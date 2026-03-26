@@ -227,7 +227,7 @@ export default function Home() {
                 animate="visible"
                 transition={{ delay: 0.5 }}
               >
-                あなたの創作の「事実」を、一生消えない証拠に。画像をアプリサーバーに送信せず、ストレージへ直結してデジタル指紋を生成。タイムスタンプとともに改ざん不能な証拠を残します。
+                あなたの創作の「事実」を、一生消えない証拠に。運営のWebサーバーを一切経由しない「Direct Upload」方式を採用。作品データはセキュアなストレージへ直接暗号化転送され、改ざん不能なデジタル指紋を生成します。
               </motion.p>
 
               {/* Hero form */}
@@ -372,15 +372,15 @@ export default function Home() {
                 {
                   icon: <Lock className="w-8 h-8 text-primary" />,
                   number: "01",
-                  title: "セキュアなダイレクト転送",
-                  desc: "アプリサーバー（Webサーバー）を一切経由せず、堅牢なクラウドストレージへ直接かつ安全に暗号化転送します。",
+                  title: "セキュアなDirect Upload",
+                  desc: "アプリサーバー（Vercel）を一切バイパスし、堅牢なクラウドストレージへ直接暗号化転送。運営側が通信経路で画像に触れることは物理的に不可能です。",
                   glow: "rgba(108,62,244,0.15)",
                 },
                 {
                   icon: <Fingerprint className="w-8 h-8 text-accent" />,
                   number: "02",
-                  title: "SHA-256ハッシュ生成",
-                  desc: "作品固有の「デジタル指紋」を不可逆な暗号技術でサーバーサイド生成し、改ざんを不可能にします。",
+                  title: "サーバーサイド・ハッシュ生成",
+                  desc: "ストレージ到達後、セキュアな環境で即座に「デジタル指紋（SHA-256）」を計算。データベースにはこの指紋とタイムスタンプのみが記録されます。",
                   glow: "rgba(0,212,170,0.15)",
                 },
                 {
@@ -482,7 +482,7 @@ export default function Home() {
                 </div>
                 <h3 className="text-2xl font-black mb-2">作品をアップロードして証明を開始</h3>
                 <p className="text-muted text-sm max-w-lg mx-auto">
-                  ファイルはVercelを経由せずSupabase Storageへ直接転送。SHA-256ハッシュはサーバーサイドで計算されます。
+                  ファイルは運営サーバー（Vercel）を一切経由せず、堅牢なSupabase Storageへ直接暗号化転送されます。プライバシーは最大限保護されます。
                 </p>
               </div>
               <div className="max-w-2xl mx-auto">
