@@ -1,11 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import * as dotenv from 'dotenv';
-import path from 'node:path';
-
-// 1. 環境変数を強制ロード（これがないとバックエンドが死にます）
-dotenv.config({ path: path.join(process.cwd(), '.env.local') });
-
-// dotenv のあとに import する必要があります
+// 1. dotenv 関連のインポートと設定をすべて削除！ (Vercelでは不要)
 import { supabaseAdmin } from "./lib/supabase-admin";
 import { randomUUID } from "node:crypto";
 
@@ -16,11 +10,15 @@ const ALLOWED_CONTENT_TYPES = new Set([
   "image/gif",
   "image/webp",
   "image/avif",
-  "image/svg+xml",
-  "image/svg" // これも追加
+  // SVGはやめるという方針だったので削除
 ]);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // CORS 対策（念のため）
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ success: false, error: "Only POST requests are supported" });
   }
@@ -28,26 +26,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { filename, contentType, userId = "anon" } = req.body;
 
-    // バリデーション
     if (!filename) return res.status(400).json({ success: false, error: "filename は必須です" });
 
-    // SVGの判定を少し緩くする（image/svg+xml でも image/svg でも通るように）
-    const isSvg = contentType?.includes("svg");
-    if (!isSvg && (!contentType || !ALLOWED_CONTENT_TYPES.has(contentType))) {
-      return res.status(400).json({ success: false, error: `許可されていない形式です: ${contentType}` });
+    // バリデーション
+    if (!contentType || !ALLOWED_CONTENT_TYPES.has(contentType)) {
+      return res.status(400).json({
+        success: false,
+        error: `許可されていない形式です: ${contentType}`
+      });
     }
 
     const ext = filename.split(".").pop()?.toLowerCase() || "bin";
     const uuid = randomUUID();
     const storagePath = `${userId}/${uuid}.${ext}`;
 
+    // 署名付きアップロードURLの発行（originals バケットを使用）
     const { data, error } = await supabaseAdmin.storage
       .from("originals")
       .createSignedUploadUrl(storagePath);
 
     if (error || !data) {
       console.error("[upload-url] Supabase error:", error);
-      return res.status(500).json({ success: false, error: "URL発行失敗" });
+      return res.status(500).json({
+        success: false,
+        error: "Supabaseへの接続に失敗しました。環境変数が正しいか確認してください。"
+      });
     }
 
     return res.status(200).json({
@@ -56,6 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       storagePath: `originals/${storagePath}`,
     });
   } catch (err) {
-    return res.status(500).json({ success: false, error: "Internal error" });
+    console.error("[upload-url] Internal error:", err);
+    return res.status(500).json({ success: false, error: "Internal Server Error" });
   }
 }

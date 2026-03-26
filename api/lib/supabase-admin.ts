@@ -1,23 +1,19 @@
 /**
  * Supabase Admin クライアント（サーバーサイド専用）
+ * Vercel 本番環境用に最適化済み
  */
 
 import { createClient } from "@supabase/supabase-js";
-import * as dotenv from 'dotenv';
-import path from 'node:path';
 
-// 【重要】ローカル開発環境で Vercel CLI が .env.local を読み込まない問題を強制解決
-// プロジェクトのルートにある .env.local を直接読みに行きます
-dotenv.config({ path: path.join(process.cwd(), '.env.local') });
+// 1. dotenv 関連をすべて削除（Vercelでは環境変数が自動的に読み込まれるため）
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !serviceRoleKey) {
+  // 本番環境のログに出力されるように
   console.error(
-    "[ProofMark Admin] Supabase 管理者用環境変数が未設定です。\n" +
-    "  VITE_SUPABASE_URL と SUPABASE_SERVICE_ROLE_KEY を\n" +
-    "  Vercel ダッシュボードの環境変数に設定してください。"
+    "[ProofMark Admin] 環境変数が未設定です。Vercelダッシュボードの設定を確認してください。"
   );
 }
 
