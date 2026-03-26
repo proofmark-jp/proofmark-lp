@@ -1,27 +1,25 @@
-/**
- * Vercel Serverless Function: 証明書データ保存 API
- *
- * Endpoint: POST /api/save-certificate
- *
- * 処理フロー:
- * 1. クライアントからアップロード完了後の storagePath を受け取る
- * 2. Supabase Storage からファイルを一時的にメモリへダウンロード
- * 3. サーバーサイドで安全に SHA-256 ハッシュを計算（改ざん防止）
- * 4. certificates テーブルにメタデータを保存
- */
-
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import * as dotenv from 'dotenv';
-import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createClient } from "@supabase/supabase-js";
+import { createHash } from "node:crypto";
 
-// 恒例の環境変数強制ロード
-dotenv.config({ path: path.join(process.cwd(), '.env.local') });
+// 🌟 悪さをしていた dotenv は完全排除！
+// 🌟 環境変数の「見えないゴミ」トリム処理
+const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim().replace(/\/$/, "");
+const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 
-import { supabaseAdmin } from "./lib/supabase-admin";
+// 🌟 Vercel特有の通信バグ回避＆インライン化（別ファイル迷子防止）
+const supabaseAdmin = createClient(
+    supabaseUrl || "https://dummy.supabase.co",
+    serviceRoleKey || "dummy",
+    {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { fetch: (...args) => fetch(...args) }
+    }
+);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    // POST のみ許可
+    // CORSフライトリクエスト対応 & POSTのみ許可
+    if (req.method === "OPTIONS") return res.status(200).end();
     if (req.method !== "POST") {
         return res.status(405).json({ success: false, error: "Only POST allowed" });
     }
@@ -33,8 +31,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(400).json({ success: false, error: "storagePath は必須です" });
         }
 
-        // クライアントから "originals/xxx/yyy.ext" と送られてくる場合を考慮し、
-        // ダウンロード用にバケット名（originals/）を取り除く
+        if (!supabaseUrl || !serviceRoleKey) {
+            return res.status(500).json({ success: false, error: "サーバーの設定エラー（環境変数）" });
+        }
+
+        // バケット名（originals/）を取り除く処理
         const filePath = storagePath.startsWith("originals/")
             ? storagePath.replace("originals/", "")
             : storagePath;
@@ -50,18 +51,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // ── 2. SHA-256 ハッシュの計算 ───────────────────────────────────
-        // サーバーサイドで計算することで、クライアントの改ざんを完全に防ぐ
-        const buffer = Buffer.from(await fileData.arrayBuffer());
+        const arrayBuffer = await fileData.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
         const fileHash = createHash("sha256").update(buffer).digest("hex");
 
         // ── 3. データベース（certificates）へ保存 ───────────────────────
-        // 未ログイン（anon）の場合は user_id を null にして、外部キー制約を回避する
         const safeUserId = userId === "anon" ? null : userId;
 
         const { data: insertData, error: dbError } = await supabaseAdmin
             .from("certificates")
             .insert({
-                user_id: safeUserId, // ← ここが null になる
+                user_id: safeUserId,
                 file_hash: fileHash,
                 storage_path: storagePath,
             })
@@ -71,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (dbError) {
             console.error("[save-certificate] DB insert error:", dbError);
 
-            // ユニーク制約違反（同じ画像が既にアップロードされている場合）の検知
+            // ユニーク制約違反（既に同じ画像がある場合）
             if (dbError.code === "23505") {
                 return res.status(409).json({
                     success: false,
@@ -88,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             certificate: insertData,
         });
 
-    } catch (err) {
+    } catch (err: any) {
         console.error("[save-certificate] Unexpected error:", err);
         return res.status(500).json({ success: false, error: "Internal server error" });
     }
