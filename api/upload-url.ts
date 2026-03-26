@@ -3,12 +3,15 @@ import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 
 // ------------------------------------------------------------------
-// 1. Supabaseクライアントの設定（別ファイルを読み込まず、ここで直接定義！）
+// 1. 環境変数の「見えない空白・改行」を強制的に削ぎ落とす (trim)
 // ------------------------------------------------------------------
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const rawUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+const rawKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-// 安全装置: 万が一環境変数が空でも、エラーで自爆させないためのダミー
+const supabaseUrl = rawUrl.trim();
+const serviceRoleKey = rawKey.trim();
+
+// 安全装置付きでクライアント初期化
 const supabaseAdmin = createClient(
   supabaseUrl || "https://dummy.supabase.co",
   serviceRoleKey || "dummy",
@@ -31,10 +34,10 @@ const ALLOWED_CONTENT_TYPES = new Set([
 // 3. メインのAPI処理
 // ------------------------------------------------------------------
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // 強制ログ出力（これで Vercel の Logs タブに絶対何か出ます！）
   console.log("=== API Start ===");
   console.log("Method:", req.method);
-  console.log("Env Check - URL:", !!supabaseUrl, "KEY:", !!serviceRoleKey);
+  // URLが正しく認識されているか、文字数も一緒に出力して確認
+  console.log("URL length:", supabaseUrl.length, "Key length:", serviceRoleKey.length);
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "POSTのみ対応" });
@@ -47,7 +50,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: `許可されていない形式です: ${contentType}` });
     }
 
-    // もし環境変数が本当に無かったら、ここでエラーを返す
     if (!supabaseUrl || !serviceRoleKey) {
       console.error("Fatal: Supabase keys are missing in Vercel!");
       return res.status(500).json({ error: "サーバーの設定エラー（環境変数）" });
