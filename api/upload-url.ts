@@ -2,17 +2,17 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 
-// URLの末尾に万が一スラッシュ(/)があっても削る
-const rawUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
-const rawKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim().replace(/\/$/, "");
+const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 
-const supabaseUrl = rawUrl.trim().replace(/\/$/, "");
-const serviceRoleKey = rawKey.trim();
-
+// 🌟 Vercel特有の通信バグ（fetch failed）を回避する最強の特効薬
 const supabaseAdmin = createClient(
   supabaseUrl || "https://dummy.supabase.co",
   serviceRoleKey || "dummy",
-  { auth: { autoRefreshToken: false, persistSession: false } }
+  {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { fetch: (...args) => fetch(...args) } // 👈 これが Vercel を安定させます！
+  }
 );
 
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -49,11 +49,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .createSignedUploadUrl(storagePath);
 
     if (error || !data) {
-      // 🚨 ここがポイント！Supabaseの生のエラーをそのままブラウザに返します
+      // 鍵の間違いがないかデバッグでヒントを出します
+      const isLikelyWrongKey = !serviceRoleKey.includes("c2VydmljZV9yb2xl");
+
       return res.status(500).json({
         error: "アップロードURLの発行に失敗しました",
         supabase_error: error,
-        debug_url: supabaseUrl
+        hint: isLikelyWrongKey ? "⚠️ 鍵が間違っている可能性があります。'service_role' の鍵か再確認してください。" : "通信エラーの可能性があります"
       });
     }
 
