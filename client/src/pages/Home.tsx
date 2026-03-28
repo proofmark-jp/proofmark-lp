@@ -282,7 +282,7 @@ export default function Home() {
                     </>
                   ) : "無料で先行登録 →"}
                 </motion.button>
-              </form>
+              </motion.form>
 
               <motion.div
                 initial={{ opacity: 0 }}
