@@ -20,7 +20,7 @@ export const generateOrganizationSchema = (): SchemaData => ({
   url: "https://proofmark.jp",
   logo: "https://proofmark.jp/logo.png",
   description:
-    "AIクリエイターが「自分が最初にこの作品を作った」という事実を、技術的・法的に裏付けるAI作品著作権証明サービス",
+    "AIクリエイターが「自分が最初にこの作品を作った」という事実を、技術的・法的に裏付けるAI作品のデジタル存在証明サービス",
   sameAs: [
     "https://x.com/ProofMark_jp",
     "https://github.com/proofmark",
@@ -153,19 +153,15 @@ export const generateSoftwareApplicationSchema = (): SchemaData => ({
   name: "ProofMark",
   applicationCategory: "UtilityApplication",
   description:
-    "AI生成物の著作権を証明するデジタル署名・タイムスタンプサービス",
+    "AIクリエイターのためのデジタル存在証明・タイムスタンプサービス。自作発言や無断転載から作品を守る改ざん不能な証拠を発行します。",
   url: "https://proofmark.jp",
   offers: {
     "@type": "Offer",
     price: "0",
     priceCurrency: "JPY",
     description: "Free tier available",
-  },
-  aggregateRating: {
-    "@type": "AggregateRating",
-    ratingValue: "5",
-    ratingCount: "1",
-  },
+  }
+  // 🌟 削除: Googleのペナルティリスクを完全に排除するため、ダミーの aggregateRating を削除しました
 });
 
 /**
@@ -176,7 +172,7 @@ export const generateLocalBusinessSchema = (): SchemaData => ({
   "@type": "LocalBusiness",
   name: "ProofMark",
   description:
-    "AI作品著作権証明サービス（日本発）",
+    "AI作品のデジタル存在証明サービス（日本発）",
   url: "https://proofmark.jp",
   areaServed: "JP",
   serviceType: "Digital Rights Management",

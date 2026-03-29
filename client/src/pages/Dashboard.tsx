@@ -49,7 +49,8 @@ export default function Dashboard() {
 
   const handleShare = (cert: Certificate) => {
     const certUrl = `${window.location.origin}/cert/${cert.id}`;
-    const text = `この作品の著作権をProofMarkで証明しました！ #ProofMark #AIイラスト ${certUrl}`;
+    // 🌟 修正: ファイル名が入るようにしました
+    const text = `ProofMarkで、この作品（${cert.file_name || "Untitled"}）の【デジタル存在証明】を発行しました！ #ProofMark #AIイラスト ${certUrl}`;
     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
     window.open(twitterUrl, "_blank", "noopener,noreferrer");
   };
@@ -392,7 +393,8 @@ const styles: Record<string, React.CSSProperties> = {
     left: 0,
     width: "100%",
     height: "100%",
-    objectFit: "cover" as const,
+    objectFit: "contain" as const, // 🌟 cover を contain に変更
+    padding: "8px", // 🌟 画像が端にくっつかないように余白を追加
   },
   thumbPlaceholder: {
     position: "absolute" as const,

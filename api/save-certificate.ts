@@ -1,6 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
-// 🌟 'node:crypto' のインポートはもう不要なので消しました！
 
 // 環境変数のトリムとスラッシュ削除
 const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim().replace(/\/$/, "");
@@ -23,10 +22,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        // 🌟 Step 1でブラウザから送られてきた `fileHash` をここで受け取る！
-        const { storagePath, userId = "anon", fileHash } = req.body;
+        // 🌟 修正: フロントエンドから `filename` も受け取るようにした
+        const { storagePath, userId = "anon", fileHash, filename } = req.body;
 
-        // fileHash が送られてきていない場合はエラーを返す
+        // fileHash と storagePath が送られてきていない場合はエラーを返す
         if (!storagePath || !fileHash) {
             return res.status(400).json({ success: false, error: "storagePath と fileHash は必須です" });
         }
@@ -35,20 +34,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(500).json({ success: false, error: "サーバーの設定エラー（環境変数）" });
         }
 
-        // 🌟 以前ここにあった「1. ファイルをダウンロード」「2. ハッシュ計算」の
-        // 重たい処理はすべて削除しました！Vercelの負担が激減します。
-
         // 3. データベース保存
         const safeUserId = userId === "anon" ? null : userId;
+
+        // 公開URLを生成
         const fileUrl = `${supabaseUrl}/storage/v1/object/public/${storagePath}`;
+        // 🌟 修正: ファイル名がない場合は「Untitled」にする
+        const safeFileName = filename || "Untitled";
 
         const { data: insertData, error: dbError } = await supabaseAdmin
             .from("certificates")
             .insert({
                 user_id: safeUserId,
-                file_hash: fileHash, // 🌟 受け取ったハッシュをそのままDBに保存
+                file_hash: fileHash,
                 storage_path: storagePath,
-                file_url: fileUrl,   // 🌟 ここも1行追加！
+                file_url: fileUrl,
+                file_name: safeFileName, // 🌟 これを追加！
             })
             .select()
             .single();

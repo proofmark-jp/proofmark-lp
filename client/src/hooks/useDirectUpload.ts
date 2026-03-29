@@ -116,7 +116,7 @@ export function useDirectUpload(): UseDirectUploadReturn {
         const saveRes = await fetch(SAVE_CERT_ENDPOINT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ storagePath, userId, fileHash }),
+          body: JSON.stringify({ storagePath, userId, fileHash, filename: file.name }), // 🌟 filename: file.name を追加！
         });
 
         const saveData = await saveRes.json();
