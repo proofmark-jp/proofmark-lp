@@ -194,20 +194,26 @@ export default function Home() {
               </motion.div>
 
               {/* Main heading */}
-              <h1 style={{ fontSize: "clamp(40px, 8vw, 64px)", fontWeight: 900, lineHeight: 1.2, letterSpacing: "-1.5px", color: "#F0EFF8", marginBottom: "24px" }}>
-                <span style={{ display: "inline-block" }}>「どうせAIでしょ？」と</span><br className="hidden md:block" />
-                <span
-                  style={{
-                    display: "inline-block",
-                    backgroundImage: "linear-gradient(135deg, #6c3ef4, #00d4aa)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
-                    filter: "drop-shadow(0 0 20px rgba(108,62,244,0.4))",
-                  }}
-                >
-                  言わせない。
-                </span>
+              <h1 style={{ 
+                fontSize: "clamp(40px, 8vw, 64px)", 
+                fontWeight: 900, 
+                lineHeight: 1.2, 
+                letterSpacing: "-1.5px", 
+                color: "#F0EFF8", 
+                marginBottom: "24px",
+                wordBreak: "keep-all"
+              }}>
+                <span style={{ display: "inline-block", whiteSpace: "nowrap" }}>「どうせAIでしょ？」と</span>
+                <br />
+                <span style={{ 
+                  display: "inline-block", 
+                  whiteSpace: "nowrap",
+                  background: "linear-gradient(90deg, #6C3EF4 0%, #00D4AA 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                  color: "transparent"
+                }}>言わせない。</span>
               </h1>
 
               {/* Subheading */}
