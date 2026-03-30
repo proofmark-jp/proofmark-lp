@@ -8,6 +8,10 @@ import Home from "./pages/Home";
 import CertificatePage from './pages/CertificatePage';
 import Auth from './pages/Auth';
 import Dashboard from './pages/Dashboard';
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
+import Security from "./pages/Security";
+import Footer from "./components/Footer";
 
 function Router() {
   return (
@@ -16,6 +20,9 @@ function Router() {
       <Route path="/cert/:id" component={CertificatePage} />
       <Route path="/auth" component={Auth} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/terms" component={Terms} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/security" component={Security} />
       <Route path="/404" component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
@@ -35,8 +42,11 @@ function App() {
       // switchable
       >
         <TooltipProvider>
-          <Toaster />
-          <Router />
+          <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+            <Toaster />
+            <Router />
+            <Footer />
+          </div>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

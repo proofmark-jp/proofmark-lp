@@ -344,3 +344,30 @@
   .animate-shimmer    { animation: shimmer   2.5s linear infinite; }
   .animate-orbit      { animation: orbit     8s linear infinite; }
 }
+
+/* ── ProofMark Print Styles ── */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-container {
+    box-shadow: none !important;
+    border: 2px solid #e2e8f0 !important;
+    border-radius: 16px !important;
+    background: white !important;
+    width: 100% !important;
+    max-width: 800px !important;
+    margin: 40px auto !important; /* A4用紙の中央に配置 */
+    padding: 60px 40px !important; /* 内部の余白を大きく確保 */
+    page-break-inside: avoid;
+  }
+  .print-container * {
+    color: black !important;
+    background: transparent !important;
+    border-color: #cbd5e1 !important;
+  }
+}
