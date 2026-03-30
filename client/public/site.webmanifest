@@ -1,0 +1,26 @@
+{
+  "name": "ProofMark",
+  "short_name": "ProofMark",
+  "icons": [
+    {
+      "src": "/assets/logo/favicon/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/logo/favicon/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/logo/favicon/proofmark-favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "theme_color": "#07061A",
+  "background_color": "#07061A",
+  "display": "standalone"
+}

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useRoute, useLocation } from 'wouter';
 import { createClient } from '@supabase/supabase-js';
+import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
+import founderBadge from '../assets/logo/badges/proofmark-badge-founder.svg';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -53,8 +55,31 @@ export default function CertificatePage() {
 
     return (
         <div className="min-h-screen bg-[#0f172a] text-white flex flex-col items-center justify-center p-4 sm:p-8 font-sans">
+            {/* ナビゲーションロゴ */}
+            <div className="no-print w-full max-w-3xl mb-6" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <a href="/dashboard" style={{ display: "flex", alignItems: "center", gap: "12px", textDecoration: "none" }}>
+                <img src={navbarLogo} alt="ProofMark Logo" style={{ height: "28px", width: "auto" }} />
+                <span style={{ fontFamily: "'Syne', sans-serif", fontSize: "20px", fontWeight: 800, color: "#F0EFF8" }}>
+                  Proof<span style={{ color: "#00D4AA" }}>Mark</span>
+                </span>
+              </a>
+            </div>
             <div className="print-container max-w-3xl w-full bg-[#1e293b] border border-slate-700 rounded-2xl p-6 sm:p-10 shadow-2xl relative overflow-hidden">
-                <h1 className="text-2xl sm:text-3xl font-bold text-blue-400 mb-1">ProofMark Digital Certificate</h1>
+                {/* PDF印刷用ブランドロゴ */}
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
+                  <img src={navbarLogo} alt="ProofMark" style={{ height: "24px" }} />
+                  <span style={{ fontFamily: "'Syne', sans-serif", fontSize: "18px", fontWeight: 800, color: "#07061A" }}>ProofMark</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                  <h1 style={{ fontSize: "24px", fontWeight: 900, color: "#6C3EF4", margin: 0 }}>
+                    ProofMark Digital Certificate
+                  </h1>
+                  {/* 創設者バッジ（印刷時も表示） */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "#1A1200", padding: "4px 10px", borderRadius: "16px", border: "1px solid #F0BB38" }} className="print-badge">
+                    <img src={founderBadge} alt="Founder Badge" style={{ height: "24px", width: "24px" }} />
+                    <span style={{ fontSize: "11px", fontWeight: "bold", color: "#F0BB38", letterSpacing: "1px", textTransform: "uppercase" }}>Founder</span>
+                  </div>
+                </div>
                 <p className="text-slate-400 text-sm font-mono border-b border-slate-700 pb-6 mb-8">ID: {cert.id}</p>
 
                 <div className="space-y-8">

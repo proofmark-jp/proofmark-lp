@@ -3,6 +3,7 @@ import { Lock, Shield, FileText } from "lucide-react";
 import ArticleDrawer from "@/components/ArticleDrawer";
 import { getArticleById } from "@/data/articles";
 import type { Article } from "@/data/articles";
+import navbarLogo from "../assets/logo/navbar/proofmark-navbar-symbol-dark.svg";
 
 /**
  * PrivacyFooter Component
@@ -34,10 +35,12 @@ export const PrivacyFooter = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
             {/* Left: Navigation */}
             <div>
-              <h3 className="font-bold mb-6 flex items-center gap-2">
-                <span className="text-2xl text-primary">⬡</span>
-                <span>ProofMark</span>
-              </h3>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
+                <img src={navbarLogo} alt="ProofMark Logo" style={{ height: "24px", width: "auto" }} />
+                <span style={{ fontFamily: "'Syne', sans-serif", fontSize: "24px", fontWeight: 800, color: "#F0EFF8" }}>
+                  Proof<span style={{ color: "#00D4AA" }}>Mark</span>
+                </span>
+              </div>
               <ul className="space-y-3">
                 <li>
                   <button

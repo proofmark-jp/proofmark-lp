@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="64"
+   height="64"
+   viewBox="0 0 100 100"
+   fill="none"
+   version="1.1"
+   id="svg2"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2">
+    <linearGradient
+       id="pp32-ri"
+       x1="15%"
+       y1="0%"
+       x2="85%"
+       y2="100%">
+      <stop
+         offset="0%"
+         stop-color="#5830CC"
+         id="stop1" />
+      <stop
+         offset="100%"
+         stop-color="#00B896"
+         id="stop2" />
+    </linearGradient>
+  </defs>
+  <rect
+     width="100"
+     height="100"
+     rx="22"
+     fill="#0D0B24"
+     id="rect2" />
+  <path
+     d="M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 87,25 L 82,29 L 76,18 Z"
+     fill="none"
+     stroke="url(#pp32-ri)"
+     stroke-width="3.8"
+     stroke-linejoin="round"
+     stroke-linecap="round"
+     opacity=".85"
+     id="path2" />
+  <polygon
+     points="17,46 27,47 39,62 79,22 83,28 36,70 23,58"
+     fill="#00D4AA"
+     id="polygon2" />
+</svg>

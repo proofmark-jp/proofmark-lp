@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { toast } from "sonner";
 import { Lock, Fingerprint, Database, AlertCircle, Check, Shield, Zap, Award, Info } from "lucide-react";
 import { motion, useScroll, useTransform } from "framer-motion";
@@ -11,6 +12,7 @@ import { PrivacyFooter } from "@/components/PrivacyFooter";
 import { sendConfirmationEmail } from "@/lib/email";
 import LearningSection from "@/components/LearningSection";
 import { SchemaScript } from "@/components/SchemaScript";
+import navbarLogo from "../assets/logo/navbar/proofmark-navbar-symbol-dark.svg";
 import {
   fadeInVariants,
   slideInVariants,
@@ -124,23 +126,21 @@ export default function Home() {
         >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
             <motion.div
-              className="flex items-center gap-2"
+              className="flex items-center gap-3"
               whileHover={{ scale: 1.03 }}
               transition={{ duration: 0.15 }}
             >
-              <span className="text-2xl font-black text-primary drop-shadow-[0_0_8px_rgba(108,62,244,0.6)]">⬡</span>
-              <span className="text-2xl font-black text-foreground">ProofMark</span>
+              <img src={navbarLogo} alt="ProofMark Logo" style={{ height: "32px", width: "auto" }} />
+              <span style={{ fontFamily: "'Syne', sans-serif", fontSize: "24px", fontWeight: 800, letterSpacing: "-0.5px", color: "#F0EFF8" }}>
+                Proof<span style={{ color: "#00D4AA" }}>Mark</span>
+              </span>
             </motion.div>
-            <motion.a
-              href="#waitlist-section"
-              className="px-6 py-2 rounded-full bg-primary text-primary-foreground font-bold text-sm"
-              style={{ boxShadow: "0 0 16px rgba(108,62,244,0.35)" }}
-              whileHover={{ scale: 1.05, boxShadow: "0 0 24px rgba(108,62,244,0.55)" }}
-              whileTap={{ scale: 0.97 }}
-              transition={{ duration: 0.15 }}
+            <Link
+              href="/auth"
+              style={{ background: "#6C3EF4", color: "#FFF", padding: "8px 20px", borderRadius: "8px", textDecoration: "none", fontWeight: "bold", fontSize: "14px", transition: "opacity 0.2s" }}
             >
-              先着100名の特典
-            </motion.a>
+              ログイン / 登録
+            </Link>
           </div>
         </motion.nav>
 
@@ -194,19 +194,11 @@ export default function Home() {
               </motion.div>
 
               {/* Main heading */}
-              <motion.h1
-                className="text-5xl sm:text-6xl xl:text-7xl font-black leading-tight mb-6"
-                variants={staggerContainer}
-                initial="hidden"
-                animate="visible"
-              >
-                <motion.span className="block" variants={heroTextVariants}>
-                  「どうせAIでしょ？」と
-                </motion.span>
-                <motion.span
-                  className="block"
-                  variants={heroTextVariants}
+              <h1 style={{ fontSize: "clamp(40px, 8vw, 64px)", fontWeight: 900, lineHeight: 1.2, letterSpacing: "-1.5px", color: "#F0EFF8", marginBottom: "24px" }}>
+                <span style={{ display: "inline-block" }}>「どうせAIでしょ？」と</span><br className="hidden md:block" />
+                <span
                   style={{
+                    display: "inline-block",
                     backgroundImage: "linear-gradient(135deg, #6c3ef4, #00d4aa)",
                     WebkitBackgroundClip: "text",
                     WebkitTextFillColor: "transparent",
@@ -215,8 +207,8 @@ export default function Home() {
                   }}
                 >
                   言わせない。
-                </motion.span>
-              </motion.h1>
+                </span>
+              </h1>
 
               {/* Subheading */}
               <motion.p
@@ -643,6 +635,7 @@ export default function Home() {
                           background: "rgba(0,212,170,0.15)",
                           color: "#00d4aa",
                           border: "1px solid rgba(0,212,170,0.3)",
+                          whiteSpace: "nowrap",
                         }}
                       >
                         月30件に増枠！

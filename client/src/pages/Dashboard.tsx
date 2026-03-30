@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
+import navbarLogo from "../assets/logo/navbar/proofmark-navbar-symbol-dark.svg";
+import founderBadge from "../assets/logo/badges/proofmark-badge-founder.svg";
 
 interface Certificate {
   id: string;
@@ -99,27 +101,25 @@ export default function Dashboard() {
       <header style={styles.header}>
         <div style={styles.headerLeft}>
           <a href="/" style={styles.logoLink}>
-            <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
-              <rect
-                width="40"
-                height="40"
-                rx="10"
-                fill="rgba(108, 62, 244, 0.15)"
-              />
-              <path
-                d="M12 20L18 26L28 14"
-                stroke="#6c3ef4"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <span style={styles.logoText}>ProofMark</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <img src={navbarLogo} alt="ProofMark Logo" style={{ height: "28px", width: "auto" }} />
+              <span style={{ fontFamily: "'Syne', sans-serif", fontSize: "20px", fontWeight: 800, color: "#F0EFF8" }}>
+                Proof<span style={{ color: "#00D4AA" }}>Mark</span>
+              </span>
+            </div>
           </a>
         </div>
-        <div style={styles.headerRight}>
-          <span style={styles.emailBadge}>{user.email}</span>
-          <button onClick={signOut} style={styles.logoutBtn}>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#1A1200", padding: "4px 12px", borderRadius: "20px", border: "1px solid #F0BB38" }}>
+            <img src={founderBadge} alt="Founder" style={{ height: "20px", width: "20px" }} />
+            <span style={{ fontSize: "12px", fontWeight: "bold", color: "#F0BB38" }}>Founder</span>
+          </div>
+          <span style={{ color: "#A8A0D8", fontSize: "14px" }}>{user?.email}</span>
+          <button
+            onClick={signOut}
+            style={{ background: "transparent", border: "1px solid #48456A", color: "#F0EFF8", padding: "6px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", transition: "background 0.2s" }}
+            className="hover:bg-[#1C1A38]"
+          >
             ログアウト
           </button>
         </div>
