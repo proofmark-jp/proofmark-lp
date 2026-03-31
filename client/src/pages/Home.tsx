@@ -13,6 +13,7 @@ import { sendConfirmationEmail } from "@/lib/email";
 import LearningSection from "@/components/LearningSection";
 import { SchemaScript } from "@/components/SchemaScript";
 import navbarLogo from "../assets/logo/navbar/proofmark-navbar-symbol-dark.svg";
+import founderBadge from "../assets/logo/badges/proofmark-badge-founder.svg";
 import {
   fadeInVariants,
   slideInVariants,
@@ -117,32 +118,19 @@ export default function Home() {
       <div id="top" className="min-h-screen bg-background text-foreground overflow-x-hidden">
 
         {/* ── Navigation ──────────────────────────────────────── */}
-        <motion.nav
-          className="sticky top-0 z-50 border-b border-border/50"
-          style={{ backdropFilter: "blur(16px)", background: "rgba(10,14,39,0.85)" }}
-          initial={{ y: -64, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-        >
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <motion.div
-              className="flex items-center gap-3"
-              whileHover={{ scale: 1.03 }}
-              transition={{ duration: 0.15 }}
-            >
-              <img src={navbarLogo} alt="ProofMark Logo" style={{ height: "32px", width: "auto" }} />
-              <span style={{ fontFamily: "'Syne', sans-serif", fontSize: "24px", fontWeight: 800, letterSpacing: "-0.5px", color: "#F0EFF8" }}>
-                Proof<span style={{ color: "#00D4AA" }}>Mark</span>
-              </span>
-            </motion.div>
-            <Link
-              href="/auth"
-              style={{ background: "#6C3EF4", color: "#FFF", padding: "8px 20px", borderRadius: "8px", textDecoration: "none", fontWeight: "bold", fontSize: "14px", transition: "opacity 0.2s" }}
-            >
+        <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #1C1A38", background: "#07061A", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <img src={navbarLogo} alt="ProofMark Logo" style={{ height: "24px", width: "auto" }} />
+            <span style={{ fontFamily: "'Syne', sans-serif", fontSize: "20px", fontWeight: 800, letterSpacing: "-0.5px", color: "#F0EFF8" }}>
+              Proof<span style={{ color: "#00D4AA" }}>Mark</span>
+            </span>
+          </div>
+          <div>
+            <Link href="/auth" style={{ background: "#6C3EF4", color: "#FFF", padding: "8px 16px", borderRadius: "8px", textDecoration: "none", fontWeight: "bold", fontSize: "12px", transition: "opacity 0.2s", whiteSpace: "nowrap" }}>
               ログイン / 登録
             </Link>
           </div>
-        </motion.nav>
+        </header>
 
         {/* ── Hero Section ────────────────────────────────────── */}
         <section className="relative min-h-[90vh] flex items-center overflow-hidden">
@@ -177,36 +165,38 @@ export default function Home() {
             style={{ y: heroY }}
           >
             <div className="max-w-2xl">
-              {/* Badge */}
-              <motion.div
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border mb-8"
-                style={{
-                  background: "rgba(108,62,244,0.12)",
-                  borderColor: "rgba(108,62,244,0.35)",
-                  boxShadow: "0 0 12px rgba(108,62,244,0.15)",
-                }}
-                initial={{ opacity: 0, scale: 0.85 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, delay: 0.1 }}
-              >
-                <AlertCircle className="w-4 h-4 text-primary" />
-                <span className="text-sm font-bold text-primary">先着100名限定</span>
-              </motion.div>
+              {/* Badge (Centered container start) */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%" }}>
+                <motion.div
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full border mb-8"
+                  style={{
+                    background: "rgba(108,62,244,0.12)",
+                    borderColor: "rgba(108,62,244,0.35)",
+                    boxShadow: "0 0 12px rgba(108,62,244,0.15)",
+                  }}
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.4, delay: 0.1 }}
+                >
+                  <AlertCircle className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-bold text-primary">先着100名限定</span>
+                </motion.div>
 
               {/* Main heading */}
-              <h1 style={{ 
-                fontSize: "clamp(40px, 8vw, 64px)", 
-                fontWeight: 900, 
-                lineHeight: 1.2, 
-                letterSpacing: "-1.5px", 
-                color: "#F0EFF8", 
+              <h1 style={{
+                fontSize: "clamp(40px, 8vw, 64px)",
+                fontWeight: 900,
+                lineHeight: 1.2,
+                letterSpacing: "-1.5px",
+                color: "#F0EFF8",
                 marginBottom: "24px",
-                wordBreak: "keep-all"
+                wordBreak: "keep-all",
+                textAlign: "center"
               }}>
                 <span style={{ display: "inline-block", whiteSpace: "nowrap" }}>「どうせAIでしょ？」と</span>
                 <br />
-                <span style={{ 
-                  display: "inline-block", 
+                <span style={{
+                  display: "inline-block",
                   whiteSpace: "nowrap",
                   background: "linear-gradient(90deg, #6C3EF4 0%, #00D4AA 100%)",
                   WebkitBackgroundClip: "text",
@@ -218,7 +208,7 @@ export default function Home() {
 
               {/* Subheading */}
               <motion.p
-                className="text-lg text-muted mb-8 leading-relaxed max-w-xl"
+                className="text-lg text-muted mb-8 leading-relaxed max-w-xl mx-auto text-center"
                 variants={fadeInVariants}
                 initial="hidden"
                 animate="visible"
@@ -230,7 +220,7 @@ export default function Home() {
               {/* Hero form */}
               <motion.form
                 onSubmit={handleHeroSubmit}
-                className="flex flex-col sm:flex-row gap-3 mb-6 max-w-md w-full"
+                className="flex flex-col sm:flex-row gap-3 mb-6 max-w-md w-full mx-auto"
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.65, duration: 0.4 }}
@@ -282,20 +272,22 @@ export default function Home() {
                 </motion.button>
               </motion.form>
 
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.8 }}
-              >
-                <p className="text-xs text-muted flex items-center gap-2 mb-3">
-                  <Lock className="w-4 h-4 text-accent" />
-                  メールアドレスはSSL/TLSで保護されます
-                </p>
-                <p className="text-sm text-muted">
-                  <span className="text-[#ffd966] font-bold">🎁 先着100名限定</span>：β版優先招待 + 3ヶ月無料 + 創設者バッジ<br />
-                  クレジットカード不要・いつでも解除OK
-                </p>
-              </motion.div>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.8 }}
+                  style={{ fontSize: "14px", color: "#A8A0D8", marginTop: "16px", lineHeight: "1.5", wordBreak: "break-word", whiteSpace: "normal", textAlign: "center" }}
+                >
+                  <p className="text-xs text-muted flex items-center justify-center gap-2 mb-3">
+                    <Lock className="w-4 h-4 text-accent" />
+                    メールアドレスはSSL/TLSで保護されます
+                  </p>
+                  <p>
+                    <span className="text-[#ffd966] font-bold">🎁 先着100名限定</span>：β版優先招待 + 3ヶ月無料 + 創設者バッジ<br />
+                    クレジットカード不要・いつでも解除OK
+                  </p>
+                </motion.div>
+              </div>
             </div>
           </motion.div>
         </section>
@@ -811,7 +803,6 @@ export default function Home() {
                 {[
                   { emoji: "🚀", text: "β版優先招待" },
                   { emoji: "🎁", text: "3ヶ月無料" },
-                  { emoji: "🏅", text: "創設者バッジ" },
                 ].map((badge, i) => (
                   <motion.div
                     key={i}
@@ -828,6 +819,12 @@ export default function Home() {
                     {badge.text}
                   </motion.div>
                 ))}
+                
+                {/* 創設者バッジを以下に置き換え */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#1A1200", padding: "8px 16px", borderRadius: "100px", border: "1px solid #F0BB38" }}>
+                  <img src={founderBadge} alt="Founder Badge" style={{ height: "16px", width: "16px" }} />
+                  <span style={{ fontSize: "14px", fontWeight: "bold", color: "#F0BB38", whiteSpace: "nowrap" }}>Founderバッジ</span>
+                </div>
               </motion.div>
             </FadeInSection>
 

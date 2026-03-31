@@ -9,11 +9,11 @@ export default function Privacy() {
         <p style={styles.date}>最終更新日: 2026年3月</p>
         <div style={styles.content}>
           <h2 style={styles.h2}>1. 収集する情報</h2>
-          <p style={styles.p}>本サービスでは、アカウント登録のためのメールアドレス、アップロードされた画像データ、およびブラウザ内で生成されたSHA-256ハッシュ値を収集・保管します。</p>
+          <p style={styles.p}>本サービスでは、アカウント登録のためのメールアドレス、アップロードされた画像データ、およびブラウザ内で生成された<span style={{ fontFamily: "'Space Mono', monospace" }}>SHA-256</span>ハッシュ値を収集・保管します。</p>
           <h2 style={styles.h2}>2. データの利用目的（AI学習への不使用）</h2>
-          <p style={styles.p}>収集したデータは、デジタル存在証明の発行およびポートフォリオの表示目的のみに使用します。<strong style={{color: "#00D4AA"}}>ユーザーの画像データを生成AIの学習（トレーニング）データとして利用したり、第三者に販売することは一切ありません。</strong></p>
+          <p style={styles.p}>収集したデータは、デジタル存在証明の発行およびポートフォリオの表示目的のみに使用します。<strong style={{ color: "#00D4AA" }}>ユーザーの画像データを生成AIの学習（トレーニング）データとして利用したり、第三者に販売することは一切ありません。</strong></p>
           <h2 style={styles.h2}>3. セキュリティ</h2>
-          <p style={styles.p}>通信および保管時の暗号化（Direct Upload方式）を採用し、ユーザー本人以外の第三者が非公開データにアクセスできないよう、厳格なアクセス制御（RLS）を実施しています。</p>
+          <p style={styles.p}>通信および保管時の暗号化（<span style={{ fontFamily: "'Space Mono', monospace" }}>Direct Upload</span>方式）を採用し、ユーザー本人以外の第三者が非公開データにアクセスできないよう、厳格なアクセス制御（<span style={{ fontFamily: "'Space Mono', monospace" }}>RLS</span>）を実施しています。</p>
         </div>
         <Link href="/" style={styles.backLink}>← トップへ戻る</Link>
       </div>

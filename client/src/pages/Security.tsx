@@ -10,15 +10,15 @@ export default function Security() {
 
         <div style={styles.grid}>
           <div style={styles.card}>
-            <h3 style={styles.cardTitle}>1. Direct Upload方式</h3>
-            <p style={styles.cardText}>作品データは当社のWebサーバー（Vercel）を一切経由しません。あなたのブラウザから、直接セキュアなクラウドストレージ（Supabase）へ暗号化転送されます。</p>
+            <h3 style={styles.cardTitle}>1. <span style={{ fontFamily: "'Space Mono', monospace" }}>Direct Upload</span>方式</h3>
+            <p style={styles.cardText}>作品データは当社のWebサーバー（<span style={{ fontFamily: "'Space Mono', monospace" }}>Vercel</span>）を一切経由しません。あなたのブラウザから、直接セキュアなクラウドストレージ（<span style={{ fontFamily: "'Space Mono', monospace" }}>Supabase</span>）へ暗号化転送されます。</p>
           </div>
           <div style={styles.card}>
             <h3 style={styles.cardTitle}>2. ブラウザ内ハッシュ計算</h3>
-            <p style={styles.cardText}>証明の核となる「SHA-256ハッシュ値」は、送信前にあなたのブラウザ内で計算されます。通信傍受によるデータ改ざんリスクを構造上排除しています。</p>
+            <p style={styles.cardText}>証明の核となる「<span style={{ fontFamily: "'Space Mono', monospace" }}>SHA-256</span>ハッシュ値」は、送信前にあなたのブラウザ内で計算されます。通信傍受によるデータ改ざんリスクを構造上排除しています。</p>
           </div>
           <div style={styles.card}>
-            <h3 style={styles.cardTitle}>3. 厳格なアクセス制御 (RLS)</h3>
+            <h3 style={styles.cardTitle}>3. 厳格なアクセス制御 (<span style={{ fontFamily: "'Space Mono', monospace" }}>RLS</span>)</h3>
             <p style={styles.cardText}>データベースにはRow Level Securityを適用。システムの構造上、あなた以外のユーザーや第三者がオリジナルの画像データにアクセスすることは不可能です。</p>
           </div>
         </div>

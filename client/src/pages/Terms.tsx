@@ -9,7 +9,7 @@ export default function Terms() {
         <p style={styles.date}>最終更新日: 2026年3月</p>
         <div style={styles.content}>
           <h2 style={styles.h2}>1. サービスの内容と免責事項</h2>
-          <p style={styles.p}>ProofMark（以下「本サービス」）は、アップロードされたデジタルデータのSHA-256ハッシュ値を計算し、タイムスタンプと共に記録する「デジタル存在証明」サービスです。本サービスは法的な著作権（Copyright）の発生や権利の帰属を公的に保証するものではありません。</p>
+          <p style={styles.p}>ProofMark（以下「本サービス」）は、アップロードされたデジタルデータの<span style={{ fontFamily: "'Space Mono', monospace" }}>SHA-256</span>ハッシュ値を計算し、タイムスタンプと共に記録する「デジタル存在証明」サービスです。本サービスは法的な著作権（<span style={{ fontFamily: "'Space Mono', monospace" }}>Copyright</span>）の発生や権利の帰属を公的に保証するものではありません。</p>
           <h2 style={styles.h2}>2. データの取り扱い</h2>
           <p style={styles.p}>ユーザーがアップロードした元データ、および生成されたハッシュ値を利用して、第三者との間で発生した著作権侵害等のいかなる紛争についても、運営者は一切の責任を負いません。証明書の法的有効性については、ユーザー自身の責任において利用するものとします。</p>
           <h2 style={styles.h2}>3. 禁止事項</h2>

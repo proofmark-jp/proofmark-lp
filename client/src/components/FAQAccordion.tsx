@@ -133,7 +133,7 @@ export const FAQAccordion = () => {
         <div className="mt-12 p-6 rounded-xl bg-primary/10 border border-primary/20">
           <p className="text-sm text-muted text-center">
             その他のご質問は、
-            <a href="#" className="text-primary font-bold hover:underline">
+            <a href="https://x.com/ProofMark_jp" target="_blank" rel="noopener noreferrer" style={{ color: "#6C3EF4", textDecoration: "underline" }}>
               お問い合わせ
             </a>
             までお気軽にどうぞ。

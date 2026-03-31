@@ -363,7 +363,7 @@ function generateConfirmationEmailHTML(email: string): string {
 
         <div class="footer">
           <p>
-            このメールに心当たりがない場合は、<a href="https://proofmark.jp">お問い合わせ</a>ください。<br>
+            このメールに心当たりがない場合は、<a href="https://x.com/ProofMark_jp">お問い合わせ</a>ください。<br>
             © 2026 ProofMark. All rights reserved.
           </p>
         </div>

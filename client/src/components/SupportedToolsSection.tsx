@@ -5,6 +5,16 @@
 
 export const SupportedToolsSection = () => {
   const tools = [
+    { 
+      name: "Nano Banana Pro", 
+      logo: (
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" style={{ margin: "0 auto" }}>
+          <path d="M12 2L4 6V18L12 22L20 18V6L12 2Z" stroke="#6EE7DF" strokeWidth="2"/>
+          <path d="M12 12C14.2091 12 16 10.2091 16 8C16 5.79086 14.2091 4 12 4C9.79086 4 8 5.79086 8 8C8 10.2091 9.79086 12 12 12Z" fill="#6EE7DF"/>
+        </svg>
+      ), 
+      description: "プロ仕様の画像生成API、Nano Banana Proをサポート。" 
+    },
     { name: "Midjourney", logo: "🎨", description: "AI画像生成" },
     { name: "Stable Diffusion", logo: "⚡", description: "オープンソースAI" },
     { name: "DALL-E", logo: "🤖", description: "OpenAI生成" },
@@ -39,7 +49,7 @@ export const SupportedToolsSection = () => {
         </div>
 
         {/* Tools Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 mb-12">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-4 mb-12">
           {tools.map((tool) => (
             <div
               key={tool.name}
