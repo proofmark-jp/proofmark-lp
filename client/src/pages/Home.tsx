@@ -338,34 +338,40 @@ export default function Home() {
           </div>
         </FadeInSection>
 
-        {/* ── How It Works ────────────────────────────────────── */}
-        <section id="how-it-works" style={{ padding: "80px 20px", background: "#0D0B24", borderTop: "1px solid #1C1A38", borderBottom: "1px solid #1C1A38" }}>
-          <div style={{ maxWidth: "1000px", margin: "0 auto", textAlign: "center" }}>
-            <h2 style={{ fontSize: "32px", fontWeight: 800, color: "#F0EFF8", marginBottom: "16px", fontFamily: "'Syne', sans-serif" }}>
+        {/* How it Works Section - Premium Design */}
+        <section id="how-it-works" className="relative py-24 bg-[#07061A] border-y border-[#1C1A38] overflow-hidden">
+          {/* 背景Glow */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-[#6C3EF4] opacity-[0.05] blur-[120px] rounded-full pointer-events-none" />
+
+          <div className="relative z-10 max-w-6xl mx-auto px-6 text-center">
+            <h2
+              className="text-4xl md:text-5xl font-extrabold text-[#F0EFF8] mb-4 tracking-tight"
+              style={{ fontFamily: "'Syne', sans-serif" }}
+            >
               How it Works
             </h2>
-            <p style={{ color: "#A8A0D8", marginBottom: "48px" }}>わずか3ステップで、あなたの作品に一生消えない証明を。</p>
+            <p className="text-[#A8A0D8] mb-16 text-lg">わずか3ステップで、あなたの作品に一生消えない証明を。</p>
 
-            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "24px", alignItems: "flex-start" }}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
               {/* Step 1 */}
-              <div style={{ flex: "1 1 250px", background: "#07061A", padding: "32px 24px", borderRadius: "16px", border: "1px solid #1C1A38", position: "relative" }}>
-                <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: "rgba(0, 212, 170, 0.1)", color: "#00D4AA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", fontWeight: "bold", margin: "0 auto 16px" }}>1</div>
-                <h3 style={{ fontSize: "18px", color: "#F0EFF8", marginBottom: "12px", fontWeight: "bold" }}>ブラウザで直接暗号化</h3>
-                <p style={{ fontSize: "14px", color: "#A8A0D8", lineHeight: "1.6" }}>作品データはサーバーに送信されません。お使いの端末内で直接<span style={{ fontFamily: "'Space Mono', monospace", color: "#00D4AA" }}>SHA-256</span>ハッシュを計算します。</p>
+              <div className="group bg-[#0D0B24] border border-[#1C1A38] hover:border-[#00D4AA]/50 p-8 rounded-2xl transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_8px_32px_rgba(0,212,170,0.1)]">
+                <div className="w-14 h-14 rounded-xl bg-[#00D4AA]/10 text-[#00D4AA] flex items-center justify-center text-2xl font-bold mb-6 group-hover:scale-110 transition-transform duration-300">1</div>
+                <h3 className="text-xl font-bold text-[#F0EFF8] mb-4">ブラウザで直接暗号化</h3>
+                <p className="text-[#A8A0D8] leading-relaxed text-sm md:text-base">作品データはサーバーに送信されません。お使いの端末内で直接<span className="font-mono text-[#00D4AA] ml-1">SHA-256</span>ハッシュを計算します。</p>
               </div>
 
               {/* Step 2 */}
-              <div style={{ flex: "1 1 250px", background: "#07061A", padding: "32px 24px", borderRadius: "16px", border: "1px solid #1C1A38", position: "relative" }}>
-                <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: "rgba(108, 62, 244, 0.1)", color: "#6C3EF4", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", fontWeight: "bold", margin: "0 auto 16px" }}>2</div>
-                <h3 style={{ fontSize: "18px", color: "#F0EFF8", marginBottom: "12px", fontWeight: "bold" }}>タイムスタンプ刻印</h3>
-                <p style={{ fontSize: "14px", color: "#A8A0D8", lineHeight: "1.6" }}>計算されたハッシュ値と現在日時を、強固なデータベースに改ざん不能な形で記録します。</p>
+              <div className="group bg-[#0D0B24] border border-[#1C1A38] hover:border-[#6C3EF4]/50 p-8 rounded-2xl transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_8px_32px_rgba(108,62,244,0.1)]">
+                <div className="w-14 h-14 rounded-xl bg-[#6C3EF4]/10 text-[#6C3EF4] flex items-center justify-center text-2xl font-bold mb-6 group-hover:scale-110 transition-transform duration-300">2</div>
+                <h3 className="text-xl font-bold text-[#F0EFF8] mb-4">タイムスタンプ刻印</h3>
+                <p className="text-[#A8A0D8] leading-relaxed text-sm md:text-base">計算されたハッシュ値と現在日時を、強固なデータベースに改ざん不能な形で記録します。</p>
               </div>
 
               {/* Step 3 */}
-              <div style={{ flex: "1 1 250px", background: "#07061A", padding: "32px 24px", borderRadius: "16px", border: "1px solid #1C1A38", position: "relative" }}>
-                <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: "rgba(240, 187, 56, 0.1)", color: "#F0BB38", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", fontWeight: "bold", margin: "0 auto 16px" }}>3</div>
-                <h3 style={{ fontSize: "18px", color: "#F0EFF8", marginBottom: "12px", fontWeight: "bold" }}>デジタル証明書の発行</h3>
-                <p style={{ fontSize: "14px", color: "#A8A0D8", lineHeight: "1.6" }}>ワンクリックでクライアント提出用のPDF証明書を発行。公開ポートフォリオとしても活用できます。</p>
+              <div className="group bg-[#0D0B24] border border-[#1C1A38] hover:border-[#F0BB38]/50 p-8 rounded-2xl transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_8px_32px_rgba(240,187,56,0.1)]">
+                <div className="w-14 h-14 rounded-xl bg-[#F0BB38]/10 text-[#F0BB38] flex items-center justify-center text-2xl font-bold mb-6 group-hover:scale-110 transition-transform duration-300">3</div>
+                <h3 className="text-xl font-bold text-[#F0EFF8] mb-4">デジタル証明書の発行</h3>
+                <p className="text-[#A8A0D8] leading-relaxed text-sm md:text-base">ワンクリックでクライアント提出用のPDF証明書を発行。公開ポートフォリオとしても活用できます。</p>
               </div>
             </div>
           </div>
