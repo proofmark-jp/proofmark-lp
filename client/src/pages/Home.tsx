@@ -366,8 +366,8 @@ export default function Home() {
               <Zap className="w-3 h-3" /> HOW IT WORKS
             </div>
 
-            <h2 className="text-4xl md:text-5xl font-extrabold text-[#F0EFF8] mb-4 tracking-tight" style={{ fontFamily: "'Syne', sans-serif" }}>
-              3ステップで「先取権」を確定
+            <h2 className="text-4xl md:text-5xl font-extrabold text-[#F0EFF8] mb-4 tracking-tight">
+              <span className="text-[#00D4AA] mr-1">3</span>ステップで「先取権」を確定
             </h2>
             <p className="text-[#A8A0D8] mb-16 text-lg">あなたの作品を、未来に残る証拠に変える仕組み</p>
 
@@ -551,12 +551,13 @@ export default function Home() {
               </div>
               <h2 className="text-4xl font-black mb-4">描いた証拠を、ワンコインで一生の守りに。</h2>
               <p className="text-muted max-w-xl mx-auto">
-                まずは大幅増枠した無料プラン（月30件）で、あなたの創作に安心をプラスしませんか？
+                まずは気軽に試せる単発プランか、大幅増枠した無料プランで、あなたの創作に安心をプラスしませんか？
               </p>
             </FadeInSection>
 
+            {/* 🌟 2カラムから3カラム（md:grid-cols-3）に変更し、最大幅（max-w-5xl）を拡張 */}
             <motion.div
-              className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto mb-8"
+              className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-8"
               variants={staggerContainer}
               initial="hidden"
               whileInView="visible"
@@ -564,7 +565,7 @@ export default function Home() {
             >
               {/* ── Free plan ── */}
               <motion.div
-                className="p-8 rounded-2xl border relative overflow-hidden"
+                className="p-8 rounded-2xl border relative overflow-hidden flex flex-col"
                 style={{
                   background: "rgba(21,29,47,0.8)",
                   backdropFilter: "blur(12px)",
@@ -578,14 +579,14 @@ export default function Home() {
                 <div className="text-4xl font-black mb-1">
                   ¥0<span className="text-lg text-muted font-normal">/月</span>
                 </div>
-                <p className="text-sm text-muted mb-6">まずは試したい方</p>
-                <ul className="space-y-3 mb-8">
+                <p className="text-sm text-muted mb-6">まずは無料で試したい方</p>
+                <ul className="space-y-3 mb-8 flex-1">
                   <li className="flex items-start gap-2 text-sm">
                     <Check className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
                     <span>
                       Webタイムスタンプ証明{" "}
                       <span
-                        className="ml-1 text-xs font-bold px-2 py-0.5 rounded-full"
+                        className="ml-1 text-xs font-bold px-2 py-0.5 rounded-full block mt-1 w-fit"
                         style={{
                           background: "rgba(0,212,170,0.15)",
                           color: "#00d4aa",
@@ -603,12 +604,12 @@ export default function Home() {
                   </li>
                   <li className="flex items-center gap-2 text-sm text-muted/60">
                     <span className="w-4 h-4 text-center text-muted/40 flex-shrink-0 select-none">—</span>
-                    <span className="line-through">PDF証明書</span>
+                    <span className="line-through">PDF証明書の発行</span>
                   </li>
                 </ul>
                 <motion.a
                   href="#waitlist-section"
-                  className="block w-full px-6 py-3 rounded-full border font-bold text-sm transition-colors text-center"
+                  className="block w-full px-6 py-3 rounded-full border font-bold text-sm transition-colors text-center mt-auto"
                   style={{ borderColor: "rgba(108,62,244,0.4)", color: "#6c3ef4" }}
                   whileHover={{ background: "rgba(108,62,244,0.12)" }}
                   whileTap={{ scale: 0.98 }}
@@ -617,9 +618,55 @@ export default function Home() {
                 </motion.a>
               </motion.div>
 
+              {/* ── Spot plan (新規追加) ── */}
+              <motion.div
+                className="p-8 rounded-2xl border relative overflow-hidden flex flex-col"
+                style={{
+                  background: "rgba(21,29,47,0.85)",
+                  backdropFilter: "blur(12px)",
+                  borderColor: "rgba(0,212,170,0.3)",
+                }}
+                variants={slideInVariants}
+                whileHover={{ borderColor: "rgba(0,212,170,0.6)", y: -4, boxShadow: "0 8px 24px rgba(0,212,170,0.1)" }}
+                transition={{ duration: 0.25 }}
+              >
+                <div className="text-xs font-bold text-[#00D4AA] uppercase tracking-widest mb-2">Spot</div>
+                <div className="text-4xl font-black mb-1">
+                  ¥100<span className="text-lg text-muted font-normal">/回</span>
+                </div>
+                <p className="text-sm text-muted mb-6">必要な時だけ手軽に使いたい方</p>
+                <ul className="space-y-3 mb-8 flex-1">
+                  <li className="flex items-center gap-2 text-sm font-bold text-white">
+                    <Zap className="w-4 h-4 text-[#00D4AA] flex-shrink-0" />
+                    <span>アカウント登録不要</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <Check className="w-4 h-4 text-accent flex-shrink-0" />
+                    <span>PDF証明書（1件発行）</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <Check className="w-4 h-4 text-accent flex-shrink-0" />
+                    <span>Webタイムスタンプ証明</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm text-muted/60">
+                    <span className="w-4 h-4 text-center text-muted/40 flex-shrink-0 select-none">—</span>
+                    <span className="line-through">公開ポートフォリオ保存</span>
+                  </li>
+                </ul>
+                <motion.a
+                  href="#waitlist-section"
+                  className="block w-full px-6 py-3 rounded-full border font-bold text-sm transition-colors text-center mt-auto"
+                  style={{ borderColor: "rgba(0,212,170,0.4)", color: "#00D4AA", background: "rgba(0,212,170,0.05)" }}
+                  whileHover={{ background: "rgba(0,212,170,0.15)" }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  今すぐ1件発行する
+                </motion.a>
+              </motion.div>
+
               {/* ── Light plan ── */}
               <motion.div
-                className="p-8 rounded-2xl relative overflow-hidden"
+                className="p-8 rounded-2xl relative overflow-hidden flex flex-col"
                 style={{
                   background: "linear-gradient(135deg, rgba(108,62,244,0.2) 0%, rgba(21,29,47,0.95) 60%)",
                   border: "2px solid rgba(108,62,244,0.5)",
@@ -630,6 +677,7 @@ export default function Home() {
                 whileHover={{ boxShadow: "0 0 60px rgba(108,62,244,0.35)", y: -4 }}
                 transition={{ duration: 0.25 }}
               >
+                {/* Recommended badge */}
                 <div
                   className="absolute top-4 right-4 text-xs font-black px-3 py-1 rounded-full"
                   style={{
@@ -639,28 +687,29 @@ export default function Home() {
                 >
                   おすすめ
                 </div>
+
                 <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Light</div>
                 <div className="text-4xl font-black mb-1">
                   ¥480<span className="text-lg text-muted font-normal">/月</span>
                 </div>
                 <p className="text-sm text-muted mb-6">本格的に権利を守りたい方へ</p>
-                <ul className="space-y-3 mb-8">
+                <ul className="space-y-3 mb-8 flex-1">
                   {[
+                    "PDF証明書 無制限",
                     "Webタイムスタンプ証明 無制限",
-                    "PDF証明書（無制限）",
+                    "公開ポートフォリオ機能",
                     "C2PAメタデータ読取（対応予定）",
                     "制作工程アップロード",
-                    "全データエクスポート",
                   ].map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-sm">
-                      <Check className="w-4 h-4 text-accent flex-shrink-0" />
+                    <li key={f} className="flex items-start gap-2 text-sm">
+                      <Check className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
                       <span>{f}</span>
                     </li>
                   ))}
                 </ul>
                 <motion.a
                   href="#waitlist-section"
-                  className="block w-full px-6 py-3 rounded-full font-bold text-sm text-primary-foreground text-center"
+                  className="block w-full px-6 py-3 rounded-full font-bold text-sm text-primary-foreground text-center mt-auto"
                   style={{
                     background: "linear-gradient(135deg, #6c3ef4, rgba(108,62,244,0.8))",
                     boxShadow: "0 0 20px rgba(108,62,244,0.4)",
@@ -668,19 +717,13 @@ export default function Home() {
                   whileHover={{ boxShadow: "0 0 32px rgba(108,62,244,0.6)", scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  先行特典を予約（Lightプラン）
+                  先行特典を予約する
                 </motion.a>
               </motion.div>
             </motion.div>
 
             <FadeInSection>
-              <div className="flex items-start justify-center gap-2 mb-4">
-                <Info className="w-4 h-4 text-muted flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-muted">
-                  必要な時だけ、1回100円からPDF証明書を発行できる単発プランも準備中です。
-                </p>
-              </div>
-              <p className="text-center text-sm text-muted">
+              <p className="text-center text-sm font-bold" style={{ color: "#F0BB38" }}>
                 ※ 先着100名はLightプラン3ヶ月無料＋創設者バッジ付き
               </p>
             </FadeInSection>
