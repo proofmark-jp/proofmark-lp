@@ -226,33 +226,21 @@ export function CertificateUpload({
       <AnimatePresence mode="wait">
         {/* ── サーバー保存完了状態（ログイン済みユーザー） ── */}
         {isCompleted ? (
-          <motion.div
-            key="completed"
-            className="relative rounded-2xl border overflow-hidden p-8 text-center"
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(0,212,170,0.12) 0%, rgba(21,29,47,0.95) 60%)",
-              border: "2px solid rgba(0,212,170,0.45)",
-              boxShadow: "0 0 40px rgba(0,212,170,0.15)",
-              backdropFilter: "blur(12px)",
-            }}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <motion.div
-              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
-              style={{ background: "rgba(0,212,170,0.15)", border: "1px solid rgba(0,212,170,0.3)" }}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.1, type: "spring", stiffness: 260, damping: 20 }}
-            >
-              <CheckCircle2 className="w-8 h-8 text-accent" />
-            </motion.div>
-            <h3 className="text-lg font-bold mb-2">証明書ページへ移動中...</h3>
-            <p className="text-sm text-muted mb-6">少々お待ちください。</p>
-          </motion.div>
+          <div className="relative rounded-2xl border p-8 text-center bg-[#0D0B24]">
+            <h3 className="text-xl font-bold text-white mb-6">証明書の発行が完了しました</h3>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link href={`/cert/${certificateId}`}>
+                <button className="bg-[#6C3EF4] text-white px-6 py-3 rounded-full font-bold text-sm">
+                  証明書を確認する
+                </button>
+              </Link>
+              <Link href={`/u/${user?.user_metadata?.username || 'sinn'}`}>
+                <button className="bg-[#151D2F] border border-[#1C1A38] text-white px-6 py-3 rounded-full font-bold text-sm">
+                  ポートフォリオを見る
+                </button>
+              </Link>
+            </div>
+          </div>
         ) : localResult ? (
           /* ── ローカルハッシュ結果表示（未ログイン） ── */
           <motion.div

@@ -23,7 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
         // 🌟 修正: フロントエンドから `filename` も受け取るようにした
-        const { storagePath, userId = "anon", fileHash, filename } = req.body;
+        const { storagePath, userId = "anon", fileHash, filename, username } = req.body;
 
         // fileHash と storagePath が送られてきていない場合はエラーを返す
         if (!storagePath || !fileHash) {
@@ -39,9 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // 公開URLを生成
         const fileUrl = `${supabaseUrl}/storage/v1/object/public/${storagePath}`;
-        // 🌟 修正: ファイル名がない場合は「Untitled」にする
-        const safeFileName = filename || "Untitled";
-
+        
         const { data: insertData, error: dbError } = await supabaseAdmin
             .from("certificates")
             .insert({
@@ -49,7 +47,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 file_hash: fileHash,
                 storage_path: storagePath,
                 file_url: fileUrl,
-                file_name: safeFileName, // 🌟 これを追加！
+                file_name: filename || "Untitled",
+                metadata: { username: username || 'sinn', show_in_gallery: true }
             })
             .select()
             .single();

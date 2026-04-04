@@ -114,7 +114,6 @@ export function useDirectUpload(): UseDirectUploadReturn {
         // ── Step 3: データベースに証明書を保存 ────────────
         setState((prev) => ({ ...prev, progress: 80 }));
 
-        // 🌟 事前計算した fileHash を一緒にAPIへ送信する！
         const saveRes = await fetch(SAVE_CERT_ENDPOINT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

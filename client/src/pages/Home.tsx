@@ -5,6 +5,7 @@ import { Lock, Database, AlertCircle, Check, Shield, Zap, Award, Info } from "lu
 import { motion, useScroll, useTransform } from "framer-motion";
 
 import { CertificateUpload } from "@/components/CertificateUpload";
+import { useAuth } from "@/hooks/useAuth";
 import { FAQAccordion } from "@/components/FAQAccordion";
 import { SupportedToolsSection } from "@/components/SupportedToolsSection";
 import { DeveloperMessage } from "@/components/DeveloperMessage";
@@ -76,6 +77,7 @@ export default function Home() {
   const [isHeroSubmitting, setIsHeroSubmitting] = useState(false);
   const [isWaitlistSubmitting, setIsWaitlistSubmitting] = useState(false);
 
+  const { user, signOut } = useAuth();
   SchemaScript();
 
   const { scrollYProgress } = useScroll();
@@ -128,10 +130,17 @@ export default function Home() {
             <Link href="/blog" className="hover:text-[#6C3EF4] transition-colors">ブログ</Link>
           </nav>
 
-          <div>
-            <Link href="/auth" style={{ background: "#6C3EF4", color: "#FFF", padding: "8px 16px", borderRadius: "8px", textDecoration: "none", fontWeight: "bold", fontSize: "12px", transition: "opacity 0.2s", whiteSpace: "nowrap" }}>
-              ログイン / 登録
-            </Link>
+          <div className="flex items-center gap-4">
+            {user ? (
+              <>
+                <Link href={`/u/${user.user_metadata?.username || 'sinn'}`}>
+                  <span className="text-sm font-bold text-[#00D4AA] cursor-pointer">My Portfolio</span>
+                </Link>
+                <button onClick={signOut} className="text-sm text-[#A8A0D8]">ログアウト</button>
+              </>
+            ) : (
+              <Link href="/auth"><button className="bg-[#6C3EF4] px-5 py-2 rounded-full text-sm font-bold">無料で始める</button></Link>
+            )}
           </div>
         </header>
 
