@@ -98,19 +98,6 @@ export function CertificateUpload({
   const [isHashing, setIsHashing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 💡 【追記】iOSのスワイプバック（bfcache）復帰時に状態をリセットする
-  useEffect(() => {
-    const handlePageShow = (event: PageTransitionEvent) => {
-      // event.persisted が true の場合、キャッシュから画面が復元されたことを意味します
-      if (event.persisted) {
-        handleReset(); // 下の方で定義されているリセット関数を呼ぶ
-      }
-    };
-
-    window.addEventListener("pageshow", handlePageShow);
-    return () => window.removeEventListener("pageshow", handlePageShow);
-  }, [handleReset]);
-
   // ── バリデーション（ログイン不要版）────────────────────────────────
   const validateFile = useCallback((file: File): string | null => {
     if (!ALLOWED_MIME_TYPES.includes(file.type as (typeof ALLOWED_MIME_TYPES)[number])) {
@@ -218,6 +205,18 @@ export function CertificateUpload({
     setLocalResult(null);
     if (inputRef.current) inputRef.current.value = "";
   }, [reset]);
+
+  // 💡 【修正箇所】iOSのスワイプバック（bfcache）復帰時に状態をリセットする
+  // ※ handleReset が定義された後に配置することでエラーを防ぎます。
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        handleReset();
+      }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, [handleReset]);
 
   // ── 表示状態 ─────────────────────────────────────────────────────
   const isCompleted = certificateId !== null;
