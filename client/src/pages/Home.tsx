@@ -133,10 +133,11 @@ export default function Home() {
           <div className="flex items-center gap-4">
             {user ? (
               <>
+                <Link href="/dashboard">
+                  <span className="text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors cursor-pointer">管理画面</span>
+                </Link>
                 <Link href={`/u/${user.user_metadata?.username || user.email?.split('@')[0] || 'sinn'}`}>
-                  <span className="flex items-center gap-2 text-sm font-bold text-[#00D4AA] hover:text-white transition-colors cursor-pointer">
-                    My Portfolio
-                  </span>
+                  <span className="text-sm font-bold text-[#00D4AA] hover:text-white transition-colors cursor-pointer">公開ギャラリー</span>
                 </Link>
                 <button onClick={signOut} className="text-sm text-[#A8A0D8] hover:text-white transition-colors">
                   ログアウト

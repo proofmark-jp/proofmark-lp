@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useRoute, useLocation } from 'wouter';
+import { useRoute, useLocation, Link } from 'wouter';
 import { createClient } from '@supabase/supabase-js';
 import { QRCodeSVG } from 'qrcode.react';
 import { CheckCircle, Clock, ShieldCheck, Image as ImageIcon, Copy, Check, FileText } from 'lucide-react';
@@ -129,6 +129,15 @@ export default function CertificatePage() {
                                     FOUNDER
                                 </div>
                             </div>
+                            {cert.metadata?.username && (
+                                <div className="mt-4 no-print text-center lg:text-left">
+                                    <Link href={`/u/${cert.metadata.username}`}>
+                                        <span className="inline-flex items-center gap-2 text-sm font-bold text-[#00D4AA] hover:text-white transition-colors cursor-pointer bg-[#00D4AA]/10 border border-[#00D4AA]/20 px-4 py-2 rounded-full">
+                                            👤 @{cert.metadata.username} の公開ギャラリーを見る
+                                        </span>
+                                    </Link>
+                                </div>
+                            )}
                         </div>
 
                         {/* 💡 print:flex-row を追加して印刷時に横並びを強制 */}

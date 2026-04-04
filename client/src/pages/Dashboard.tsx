@@ -137,10 +137,10 @@ export default function Dashboard() {
       {/* Hero section */}
       <section style={styles.hero}>
         <h1 className="text-3xl font-black mb-2" style={styles.heroTitle}>
-          My Portfolio
+          Dashboard
         </h1>
         <p className="text-muted" style={styles.heroSubtitle}>
-          あなたの証明済み作品一覧。これらは安全なクラウドに保管されています。
+          証明済み作品の管理パネル。ここはあなただけがアクセスできる非公開エリアです。
         </p>
       </section>
 

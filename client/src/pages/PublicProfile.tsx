@@ -23,6 +23,7 @@ interface CertRecord {
   file_hash: string;
   created_at: string;
   image_url?: string;
+  file_url?: string;
   storage_path?: string;
   file_name?: string;
   metadata?: {
@@ -164,7 +165,7 @@ export default function PublicProfile() {
               <h1 className="text-3xl font-extrabold text-white tracking-tight">@{username}</h1>
               <div className="flex items-center gap-1.5 bg-[#1A1200] border border-[#F0BB38] px-4 py-1.5 rounded-full">
                 <img src={founderBadge} alt="Founder" className="w-4 h-4" />
-                <span className="text-[10px] font-black text-[#F0BB38] tracking-widest uppercase">Verified Founder</span>
+                <span className="text-[10px] font-black text-[#F0BB38] tracking-widest uppercase">Founder</span>
               </div>
             </div>
             <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm font-medium">
@@ -189,7 +190,7 @@ export default function PublicProfile() {
         ) : (
           <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
             {certs.map((cert) => {
-              const imgUrl = cert.image_url;
+              const imgUrl = cert.file_url || cert.image_url;
               const cleanFilename = formatFilename(cert);
 
               return (
