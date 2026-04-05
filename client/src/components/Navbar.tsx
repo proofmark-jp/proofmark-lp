@@ -16,35 +16,35 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
           </span>
         </Link>
 
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-2 sm:gap-5">
           {user ? (
             <>
               <Link href="/dashboard">
-                <span className="flex items-center gap-1.5 text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors cursor-pointer">
-                  <LayoutDashboard className="w-4 h-4" /> 管理画面
+                <span className="flex items-center gap-1.5 text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors cursor-pointer whitespace-nowrap">
+                  <LayoutDashboard className="w-4 h-4" /> <span className="hidden sm:inline">管理画面</span>
                 </span>
               </Link>
               <Link href={`/u/${displayUsername}`}>
-                <span className="flex items-center gap-1.5 text-sm font-bold text-[#00D4AA] hover:text-white transition-colors cursor-pointer">
-                  <ImageIcon className="w-4 h-4" /> 公開ギャラリー
+                <span className="flex items-center gap-1.5 text-sm font-bold text-[#00D4AA] hover:text-white transition-colors cursor-pointer whitespace-nowrap">
+                  <ImageIcon className="w-4 h-4" /> <span className="hidden sm:inline">公開ギャラリー</span>
                 </span>
               </Link>
               <Link href="/settings">
-                <span className="flex items-center gap-1.5 text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors cursor-pointer">
-                  <Settings className="w-4 h-4" /> 設定
+                <span className="flex items-center gap-1.5 text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors cursor-pointer whitespace-nowrap">
+                  <Settings className="w-4 h-4" /> <span className="hidden sm:inline">設定</span>
                 </span>
               </Link>
-              <button onClick={signOut} className="flex items-center gap-1.5 text-sm text-[#A8A0D8] hover:text-white transition-colors">
-                <LogOut className="w-4 h-4" /> ログアウト
+              <button onClick={signOut} className="flex items-center gap-1.5 text-sm text-[#A8A0D8] hover:text-white transition-colors whitespace-nowrap">
+                <LogOut className="w-4 h-4" /> <span className="hidden sm:inline">ログアウト</span>
               </button>
             </>
           ) : (
             <>
               <Link href="/auth">
-                <span className="text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors cursor-pointer">ログイン</span>
+                <span className="text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors cursor-pointer whitespace-nowrap">ログイン</span>
               </Link>
               <Link href="/auth">
-                <button className="bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white px-5 py-2.5 rounded-full text-sm font-bold shadow-[0_0_15px_rgba(108,62,244,0.3)] hover:scale-105 transition-all">
+                <button className="bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold shadow-[0_0_15px_rgba(108,62,244,0.3)] hover:scale-105 transition-all whitespace-nowrap">
                   無料で始める
                 </button>
               </Link>

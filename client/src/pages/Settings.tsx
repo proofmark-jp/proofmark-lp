@@ -56,9 +56,22 @@ export default function Settings() {
       if (uploadError) throw uploadError;
 
       // パブリックURLの取得
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      setAvatarUrl(data.publicUrl);
-      toast.success('アバター画像をアップロードしました');
+      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      const publicUrl = publicUrlData.publicUrl;
+      setAvatarUrl(publicUrl);
+
+      // 🌟 AuthのメタデータにURLを書き込む（これが抜けていたためポートフォリオ等に反映されなかった）
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: { avatar_url: publicUrl }
+      });
+
+      if (updateError) {
+        toast.error("アバターURLの保存に失敗しました");
+      } else {
+        toast.success('アバター画像を更新しました！');
+        // 変更を即座に反映させるためリロード
+        setTimeout(() => window.location.reload(), 1000);
+      }
       
     } catch (error: any) {
       toast.error('画像のアップロードに失敗しました');
