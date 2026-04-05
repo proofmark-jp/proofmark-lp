@@ -15,29 +15,29 @@ interface AuthActions {
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
 }
 
+import { getCurrentSession, onAuthStateChange } from "../lib/auth";
+
 export function useAuth(): AuthState & AuthActions {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 初回セッション取得
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // マウント時に現在のセッションを確認してStateに反映
+    getCurrentSession().then((session) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    // セッション変更の監視
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    // 認証状態の変化を監視（提供されたヘルパーを使用）
+    const unsubscribe = onAuthStateChange((user, session) => {
+      setUser(user);
       setSession(session);
-      setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, username?: string) => {

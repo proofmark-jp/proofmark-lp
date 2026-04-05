@@ -12,12 +12,28 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../hooks/useAuth";
+import { supabase } from "../lib/supabase";
 import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
 
 const AssetCounter = () => {
-  // TODO: 後でSupabaseから総登録数を取得してセットする
-  const targetNumber = 124;
+  const [targetNumber, setTargetNumber] = useState(124);
   const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const fetchCount = async () => {
+      try {
+        const { data } = await supabase
+          .from('stat_counters')
+          .select('stat_value')
+          .eq('stat_name', 'total_profiles')
+          .single();
+        if (data) setTargetNumber(data.stat_value);
+      } catch (err) {
+        console.error("Failed to fetch count:", err);
+      }
+    };
+    fetchCount();
+  }, []);
 
   useEffect(() => {
     let start = 0;
@@ -35,7 +51,7 @@ const AssetCounter = () => {
     }, 16);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [targetNumber]);
 
   return (
     <div className="flex flex-col gap-1">
@@ -185,7 +201,7 @@ export default function Auth() {
 
       {/* ── Form Panel (Right/Bottom) ─────────────────────────── */}
       <div className="flex flex-col items-center justify-center p-8 lg:p-16 xl:p-24 relative overflow-hidden transition-all duration-300">
-        <Link href="/" className="lg:hidden absolute top-8 left-8 flex items-center gap-2 text-[#A8A0D8] hover:text-white transition-colors">
+        <Link href="/" className="lg:hidden absolute top-8 left-8 flex items-center gap-2 text-[#A8A0D8] hover:text-white transition-all relative z-50 pointer-events-auto">
           <ArrowLeft className="w-4 h-4" /> Home
         </Link>
 
@@ -201,12 +217,16 @@ export default function Auth() {
 
         <div className="w-full max-w-md relative z-10">
           {/* Mobile Logo Only */}
-          <div className="lg:hidden mb-12 flex flex-col items-center">
-            <div className="relative">
-              <div className="absolute inset-x-0 bottom-0 h-4 bg-[#6C3EF4]/30 blur-xl" />
-              <img src={navbarLogo} alt="ProofMark" className="h-10 w-auto relative z-10" />
-            </div>
-            <h2 className="text-2xl font-black text-white tracking-tighter mt-2">ProofMark</h2>
+          <div className="lg:hidden mb-12 flex flex-col items-center relative z-50 pointer-events-auto">
+            <Link href="/" className="flex flex-col items-center gap-2">
+              <div className="relative">
+                <div className="absolute inset-0 bg-[#00D4AA]/20 blur-lg rounded-full" />
+                <img src={navbarLogo} alt="ProofMark" className="h-10 w-auto relative z-10 antialiased" />
+              </div>
+              <span className="font-['Syne'] text-2xl font-black text-white tracking-tighter mt-1">
+                Proof<span className="text-[#00D4AA]">Mark</span>
+              </span>
+            </Link>
           </div>
 
           <div className="mb-10">
