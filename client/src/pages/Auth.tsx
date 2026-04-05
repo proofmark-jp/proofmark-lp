@@ -95,6 +95,8 @@ export default function Auth() {
             <label style={styles.label}>メールアドレス</label>
             <input
               type="email"
+              name="email"
+              autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
@@ -107,6 +109,8 @@ export default function Auth() {
             <label style={styles.label}>パスワード</label>
             <input
               type="password"
+              name="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"

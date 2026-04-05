@@ -204,13 +204,25 @@ export default function PublicProfile() {
                     )}
 
                     {/* Default Top Badge */}
-                    <div className="absolute top-3 left-3 flex items-center gap-1 bg-[#0a0f1c]/80 backdrop-blur-md border border-[#00D4AA]/30 px-2.5 py-1 rounded-full z-10">
-                      <ShieldCheck className="w-3 h-3 text-[#00D4AA]" />
-                      <span className="text-[9px] font-bold text-[#00D4AA] tracking-widest uppercase">Verified</span>
+                    <div className="absolute top-3 left-3 flex flex-col gap-2 z-10">
+                      <div className="flex items-center gap-1 bg-[#0a0f1c]/80 backdrop-blur-md border border-[#00D4AA]/30 px-2.5 py-1 rounded-full w-fit">
+                        <ShieldCheck className="w-3 h-3 text-[#00D4AA]" />
+                        <span className="text-[9px] font-bold text-[#00D4AA] tracking-widest uppercase">Verified</span>
+                      </div>
+                      
+                      {/* 🌟 Mobile Only Info (Always Visible) */}
+                      <div className="block sm:hidden bg-[#07061A]/90 backdrop-blur-md border border-[#1C1A38] px-3 py-2 rounded-xl shadow-xl max-w-[140px]">
+                        <p className="text-white text-[10px] font-bold truncate mb-0.5">
+                          {cleanFilename}
+                        </p>
+                        <p className="text-[#00D4AA] text-[8px] font-black tracking-tighter uppercase flex items-center gap-1">
+                          <ExternalLink className="w-2.5 h-2.5" /> View Certificate
+                        </p>
+                      </div>
                     </div>
 
-                    {/* Cyber Hover Overlay */}
-                    <div className="absolute inset-0 bg-[#07061A]/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-center p-4">
+                    {/* Cyber Hover Overlay (Desktop Only) */}
+                    <div className="absolute inset-0 bg-[#07061A]/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-300 hidden sm:flex flex-col items-center justify-center p-4">
                       <div className="w-12 h-12 rounded-full border-2 border-[#00D4AA] flex items-center justify-center mb-3 shadow-[0_0_15px_rgba(0,212,170,0.5)]">
                         <ExternalLink className="w-5 h-5 text-[#00D4AA]" />
                       </div>

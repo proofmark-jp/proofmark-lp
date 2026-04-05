@@ -113,7 +113,7 @@ export default function Home() {
 
   return (
     <>
-      <div id="top" className="min-h-screen bg-background text-foreground overflow-x-hidden">
+      <div id="top" className="min-h-screen bg-background text-foreground overflow-clip">
         <Navbar user={user} signOut={signOut} />
 
         {/* ── Hero Section ────────────────────────────────────── */}
