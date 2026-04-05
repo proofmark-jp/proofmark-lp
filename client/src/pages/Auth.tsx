@@ -289,7 +289,7 @@ export default function Auth() {
                   id="email"
                   name="email"
                   type="email"
-                  autoComplete={isResetMode ? "email" : isLogin ? "username" : "email"}
+                  autoComplete="email username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@email.com"
