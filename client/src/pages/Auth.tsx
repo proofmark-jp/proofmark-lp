@@ -294,7 +294,8 @@ export default function Auth() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {isRecoveryMode ? (
-              <div className="space-y-2">
+              // 🔴 パスワード再設定（リカバリー）モード専用のUI
+              <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
                 <label className="text-xs font-black text-[#A8A0D8] uppercase tracking-widest pl-1" htmlFor="newPassword">新しいパスワード</label>
                 <div className="relative group">
                   <input
@@ -309,9 +310,13 @@ export default function Auth() {
                     minLength={6}
                     className="w-full bg-[#0D0B24]/50 border border-[#1C1A38] focus:border-[#6C3EF4]/50 rounded-2xl px-5 py-4 text-white placeholder-[#A8A0D8]/30 outline-none transition-all group-hover:border-[#1C1A38]/80"
                   />
+                  <div className="text-[10px] text-[#A8A0D8]/50 mt-2 pl-1 leading-relaxed">
+                    ※ セキュリティのため、6文字以上の新しいパスワードを入力してください。
+                  </div>
                 </div>
               </div>
             ) : (
+              // 🔵 通常のログイン・新規登録・パスワード忘れモードのUI
               <>
                 {!isLogin && !isResetMode && (
                   <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -333,6 +338,8 @@ export default function Auth() {
                     </div>
                   </div>
                 )}
+                
+                {/* メールアドレス入力（ログイン・新規登録・リセット共通） */}
                 <div className="space-y-2">
                   <label className="text-xs font-black text-[#A8A0D8] uppercase tracking-widest pl-1" htmlFor="email">メールアドレス</label>
                   <div className="relative group">
@@ -349,40 +356,42 @@ export default function Auth() {
                     />
                   </div>
                 </div>
+
+                {/* パスワード入力（ログイン・新規登録のみ。リセットモードでは非表示） */}
+                {!isResetMode && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between pl-1">
+                      <label className="text-xs font-black text-[#A8A0D8] uppercase tracking-widest" htmlFor="password">パスワード</label>
+                      {isLogin && (
+                        <button 
+                          type="button" 
+                          onClick={() => { setIsResetMode(true); setError(null); setSuccessMsg(null); }}
+                          className="text-[10px] font-bold text-[#6C3EF4] hover:text-[#8B61FF] transition-colors"
+                        >
+                          Forgot password?
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative group">
+                      <input
+                        id="password"
+                        name="password"
+                        type="password"
+                        autoComplete={isLogin ? "current-password" : "new-password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        required
+                        minLength={6}
+                        className="w-full bg-[#0D0B24]/50 border border-[#1C1A38] focus:border-[#6C3EF4]/50 rounded-2xl px-5 py-4 text-white placeholder-[#A8A0D8]/30 outline-none transition-all group-hover:border-[#1C1A38]/80"
+                      />
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
-            {!isResetMode && !isRecoveryMode && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between pl-1">
-                  <label className="text-xs font-black text-[#A8A0D8] uppercase tracking-widest" htmlFor="password">パスワード</label>
-                  {isLogin && (
-                    <button 
-                      type="button" 
-                      onClick={() => { setIsResetMode(true); setError(null); setSuccessMsg(null); }}
-                      className="text-[10px] font-bold text-[#6C3EF4] hover:text-[#8B61FF] transition-colors"
-                    >
-                      Forgot password?
-                    </button>
-                  )}
-                </div>
-                <div className="relative group">
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    autoComplete={isLogin ? "current-password" : "new-password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    minLength={6}
-                    className="w-full bg-[#0D0B24]/50 border border-[#1C1A38] focus:border-[#6C3EF4]/50 rounded-2xl px-5 py-4 text-white placeholder-[#A8A0D8]/30 outline-none transition-all group-hover:border-[#1C1A38]/80"
-                  />
-                </div>
-              </div>
-            )}
-
+            {/* エラー・成功メッセージと送信ボタンは維持 */}
             {error && (
               <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex gap-3 animate-in fade-in slide-in-from-top-2">
                 <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[10px] font-bold">!</div>
