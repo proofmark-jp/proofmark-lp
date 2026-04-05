@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
-import navbarLogo from "../assets/logo/navbar/proofmark-navbar-symbol-dark.svg";
-import founderBadge from "../assets/logo/badges/proofmark-badge-founder.svg";
+import Navbar from "../components/Navbar";
 
 interface Certificate {
   id: string;
@@ -97,42 +96,7 @@ export default function Dashboard() {
 
   return (
     <div style={styles.page}>
-      {/* Header (レスポンシブ対応版) */}
-      <header style={{ ...styles.header, padding: "12px 16px" }}>
-        {/* 左側：ロゴ ＋ Founderバッジ */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <a href="/" style={styles.logoLink}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <img src={navbarLogo} alt="ProofMark Logo" style={{ height: "24px", width: "auto" }} />
-              {/* 🌟 iPhone SEなどの極小画面では文字を隠し、ロゴマークのみにする */}
-              <span className="hidden sm:block" style={{ fontFamily: "'Syne', sans-serif", fontSize: "18px", fontWeight: 800, color: "#F0EFF8" }}>
-                Proof<span style={{ color: "#00D4AA" }}>Mark</span>
-              </span>
-            </div>
-          </a>
-
-          {/* 🌟 Founderバッジを左寄せのグループに移動し、少しコンパクトに */}
-          <div style={{ display: "flex", alignItems: "center", gap: "4px", background: "#1A1200", padding: "4px 8px", borderRadius: "20px", border: "1px solid #F0BB38" }}>
-            <img src={founderBadge} alt="Founder" style={{ height: "16px", width: "16px" }} />
-            <span style={{ fontSize: "11px", fontWeight: "bold", color: "#F0BB38", whiteSpace: "nowrap" }}>Founder</span>
-          </div>
-        </div>
-
-        {/* 右側：メールアドレス ＋ ログアウト */}
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          {/* 🌟 スマホ（smサイズ未満）ではメールアドレスを非表示にする */}
-          <span className="hidden sm:block" style={{ color: "#A8A0D8", fontSize: "14px" }}>
-            {user?.email}
-          </span>
-          <button
-            onClick={signOut}
-            style={{ background: "transparent", border: "1px solid #48456A", color: "#F0EFF8", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", transition: "background 0.2s", whiteSpace: "nowrap" }}
-            className="hover:bg-[#1C1A38]"
-          >
-            ログアウト
-          </button>
-        </div>
-      </header>
+      <Navbar user={user} signOut={signOut} />
 
       {/* Hero section */}
       <section style={styles.hero}>

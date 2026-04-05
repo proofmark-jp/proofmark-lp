@@ -13,6 +13,8 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
 import founderBadge from '../assets/logo/badges/proofmark-badge-founder.svg';
+import { useAuth } from '../hooks/useAuth';
+import Navbar from '../components/Navbar';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -83,6 +85,7 @@ export default function PublicProfile() {
   const [certs, setCerts] = useState<CertRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [profileExists, setProfileExists] = useState(false);
+  const { user, signOut } = useAuth();
 
   useEffect(() => {
     if (!username) {
@@ -137,20 +140,7 @@ export default function PublicProfile() {
 
   return (
     <div className="min-h-screen bg-[#07061A] text-[#F0EFF8] font-sans pb-24">
-      {/* Navbar */}
-      <div className="w-full border-b border-[#1C1A38] bg-[#0D0B24]/90 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 text-decoration-none">
-            <img src={navbarLogo} alt="ProofMark" className="h-6 w-auto" />
-            <span className="font-['Syne'] text-lg font-extrabold text-[#F0EFF8]">
-              Proof<span className="text-[#00D4AA]">Mark</span>
-            </span>
-          </Link>
-          <Link href="/" className="flex items-center gap-2 text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors cursor-pointer">
-            <ArrowLeft className="w-4 h-4" /> 発行ページへ
-          </Link>
-        </div>
-      </div>
+      <Navbar user={user} signOut={signOut} />
 
       {/* Header */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-10">

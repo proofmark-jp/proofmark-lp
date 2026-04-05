@@ -3,6 +3,8 @@ import { useRoute, useLocation, Link } from 'wouter';
 import { createClient } from '@supabase/supabase-js';
 import { QRCodeSVG } from 'qrcode.react';
 import { CheckCircle, Clock, ShieldCheck, Image as ImageIcon, Copy, Check, FileText } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
+import Navbar from '../components/Navbar';
 import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
 import founderBadge from '../assets/logo/badges/proofmark-badge-founder.svg';
 
@@ -21,6 +23,7 @@ export default function CertificatePage() {
 
     // 💡 複数ボタンに対応するためコピー状態を文字列で管理
     const [copiedType, setCopiedType] = useState<string | null>(null);
+    const { user, signOut } = useAuth();
 
     useEffect(() => {
         async function fetchCertificate() {
@@ -93,14 +96,7 @@ export default function CertificatePage() {
             {/* 💡 Tailwindの `print:` クラスを駆使して印刷時の見た目を完全にコントロール */}
             <div className="min-h-screen bg-[#07061A] text-[#F0EFF8] flex flex-col items-center py-10 px-4 sm:px-8 font-sans print:min-h-0 print:bg-white print:py-0 print:px-0">
 
-                <div className="print:hidden w-full max-w-5xl mb-8 flex items-center justify-between">
-                    <a href="/" className="flex items-center gap-3 text-decoration-none">
-                        <img src={navbarLogo} alt="ProofMark Logo" className="h-7 w-auto" />
-                        <span className="font-['Syne'] text-xl font-extrabold text-[#F0EFF8]">
-                            Proof<span className="text-[#00D4AA]">Mark</span>
-                        </span>
-                    </a>
-                </div>
+                <Navbar user={user} signOut={signOut} />
 
                 {/* --- 📜 証明書カード本体 --- */}
                 <div className="w-full max-w-5xl bg-[#0D0B24] border border-[#1C1A38] rounded-3xl p-8 sm:p-12 shadow-[0_0_50px_rgba(108,62,244,0.1)] relative overflow-hidden print:bg-white print:border-2 print:border-gray-200 print:shadow-none print:p-8 print:w-full print:max-w-none print:break-inside-avoid">

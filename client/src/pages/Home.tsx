@@ -13,7 +13,7 @@ import { PrivacyFooter } from "@/components/PrivacyFooter";
 import { sendConfirmationEmail } from "@/lib/email";
 import LearningSection from "@/components/LearningSection";
 import { SchemaScript } from "@/components/SchemaScript";
-import navbarLogo from "../assets/logo/navbar/proofmark-navbar-symbol-dark.svg";
+import Navbar from "@/components/Navbar";
 import founderBadge from "../assets/logo/badges/proofmark-badge-founder.svg";
 import {
   fadeInVariants,
@@ -114,51 +114,7 @@ export default function Home() {
   return (
     <>
       <div id="top" className="min-h-screen bg-background text-foreground overflow-x-hidden">
-
-        {/* ── Navigation (グローバルナビ追加) ────────────────── */}
-        <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #1C1A38", background: "rgba(7, 6, 26, 0.9)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 50, flexWrap: "wrap", gap: "10px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <img src={navbarLogo} alt="ProofMark Logo" style={{ height: "24px", width: "auto" }} />
-            <span style={{ fontFamily: "'Syne', sans-serif", fontSize: "20px", fontWeight: 800, letterSpacing: "-0.5px", color: "#F0EFF8" }}>
-              Proof<span style={{ color: "#00D4AA" }}>Mark</span>
-            </span>
-          </div>
-
-          <nav className="hidden md:flex items-center gap-8 text-sm font-bold text-[#A8A0D8]">
-            <a href="#how-it-works" className="hover:text-[#00D4AA] transition-colors">仕組み</a>
-            <a href="#pricing" className="hover:text-[#F0BB38] transition-colors">料金プラン</a>
-            <Link href="/blog" className="hover:text-[#6C3EF4] transition-colors">ブログ</Link>
-          </nav>
-
-          <div className="flex items-center gap-4">
-            {user ? (
-              <>
-                <Link href="/dashboard">
-                  <span className="text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors cursor-pointer">管理画面</span>
-                </Link>
-                <Link href={`/u/${user.user_metadata?.username || user.email?.split('@')[0] || 'sinn'}`}>
-                  <span className="text-sm font-bold text-[#00D4AA] hover:text-white transition-colors cursor-pointer">公開ギャラリー</span>
-                </Link>
-                <button onClick={signOut} className="text-sm text-[#A8A0D8] hover:text-white transition-colors">
-                  ログアウト
-                </button>
-              </>
-            ) : (
-              <div className="flex items-center gap-5">
-                <Link href="/auth">
-                  <span className="text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors cursor-pointer">
-                    ログイン
-                  </span>
-                </Link>
-                <Link href="/auth">
-                  <button className="bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white px-5 py-2.5 rounded-full text-sm font-bold shadow-[0_0_15px_rgba(108,62,244,0.3)] hover:scale-105 transition-all flex items-center justify-center">
-                    無料で始める
-                  </button>
-                </Link>
-              </div>
-            )}
-          </div>
-        </header>
+        <Navbar user={user} signOut={signOut} />
 
         {/* ── Hero Section ────────────────────────────────────── */}
         <section className="relative min-h-[90vh] flex items-center overflow-hidden">
