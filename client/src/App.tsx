@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { useAuth } from "./hooks/useAuth";
 import Home from "./pages/Home";
 import CertificatePage from './pages/CertificatePage';
 import Auth from './pages/Auth';
@@ -46,6 +48,8 @@ function Router() {
 }
 
 function App() {
+  const { user } = useAuth(); // ← Appのレンダリング時にセッションを復元・監視させる
+
   return (
     <ErrorBoundary>
       <ThemeProvider>

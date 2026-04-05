@@ -155,14 +155,18 @@ export default function Auth() {
         <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-[#6C3EF4] opacity-10 blur-[120px] rounded-full pointer-events-none" />
         <div className="absolute bottom-[10%] left-[-5%] w-[300px] h-[300px] bg-[#00D4AA] opacity-10 blur-[100px] rounded-full pointer-events-none" />
         
-        {/* Header Logo Component */}
-        <Link href="/" className="relative z-10 flex items-center gap-3 group transition-all hover:scale-105 active:scale-95 w-fit">
-          <div className="relative">
-            <div className="absolute inset-0 bg-[#00D4AA]/20 blur-lg rounded-full group-hover:bg-[#00D4AA]/40 transition-all opacity-0 group-hover:opacity-100" />
-            <img src={navbarLogo} alt="ProofMark" className="h-10 w-auto relative z-10 transition-all group-hover:rotate-6" />
-          </div>
-          <span className="text-2xl font-black text-white tracking-tighter">ProofMark</span>
-        </Link>
+        {/* Header Logo Component - Standardized with LP */}
+        <div className="mb-12">
+          <a href="/" className="flex items-center text-decoration-none group cursor-pointer w-fit inline-flex relative z-50 pointer-events-auto">
+            <div className="relative">
+              <div className="absolute inset-0 bg-[#00D4AA]/20 blur-lg rounded-full group-hover:bg-[#00D4AA]/40 transition-all opacity-0 group-hover:opacity-100" />
+              <img src={navbarLogo} alt="ProofMark" className="h-10 w-auto relative z-10" />
+            </div>
+            <span className="font-['Syne'] text-3xl font-extrabold text-[#F0EFF8] tracking-tight ml-3">
+              Proof<span className="text-[#00D4AA]">Mark</span>
+            </span>
+          </a>
+        </div>
         
         {/* Value Proposition Content */}
         <div className="relative z-10 max-w-lg">
@@ -201,32 +205,29 @@ export default function Auth() {
 
       {/* ── Form Panel (Right/Bottom) ─────────────────────────── */}
       <div className="flex flex-col items-center justify-center p-8 lg:p-16 xl:p-24 relative overflow-hidden transition-all duration-300">
-        <Link href="/" className="lg:hidden absolute top-8 left-8 flex items-center gap-2 text-[#A8A0D8] hover:text-white transition-all relative z-50 pointer-events-auto">
-          <ArrowLeft className="w-4 h-4" /> Home
-        </Link>
-
+        
         {/* Back button for Reset Mode */}
         {isResetMode && (
           <button 
             onClick={() => { setIsResetMode(false); setError(null); setSuccessMsg(null); }}
-            className="absolute top-8 left-8 lg:left-16 flex items-center gap-2 text-[#A8A0D8] hover:text-[#6C3EF4] transition-all font-bold text-sm"
+            className="absolute top-8 left-8 lg:left-16 flex items-center gap-2 text-[#A8A0D8] hover:text-[#6C3EF4] transition-all font-bold text-sm z-50 pointer-events-auto"
           >
             <ArrowLeft className="w-4 h-4" /> 戻る
           </button>
         )}
 
         <div className="w-full max-w-md relative z-10">
-          {/* Mobile Logo Only */}
-          <div className="lg:hidden mb-12 flex flex-col items-center relative z-50 pointer-events-auto">
-            <Link href="/" className="flex flex-col items-center gap-2">
+          {/* Mobile Header Logo - Simplified and Unified */}
+          <div className="flex items-center justify-center relative z-50 pointer-events-auto mb-10 md:hidden">
+            <a href="/" className="flex items-center text-decoration-none group cursor-pointer hover:opacity-80 transition-opacity">
               <div className="relative">
-                <div className="absolute inset-0 bg-[#00D4AA]/20 blur-lg rounded-full" />
-                <img src={navbarLogo} alt="ProofMark" className="h-10 w-auto relative z-10 antialiased" />
+                <div className="absolute inset-0 bg-[#00D4AA]/20 blur-lg rounded-full group-hover:bg-[#00D4AA]/40 transition-all opacity-0 group-hover:opacity-100" />
+                <img src={navbarLogo} alt="ProofMark" className="h-7 w-auto relative z-10" />
               </div>
-              <span className="font-['Syne'] text-2xl font-black text-white tracking-tighter mt-1">
+              <span className="font-['Syne'] text-xl font-extrabold text-[#F0EFF8] tracking-tight ml-2">
                 Proof<span className="text-[#00D4AA]">Mark</span>
               </span>
-            </Link>
+            </a>
           </div>
 
           <div className="mb-10">
