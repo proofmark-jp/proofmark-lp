@@ -71,7 +71,7 @@ const NotFoundScreen = ({ username }: { username: string }) => (
 
       {/* Marketing CTA Section */}
       <div className="w-full p-8 rounded-3xl bg-gradient-to-br from-[#0D0B24] to-[#151D2F] border border-[#1C1A38] shadow-2xl relative overflow-hidden group">
-        <div className="absolute inset-0 bg-gradient-to-r from-[#6C3EF4]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#6C3EF4]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
         
         <h2 className="text-xl font-bold text-white mb-3">あなただけの証拠、あなただけのID。</h2>
         <p className="text-[#A8A0D8] text-sm mb-8 leading-relaxed">
@@ -79,15 +79,15 @@ const NotFoundScreen = ({ username }: { username: string }) => (
           今なら、このIDを確保してすぐに始められます。
         </p>
         
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 relative z-50">
           <Link href={`/auth?mode=signup&username=${username}`}>
-            <button className="w-full bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white py-4 rounded-2xl font-black tracking-tight shadow-[0_10px_25px_rgba(108,62,244,0.4)] hover:shadow-[0_15px_35px_rgba(108,62,244,0.6)] hover:-translate-y-0.5 active:translate-y-0 transition-all">
+            <button className="w-full bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white py-4 rounded-2xl font-black tracking-tight shadow-[0_10px_25px_rgba(108,62,244,0.4)] hover:shadow-[0_15px_35px_rgba(108,62,244,0.6)] hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer">
               このIDで無料で始める
             </button>
           </Link>
           
           <Link href="/">
-            <button className="w-full py-2 text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors flex items-center justify-center gap-2">
+            <button className="w-full py-2 text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors flex items-center justify-center gap-2 cursor-pointer">
               <ArrowLeft className="w-4 h-4" /> ProofMark トップへ
             </button>
           </Link>

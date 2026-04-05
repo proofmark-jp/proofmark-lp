@@ -14,6 +14,41 @@ import { toast } from "sonner";
 import { useAuth } from "../hooks/useAuth";
 import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
 
+const AssetCounter = () => {
+  // TODO: 後でSupabaseから総登録数を取得してセットする
+  const targetNumber = 124;
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    let start = 0;
+    const duration = 1500; // 1.5秒でカウントアップ
+    const increment = Math.max(1, Math.floor(targetNumber / (duration / 16)));
+
+    const timer = setInterval(() => {
+      start += increment;
+      if (start >= targetNumber) {
+        setCount(targetNumber);
+        clearInterval(timer);
+      } else {
+        setCount(start);
+      }
+    }, 16);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] tracking-widest text-gray-500 font-mono uppercase">
+        Securing Creative Assets
+      </span>
+      <span className="text-xl text-white font-mono font-bold tracking-wider">
+        {count}
+      </span>
+    </div>
+  );
+};
+
 export default function Auth() {
   const [location] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
@@ -142,17 +177,9 @@ export default function Auth() {
           </div>
         </div>
         
-        {/* Footer Meta info - HONEST SOCIAL PROOF */}
+        {/* Footer Meta info - HONEST SOCIAL PROOF (Now AssetCounter) */}
         <div className="relative z-10">
-          <p className="text-[#A8A0D8]/40 text-xs font-mono tracking-widest uppercase mb-4">BETA ACCESS : アーリーアダプターとして参加</p>
-          <div className="flex -space-x-3">
-             {[1, 2, 3].map((i) => (
-               <div key={i} className="w-8 h-8 rounded-full border-2 border-[#07061A] bg-[#1C1A38] flex items-center justify-center overflow-hidden">
-                 <UserIcon className="w-4 h-4 text-[#A8A0D8]/20" />
-               </div>
-             ))}
-             <div className="w-8 h-8 rounded-full border-2 border-[#07061A] bg-[#0D0B24] flex items-center justify-center text-[10px] font-bold text-[#A8A0D8]">...</div>
-          </div>
+          <AssetCounter />
         </div>
       </div>
 
@@ -318,7 +345,7 @@ export default function Auth() {
 
           <p className="mt-10 text-center text-[10px] font-bold text-[#A8A0D8]/40 uppercase tracking-[0.2em] px-4 leading-relaxed">
             Protecting creative integrity with cryptographic proof.<br />
-            © 2026 ProofMark - Certified by Manus
+            © 2026 ProofMark
           </p>
         </div>
       </div>
