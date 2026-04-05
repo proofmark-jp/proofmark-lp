@@ -587,15 +587,13 @@ export default function Home() {
                     <span className="line-through">PDF証明書の発行</span>
                   </li>
                 </ul>
-                <motion.a
-                  href="#waitlist-section"
+                <Link
+                  href="/auth?mode=signup"
                   className="block w-full px-6 py-3 rounded-full border font-bold text-sm transition-colors text-center mt-auto"
                   style={{ borderColor: "rgba(108,62,244,0.4)", color: "#6c3ef4" }}
-                  whileHover={{ background: "rgba(108,62,244,0.12)" }}
-                  whileTap={{ scale: 0.98 }}
                 >
                   無料で始める
-                </motion.a>
+                </Link>
               </motion.div>
 
               {/* ── Spot plan (新規追加) ── */}
@@ -633,15 +631,13 @@ export default function Home() {
                     <span className="line-through">公開ポートフォリオ保存</span>
                   </li>
                 </ul>
-                <motion.a
-                  href="#waitlist-section"
+                <Link
+                  href="/auth?mode=signup"
                   className="block w-full px-6 py-3 rounded-full border font-bold text-sm transition-colors text-center mt-auto"
                   style={{ borderColor: "rgba(0,212,170,0.4)", color: "#00D4AA", background: "rgba(0,212,170,0.05)" }}
-                  whileHover={{ background: "rgba(0,212,170,0.15)" }}
-                  whileTap={{ scale: 0.98 }}
                 >
                   今すぐ1件発行する
-                </motion.a>
+                </Link>
               </motion.div>
 
               {/* ── Light plan ── */}
@@ -687,18 +683,16 @@ export default function Home() {
                     </li>
                   ))}
                 </ul>
-                <motion.a
-                  href="#waitlist-section"
+                <Link
+                  href="/auth?mode=signup"
                   className="block w-full px-6 py-3 rounded-full font-bold text-sm text-primary-foreground text-center mt-auto"
                   style={{
-                    background: "linear-gradient(135deg, #6c3ef4, rgba(108,62,244,0.8))",
+                    background: "linear-gradient(135deg, #6C3EF4, #8B61FF)",
                     boxShadow: "0 0 20px rgba(108,62,244,0.4)",
                   }}
-                  whileHover={{ boxShadow: "0 0 32px rgba(108,62,244,0.6)", scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
                 >
                   先行特典を予約する
-                </motion.a>
+                </Link>
               </motion.div>
             </motion.div>
 

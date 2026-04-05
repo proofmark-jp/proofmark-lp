@@ -71,7 +71,7 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
               <Link href="/auth">
                 <span className="text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors cursor-pointer">ログイン</span>
               </Link>
-              <Link href="/auth">
+              <Link href="/auth?mode=signup">
                 <button className="bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-[0_0_20px_rgba(108,62,244,0.4)] hover:scale-105 transition-all">
                   無料で始める
                 </button>
@@ -111,7 +111,7 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                <Link href="/auth">
+                <Link href="/auth?mode=signup">
                   <button onClick={closeMenu} className="w-full bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white py-4 rounded-2xl font-bold">無料で始める</button>
                 </Link>
                 <Link href="/auth">

@@ -48,21 +48,51 @@ const LoadingScreen = () => (
 );
 
 const NotFoundScreen = ({ username }: { username: string }) => (
-  <div className="min-h-screen bg-[#07061A] flex flex-col items-center justify-center gap-6 px-4 text-center">
-    <div className="w-20 h-20 rounded-2xl bg-[#0D0B24] border border-[#1C1A38] flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(108,62,244,0.1)]">
-      <ShieldCheck className="w-10 h-10 text-[#6C3EF4]" />
+  <div className="min-h-screen bg-[#07061A] flex flex-col items-center justify-center gap-10 px-6 text-center relative overflow-hidden">
+    {/* Background Decorative Orbs */}
+    <div className="absolute top-[-10%] left-[-10%] w-[400px] h-[400px] bg-[#6C3EF4] opacity-10 blur-[100px] rounded-full pointer-events-none" />
+    <div className="absolute bottom-[10%] right-[-10%] w-[300px] h-[300px] bg-[#00D4AA] opacity-10 blur-[80px] rounded-full pointer-events-none" />
+
+    <div className="relative z-10 flex flex-col items-center max-w-lg">
+      <div className="w-24 h-24 rounded-[2rem] bg-[#0D0B24] border border-[#1C1A38] flex items-center justify-center mb-8 shadow-[0_0_50px_rgba(108,62,244,0.15)] relative group cursor-default">
+        <div className="absolute inset-0 bg-[#6C3EF4]/5 rounded-[2rem] blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+        <ShieldCheck className="w-12 h-12 text-[#6C3EF4] relative z-10" />
+      </div>
+      
+      <h1 className="text-3xl font-black text-white tracking-tight mb-4">
+        @{username} はまだ存在しません
+      </h1>
+      
+      <p className="text-[#A8A0D8] text-lg leading-relaxed mb-12">
+        このポートフォリオは非公開に設定されているか、移動されました。<br className="hidden sm:block" />
+        あるいは、まだ誰にも取得されていないプレミアムなIDかもしれません。
+      </p>
+
+      {/* Marketing CTA Section */}
+      <div className="w-full p-8 rounded-3xl bg-gradient-to-br from-[#0D0B24] to-[#151D2F] border border-[#1C1A38] shadow-2xl relative overflow-hidden group">
+        <div className="absolute inset-0 bg-gradient-to-r from-[#6C3EF4]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        
+        <h2 className="text-xl font-bold text-white mb-3">あなたもProofMarkを始めませんか？</h2>
+        <p className="text-[#A8A0D8] text-sm mb-8 leading-relaxed">
+          AI時代のクリエイターに、改ざん不能な「制作事実」という武器を。
+          完全無料、30秒であなたの創作を守り始めましょう。
+        </p>
+        
+        <div className="flex flex-col gap-4">
+          <Link href="/auth?mode=signup">
+            <button className="w-full bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white py-4 rounded-2xl font-black tracking-tight shadow-[0_10px_25px_rgba(108,62,244,0.4)] hover:shadow-[0_15px_35px_rgba(108,62,244,0.6)] hover:-translate-y-0.5 active:translate-y-0 transition-all">
+              無料で今すぐ始める
+            </button>
+          </Link>
+          
+          <Link href="/">
+            <button className="w-full py-2 text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors flex items-center justify-center gap-2">
+              <ArrowLeft className="w-4 h-4" /> トップページへ戻る
+            </button>
+          </Link>
+        </div>
+      </div>
     </div>
-    <h1 className="text-2xl font-extrabold text-white tracking-tight">
-      @{username} は存在しません
-    </h1>
-    <p className="text-[#A8A0D8] text-sm max-w-sm">
-      このユーザー名は登録されていないか、ポートフォリオが非公開に設定されています。
-    </p>
-    <Link href="/">
-      <span className="inline-flex items-center gap-2 text-sm font-bold text-[#00D4AA] hover:text-white transition-colors cursor-pointer border-b border-[#00D4AA]/40 pb-0.5 mt-4">
-        <ArrowLeft className="w-4 h-4" /> ProofMarkトップへ
-      </span>
-    </Link>
   </div>
 );
 

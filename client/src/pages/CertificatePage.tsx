@@ -18,6 +18,7 @@ export default function CertificatePage() {
     const [, setLocation] = useLocation();
 
     const [cert, setCert] = useState<any>(null);
+    const [profile, setProfile] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isHashCopied, setIsHashCopied] = useState(false);
 
@@ -31,14 +32,29 @@ export default function CertificatePage() {
                 setLoading(false);
                 return;
             }
-            const { data, error } = await supabase
+            
+            // 1. 証明書データの取得
+            const { data: certData, error: certError } = await supabase
                 .from('certificates')
                 .select('*')
                 .eq('id', id)
                 .single();
 
-            if (!error && data) {
-                setCert(data);
+            if (!certError && certData) {
+                setCert(certData);
+                
+                // 2. 最新のプロフィール情報を取得（ユーザー名変更に対応）
+                if (certData.user_id) {
+                    const { data: profileData } = await supabase
+                        .from('profiles')
+                        .select('username, avatar_url')
+                        .eq('id', certData.user_id)
+                        .maybeSingle();
+                    
+                    if (profileData) {
+                        setProfile(profileData);
+                    }
+                }
             }
             setLoading(false);
         }
@@ -125,11 +141,11 @@ export default function CertificatePage() {
                                     FOUNDER
                                 </div>
                             </div>
-                            {cert.metadata?.username && (
+                            {profile?.username && (
                                 <div className="mt-4 no-print text-center lg:text-left">
-                                    <Link href={`/u/${cert.metadata.username}`}>
+                                    <Link href={`/u/${profile.username}`}>
                                         <span className="inline-flex items-center gap-2 text-sm font-bold text-[#00D4AA] hover:text-white transition-colors cursor-pointer bg-[#00D4AA]/10 border border-[#00D4AA]/20 px-4 py-2 rounded-full">
-                                            👤 @{cert.metadata.username} の公開ギャラリーを見る
+                                            👤 @{profile.username} の公開ギャラリーを見る
                                         </span>
                                     </Link>
                                 </div>
