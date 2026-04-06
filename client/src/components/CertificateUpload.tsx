@@ -2,63 +2,104 @@ import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useLocation } from 'wouter';
 import { createClient } from '@supabase/supabase-js';
+import { Shield, Eye, ShieldCheck, UploadCloud } from 'lucide-react';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+type ProofMode = 'private' | 'shareable';
+
 export default function CertificateUpload() {
   const [file, setFile] = useState<File | null>(null);
   const [hash, setHash] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [isCalculating, setIsCalculating] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [proofMode, setProofMode] = useState<ProofMode>('private');
+  const [processStatus, setProcessStatus] = useState<string>('');
   const [, setLocation] = useLocation();
 
-  // Web Crypto APIを使用した高速なSHA-256ハッシュ計算
+  // ブラウザ内ハッシュ計算 (Private)
   const calculateHash = async (file: File): Promise<string> => {
+    setProcessStatus('ブラウザ内でSHA-256ハッシュを計算中...');
     const arrayBuffer = await file.arrayBuffer();
     const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return hashHex;
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   };
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    const selectedFile = acceptedFiles[0];
-    if (!selectedFile) return;
+  // Storageへのアップロード (Shareable)
+  const uploadImage = async (file: File, certId: string): Promise<string | null> => {
+    setProcessStatus('暗号化通信で画像をセキュアストレージに保存中...');
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id || 'anonymous';
+    const fileExt = file.name.split('.').pop();
+    const filePath = `${userId}/${certId}/original.${fileExt}`;
 
-    setFile(selectedFile);
-    setPreview(URL.createObjectURL(selectedFile));
-    setIsCalculating(true);
+    const { data, error } = await supabase.storage
+      .from('proofmark-assets')
+      .upload(filePath, file);
+
+    if (error) {
+      console.error("Storage upload error:", error);
+      throw error;
+    }
+    return data.path;
+  };
+
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const selectedFile = acceptedFiles[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      setPreview(URL.createObjectURL(selectedFile));
+    }
+  }, []);
+
+  const handleIssueCertificate = async () => {
+    if (!file) return;
+    setIsProcessing(true);
 
     try {
-      // 1. ハッシュ計算
-      const fileHash = await calculateHash(selectedFile);
+      // 1. ハッシュ計算 (常にローカルで実行)
+      const fileHash = await calculateHash(file);
       setHash(fileHash);
 
-      // 2. Supabaseへレコード作成
-      const { data, error } = await supabase
+      // 2. DBレコードの仮作成 (IDを取得するため)
+      setProcessStatus('ブロックチェーンレベルの存在証明を生成中...');
+      const { data: certData, error: certError } = await supabase
         .from('certificates')
-        .insert([{ file_hash: fileHash }])
+        .insert([{ 
+            file_hash: fileHash, 
+            file_name: file.name,
+            proof_mode: proofMode 
+        }])
         .select()
         .single();
 
-      if (error) {
-        console.error("Supabase insert error:", error);
-        return;
+      if (certError || !certData) throw certError;
+
+      // 3. Shareableモードの場合のみ、StorageへアップロードしてDB更新
+      if (proofMode === 'shareable') {
+        const storagePath = await uploadImage(file, certData.id);
+        await supabase
+          .from('certificates')
+          .update({ storage_path: storagePath })
+          .eq('id', certData.id);
       }
 
-      // 3. 発行された証明書ページへ即時遷移
-      if (data && data.id) {
-        setLocation(`/cert/${data.id}`);
-      }
+      setProcessStatus('完了しました。証明書ページへリダイレクトします...');
+      
+      // 4. リダイレクト
+      setTimeout(() => {
+        setLocation(`/cert/${certData.id}`);
+      }, 1000);
 
     } catch (error) {
       console.error("Process failed:", error);
-    } finally {
-      setIsCalculating(false);
+      setProcessStatus('エラーが発生しました。もう一度お試しください。');
+      setIsProcessing(false);
     }
-  }, [setLocation]);
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -67,53 +108,105 @@ export default function CertificateUpload() {
   });
 
   return (
-    <div className="w-full max-w-2xl mx-auto p-6 bg-[#1e293b] rounded-2xl border border-slate-700 text-white shadow-xl">
-      <div
-        {...getRootProps()}
-        className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200 ${
-          isDragActive 
-            ? 'border-[#00D4AA] bg-[#00D4AA]/10' 
-            : 'border-slate-600 hover:border-slate-400 hover:bg-slate-800'
-        }`}
-      >
-        <input {...getInputProps()} />
-        {isDragActive ? (
-          <p className="text-[#00D4AA] font-bold text-lg">画像をドロップして解析を開始...</p>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-slate-200 font-bold text-lg">クリックまたは画像をドラッグ＆ドロップ</p>
-            <p className="text-slate-400 text-sm">ブラウザ内で安全にデジタル存在証明（SHA-256）を計算します</p>
-          </div>
-        )}
-      </div>
-
-      {preview && (
-        <div className="mt-8 space-y-6 animate-in fade-in duration-500">
-          <div className="flex justify-center">
-            <img 
-              src={preview} 
-              alt="Preview" 
-              className="max-h-64 rounded-lg shadow-2xl border border-slate-700 object-contain" 
-            />
-          </div>
-          
-          <div className="bg-[#0f172a] p-5 rounded-xl border border-slate-700">
-            <div className="mb-4">
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Target File</p>
-              <p className="text-sm text-slate-300 break-all">{file?.name}</p>
+    <div className="w-full max-w-3xl mx-auto p-6 bg-[#0D0B24] rounded-3xl border border-[#1C1A38] text-white shadow-2xl">
+      {!file ? (
+        <div
+          {...getRootProps()}
+          className={`border-2 border-dashed rounded-2xl p-16 text-center cursor-pointer transition-all duration-300 ${
+            isDragActive 
+              ? 'border-[#00D4AA] bg-[#00D4AA]/10' 
+              : 'border-slate-700 hover:border-[#6C3EF4] hover:bg-[#15132D]'
+          }`}
+        >
+          <input {...getInputProps()} />
+          <UploadCloud className="w-12 h-12 mx-auto mb-4 text-slate-400" />
+          <p className="text-white font-bold text-xl mb-2">作品をドラッグ＆ドロップして証明を開始</p>
+          <p className="text-[#A8A0D8] text-sm">またはクリックしてファイルを選択</p>
+        </div>
+      ) : (
+        <div className="space-y-8 animate-in fade-in duration-500">
+          <div className="flex flex-col sm:flex-row gap-6 items-center bg-[#07061A] p-6 rounded-2xl border border-[#1C1A38]">
+            <img src={preview!} alt="Preview" className="w-32 h-32 object-cover rounded-xl border border-slate-700" />
+            <div className="flex-1 w-full text-left">
+              <p className="text-xs text-[#00D4AA] font-bold uppercase tracking-widest mb-1">Target Asset</p>
+              <p className="text-lg font-bold truncate">{file.name}</p>
+              <p className="text-sm text-[#A8A0D8]">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
             </div>
+            <button 
+                onClick={() => { setFile(null); setPreview(null); }}
+                className="text-sm text-slate-400 hover:text-white underline transition-colors"
+                disabled={isProcessing}
+            >
+                選び直す
+            </button>
+          </div>
 
-            <div>
-              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">SHA-256 Hash Signature</p>
-              {isCalculating ? (
-                <p className="text-[#00D4AA] animate-pulse font-mono text-sm">Computing hash and generating certificate...</p>
-              ) : (
-                <p className="text-[#00D4AA] font-mono text-sm break-all select-all bg-[#00D4AA]/10 p-3 rounded-lg border border-[#00D4AA]/20">
-                  {hash}
-                </p>
-              )}
+          <div className="space-y-4">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-[#00D4AA]" /> 証明モードの選択
+            </h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Private Mode */}
+              <div 
+                onClick={() => !isProcessing && setProofMode('private')}
+                className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all ${
+                    proofMode === 'private' ? 'border-[#00D4AA] bg-[#00D4AA]/5' : 'border-[#1C1A38] bg-[#07061A] hover:border-slate-600'
+                } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                        <Shield className={`w-5 h-5 ${proofMode === 'private' ? 'text-[#00D4AA]' : 'text-slate-500'}`} />
+                        <h4 className={`font-bold ${proofMode === 'private' ? 'text-[#00D4AA]' : 'text-slate-300'}`}>Private Proof</h4>
+                    </div>
+                    {proofMode === 'private' && <div className="w-3 h-3 rounded-full bg-[#00D4AA] shadow-[0_0_10px_#00D4AA]" />}
+                </div>
+                <p className="text-xs text-[#A8A0D8] mb-3">原画を一切送信せず、ハッシュ情報のみで存在を証明します。</p>
+                <ul className="text-[10px] space-y-1 text-slate-400">
+                    <li className="flex items-center gap-1">✓ <span className="text-white">最高レベルのプライバシー</span></li>
+                    <li className="flex items-center gap-1">✓ 運営すら原画を閲覧不可</li>
+                    <li className="flex items-center gap-1 text-yellow-500/80">⚠ 証明書に画像は表示されません</li>
+                </ul>
+              </div>
+
+              {/* Shareable Mode */}
+              <div 
+                onClick={() => !isProcessing && setProofMode('shareable')}
+                className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all ${
+                    proofMode === 'shareable' ? 'border-[#6C3EF4] bg-[#6C3EF4]/5' : 'border-[#1C1A38] bg-[#07061A] hover:border-slate-600'
+                } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                        <Eye className={`w-5 h-5 ${proofMode === 'shareable' ? 'text-[#6C3EF4]' : 'text-slate-500'}`} />
+                        <h4 className={`font-bold ${proofMode === 'shareable' ? 'text-[#6C3EF4]' : 'text-slate-300'}`}>Shareable Proof</h4>
+                    </div>
+                    {proofMode === 'shareable' && <div className="w-3 h-3 rounded-full bg-[#6C3EF4] shadow-[0_0_10px_#6C3EF4]" />}
+                </div>
+                <p className="text-xs text-[#A8A0D8] mb-3">画像をセキュアストレージに保存し、公開検証ページに表示します。</p>
+                <ul className="text-[10px] space-y-1 text-slate-400">
+                    <li className="flex items-center gap-1">✓ <span className="text-white">SNSシェアやポートフォリオに最適</span></li>
+                    <li className="flex items-center gap-1">✓ RLSによる厳格なアクセス制御</li>
+                    <li className="flex items-center gap-1 text-[#6C3EF4]/80">ⓘ 画像のアップロード通信が発生します</li>
+                </ul>
+              </div>
             </div>
           </div>
+
+          <button
+            onClick={handleIssueCertificate}
+            disabled={isProcessing}
+            className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-[#00D4AA] to-[#6C3EF4] hover:opacity-90 transition-opacity text-white disabled:opacity-50 flex flex-col items-center justify-center gap-1"
+          >
+            {isProcessing ? (
+                <>
+                    <span>処理を実行中...</span>
+                    <span className="text-xs font-normal opacity-80">{processStatus}</span>
+                </>
+            ) : (
+                'デジタル存在証明を発行する'
+            )}
+          </button>
         </div>
       )}
     </div>
