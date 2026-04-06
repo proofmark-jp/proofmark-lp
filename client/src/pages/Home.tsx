@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
-import { Lock, Database, AlertCircle, Check, Shield, Zap, Award, Info } from "lucide-react";
+import { Lock, Database, AlertCircle, Check, Shield, Zap, Award, Info, Share2, CheckCircle } from "lucide-react";
 import { motion, useScroll, useTransform } from "framer-motion";
 
-import { CertificateUpload } from "@/components/CertificateUpload";
+import CertificateUpload from "@/components/CertificateUpload";
 import { useAuth } from "@/hooks/useAuth";
 import { FAQAccordion } from "@/components/FAQAccordion";
 import { SupportedToolsSection } from "@/components/SupportedToolsSection";
@@ -146,57 +146,19 @@ export default function Home() {
             style={{ y: heroY }}
           >
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%" }}>
-              <motion.div
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border mb-8"
-                style={{
-                  background: "rgba(108,62,244,0.12)",
-                  borderColor: "rgba(108,62,244,0.35)",
-                  boxShadow: "0 0 12px rgba(108,62,244,0.15)",
-                }}
-                initial={{ opacity: 0, scale: 0.85 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, delay: 0.1 }}
-              >
-                <AlertCircle className="w-4 h-4 text-primary" />
-                <span className="text-sm font-bold text-primary">先着100名限定</span>
-              </motion.div>
-
-              {/* Main heading - 迫力とレスポンシブの完全両立 */}
-              <h1 className="font-black leading-[1.1] tracking-tight text-center mb-8" style={{ color: "#F0EFF8" }}>
-                <span className="block text-[34px] sm:text-[52px] md:text-[64px] mb-1 sm:mb-2 whitespace-nowrap">
-                  「どうせAIでしょ？」
-                </span>
-                <span className="block text-[42px] sm:text-[60px] md:text-[72px] mt-2">
-                  <span className="text-[24px] sm:text-[36px] md:text-[40px] inline-block align-middle mr-1 sm:mr-2 opacity-80">
-                    と、
-                  </span>
-                  <span style={{
-                    background: "linear-gradient(90deg, #6C3EF4 0%, #00D4AA 100%)",
-                    WebkitBackgroundClip: "text",
-                    WebkitTextFillColor: "transparent",
-                    backgroundClip: "text",
-                    color: "transparent"
-                  }}>
-                    言わせない。
-                  </span>
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#00D4AA]/10 border border-[#00D4AA]/30 text-[#00D4AA] text-xs sm:text-sm font-bold tracking-widest uppercase mb-8">
+                ブラウザ完結・完全秘匿型 デジタル存在証明
+              </div>
+              <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight mb-6 leading-tight text-center">
+                「どうせAIでしょ？」を、<br className="hidden sm:block" />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00D4AA] to-[#6C3EF4]">
+                  検証可能な事実で終わらせる。
                 </span>
               </h1>
-
-              {/* Subheading */}
-              <motion.div
-                className="mb-10 px-2 text-center"
-                variants={fadeInVariants}
-                initial="hidden"
-                animate="visible"
-                transition={{ delay: 0.5 }}
-              >
-                <p className="text-lg md:text-xl font-bold text-white mb-3">
-                  あなたの創作の「事実」を、一生消えない証拠に。
-                </p>
-                <p className="text-sm md:text-base text-[#A8A0D8] leading-relaxed max-w-xl mx-auto break-words">
-                  作品のハッシュ計算はブラウザ内で完結。運営側すらあなたの原画を見られない「完全プライベート空間」で、改ざん不能なデジタル指紋とタイムスタンプを即時生成します。
-                </p>
-              </motion.div>
+              <p className="text-[#A8A0D8] text-base sm:text-xl max-w-3xl mx-auto mb-10 leading-relaxed text-center">
+                画像のSHA-256ハッシュをブラウザで計算し、作成時点の証拠をブロックチェーンレベルで記録。<br className="hidden md:block" />
+                公開検証URL・PDF・QRコードで、あなたの創作の事実を第三者に堂々と共有できます。
+              </p>
 
               {/* Hero form */}
               <motion.form
@@ -284,6 +246,47 @@ export default function Home() {
               </motion.div>
             </div>
           </motion.div>
+        </section>
+
+        {/* --- 2モード解説セクション --- */}
+        <section className="py-24 px-6 sm:px-12 bg-[#0D0B24] border-y border-[#1C1A38]">
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">選べる2つの証明モード</h2>
+              <p className="text-[#A8A0D8]">ProofMarkは「原画を送信しない」ことをデフォルトとし、クリエイターの尊厳を守ります。</p>
+            </div>
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="bg-[#07061A] border border-[#1C1A38] rounded-3xl p-8 sm:p-10 relative overflow-hidden group hover:border-[#00D4AA]/50 transition-colors">
+                <Shield className="w-12 h-12 text-[#00D4AA] mb-6" />
+                <h3 className="text-2xl font-bold text-white mb-3">Private Proof <span className="text-sm font-normal text-slate-400 ml-2">(推奨)</span></h3>
+                <p className="text-[#A8A0D8] mb-6 leading-relaxed">原画をサーバーに一切送信せず、ブラウザ上でハッシュ計算のみを行います。運営側すら作品を見ることができない、最高水準のプライバシー保護モードです。</p>
+                <ul className="space-y-3">
+                  <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle className="w-5 h-5 text-[#00D4AA]" /> 原画の漏洩リスクゼロ</li>
+                </ul>
+              </div>
+              <div className="bg-[#07061A] border border-[#1C1A38] rounded-3xl p-8 sm:p-10 relative overflow-hidden group hover:border-[#6C3EF4]/50 transition-colors">
+                <Share2 className="w-12 h-12 text-[#6C3EF4] mb-6" />
+                <h3 className="text-2xl font-bold text-white mb-3">Shareable Proof</h3>
+                <p className="text-[#A8A0D8] mb-6 leading-relaxed">SNSシェアやポートフォリオ用に、表示用画像をセキュアストレージに保存します。RLSにより、安全な状態で公開検証ページに画像を表示できます。</p>
+                <ul className="space-y-3">
+                  <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle className="w-5 h-5 text-[#6C3EF4]" /> 美しい公開検証ページの生成</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* --- 免責事項セクション --- */}
+        <section className="py-20 px-6 sm:px-12">
+          <div className="max-w-4xl mx-auto bg-[#15132D] rounded-2xl border border-[#2a2a4e] p-8 sm:p-10 text-center">
+            <Lock className="w-10 h-10 text-slate-400 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-white mb-4">この証明が意味すること、保証しないこと</h2>
+            <p className="text-sm text-[#A8A0D8] leading-relaxed text-left sm:text-center">
+              ProofMarkは、「特定の日時において、特定のハッシュ値を持つファイルが存在した」という客観的な事実を暗号技術を用いて記録・証明するインフラストラクチャです。<br className="hidden sm:block" />
+              <span className="text-yellow-500/90 font-bold">本サービスは、当該ファイルの「著作権の帰属」や「作品の独自性・適法性」そのものを最終的に保証するものではありません。</span><br className="hidden sm:block" />
+              無断転載時の証拠提示や、クライアントへの納品時の信頼性担保としてご活用ください。
+            </p>
+          </div>
         </section>
 
         {/* ── Stats Bar ───────────────────────────────────────── */}
@@ -415,11 +418,7 @@ export default function Home() {
                 ハッシュ計算はブラウザ内で完結します。ログイン不要でSHA-256計算とタイムスタンプを即時確認できます。
               </p>
               <div className="max-w-2xl mx-auto">
-                <CertificateUpload
-                  onUploadComplete={(path) => {
-                    console.info("[ProofMark] アップロード完了:", path);
-                  }}
-                />
+                <CertificateUpload />
               </div>
             </div>
           </div>
