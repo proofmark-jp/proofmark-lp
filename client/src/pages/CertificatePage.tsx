@@ -111,8 +111,15 @@ export default function CertificatePage() {
             {/* 🖨️ ブラウザの印刷基本設定を強制（Tailwindと併用して最強にする） */}
             <style>{`
                 @media print {
-                    @page { size: A4 landscape; margin: 15mm; }
-                    body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; }
+                    @page { size: A4 landscape; margin: 10mm; }
+                    body { 
+                        -webkit-print-color-adjust: exact !important; 
+                        print-color-adjust: exact !important; 
+                        background: white !important; 
+                        zoom: 0.88; 
+                    }
+                    /* 余分な空白を詰める */
+                    .print-compact { padding: 1rem !important; margin-bottom: 0 !important; }
                 }
             `}</style>
 
@@ -122,7 +129,7 @@ export default function CertificatePage() {
                 <Navbar user={user} signOut={signOut} />
 
                 {/* --- 📜 証明書カード本体 --- */}
-                <div className="w-full max-w-5xl bg-[#0D0B24] border border-[#1C1A38] rounded-3xl p-8 sm:p-12 shadow-[0_0_50px_rgba(108,62,244,0.1)] relative overflow-hidden print:bg-white print:border-2 print:border-gray-200 print:shadow-none print:p-8 print:w-full print:max-w-none print:break-inside-avoid">
+                <div className="print-compact w-full max-w-5xl bg-[#0D0B24] border border-[#1C1A38] rounded-3xl p-8 sm:p-12 shadow-[0_0_50px_rgba(108,62,244,0.1)] relative overflow-hidden print:bg-white print:border-2 print:border-gray-200 print:shadow-none print:p-4 print:w-full print:max-w-none print:break-inside-avoid">
 
                     <div className="print:hidden absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
                         <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#6C3EF4] opacity-10 blur-[100px] rounded-full"></div>
@@ -165,8 +172,8 @@ export default function CertificatePage() {
                             {/* 左側：アートワーク または ZK表示 */}
                             <div className="w-full md:w-2/5 flex-shrink-0 print:w-[38%]">
                                 <div className="aspect-square w-full rounded-2xl border border-[#1C1A38] bg-[#07061A] flex flex-col items-center justify-center overflow-hidden relative shadow-inner print:border-gray-300 print:bg-gray-50 print:shadow-none">
-                                    {cert.image_url ? (
-                                        <img src={cert.image_url} alt="Artwork" className="w-full h-full object-cover" />
+                                    {cert.public_image_url ? (
+                                        <img src={cert.public_image_url} alt="Artwork" className="w-full h-full object-cover" />
                                     ) : (
                                         <div className="text-center p-6 flex flex-col items-center justify-center h-full w-full bg-gradient-to-br from-[#151D2F] to-[#07061A] print:bg-none print:bg-gray-50">
                                             <ImageIcon className="w-10 h-10 text-[#6C3EF4]/40 mb-3 print:text-gray-400" />
