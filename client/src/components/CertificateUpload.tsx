@@ -69,8 +69,11 @@ export default function CertificateUpload() {
       const { data: certData, error: certError } = await supabase
         .from('certificates')
         .insert([{ 
-            file_hash: fileHash, 
-            file_name: file.name,
+            sha256: fileHash, 
+            original_filename: file.name,
+            title: file.name,
+            mime_type: file.type,
+            file_size: file.size,
             proof_mode: proofMode 
         }])
         .select()

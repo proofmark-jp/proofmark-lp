@@ -44,10 +44,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .from("certificates")
             .insert({
                 user_id: safeUserId,
-                file_hash: fileHash,
+                sha256: fileHash,
                 storage_path: storagePath,
-                file_url: fileUrl,
-                file_name: filename || "Untitled",
+                public_image_url: fileUrl,
+                original_filename: filename || "unknown_file",
+                title: filename || "Untitled",
                 metadata: { username: username || 'sinn', show_in_gallery: true }
             })
             .select()

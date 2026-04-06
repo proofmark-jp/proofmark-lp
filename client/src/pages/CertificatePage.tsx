@@ -62,8 +62,8 @@ export default function CertificatePage() {
     }, [id]);
 
     const handleHashCopy = () => {
-        if (cert?.file_hash) {
-            navigator.clipboard.writeText(cert.file_hash);
+        if (cert?.sha256) {
+            navigator.clipboard.writeText(cert.sha256);
             setIsHashCopied(true);
             setTimeout(() => setIsHashCopied(false), 2000);
         }
@@ -197,8 +197,8 @@ export default function CertificatePage() {
                                     </p>
                                     <p className="font-medium text-sm sm:text-base text-white print:text-black">
                                         {(() => {
-                                            // 1. DBにちゃんとしたファイル名 (file_name) があればそれを優先表示
-                                            if (cert.file_name && cert.file_name !== 'Untitled') return cert.file_name;
+                                            // 1. DBにちゃんとしたファイル名 (original_filename) があればそれを優先表示
+                                            if (cert.original_filename && cert.original_filename !== 'unknown_file') return cert.original_filename;
 
                                             // 2. なければ、storage_path（例: "cert_1712345678/image.png"）から抽出
                                             if (cert.storage_path) {
@@ -222,7 +222,7 @@ export default function CertificatePage() {
                                         <CheckCircle className="w-4 h-4 text-[#00D4AA] print:text-teal-600" />
                                         <h2 className="text-[10px] sm:text-xs font-bold text-[#00D4AA] uppercase tracking-widest print:text-teal-700">SHA-256 Hash Signature</h2>
                                     </div>
-                                    <p className="font-mono text-[#F0EFF8] text-[10px] sm:text-xs break-all pr-8 leading-relaxed print:text-gray-800">{cert.file_hash}</p>
+                                    <p className="font-mono text-[#F0EFF8] text-[10px] sm:text-xs break-all pr-8 leading-relaxed print:text-gray-800">{cert.sha256}</p>
                                     <button
                                         onClick={handleHashCopy}
                                         className="print:hidden absolute top-1/2 -translate-y-1/2 right-3 p-2 rounded-lg bg-[#00D4AA]/10 hover:bg-[#00D4AA]/20 transition-colors"
