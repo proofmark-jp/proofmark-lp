@@ -156,7 +156,7 @@ export default function Home() {
                 </span>
               </h1>
               <p className="text-[#A8A0D8] text-base sm:text-xl max-w-3xl mx-auto mb-10 leading-relaxed text-center">
-                画像のSHA-256ハッシュをブラウザで計算し、作成時点の証拠をブロックチェーンレベルで記録。<br className="hidden md:block" />
+                画像のSHA-256ハッシュをブラウザ内で計算し（Client-side Hashing）、作成時点の証拠を暗号学的に記録。<br className="hidden md:block" />
                 公開検証URL・PDF・QRコードで、あなたの創作の事実を第三者に堂々と共有できます。
               </p>
 
@@ -283,8 +283,8 @@ export default function Home() {
             <h2 className="text-xl font-bold text-white mb-4">この証明が意味すること、保証しないこと</h2>
             <p className="text-sm text-[#A8A0D8] leading-relaxed text-left sm:text-center">
               ProofMarkは、「特定の日時において、特定のハッシュ値を持つファイルが存在した」という客観的な事実を暗号技術を用いて記録・証明するインフラストラクチャです。<br className="hidden sm:block" />
-              <span className="text-yellow-500/90 font-bold">本サービスは、当該ファイルの「著作権の帰属」や「作品の独自性・適法性」そのものを最終的に保証するものではありません。</span><br className="hidden sm:block" />
-              無断転載時の証拠提示や、クライアントへの納品時の信頼性担保としてご活用ください。
+              <span className="text-yellow-500/90 font-bold">本サービスは、当該ファイルの「著作権の帰属」や「作品の独自性・適法性」そのものを最終的に判定・保証するものではありません。</span><br className="hidden sm:block" />
+              無断転載時の証拠提示や、クライアントへの納品時の信頼性担保としてご活用ください。また、Private Proofモードにおいて運営側がユーザーの元データを閲覧・取得することは技術的に不可能です。
             </p>
           </div>
         </section>
@@ -366,7 +366,7 @@ export default function Home() {
                 </div>
                 <h3 className="relative z-10 text-xl font-bold text-[#F0EFF8] mb-4 group-hover:text-[#00D4AA] transition-colors">ブラウザ内ハッシュ計算</h3>
                 <p className="relative z-10 text-[#A8A0D8] leading-relaxed text-sm md:text-base">
-                  ハッシュ計算はブラウザ内で完結し、サーバーに負荷や情報を渡しません。<span className="text-[#00D4AA] opacity-80 text-xs block mt-2">（※公開ポートフォリオ用の画像のみ、暗号化通信でセキュアクラウドに安全に保管されます）</span>
+                  Client-side Hashing技術により、計算はブラウザ内で完結。原画データをサーバーに送信することなく証明が可能です。<span className="text-[#00D4AA] opacity-80 text-xs block mt-2">（※Shareable Proofモードを選択した場合のみ、公開用画像が安全に保管されます）</span>
                 </p>
               </div>
 
@@ -381,7 +381,7 @@ export default function Home() {
                 </div>
                 <h3 className="relative z-10 text-xl font-bold text-[#F0EFF8] mb-4 group-hover:text-[#6C3EF4] transition-colors">タイムスタンプ刻印</h3>
                 <p className="relative z-10 text-[#A8A0D8] leading-relaxed text-sm md:text-base">
-                  計算されたハッシュ値と現在日時を、強固なデータベースに改ざん不能な形で記録し、デジタル存在証明を確立します。
+                  計算されたハッシュ値と現在日時（タイムスタンプ）をセキュアなデータベースに記録し、あなたの「先取権」を裏付ける客観的な証拠を確立します。
                 </p>
               </div>
 

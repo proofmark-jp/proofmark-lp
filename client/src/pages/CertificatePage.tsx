@@ -179,7 +179,7 @@ export default function CertificatePage() {
                                         <div className="text-center p-6 flex flex-col items-center justify-center h-full w-full bg-gradient-to-br from-[#151D2F] to-[#07061A] print:bg-none print:bg-gray-50">
                                             <ImageIcon className="w-10 h-10 text-[#6C3EF4]/40 mb-3 print:text-gray-400" />
                                             <span className="text-[#00D4AA] text-[10px] sm:text-xs font-bold tracking-widest border border-[#00D4AA]/30 bg-[#00D4AA]/10 px-3 py-1 rounded-full mb-2 print:bg-gray-200 print:border-gray-400 print:text-gray-600">
-                                                ZERO-KNOWLEDGE
+                                                CLIENT-SIDE HASHING
                                             </span>
                                             <p className="text-[#A8A0D8] text-xs sm:text-sm font-bold mb-1 print:text-gray-700">Image Data Hidden</p>
                                             <p className="text-[#A8A0D8]/60 text-[10px] sm:text-xs leading-relaxed max-w-[200px] opacity-80 print:text-gray-500">
