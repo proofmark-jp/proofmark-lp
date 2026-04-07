@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRoute, useLocation, Link } from 'wouter';
 import { createClient } from '@supabase/supabase-js';
 import { QRCodeSVG } from 'qrcode.react';
-import { CheckCircle, Clock, ShieldCheck, Image as ImageIcon, Copy, Check, FileText } from 'lucide-react';
+import { CheckCircle, Clock, ShieldCheck, Image as ImageIcon, Copy, Check, FileText, Lock } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import Navbar from '../components/Navbar';
 import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
@@ -18,13 +18,14 @@ export default function CertificatePage() {
     const [, setLocation] = useLocation();
 
     const [cert, setCert] = useState<any>(null);
-    const [profile, setProfile] = useState<any>(null);
+    const [authorProfile, setAuthorProfile] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isHashCopied, setIsHashCopied] = useState(false);
 
     // 💡 複数ボタンに対応するためコピー状態を文字列で管理
     const [copiedType, setCopiedType] = useState<string | null>(null);
-    const { user, signOut } = useAuth();
+    const { user, profile, signOut } = useAuth(); // profileを追加
+    const isPaidPlan = profile?.plan_tier === 'standard'; // 追加
 
     useEffect(() => {
         async function fetchCertificate() {
@@ -52,7 +53,7 @@ export default function CertificatePage() {
                         .maybeSingle();
                     
                     if (profileData) {
-                        setProfile(profileData);
+                        setAuthorProfile(profileData);
                     }
                 }
             }
@@ -155,11 +156,11 @@ export default function CertificatePage() {
                                     FOUNDER
                                 </div>
                             </div>
-                            {profile?.username && (
+                            {authorProfile?.username && (
                                 <div className="mt-4 no-print text-center lg:text-left">
-                                    <Link href={`/u/${profile.username}`}>
+                                    <Link href={`/u/${authorProfile.username}`}>
                                         <span className="inline-flex items-center gap-2 text-sm font-bold text-[#00D4AA] hover:text-white transition-colors cursor-pointer bg-[#00D4AA]/10 border border-[#00D4AA]/20 px-4 py-2 rounded-full">
-                                            👤 @{profile.username} の公開ギャラリーを見る
+                                            👤 @{authorProfile.username} の公開ギャラリーを見る
                                         </span>
                                     </Link>
                                 </div>
@@ -280,12 +281,26 @@ export default function CertificatePage() {
                             <svg viewBox="0 0 24 24" aria-hidden="true" className="w-5 h-5 fill-current"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 22.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.008 3.827H5.078z"></path></svg>
                             Xで証明をシェア
                         </button>
-                        <button
-                            onClick={() => window.print()}
-                            className="no-print bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-xl font-bold transition-all"
-                        >
-                            PDFとして保存
-                        </button>
+    {isPaidPlan ? (
+        <button
+            onClick={() => window.print()}
+            className="no-print bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2"
+        >
+            <FileText className="w-4 h-4" /> PDFとして保存
+        </button>
+    ) : (
+        <button
+            onClick={() => {
+                alert("PDF証明書の保存はStandardプラン限定の機能です。プランをアップグレードしてください。");
+            }}
+            className="no-print bg-slate-800 text-slate-400 px-6 py-3 rounded-xl font-bold border border-slate-700 flex items-center gap-2 hover:bg-slate-700 hover:text-white transition-all cursor-pointer relative group"
+        >
+             <Lock className="w-4 h-4" /> PDF保存をロック解除
+             <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#F0BB38] text-[#1A1200] text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                 Standardプラン限定
+             </span>
+        </button>
+    )}
                         <button
                             onClick={() => setLocation('/')}
                             className="no-print bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-all"

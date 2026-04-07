@@ -6,6 +6,7 @@ import { getCurrentSession, onAuthStateChange } from "../lib/auth";
 interface AuthState {
   session: Session | null;
   user: User | null;
+  profile: any | null; // 追加
   loading: boolean;
 }
 
@@ -23,22 +24,47 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<any | null>(null); // 追加
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
 
-    // 1. 初回マウント時に、確実にセッションをストレージから待機する
+    const fetchUserAndProfile = async (sessionUser: User | null) => {
+        if (!sessionUser) {
+            if (isMounted) {
+                setUser(null);
+                setProfile(null);
+                setLoading(false);
+            }
+            return;
+        }
+        try {
+            const { data } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', sessionUser.id)
+                .single();
+            if (isMounted) {
+                setUser(sessionUser);
+                setProfile(data || { plan_tier: 'free' });
+                setLoading(false);
+            }
+        } catch (err) {
+            console.error("Failed to fetch profile", err);
+            if (isMounted) {
+                setUser(sessionUser);
+                setLoading(false);
+            }
+        }
+    };
+
     const initializeAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) throw error;
-        
-        if (isMounted) {
-          setSession(session);
-          setUser(session?.user ?? null);
-          setLoading(false); // ⚠️ ストレージの読み込みが完全に終わってから初めて待機を解除する
-        }
+        if (isMounted) setSession(session);
+        await fetchUserAndProfile(session?.user ?? null); // 修正
       } catch (error) {
         console.error("Auth initialization error:", error);
         if (isMounted) setLoading(false);
@@ -47,12 +73,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initializeAuth();
 
-    // 2. 状態変化のリスナー（別タブでのログインやログアウトを検知）
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (isMounted) {
         setSession(session);
-        setUser(session?.user ?? null);
-        // ⚠️ ここでは setLoading(false) を呼ばない！初回ロードの邪魔をさせないため。
+        fetchUserAndProfile(session?.user ?? null); // 修正
       }
     });
 
@@ -86,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, signUp, signIn, signOut, resetPassword }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, signUp, signIn, signOut, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );
