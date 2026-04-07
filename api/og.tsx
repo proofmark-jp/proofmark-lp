@@ -9,7 +9,8 @@ const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_A
 
 export default async function handler(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
+    const requestUrl = request.url || '';
+    const { searchParams } = new URL(requestUrl, requestUrl.startsWith('http') ? undefined : 'https://proofmark.jp');
     const id = searchParams.get('id');
 
     // IDがない、または不明な場合のデフォルト画像
@@ -55,17 +56,16 @@ export default async function handler(request: Request) {
       return renderDefault();
     }
 
-    // 日本時間へのフォーマット (Edge Runtime)
+    // Satoriクラッシュ防止：完全なASCIIフォーマットで日本時間を生成
     const date = new Date(cert.created_at);
-    const formattedDate = date.toLocaleString('ja-JP', { 
-      timeZone: 'Asia/Tokyo',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
+    const jstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
+    const year = jstDate.getUTCFullYear();
+    const month = String(jstDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(jstDate.getUTCDate()).padStart(2, '0');
+    const hours = String(jstDate.getUTCHours()).padStart(2, '0');
+    const minutes = String(jstDate.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(jstDate.getUTCSeconds()).padStart(2, '0');
+    const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} JST`;
 
     return new ImageResponse(
       (
