@@ -65,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     const seconds = String(jstDate.getUTCSeconds()).padStart(2, '0');
                     const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds} JST`;
 
-                    // 画像エリアの出し分け（HTML文字列として生成）
+                    // 画像エリアの出し分け
                     const imageSection = cert.public_image_url
                         ? `<img src="${cert.public_image_url}" tw="w-full h-full" style="object-fit: cover;" />`
                         : `<div tw="flex flex-col items-center justify-center text-center p-8">
@@ -90,22 +90,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   <div tw="flex items-center self-start px-4 py-1.5 bg-[#00D4AA]/10 border border-[#00D4AA]/30 text-[#00D4AA] text-sm font-black tracking-widest uppercase rounded-full mb-6">
                     VERIFIED DIGITAL ASSET
                   </div>
-                  <div tw="text-5xl font-black text-white leading-tight mb-8">
-                    CERTIFICATE OF<br />AUTHENTICITY
+                  
+                  <div tw="flex flex-col mb-8">
+                    <div tw="text-5xl font-black text-white leading-tight">CERTIFICATE OF</div>
+                    <div tw="text-5xl font-black text-white leading-tight">AUTHENTICITY</div>
                   </div>
+
                   <div tw="flex flex-col mb-6">
                     <div tw="text-xs font-bold text-[#A8A0D8] uppercase tracking-widest mb-1">Certificate ID</div>
                     <div tw="text-lg font-mono text-white/80">${cert.id}</div>
                   </div>
+
                   <div tw="flex flex-col mb-6">
                     <div tw="text-xs font-bold text-[#A8A0D8] uppercase tracking-widest mb-1">SHA-256 Hash Signature</div>
-                    <div tw="text-sm font-mono text-white/90 break-all leading-tight">${cert.sha256}</div>
+                    <div tw="text-sm font-mono text-white/90 leading-tight" style="word-break: break-all;">${cert.sha256}</div>
                   </div>
+
                   <div tw="flex flex-col">
                     <div tw="text-xs font-bold text-[#A8A0D8] uppercase tracking-widest mb-1">Timestamp (JST)</div>
                     <div tw="text-2xl font-bold text-white tracking-tight">${formattedDate}</div>
                   </div>
                 </div>
+
                 <div tw="flex flex-row items-center justify-between border-t border-[#1C1A38] pt-6 opacity-60">
                   <div tw="text-[#A8A0D8] text-lg font-bold uppercase tracking-widest">ProofMark</div>
                   <div tw="text-[#A8A0D8] text-sm">Digital Existence Proven</div>
