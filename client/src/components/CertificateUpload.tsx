@@ -23,7 +23,8 @@ export default function CertificateUpload() {
   const [, setLocation] = useLocation();
 
   const { user, profile } = useAuth(); // profileを追加
-  const currentPlan = (profile?.plan_tier || '').toLowerCase();
+  const actualPlanVariable = user?.user_metadata?.plan_type;
+  const currentPlan = (actualPlanVariable || '').toLowerCase();
   const isPaidPlan = currentPlan === 'light' || currentPlan === 'admin';
 
   // ブラウザ内ハッシュ計算 (Private)
@@ -213,13 +214,14 @@ export default function CertificateUpload() {
       {/* Shareable Mode */}
       <div
         onClick={() => {
+          console.log("Current Plan Check:", actualPlanVariable, "=> Evaluated as:", currentPlan);
           if (isProcessing) return;
           if (!user) {
             alert('ログイン（無料登録）が必要です。');
             return;
           }
           if (!isPaidPlan) {
-              alert('Shareable ProofはLIGHTプランまたはADMIN専用の機能です。');
+              alert('Shareable ProofはLIGHTプラン専用の機能です。');
               return;
           }
           setProofMode('shareable');

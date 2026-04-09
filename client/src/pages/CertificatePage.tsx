@@ -44,7 +44,8 @@ export default function CertificatePage() {
     // 💡 複数ボタンに対応するためコピー状態を文字列で管理
     const [copiedType, setCopiedType] = useState<string | null>(null);
     const { user, profile, signOut } = useAuth(); // profileを追加
-    const currentPlan = (profile?.plan_tier || '').toLowerCase();
+    const actualPlanVariable = user?.user_metadata?.plan_type;
+    const currentPlan = (actualPlanVariable || '').toLowerCase();
     const isPaidPlan = currentPlan === 'light' || currentPlan === 'admin';
 
     // ---- RFC3161 Timestamp State ----
