@@ -108,6 +108,14 @@ export default function Footer() {
                   公式 X (@ProofMark_jp)
                 </a>
               </li>
+              <li>
+                <Link 
+                  href="/blog" 
+                  className="text-[#A8A0D8] hover:text-[#00D4AA] text-sm transition-colors"
+                >
+                  公式ブログ
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
@@ -116,11 +124,18 @@ export default function Footer() {
           <p className="text-[#48456A] text-xs">
             © {currentYear} ProofMark. All rights reserved.
           </p>
-          <div className="flex gap-6 text-[#48456A] text-[10px] uppercase tracking-tighter">
+          <div className="flex gap-6 text-[#48456A] text-[10px] uppercase tracking-tighter flex-wrap justify-center">
             <span>Serverless Infrastructure</span>
             <span>Client-side Hash Verification</span>
             <span>RFC3161 Compliant</span>
           </div>
+        </div>
+
+        <div className="mt-8 p-4 rounded-xl bg-[#0D0B24] border border-[#1C1A38]/50">
+          <p className="text-[#48456A] text-xs leading-relaxed text-center sm:text-left">
+            <span className="font-semibold text-[#8B88B1]">商標について:</span>{" "}
+            本サイトに表示されるすべての製品名、ロゴ、ブランドは、それぞれの所有者の財産です。ProofMarkはこれらのツールとの公式な提携を主張するものではなく、互換性を示しています。
+          </p>
         </div>
       </div>
     </footer>

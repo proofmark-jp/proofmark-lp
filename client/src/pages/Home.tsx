@@ -159,76 +159,93 @@ export default function Home() {
                 公開検証URL・PDF・QRコードで、あなたの創作の事実を第三者に堂々と共有できます。
               </p>
 
-              {/* Hero form */}
-              <motion.form
-                onSubmit={handleHeroSubmit}
-                className="flex flex-col sm:flex-row gap-3 mb-6 max-w-md w-full mx-auto"
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.65, duration: 0.4 }}
-              >
-                <label htmlFor="hero-email" className="sr-only">メールアドレス</label>
-                <input
-                  id="hero-email"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={heroEmail}
-                  onChange={(e) => setHeroEmail(e.target.value)}
-                  disabled={isHeroSubmitting}
-                  className="flex-1 px-6 py-4 rounded-full border transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
-                  style={{
-                    background: "rgba(21,29,47,0.85)",
-                    borderColor: "rgba(42,42,78,0.8)",
-                    backdropFilter: "blur(8px)",
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = "rgba(108,62,244,0.7)";
-                    e.currentTarget.style.boxShadow = "0 0 0 3px rgba(108,62,244,0.15)";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "rgba(42,42,78,0.8)";
-                    e.currentTarget.style.boxShadow = "none";
-                  }}
-                  required
-                  aria-label="先行登録用のメールアドレス"
-                />
-                <motion.button
-                  type="submit"
-                  disabled={isHeroSubmitting}
-                  className="px-8 py-4 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-70 disabled:cursor-wait"
-                  style={{ boxShadow: "0 0 20px rgba(108,62,244,0.4)" }}
-                  variants={buttonVariants}
-                  initial="rest"
-                  whileHover="hover"
-                  whileTap="tap"
+              {/* Hero form / Dashboard CTA based on auth state */}
+              {user ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.65, duration: 0.4 }}
+                  className="mb-10 w-full"
                 >
-                  {isHeroSubmitting ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      暗号化通信中...
-                    </>
-                  ) : "先行アクセスを確保 ➔"}
-                </motion.button>
-              </motion.form>
+                  <Link href="/dashboard">
+                    <button className="px-10 py-5 rounded-full bg-primary text-white font-black text-lg hover:scale-105 transition-all shadow-[0_0_40px_rgba(108,62,244,0.4)] block mx-auto">
+                      管理画面へ進む (Go to Dashboard) ➔
+                    </button>
+                  </Link>
+                </motion.div>
+              ) : (
+                <>
+                  <motion.form
+                    onSubmit={handleHeroSubmit}
+                    className="flex flex-col sm:flex-row gap-3 mb-6 max-w-md w-full mx-auto"
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.65, duration: 0.4 }}
+                  >
+                    <label htmlFor="hero-email" className="sr-only">メールアドレス</label>
+                    <input
+                      id="hero-email"
+                      type="email"
+                      placeholder="your@email.com"
+                      value={heroEmail}
+                      onChange={(e) => setHeroEmail(e.target.value)}
+                      disabled={isHeroSubmitting}
+                      className="flex-1 px-6 py-4 rounded-full border transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
+                      style={{
+                        background: "rgba(21,29,47,0.85)",
+                        borderColor: "rgba(42,42,78,0.8)",
+                        backdropFilter: "blur(8px)",
+                      }}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = "rgba(108,62,244,0.7)";
+                        e.currentTarget.style.boxShadow = "0 0 0 3px rgba(108,62,244,0.15)";
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = "rgba(42,42,78,0.8)";
+                        e.currentTarget.style.boxShadow = "none";
+                      }}
+                      required
+                      aria-label="先行登録用のメールアドレス"
+                    />
+                    <motion.button
+                      type="submit"
+                      disabled={isHeroSubmitting}
+                      className="px-8 py-4 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-70 disabled:cursor-wait"
+                      style={{ boxShadow: "0 0 20px rgba(108,62,244,0.4)" }}
+                      variants={buttonVariants}
+                      initial="rest"
+                      whileHover="hover"
+                      whileTap="tap"
+                    >
+                      {isHeroSubmitting ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          暗号化通信中...
+                        </>
+                      ) : "先行アクセスを確保 ➔"}
+                    </motion.button>
+                  </motion.form>
 
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.8 }}
-                style={{ fontSize: "14px", color: "#A8A0D8", marginTop: "16px", lineHeight: "1.5", wordBreak: "break-word", whiteSpace: "normal", textAlign: "center" }}
-              >
-                <p className="text-xs text-muted flex items-center justify-center gap-2 mb-3">
-                  <Lock className="w-4 h-4 text-accent" />
-                  メールアドレスはSSL/TLSで保護されます
-                </p>
-                <p>
-                  <span className="text-[#ffd966] font-bold">🎁 先着100名限定</span>：β版優先招待 + 3ヶ月無料 + 創設者バッジ<br />
-                  クレジットカード不要・いつでも解除OK
-                </p>
-              </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.8 }}
+                    style={{ fontSize: "14px", color: "#A8A0D8", marginTop: "16px", lineHeight: "1.5", wordBreak: "break-word", whiteSpace: "normal", textAlign: "center" }}
+                  >
+                    <p className="text-xs text-muted flex items-center justify-center gap-2 mb-3">
+                      <Lock className="w-4 h-4 text-accent" />
+                      メールアドレスはSSL/TLSで保護されます
+                    </p>
+                    <p>
+                      <span className="text-[#ffd966] font-bold">🎁 先着100名限定</span>：β版優先招待 + 3ヶ月無料 + 創設者バッジ<br />
+                      クレジットカード不要・いつでも解除OK
+                    </p>
+                  </motion.div>
+                </>
+              )}
 
               {/* ヒーロー画像：証明書モックアップ（/mockup.avif に置き換え） */}
               <motion.div
