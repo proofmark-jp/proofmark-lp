@@ -44,7 +44,7 @@ export default function CertificatePage() {
     // 💡 複数ボタンに対応するためコピー状態を文字列で管理
     const [copiedType, setCopiedType] = useState<string | null>(null);
     const { user, profile, signOut } = useAuth(); // profileを追加
-    const isPaidPlan = ['light', 'admin'].includes(profile?.plan_tier || ''); // プラン判定をlight/adminに変更
+    const isPaidPlan = profile?.plan_tier ? ['light', 'admin'].includes(profile.plan_tier.toLowerCase()) : false; // 大文字小文字を問わず判定
 
     // ---- RFC3161 Timestamp State ----
     const [isStamping, setIsStamping] = useState(false);
@@ -368,13 +368,13 @@ export default function CertificatePage() {
     ) : (
         <button
             onClick={() => {
-                alert("PDF証明書の保存はLIGHTまたはADMINプラン限定の機能です。プランをアップグレードしてください。");
+                alert("PDF証明書の保存はLIGHTプラン限定の機能です。プランをアップグレードしてください。");
             }}
             className="no-print bg-slate-800 text-slate-400 px-6 py-3 rounded-xl font-bold border border-slate-700 flex items-center gap-2 hover:bg-slate-700 hover:text-white transition-all cursor-pointer relative group"
         >
              <Lock className="w-4 h-4" /> PDF保存をロック解除
              <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#F0BB38] text-[#1A1200] text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                 LIGHT/ADMINプラン限定
+                 LIGHTプラン限定
              </span>
         </button>
     )}
