@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
 
 /**
  * FAQAccordion Component
@@ -14,11 +15,6 @@ interface FAQItem {
 }
 
 const faqItems: FAQItem[] = [
-  {
-    id: "what-is-sha256",
-    question: "SHA-256とは何ですか？",
-    answer: "SHA-256は世界標準の暗号化技術です。画像データを「デジタル指紋（ハッシュ値）」に変換します。1ピクセルでも画像が書き換えられればこの指紋は全く別のものになるため、あなたの作品が「いつからその状態であったか」を改ざん不能な形で証明できます。指紋から元の画像を復元することは不可能です。",
-  },
   {
     id: "is-data-safe",
     question: "データは本当に安全ですか？",
@@ -35,54 +31,9 @@ const faqItems: FAQItem[] = [
     answer: "ハッシュ値はユーザーのブラウザ内で計算されるため、証明書を発行するだけであれば運営が画像の内容を知ることはシステム上不可能です。また、クラウドに保存されたポートフォリオ用の画像データについても、厳格なセキュリティポリシー（RLS）で保護されており、運営スタッフが意図的にユーザーの非公開画像を閲覧する仕組みにはなっていません。",
   },
   {
-    id: "post-certificate-deletion",
-    question: "証明書を発行した後、画像はどうなりますか？",
-    answer: "証明書発行後、ご自身でいつでもクラウドストレージから画像を削除することが可能です。画像本体を削除しても、データベースに記録されたデジタル指紋（ハッシュ）とタイムスタンプによる証明の効力が失われることはありません。",
-  },
-  {
-    id: "how-timestamp-works",
-    question: "タイムスタンプはどのように機能しますか？",
-    answer: "あなたが作品を登録した「日時」を、修正不可能な形で記録します。これにより、パクリトラブルや無断転載が起きた際、「相手よりも先に自分がこの作品を所持していた」という客観的な先着証明（エビデンス）として、プラットフォーム運営への異議申し立て等に活用できます。",
-  },
-  {
-    id: "about-copyright",
-    question: "ProofMarkを使うと著作権が発生するのですか？",
-    answer: "ProofMark自体が法的な著作権（Copyright）を付与するものではありません。しかし、「あなたがこの日時にこのデータを所持していた」という改ざん不能な事実を記録します。AI作品の権利関係が曖昧な現代において、この客観的証拠は、自身の正当性を主張し、作品を守るための「強力な武器」として機能します。",
-  },
-  {
-    id: "what-is-c2pa",
-    question: "C2PAとは何ですか？",
-    answer: "AdobeやMicrosoftなどが推進する、デジタルコンテンツの由来を証明するための国際標準規格です。ProofMarkはこの規格の考え方をベースに設計されており、将来のアップデートでC2PAメタデータの読み取り・付与に完全対応する予定です。",
-  },
-  {
     id: "free-vs-light",
-    question: "FreeプランとLightプランの違いは何ですか？",
+    question: "料金について：FreeプランとLightプランの違いは何ですか？",
     answer: "Freeプランは月30件までの証明書発行が可能です。Lightプラン（¥480/月）は発行が無制限になり、さらにプロフェッショナルな「PDF証明書」のダウンロードや、高度な機能が利用可能になります。クライアントへの納品物に証明書を添付したい方には、Lightプランが最適です。",
-  },
-  {
-    id: "export-certificate",
-    question: "証明書をPDFでダウンロードできますか？",
-    answer: "はい、Lightプラン以上（または先行登録特典）で対応予定です。PDF証明書には、SHA-256ハッシュ値、タイムスタンプ、保存証明がすべて記載されます。これをポートフォリオに添付したり、クライアントに提示したり、著作権侵害の証拠として保管できます。",
-  },
-  {
-    id: "ai-tools-compatible",
-    question: "どのAIツールの出力に対応していますか？",
-    answer: "Midjourney、Stable Diffusion、DALL-E、Adobe Fireflyなど、すべての生成AIツールに対応しています。出力された画像形式（JPG、PNG、WebP、GIF、AVIF）であれば、そのままドラッグ&ドロップで登録可能です。※現在、セキュリティ保護のためSVG形式には対応しておりません。",
-  },
-  {
-    id: "portfolio-use",
-    question: "ProofMarkをポートフォリオでどう活用すればいいですか？",
-    answer: "完成品だけでなく、制作途中のデータをProofMarkに登録しておくことをおすすめします。「制作プロセス」を段階的に記録し、公開ポートフォリオで提示することで、AIとの協働作業を客観的に証明でき、クライアントからの信頼性が飛躍的に向上します。",
-  },
-  {
-    id: "client-explanation",
-    question: "クライアントにどう説明すればいいですか？",
-    answer: "納品時にProofMarkの証明書リンク（またはPDF）を添付し、『この作品はSHA-256とタイムスタンプにより、私が制作した事実が客観的に証明されています』と伝えてください。技術的な詳細よりも『第三者機関による改ざん不能な記録がある』という事実が、クライアントに大きな安心感を与えます。",
-  },
-  {
-    id: "how-to-use",
-    question: "使い方は簡単ですか？",
-    answer: "非常に簡単です。（1）作品画像をアップロード、（2）ハッシュとタイムスタンプが自動生成される、（3）証明書ページが発行される、というシンプルなステップです。難しい技術知識は一切不要です。",
   },
 ];
 
@@ -138,6 +89,12 @@ export const FAQAccordion = () => {
             </a>
             までお気軽にどうぞ。
           </p>
+        </div>
+        
+        <div className="mt-8 flex justify-center">
+          <Link href="/faq" className="inline-flex items-center gap-2 text-[#00D4AA] hover:text-white font-bold transition-colors">
+            詳細なFAQ・法的有効性について確認する <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
       </div>
     </section>

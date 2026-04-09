@@ -20,6 +20,8 @@ import Settings from "./pages/Settings";
 import ArticleCopyright from "./pages/ArticleCopyright";
 import ArticleMonetization from "./pages/ArticleMonetization";
 import PublicProfile from "./pages/PublicProfile";
+import Faq from "./pages/Faq";
+import WhatItProves from "./pages/WhatItProves";
 import Footer from "./components/Footer";
 
 function Router() {
@@ -34,6 +36,8 @@ function Router() {
       <Route path="/privacy" component={Privacy} />
       <Route path="/tokushoho" component={Tokushoho} />
       <Route path="/security" component={Security} />
+      <Route path="/faq" component={Faq} />
+      <Route path="/what-it-proves" component={WhatItProves} />
       <Route path="/u/:username" component={PublicProfile} />
       <Route path="/blog" component={BlogIndex} />
       <Route path="/blog/copyright" component={ArticleCopyright} />
