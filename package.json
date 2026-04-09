@@ -42,6 +42,8 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@resvg/resvg-js": "^2.6.2",
+    "@sentry/node": "^10.47.0",
+    "@sentry/react": "^10.47.0",
     "@supabase/supabase-js": "^2.99.3",
     "@vercel/og": "^0.11.1",
     "axios": "^1.12.0",

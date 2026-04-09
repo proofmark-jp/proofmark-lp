@@ -1,4 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import * as Sentry from "@sentry/node";
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || "",
+  tracesSampleRate: 1.0,
+});
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
@@ -103,6 +109,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     } catch (error: any) {
         console.error('RFC3161 Timestamp Error:', error);
+        Sentry.captureException(error);
+        await Sentry.flush(2000); // 🌟 追加: 送信完了まで最大2秒待機する
         return res.status(500).json({ error: error.message });
     }
 }

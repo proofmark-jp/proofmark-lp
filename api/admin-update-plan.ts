@@ -1,5 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import * as Sentry from "@sentry/node";
 import { supabaseAdmin } from "./lib/supabase-admin";
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || "",
+  tracesSampleRate: 1.0,
+});
 
 /**
  * ADMIN専用: ユーザープラン更新 API
@@ -64,6 +70,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     } catch (err: any) {
         console.error("[Admin API] Error updating plan:", err);
+        Sentry.captureException(err);
+        await Sentry.flush(2000); // 🌟 追加: 送信完了まで最大2秒待機する
         return res.status(500).json({ success: false, error: err.message });
     }
 }
