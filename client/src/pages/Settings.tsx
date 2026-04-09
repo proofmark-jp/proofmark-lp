@@ -3,6 +3,7 @@ import { useLocation, Link } from 'wouter';
 import { createClient } from '@supabase/supabase-js';
 import { Camera, Save, User, Loader2, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
+import AdminStorageSimulator from '../components/AdminStorageSimulator';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -259,6 +260,9 @@ export default function Settings() {
               ))}
             </div>
           </div>
+
+          {/* ── ストレージ容量シミュレーター (ADMIN限定) ── */}
+          {currentPlan === 'admin' && <AdminStorageSimulator />}
 
         </div>
       </div>
