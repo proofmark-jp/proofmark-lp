@@ -29,6 +29,11 @@ interface CertRecord {
   file_url?: string;
   storage_path?: string;
   file_name?: string;
+  original_filename?: string;
+  public_image_url?: string;
+  proof_mode?: string;
+  visibility?: string;
+  user_id?: string;
   metadata?: {
     show_in_gallery?: boolean;
     [key: string]: unknown;
@@ -164,7 +169,8 @@ export default function PublicProfile() {
   }, [username]);
 
   const formatFilename = (cert: CertRecord) => {
-    if (cert.file_name && cert.file_name !== 'Untitled') return cert.file_name;
+    const originalName = cert.original_filename || cert.file_name;
+    if (originalName && originalName !== 'Untitled' && originalName !== 'unknown_file') return originalName;
     if (cert.storage_path) {
       const parts = cert.storage_path.split('/');
       return (parts[parts.length - 1] || '').replace(/^file_\d+_?/, '');
@@ -221,7 +227,8 @@ export default function PublicProfile() {
         ) : (
           <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
             {certs.map((cert) => {
-              const imgUrl = cert.file_url || cert.image_url;
+              const showImage = cert.proof_mode === 'shareable' && cert.public_image_url && (cert.visibility === 'public' || user?.id === cert.user_id);
+              const imgUrl = showImage ? cert.public_image_url : null;
               const cleanFilename = formatFilename(cert);
 
               return (
