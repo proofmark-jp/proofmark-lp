@@ -8,7 +8,7 @@
     },
     {
       "source": "/cert/:id",
-      "destination": "/api/cert?id=$id"
+      "destination": "/api/cert?id=:id"
     },
     {
       "source": "/(.*)",
