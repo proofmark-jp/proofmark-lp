@@ -135,43 +135,43 @@ export default function PublicProfile() {
     }
 
     async function loadPortfolio() {
-      setLoading(true);
-      // 🌟 まずプロファイルテーブルからユーザー情報を取得
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, avatar_url, is_founder')
-        .ilike('username', username)
-        .maybeSingle();
+      try {
+        // 🌟 まずプロファイルテーブルからユーザー情報を取得
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, avatar_url, is_founder')
+          .ilike('username', username)
+          .maybeSingle();
 
-      if (profileError || !profile) {
-        setProfileExists(false);
-        setLoading(false);
-        return;
+        if (profileError || !profile) {
+          setProfileExists(false);
+          return;
+        }
+
+        setProfileExists(true);
+        setUserAvatar(profile.avatar_url);
+        setIsFounder(Boolean(profile.is_founder));
+
+        // 🌟 user_id を使って、そのユーザーの証明書のみを直接取得（効率的）
+        const { data: userCerts, error: certsError } = await supabase
+          .from('certificates')
+          .select('*')
+          .eq('user_id', profile.id)
+          .order('created_at', { ascending: false });
+
+        if (certsError || !userCerts) {
+          return;
+        }
+
+        const galleryCerts = userCerts.filter((c) => {
+          const meta = c.metadata as Record<string, unknown> | null;
+          return !meta || meta.show_in_gallery !== false;
+        });
+
+        setCerts(galleryCerts);
+      } finally {
+        if (active) setLoading(false);
       }
-
-      setProfileExists(true);
-      setUserAvatar(profile.avatar_url);
-      setIsFounder(Boolean(profile.is_founder));
-
-      // 🌟 user_id を使って、そのユーザーの証明書のみを直接取得（効率的）
-      const { data: userCerts, error: certsError } = await supabase
-        .from('certificates')
-        .select('*')
-        .eq('user_id', profile.id)
-        .order('created_at', { ascending: false });
-
-      if (certsError || !userCerts) {
-        setLoading(false);
-        return;
-      }
-
-      const galleryCerts = userCerts.filter((c) => {
-        const meta = c.metadata as Record<string, unknown> | null;
-        return !meta || meta.show_in_gallery !== false;
-      });
-
-      setCerts(galleryCerts);
-      setLoading(false);
     }
     loadPortfolio();
   }, [username]);
@@ -186,8 +186,8 @@ export default function PublicProfile() {
     return 'Verified_Digital_Artwork';
   };
 
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-[#00D4AA] font-bold tracking-widest">LOADING PROFILE...</div>;
   if (!username) return <NotFoundScreen username="unknown" />;
-  if (loading) return <LoadingScreen />;
   if (!profileExists) return <NotFoundScreen username={username} />;
 
   return (

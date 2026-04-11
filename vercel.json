@@ -2,21 +2,8 @@
   "version": 2,
   "public": true,
   "rewrites": [
-    {
-      "source": "/api/og",
-      "destination": "/api/og"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/cert/:id",
-      "destination": "/api/cert?id=$id"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/cert/(?<id>[^/]+)", "destination": "/api/cert?id=$id" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
