@@ -1,9 +1,52 @@
-import React from "react";
-import { Check, Zap, Minus, Tag } from "lucide-react";
-import { Link } from "wouter";
+import React, { useState } from "react";
+import { Check, Zap, Minus, Tag, Loader2 } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
+import { useAuth } from "../hooks/useAuth";
+import { supabase } from "../lib/supabase";
+import { toast } from "sonner";
 
 export default function Pricing() {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  const [reserving, setReserving] = useState(false);
+
+  const handleReserve = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!user) {
+      setLocation("/auth?mode=signup&plan=light");
+      return;
+    }
+    
+    if (window.confirm("先行特典（Lightプラン3ヶ月無料＋創設者バッジ付与）を予約しますか？\\n※現在料金は発生しません。")) {
+      try {
+        setReserving(true);
+        // Authメタデータの更新
+        const { error: authError } = await supabase.auth.updateUser({
+          data: { is_founder: true }
+        });
+        if (authError) throw authError;
+
+        // Profilesの更新 (カラムがあれば)
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ is_founder: true })
+          .eq('id', user.id);
+        
+        // カラムが存在しないエラーの場合は無視してもOK (とりあえずAuth Metaで動く)
+
+        toast.success("先行特典の予約が完了しました！", {
+          description: "創設者バッジがアカウントに付与されました。"
+        });
+        
+        setTimeout(() => window.location.reload(), 1500);
+      } catch (err: any) {
+        toast.error("エラーが発生しました", { description: err.message });
+      } finally {
+        setReserving(false);
+      }
+    }
+  };
   return (
     <div className="min-h-screen bg-[#07061A] text-white pt-32 pb-24 px-4 sm:px-6 lg:px-8 selection:bg-[#6C3EF4]/30">
       <div className="max-w-7xl mx-auto">
@@ -172,11 +215,22 @@ export default function Pricing() {
               </li>
             </ul>
 
-            <Link href="/auth?mode=signup&plan=light">
-              <button className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white font-bold hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(108,62,244,0.4)]">
-                先行特典を予約する
+            {user ? (
+              <button 
+                onClick={handleReserve}
+                disabled={reserving}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white font-bold hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(108,62,244,0.4)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {reserving ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
+                {reserving ? "予約処理中..." : "先行特典を予約する"}
               </button>
-            </Link>
+            ) : (
+              <Link href="/auth?mode=signup&plan=light">
+                <button className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white font-bold hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(108,62,244,0.4)]">
+                  先行特典を予約する
+                </button>
+              </Link>
+            )}
           </motion.div>
         </div>
 

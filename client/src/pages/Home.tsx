@@ -712,7 +712,7 @@ export default function Home() {
             </motion.div>
 
             <FadeInSection>
-              <p className="text-center text-sm font-bold" style={{ color: "#F0BB38" }}>
+              <p className="text-center text-sm font-bold" style={{ color: "#BC78FF" }}>
                 ※ 先着100名はLightプラン3ヶ月無料＋創設者バッジ付き
               </p>
             </FadeInSection>
@@ -803,9 +803,9 @@ export default function Home() {
                     {badge.text}
                   </motion.div>
                 ))}
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#1A1200", padding: "8px 16px", borderRadius: "100px", border: "1px solid #F0BB38" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(108, 62, 244, 0.1)", padding: "8px 16px", borderRadius: "100px", border: "1px solid rgba(108, 62, 244, 0.5)", boxShadow: "0 0 12px rgba(108, 62, 244, 0.4)" }}>
                   <img src={founderBadge} alt="Founder Badge" style={{ height: "16px", width: "16px" }} />
-                  <span style={{ fontSize: "14px", fontWeight: "bold", color: "#F0BB38", whiteSpace: "nowrap" }}>Founderバッジ</span>
+                  <span style={{ fontSize: "14px", fontWeight: "bold", color: "#BC78FF", whiteSpace: "nowrap" }}>Founderバッジ</span>
                 </div>
               </motion.div>
             </FadeInSection>

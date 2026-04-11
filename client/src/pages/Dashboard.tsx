@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import Navbar from "../components/Navbar";
+import FounderBadge from "../components/FounderBadge";
 
 interface Certificate {
   id: string;
@@ -100,9 +101,12 @@ export default function Dashboard() {
 
       {/* Hero section */}
       <section style={styles.hero}>
-        <h1 className="text-3xl font-black mb-2" style={styles.heroTitle}>
-          Dashboard
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '8px' }}>
+          <h1 className="text-3xl font-black" style={{ margin: 0, fontSize: 30, color: '#fff', letterSpacing: '-0.02em' }}>
+            {user.user_metadata?.username ? `@${user.user_metadata.username}` : 'Dashboard'}
+          </h1>
+          {user.user_metadata?.is_founder && <FounderBadge />}
+        </div>
         <p className="text-muted" style={styles.heroSubtitle}>
           証明済み作品の管理パネル。ここはあなただけがアクセスできる非公開エリアです。
         </p>

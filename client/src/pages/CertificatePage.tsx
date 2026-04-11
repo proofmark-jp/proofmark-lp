@@ -193,9 +193,9 @@ export default function CertificatePage() {
                                 <div className="flex items-center gap-1.5 bg-[#00D4AA]/10 border border-[#00D4AA]/30 text-[#00D4AA] px-4 py-2 rounded-full text-xs font-black tracking-widest uppercase print:bg-teal-50 print:border-teal-500 print:text-teal-700">
                                     <ShieldCheck className="w-4 h-4" /> VERIFIED
                                 </div>
-                                <div className="flex items-center gap-1.5 bg-[#1A1200] border border-[#F0BB38] text-[#F0BB38] px-4 py-2 rounded-full text-xs font-black tracking-widest uppercase print:bg-yellow-50 print:border-yellow-500 print:text-yellow-700">
+                                <div className="flex items-center gap-1.5 bg-[#6C3EF4]/10 border border-[#6C3EF4]/50 shadow-[0_0_12px_rgba(108,62,244,0.4)] text-[#BC78FF] px-4 py-2 rounded-full text-xs font-black tracking-widest uppercase print:bg-purple-50 print:border-purple-500 print:text-purple-700">
                                     <img src={founderBadge} alt="Founder" className="w-4 h-4 print:hidden" />
-                                    <span className="hidden print:inline-block w-4 h-4 text-center leading-4">👑</span>
+                                    <span className="hidden print:inline-block w-4 h-4 text-center leading-4">🚀</span>
                                     FOUNDER
                                 </div>
                             </div>

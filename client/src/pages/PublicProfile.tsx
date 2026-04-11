@@ -16,6 +16,7 @@ import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
 import founderBadge from '../assets/logo/badges/proofmark-badge-founder.svg';
 import { useAuth } from '../hooks/useAuth';
 import Navbar from '../components/Navbar';
+import FounderBadge from '../components/FounderBadge';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -122,6 +123,7 @@ export default function PublicProfile() {
   const [loading, setLoading] = useState(true);
   const [profileExists, setProfileExists] = useState(false);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
+  const [isFounder, setIsFounder] = useState(false);
   const { user, signOut } = useAuth();
 
   useEffect(() => {
@@ -132,7 +134,7 @@ export default function PublicProfile() {
       // 🌟 まずプロファイルテーブルからユーザー情報を取得
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('id, avatar_url')
+        .select('id, avatar_url, is_founder')
         .eq('username', username)
         .maybeSingle();
 
@@ -144,6 +146,7 @@ export default function PublicProfile() {
 
       setProfileExists(true);
       setUserAvatar(profile.avatar_url);
+      setIsFounder(Boolean(profile.is_founder));
 
       // 🌟 user_id を使って、そのユーザーの証明書のみを直接取得（効率的）
       const { data: userCerts, error: certsError } = await supabase
@@ -200,10 +203,7 @@ export default function PublicProfile() {
           <div className="flex-1 text-center md:text-left">
             <div className="flex flex-col md:flex-row items-center gap-4 mb-3">
               <h1 className="text-3xl font-extrabold text-white tracking-tight">@{username}</h1>
-              <div className="flex items-center gap-1.5 bg-[#1A1200] border border-[#F0BB38] px-4 py-1.5 rounded-full">
-                <img src={founderBadge} alt="Founder" className="w-4 h-4" />
-                <span className="text-[10px] font-black text-[#F0BB38] tracking-widest uppercase">Founder</span>
-              </div>
+              {isFounder && <FounderBadge />}
             </div>
             <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm font-medium">
               <span className="flex items-center gap-1.5 text-white bg-[#151D2F] border border-[#2a2a4e] px-4 py-2 rounded-full">

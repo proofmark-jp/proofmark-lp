@@ -17,12 +17,12 @@
        r="52%">
       <stop
          offset="0%"
-         stop-color="#F5C842"
+         stop-color="#BC78FF"
          stop-opacity=".12"
          id="stop1" />
       <stop
          offset="100%"
-         stop-color="#E8860A"
+         stop-color="#6C3EF4"
          stop-opacity=".03"
          id="stop2" />
     </radialGradient>
@@ -34,11 +34,11 @@
        y2="100%">
       <stop
          offset="0%"
-         stop-color="#F5C842"
+         stop-color="#BC78FF"
          id="stop3" />
       <stop
          offset="100%"
-         stop-color="#E8860A"
+         stop-color="#6C3EF4"
          id="stop4" />
     </linearGradient>
     <linearGradient
@@ -49,11 +49,11 @@
        y2="0%">
       <stop
          offset="0%"
-         stop-color="#E8860A"
+         stop-color="#6C3EF4"
          id="stop5" />
       <stop
          offset="100%"
-         stop-color="#FFF8DC"
+         stop-color="#FFFFFF"
          id="stop6" />
     </linearGradient>
   </defs>
@@ -61,7 +61,7 @@
      width="100"
      height="100"
      rx="22"
-     fill="#1A1200"
+     fill="#0D0B24"
      id="rect6" />
   <polygon
      points="50,12 82,30 82,70 50,88 18,70 18,30"
@@ -83,7 +83,7 @@
      stroke-linecap="round"
      id="path7" />
   <g
-     stroke="#F5C842"
+     stroke="#BC78FF"
      stroke-linecap="round"
      opacity=".26"
      id="g12">
