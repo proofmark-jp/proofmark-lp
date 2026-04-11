@@ -9,9 +9,14 @@ interface Certificate {
   id: string;
   file_name: string;
   file_hash: string;
-  file_url: string;
+  file_url?: string;
   thumbnail_url?: string;
   created_at: string;
+  original_filename?: string;
+  public_image_url?: string;
+  proof_mode?: string;
+  visibility?: string;
+  sha256?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -186,7 +191,7 @@ export default function Dashboard() {
                   <div style={styles.metaRow}>
                     <span style={styles.metaLabel}>Hash</span>
                     <code style={styles.hashValue}>
-                      {truncateHash(cert.file_hash)}
+                      {truncateHash(cert.sha256 || cert.file_hash)}
                     </code>
                   </div>
 

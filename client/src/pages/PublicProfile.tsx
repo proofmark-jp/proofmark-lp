@@ -127,15 +127,20 @@ export default function PublicProfile() {
   const { user, signOut } = useAuth();
 
   useEffect(() => {
+    let active = true;
+
     if (!username) {
-      setLoading(false); return;
+      // ユーザー名が存在しない場合はNot Found画面ではなくローディングか何もしない状態にしておく
+      return; 
     }
+
     async function loadPortfolio() {
+      setLoading(true);
       // 🌟 まずプロファイルテーブルからユーザー情報を取得
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('id, avatar_url, is_founder')
-        .eq('username', username)
+        .ilike('username', username)
         .maybeSingle();
 
       if (profileError || !profile) {
@@ -181,8 +186,9 @@ export default function PublicProfile() {
     return 'Verified_Digital_Artwork';
   };
 
+  if (!username) return <NotFoundScreen username="unknown" />;
   if (loading) return <LoadingScreen />;
-  if (!username || !profileExists) return <NotFoundScreen username={username || 'unknown'} />;
+  if (!profileExists) return <NotFoundScreen username={username} />;
 
   return (
     <div className="min-h-screen bg-[#07061A] text-[#F0EFF8] font-sans pb-24">
