@@ -13,7 +13,8 @@ import {
   ExternalLink,
   Zap,
   Scale,
-  CreditCard
+  CreditCard,
+  ShieldAlert
 } from 'lucide-react';
 import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
 import { useAuth } from '../hooks/useAuth';
@@ -62,6 +63,9 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
           </Link>
           <Link href="/compare-c2pa">
             <span className={`text-sm font-bold transition-all cursor-pointer ${location === '/compare-c2pa' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>C2PA比較</span>
+          </Link>
+          <Link href="/legal-resources">
+            <span className={`text-sm font-bold transition-all cursor-pointer ${location === '/legal-resources' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>法的ガイド</span>
           </Link>
           <Link href="/pricing">
             <span className={`text-sm font-bold transition-all cursor-pointer ${location === '/pricing' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>料金プラン</span>
@@ -153,6 +157,12 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
                 <span onClick={closeMenu} className="flex items-center gap-3 p-4 hover:bg-white/5 rounded-2xl transition-all">
                   <CreditCard className="w-5 h-5 text-[#6C3EF4]" />
                   <span className="text-sm font-bold text-[#A8A0D8]">料金プラン</span>
+                </span>
+              </Link>
+              <Link href="/legal-resources">
+                <span onClick={closeMenu} className="flex items-center gap-3 p-4 hover:bg-white/5 rounded-2xl transition-all">
+                  <ShieldAlert className="w-5 h-5 text-[#BC78FF]" />
+                  <span className="text-sm font-bold text-[#A8A0D8]">権利行使・法的ガイド</span>
                 </span>
               </Link>
               <Link href="/blog">

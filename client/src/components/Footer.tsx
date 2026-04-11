@@ -72,6 +72,11 @@ export default function Footer() {
                   特定商取引法に基づく表記
                 </Link>
               </li>
+              <li>
+                <Link href="/legal-resources" className="text-[#A8A0D8] hover:text-[#6C3EF4] text-sm transition-colors">
+                  権利行使キット (DMCA)
+                </Link>
+              </li>
             </ul>
           </div>
 

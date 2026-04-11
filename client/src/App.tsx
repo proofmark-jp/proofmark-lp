@@ -26,6 +26,7 @@ import HowItWorks from "./pages/HowItWorks";
 import CompareC2PA from "./pages/CompareC2PA";
 import Footer from "./components/Footer";
 import Pricing from "./pages/Pricing";
+import LegalResources from "./pages/LegalResources";
 
 function Router() {
   return (
@@ -44,6 +45,7 @@ function Router() {
       <Route path="/what-it-proves" component={WhatItProves} />
       <Route path="/how-it-works" component={HowItWorks} />
       <Route path="/compare-c2pa" component={CompareC2PA} />
+      <Route path="/legal-resources" component={LegalResources} />
       <Route path="/u/:username" component={PublicProfile} />
       <Route path="/blog" component={BlogIndex} />
       <Route path="/blog/copyright" component={ArticleCopyright} />
