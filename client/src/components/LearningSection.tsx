@@ -72,26 +72,7 @@ export default function LearningSection({
           ))}
         </div>
 
-        {/* CTA（行動喚起） */}
-        <div className="flex flex-col items-center gap-6 rounded-xl border border-border/50 bg-gradient-to-r from-primary/5 to-accent/5 p-8 text-center backdrop-blur-sm md:p-12">
-          <div>
-            <h3 className="mb-2 text-2xl font-bold text-foreground">
-              仕組みに納得したら、次はあなたの番です
-            </h3>
-            <p className="text-muted-foreground">
-              無料の先行登録で、あなた自身の作品を守る準備を始めましょう。
-            </p>
-          </div>
 
-          <button
-            onClick={onRegisterClick}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary to-primary/80 px-6 py-3 font-semibold text-primary-foreground transition-all duration-300 hover:gap-3 hover:shadow-lg hover:shadow-primary/30 active:scale-95"
-            aria-label="無料で先行登録する"
-          >
-            無料で先行登録する
-            <ArrowRight className="h-5 w-5" />
-          </button>
-        </div>
 
         {/* フッターノート */}
         <div className="mt-12 border-t border-border/50 pt-8 text-center text-sm text-muted-foreground">

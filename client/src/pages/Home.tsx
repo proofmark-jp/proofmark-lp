@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { Lock, Database, AlertCircle, Check, Shield, Zap, Award, Info, Share2, CheckCircle } from "lucide-react";
@@ -13,6 +13,7 @@ import { sendConfirmationEmail } from "@/lib/email";
 import LearningSection from "@/components/LearningSection";
 import { SchemaScript } from "@/components/SchemaScript";
 import Navbar from "@/components/Navbar";
+import { supabase } from "@/lib/supabase";
 import founderBadge from "../assets/logo/badges/proofmark-badge-founder.svg";
 import {
   fadeInVariants,
@@ -78,6 +79,22 @@ export default function Home() {
 
   const { user, signOut } = useAuth();
   SchemaScript();
+
+  const [totalCerts, setTotalCerts] = useState<number>(18);
+
+  useEffect(() => {
+    async function fetchTotalCerts() {
+      try {
+        const { count } = await supabase
+          .from("certificates")
+          .select("*", { count: "exact", head: true });
+        if (count !== null) setTotalCerts(count);
+      } catch (err) {
+        console.error("Failed to fetch cert count:", err);
+      }
+    }
+    fetchTotalCerts();
+  }, []);
 
   const { scrollYProgress } = useScroll();
   const heroY = useTransform(scrollYProgress, [0, 0.3], [0, -60]);
@@ -146,7 +163,7 @@ export default function Home() {
           >
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%" }}>
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#00D4AA]/10 border border-[#00D4AA]/30 text-[#00D4AA] text-xs sm:text-sm font-bold tracking-widest uppercase mb-8">
-                ブラウザ完結・完全秘匿型 デジタル存在証明
+                Securing Creative Assets: <span className="text-white ml-1">{totalCerts}</span>
               </div>
               <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight mb-6 leading-tight text-center">
                 「どうせAIでしょ？」を、<br className="hidden sm:block" />
@@ -603,11 +620,11 @@ export default function Home() {
                   </li>
                 </ul>
                 <Link
-                  href="/auth?mode=signup"
+                  href={user ? "/dashboard" : "/auth?mode=signup"}
                   className="block w-full px-6 py-3 rounded-full border font-bold text-sm transition-colors text-center mt-auto"
                   style={{ borderColor: "rgba(108,62,244,0.4)", color: "#6c3ef4" }}
                 >
-                  無料で始める
+                  {user ? "管理画面へ進む" : "無料で始める"}
                 </Link>
               </motion.div>
 
@@ -647,11 +664,11 @@ export default function Home() {
                   </li>
                 </ul>
                 <Link
-                  href="/auth?mode=signup"
+                  href={user ? "/dashboard" : "/auth?mode=signup"}
                   className="block w-full px-6 py-3 rounded-full border font-bold text-sm transition-colors text-center mt-auto"
                   style={{ borderColor: "rgba(0,212,170,0.4)", color: "#00D4AA", background: "rgba(0,212,170,0.05)" }}
                 >
-                  今すぐ1件発行する
+                  {user ? "管理画面へ進む" : "今すぐ1件発行する"}
                 </Link>
               </motion.div>
 
@@ -699,14 +716,14 @@ export default function Home() {
                   ))}
                 </ul>
                 <Link
-                  href="/auth?mode=signup"
+                  href={user ? "/settings" : "/auth?mode=signup"}
                   className="block w-full px-6 py-3 rounded-full font-bold text-sm text-primary-foreground text-center mt-auto"
                   style={{
                     background: "linear-gradient(135deg, #6C3EF4, #8B61FF)",
                     boxShadow: "0 0 20px rgba(108,62,244,0.4)",
                   }}
                 >
-                  先行特典を予約する
+                  {user ? "管理画面へ進む" : "先行特典を予約する"}
                 </Link>
               </motion.div>
             </motion.div>
@@ -737,137 +754,139 @@ export default function Home() {
         <DeveloperMessage />
 
         {/* ── Waitlist CTA ─────────────────────────────────────── */}
-        <section
-          id="waitlist-section"
-          className="py-24 relative overflow-hidden border-t border-b border-border/50"
-          style={{ background: "rgba(15,22,41,0.5)" }}
-        >
-          <GlowOrb color="#6c3ef4" size={600} top="50%" left="50%" opacity={0.08} />
-          <GlowOrb color="#00d4aa" size={300} top="10%" left="10%" opacity={0.06} />
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              backgroundImage:
-                "linear-gradient(rgba(108,62,244,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(108,62,244,0.03) 1px, transparent 1px)",
-              backgroundSize: "60px 60px",
-            }}
-          />
+        {!user && (
+          <section
+            id="waitlist-section"
+            className="py-24 relative overflow-hidden border-t border-b border-border/50"
+            style={{ background: "rgba(15,22,41,0.5)" }}
+          >
+            <GlowOrb color="#6c3ef4" size={600} top="50%" left="50%" opacity={0.08} />
+            <GlowOrb color="#00d4aa" size={300} top="10%" left="10%" opacity={0.06} />
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                backgroundImage:
+                  "linear-gradient(rgba(108,62,244,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(108,62,244,0.03) 1px, transparent 1px)",
+                backgroundSize: "60px 60px",
+              }}
+            />
 
-          <div className="relative z-10 max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <FadeInSection>
-              <motion.div
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full border mb-8"
-                style={{
-                  background: "rgba(108,62,244,0.12)",
-                  borderColor: "rgba(108,62,244,0.35)",
-                  boxShadow: "0 0 16px rgba(108,62,244,0.15)",
-                }}
-                animate={{ boxShadow: ["0 0 16px rgba(108,62,244,0.15)", "0 0 28px rgba(108,62,244,0.3)", "0 0 16px rgba(108,62,244,0.15)"] }}
-                transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-              >
-                <span className="text-lg">🚀</span>
-                <span className="text-sm font-bold text-primary">β版アーリーアクセス受付中</span>
-              </motion.div>
+            <div className="relative z-10 max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+              <FadeInSection>
+                <motion.div
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full border mb-8"
+                  style={{
+                    background: "rgba(108,62,244,0.12)",
+                    borderColor: "rgba(108,62,244,0.35)",
+                    boxShadow: "0 0 16px rgba(108,62,244,0.15)",
+                  }}
+                  animate={{ boxShadow: ["0 0 16px rgba(108,62,244,0.15)", "0 0 28px rgba(108,62,244,0.3)", "0 0 16px rgba(108,62,244,0.15)"] }}
+                  transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <span className="text-lg">🚀</span>
+                  <span className="text-sm font-bold text-primary">β版アーリーアクセス受付中</span>
+                </motion.div>
 
-              <h2 className="text-4xl font-black mb-4">今すぐ先行登録する</h2>
-              <p className="text-muted mb-2">
-                ProofMarkは現在、開発の最終フェーズにあります。初期メンバーとして参加し、AIクリエイターのための新しい基準を一緒に作りませんか？
-              </p>
-              <p className="text-muted mb-8 text-sm">スパムなし・クレカ不要。いつでも解除できます。</p>
-            </FadeInSection>
+                <h2 className="text-4xl font-black mb-4">今すぐ先行登録する</h2>
+                <p className="text-muted mb-2">
+                  ProofMarkは現在、開発の最終フェーズにあります。初期メンバーとして参加し、AIクリエイターのための新しい基準を一緒に作りませんか？
+                </p>
+                <p className="text-muted mb-8 text-sm">スパムなし・クレカ不要。いつでも解除できます。</p>
+              </FadeInSection>
 
-            <FadeInSection delay={0.1}>
-              <motion.div
-                className="flex flex-wrap justify-center gap-3 mb-8"
-                variants={staggerContainer}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-              >
-                {[
-                  { emoji: "🚀", text: "β版優先招待" },
-                  { emoji: "🎁", text: "3ヶ月無料" },
-                ].map((badge, i) => (
-                  <motion.div
-                    key={i}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold"
+              <FadeInSection delay={0.1}>
+                <motion.div
+                  className="flex flex-wrap justify-center gap-3 mb-8"
+                  variants={staggerContainer}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                >
+                  {[
+                    { emoji: "🚀", text: "β版優先招待" },
+                    { emoji: "🎁", text: "3ヶ月無料" },
+                  ].map((badge, i) => (
+                    <motion.div
+                      key={i}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold"
+                      style={{
+                        background: "rgba(21,29,47,0.7)",
+                        borderColor: "rgba(42,42,78,0.7)",
+                        backdropFilter: "blur(8px)",
+                      }}
+                      variants={slideInVariants}
+                      whileHover={{ scale: 1.05, borderColor: "rgba(108,62,244,0.5)" }}
+                    >
+                      <span>{badge.emoji}</span>
+                      {badge.text}
+                    </motion.div>
+                  ))}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(108, 62, 244, 0.1)", padding: "8px 16px", borderRadius: "100px", border: "1px solid rgba(108, 62, 244, 0.5)", boxShadow: "0 0 12px rgba(108, 62, 244, 0.4)" }}>
+                    <img src={founderBadge} alt="Founder Badge" style={{ height: "16px", width: "16px" }} />
+                    <span style={{ fontSize: "14px", fontWeight: "bold", color: "#BC78FF", whiteSpace: "nowrap" }}>Founderバッジ</span>
+                  </div>
+                </motion.div>
+              </FadeInSection>
+
+              <FadeInSection delay={0.15}>
+                <form onSubmit={handleWaitlistSubmit} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+                  <label htmlFor="waitlist-email" className="sr-only">メールアドレス</label>
+                  <input
+                    id="waitlist-email"
+                    type="email"
+                    placeholder="your@email.com"
+                    value={waitlistEmail}
+                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                    disabled={isWaitlistSubmitting}
+                    className="flex-1 px-6 py-4 rounded-full border transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
                     style={{
-                      background: "rgba(21,29,47,0.7)",
-                      borderColor: "rgba(42,42,78,0.7)",
+                      background: "rgba(21,29,47,0.85)",
+                      borderColor: "rgba(42,42,78,0.8)",
                       backdropFilter: "blur(8px)",
                     }}
-                    variants={slideInVariants}
-                    whileHover={{ scale: 1.05, borderColor: "rgba(108,62,244,0.5)" }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = "rgba(108,62,244,0.7)";
+                      e.currentTarget.style.boxShadow = "0 0 0 3px rgba(108,62,244,0.15)";
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = "rgba(42,42,78,0.8)";
+                      e.currentTarget.style.boxShadow = "none";
+                    }}
+                    required
+                    aria-label="ウェイティングリスト登録用のメールアドレス"
+                  />
+                  <motion.button
+                    type="submit"
+                    disabled={isWaitlistSubmitting}
+                    className="px-8 py-4 rounded-full text-primary-foreground font-bold flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-70 disabled:cursor-wait"
+                    style={{
+                      background: "linear-gradient(135deg, #6c3ef4, rgba(108,62,244,0.85))",
+                      boxShadow: "0 0 20px rgba(108,62,244,0.4)",
+                    }}
+                    variants={buttonVariants}
+                    initial="rest"
+                    whileHover="hover"
+                    whileTap="tap"
                   >
-                    <span>{badge.emoji}</span>
-                    {badge.text}
-                  </motion.div>
-                ))}
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(108, 62, 244, 0.1)", padding: "8px 16px", borderRadius: "100px", border: "1px solid rgba(108, 62, 244, 0.5)", boxShadow: "0 0 12px rgba(108, 62, 244, 0.4)" }}>
-                  <img src={founderBadge} alt="Founder Badge" style={{ height: "16px", width: "16px" }} />
-                  <span style={{ fontSize: "14px", fontWeight: "bold", color: "#BC78FF", whiteSpace: "nowrap" }}>Founderバッジ</span>
-                </div>
-              </motion.div>
-            </FadeInSection>
-
-            <FadeInSection delay={0.15}>
-              <form onSubmit={handleWaitlistSubmit} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-                <label htmlFor="waitlist-email" className="sr-only">メールアドレス</label>
-                <input
-                  id="waitlist-email"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={waitlistEmail}
-                  onChange={(e) => setWaitlistEmail(e.target.value)}
-                  disabled={isWaitlistSubmitting}
-                  className="flex-1 px-6 py-4 rounded-full border transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
-                  style={{
-                    background: "rgba(21,29,47,0.85)",
-                    borderColor: "rgba(42,42,78,0.8)",
-                    backdropFilter: "blur(8px)",
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = "rgba(108,62,244,0.7)";
-                    e.currentTarget.style.boxShadow = "0 0 0 3px rgba(108,62,244,0.15)";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "rgba(42,42,78,0.8)";
-                    e.currentTarget.style.boxShadow = "none";
-                  }}
-                  required
-                  aria-label="ウェイティングリスト登録用のメールアドレス"
-                />
-                <motion.button
-                  type="submit"
-                  disabled={isWaitlistSubmitting}
-                  className="px-8 py-4 rounded-full text-primary-foreground font-bold flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-70 disabled:cursor-wait"
-                  style={{
-                    background: "linear-gradient(135deg, #6c3ef4, rgba(108,62,244,0.85))",
-                    boxShadow: "0 0 20px rgba(108,62,244,0.4)",
-                  }}
-                  variants={buttonVariants}
-                  initial="rest"
-                  whileHover="hover"
-                  whileTap="tap"
-                >
-                  {isWaitlistSubmitting ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      暗号化通信中...
-                    </>
-                  ) : "登録する"}
-                </motion.button>
-              </form>
-              <p className="text-xs text-muted flex items-center justify-center gap-2 mt-3">
-                <Lock className="w-4 h-4 text-accent" />
-                メールアドレスはSSL/TLSで保護されます
-              </p>
-            </FadeInSection>
-          </div>
-        </section>
+                    {isWaitlistSubmitting ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        暗号化通信中...
+                      </>
+                    ) : "登録する"}
+                  </motion.button>
+                </form>
+                <p className="text-xs text-muted flex items-center justify-center gap-2 mt-3">
+                  <Lock className="w-4 h-4 text-accent" />
+                  メールアドレスはSSL/TLSで保護されます
+                </p>
+              </FadeInSection>
+            </div>
+          </section>
+        )}
 
         {/* ── Footer ──────────────────────────────────────────── */}
       </div>
