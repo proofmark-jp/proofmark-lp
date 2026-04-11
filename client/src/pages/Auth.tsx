@@ -83,7 +83,7 @@ export default function Auth() {
   const [submitting, setSubmitting] = useState(false);
   
   const { signIn, signUp, resetPassword, user, loading } = useAuth();
-  const [, navigate] = useLocation();
+  const [, setLocation] = useLocation();
 
   // ★ PKCEフロー対応：SupabaseのAuthイベントを直接監視する
   useEffect(() => {
@@ -129,7 +129,7 @@ export default function Auth() {
         } else {
           setSuccessMsg("パスワードを更新しました。ダッシュボードに移動します。");
           toast.success("パスワードを更新しました");
-          setTimeout(() => navigate("/dashboard"), 1500);
+          setTimeout(() => setLocation("/dashboard"), 1500);
         }
       } else if (isResetMode) {
         const { error } = await resetPassword(email);
@@ -146,8 +146,8 @@ export default function Auth() {
           setError(error.message);
           toast.error("ログインに失敗しました");
         } else {
-          navigate("/dashboard");
           toast.success("おかえりなさい！");
+          setLocation("/dashboard");
         }
       } else {
         const { error } = await signUp(email, password, username);
