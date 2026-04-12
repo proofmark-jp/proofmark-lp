@@ -45,23 +45,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        // 1. Auth メタデータを更新 (user_metadata.plan_type)
+        // Auth メタデータを更新 (user_metadata.plan_type)
+        // ※DBトリガーにより profiles.plan_tier は自動同期されます
         const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
             userId,
             { user_metadata: { plan_type: newPlan } }
         );
 
         if (authError) throw authError;
-
-        // 2. Profile テーブルを更新 (plan_tier) - 同期させる
-        const { error: profileError } = await supabaseAdmin
-            .from('profiles')
-            .update({ plan_tier: newPlan })
-            .eq('id', userId);
-
-        if (profileError) {
-            console.warn("[Admin API] Profile update failed but Auth update succeeded:", profileError.message);
-        }
 
         return res.status(200).json({
             success: true,
