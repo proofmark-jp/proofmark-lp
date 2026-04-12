@@ -124,10 +124,10 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
       {/* Mobile Menu Dropdown */}
       {isMenuOpen && (
         <div className="lg:hidden absolute top-full left-0 w-full max-h-[calc(100dvh-70px)] overflow-y-auto overscroll-contain bg-[#0D0B24]/95 backdrop-blur-2xl border-b border-[#1C1A38] p-6 shadow-2xl animate-in slide-in-from-top-4 duration-300">
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-5">
             {user ? (
-              <div className="grid grid-cols-1 gap-2">
-                <p className="text-[10px] font-black text-[#6C3EF4] tracking-[0.2em] uppercase mb-1">Navigation</p>
+              <div className="grid grid-cols-1 gap-1">
+                <p className="text-[10px] font-black text-[#6C3EF4] tracking-[0.2em] uppercase mb-1 px-2">Navigation</p>
                 <NavLink href="/dashboard" icon={LayoutDashboard} active={location === '/dashboard'} onClick={closeMenu}>管理画面</NavLink>
                 <NavLink href={`/u/${displayUsername}`} icon={ImageIcon} active={location.startsWith('/u/')} onClick={closeMenu}>公開ギャラリー</NavLink>
                 <NavLink href="/settings" icon={Settings} active={location === '/settings'} onClick={closeMenu}>プロフィール設定</NavLink>
@@ -143,49 +143,50 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-2">
-              <p className="text-[10px] font-black text-[#6C3EF4] tracking-[0.2em] uppercase mb-1">Resources</p>
+            <div className="grid grid-cols-1 gap-1">
+              <p className="text-[10px] font-black text-[#6C3EF4] tracking-[0.2em] uppercase mb-1 px-2">Product</p>
               <Link href="/how-it-works">
-                <span onClick={closeMenu} className="flex items-center gap-3 p-4 hover:bg-white/5 rounded-2xl transition-all">
+                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
                   <Zap className="w-5 h-5 text-[#ffd966]" />
                   <span className="text-sm font-bold text-[#A8A0D8]">ProofMarkの仕組み</span>
                 </span>
               </Link>
-              <Link href="/compare-c2pa">
-                <span onClick={closeMenu} className="flex items-center gap-3 p-4 hover:bg-white/5 rounded-2xl transition-all">
-                  <Scale className="w-5 h-5 text-[#00D4AA]" />
-                  <span className="text-sm font-bold text-[#A8A0D8]">C2PAとの比較</span>
-                </span>
-              </Link>
               <Link href="/pricing">
-                <span onClick={closeMenu} className="flex items-center gap-3 p-4 hover:bg-white/5 rounded-2xl transition-all">
+                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
                   <CreditCard className="w-5 h-5 text-[#6C3EF4]" />
                   <span className="text-sm font-bold text-[#A8A0D8]">料金プラン</span>
                 </span>
               </Link>
-              <Link href="/legal-resources">
-                <span onClick={closeMenu} className="flex items-center gap-3 p-4 hover:bg-white/5 rounded-2xl transition-all">
-                  <ShieldAlert className="w-5 h-5 text-[#BC78FF]" />
-                  <span className="text-sm font-bold text-[#A8A0D8]">権利行使・法的ガイド</span>
+              <Link href="/compare-c2pa">
+                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
+                  <Scale className="w-5 h-5 text-[#00D4AA]" />
+                  <span className="text-sm font-bold text-[#A8A0D8]">C2PAとの比較</span>
                 </span>
               </Link>
+              <Link href="/blog">
+                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
+                  <FileText className="w-5 h-5 text-[#BC78FF]" />
+                  <span className="text-sm font-bold text-[#A8A0D8]">公式ブログ</span>
+                </span>
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 gap-1">
+              <p className="text-[10px] font-black text-[#6C3EF4] tracking-[0.2em] uppercase mb-1 px-2">Trust & Legal</p>
               <Link href="/trust-center">
-                <span onClick={closeMenu} className="flex items-center gap-3 p-4 hover:bg-white/5 rounded-2xl transition-all">
+                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
                   <ShieldCheck className="w-5 h-5 text-[#00D4AA]" />
                   <span className="text-sm font-bold text-[#A8A0D8]">Trust Center</span>
                 </span>
               </Link>
-              <Link href="/blog">
-                <span onClick={closeMenu} className="flex items-center justify-between p-4 bg-[#151D2F] border border-[#2a2a4e] rounded-2xl group active:scale-95 transition-all">
-                  <div className="flex items-center gap-3">
-                    <FileText className="w-5 h-5 text-[#00D4AA]" />
-                    <span className="text-sm font-bold text-white">公式ブログ</span>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-[#A8A0D8] group-hover:text-[#00D4AA] transition-colors" />
+              <Link href="/legal-resources">
+                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
+                  <ShieldAlert className="w-5 h-5 text-[#FF6B6B]" />
+                  <span className="text-sm font-bold text-[#A8A0D8]">権利行使・法的ガイド</span>
                 </span>
               </Link>
               <Link href="/terms">
-                <span onClick={closeMenu} className="flex items-center gap-3 p-4 hover:bg-white/5 rounded-2xl transition-all">
+                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
                   <Shield className="w-5 h-5 text-[#A8A0D8]" />
                   <span className="text-sm font-bold text-[#A8A0D8]">利用規約・プライバシー</span>
                 </span>
@@ -195,7 +196,7 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
             {user && (
               <button
                 onClick={() => { signOut(); closeMenu(); }}
-                className="flex items-center justify-center gap-2 p-4 text-[#FF4D4D] font-bold border border-[#FF4D4D]/20 rounded-2xl bg-[#FF4D4D]/5 active:scale-95 transition-all"
+                className="flex items-center justify-center gap-2 p-3 text-[#FF4D4D] font-bold border border-[#FF4D4D]/20 rounded-2xl bg-[#FF4D4D]/5 active:scale-95 transition-all"
               >
                 <LogOut className="w-4 h-4" /> ログアウト
               </button>
