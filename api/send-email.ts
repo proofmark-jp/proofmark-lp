@@ -55,7 +55,7 @@ function generateConfirmationEmailHTML(email: string): string {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
           line-height: 1.6;
           color: #f0f0fa;
-          background-color: #0a0e27;
+          background-color: #0D0B24;
         }
         .container {
           max-width: 600px;
@@ -63,13 +63,13 @@ function generateConfirmationEmailHTML(email: string): string {
           padding: 20px;
           background-color: #151d2f;
           border-radius: 12px;
-          border: 1px solid #2a2a4e;
+          border: 1px solid #1C1A38;
         }
         .header {
           text-align: center;
           margin-bottom: 30px;
           padding-bottom: 20px;
-          border-bottom: 1px solid #2a2a4e;
+          border-bottom: 1px solid #1C1A38;
         }
         .logo {
           font-size: 32px;
@@ -128,6 +128,7 @@ function generateConfirmationEmailHTML(email: string): string {
           font-weight: bold;
           margin: 20px 0;
           text-align: center;
+          box-shadow: 0 4px 14px 0 rgba(108, 62, 244, 0.39);
         }
         .footer {
           text-align: center;
@@ -145,7 +146,9 @@ function generateConfirmationEmailHTML(email: string): string {
     <body>
       <div class="container">
         <div class="header">
-          <div class="logo">⬡ ProofMark</div>
+          <div style="text-align: center; font-size: 32px; font-weight: 900; color: #F0EFF8; display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 10px;">
+            <img src="https://proofmark.jp/apple-touch-icon.png" width="36" height="36" alt="ProofMark Logo" style="border-radius: 8px;"> Proof<span style="color: #00D4AA;">Mark</span>
+          </div>
           <p style="margin: 0; color: #a0a0c0; font-size: 14px;">AI作品のデジタル存在証明サービス</p>
         </div>
 

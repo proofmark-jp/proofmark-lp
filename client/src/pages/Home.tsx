@@ -104,6 +104,17 @@ export default function Home() {
     e.preventDefault();
     if (!heroEmail) return;
     setIsHeroSubmitting(true);
+
+    const { error: dbError } = await supabase
+      .from('waitlist')
+      .insert([{ email: heroEmail }]);
+
+    if (dbError && dbError.code === '23505') {
+      toast.info("このメールアドレスは既に先行登録されています。ご期待いただきありがとうございます！");
+      setIsHeroSubmitting(false);
+      return;
+    }
+
     const emailResult = await sendConfirmationEmail(heroEmail);
     if (emailResult.success) {
       toast.success("登録完了！確認メールをお送りしました。");
@@ -118,6 +129,17 @@ export default function Home() {
     e.preventDefault();
     if (!waitlistEmail) return;
     setIsWaitlistSubmitting(true);
+
+    const { error: dbError } = await supabase
+      .from('waitlist')
+      .insert([{ email: waitlistEmail }]);
+
+    if (dbError && dbError.code === '23505') {
+      toast.info("このメールアドレスは既に先行登録されています。ご期待いただきありがとうございます！");
+      setIsWaitlistSubmitting(false);
+      return;
+    }
+
     const emailResult = await sendConfirmationEmail(waitlistEmail);
     if (emailResult.success) {
       toast.success("ウェイティングリストに追加されました！");
