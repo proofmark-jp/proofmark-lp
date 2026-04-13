@@ -47,50 +47,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // 4. Satori用のHTML（JSX不使用、ピュアなHTML文字列）
-        const markup = html`
-      <div style="height: 100%; width: 100%; display: flex; flex-direction: column; position: relative; background-color: #07061A; font-family: 'Noto Sans JP', sans-serif;">
-        
-        ${base64Thumb ?
-                `<img src="${base64Thumb}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;" />` :
-                `<div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #1C1A38;"></div>`
-            }
-
-        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-image: linear-gradient(to bottom, rgba(13, 11, 36, 0) 0%, rgba(13, 11, 36, 0.4) 40%, rgba(13, 11, 36, 0.95) 80%, rgba(13, 11, 36, 1) 100%);"></div>
-
-        <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; width: 100%; padding: 60px; position: absolute; top: 0; left: 0;">
-          
-          <div style="display: flex; align-items: center; font-size: 36px; font-weight: 900; color: #F0EFF8;">
-            <img src="https://proofmark.jp/apple-touch-icon.png" width="48" height="48" style="border-radius: 12px; margin-right: 12px;" />
-            <div style="display: flex;">Proof<span style="color: #00D4AA;">Mark</span></div>
+        const markup = html`<div style="display: flex; height: 100%; width: 100%; flex-direction: column; position: relative; background-color: #07061A; font-family: 'Noto Sans JP', sans-serif;">
+      ${base64Thumb ? 
+        `<img src="${base64Thumb}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;" />` : 
+        `<div style="display: flex; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: #1C1A38;"></div>`
+      }
+      <div style="display: flex; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-image: linear-gradient(to bottom, rgba(13, 11, 36, 0) 0%, rgba(13, 11, 36, 0.4) 40%, rgba(13, 11, 36, 0.95) 80%, rgba(13, 11, 36, 1) 100%);"></div>
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; width: 100%; padding: 60px; position: absolute; top: 0; left: 0;">
+        <div style="display: flex; flex-direction: row; align-items: center; font-size: 36px; font-weight: 900; color: #F0EFF8;">
+          <img src="https://proofmark.jp/apple-touch-icon.png" width="48" height="48" style="border-radius: 12px; margin-right: 12px;" />
+          <div style="display: flex; flex-direction: row;">
+            <div style="display: flex;">Proof</div>
+            <div style="display: flex; color: #00D4AA;">Mark</div>
           </div>
-
-          <div style="display: flex; flex-direction: column;">
-            
-            <div style="display: flex; flex-direction: column; margin-bottom: 24px;">
-              <div style="font-size: 64px; font-weight: 900; color: #F0EFF8; text-shadow: 0 4px 20px rgba(0,0,0,0.8); line-height: 1.1; max-width: 1080px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                ${title}
-              </div>
-              <div style="font-size: 32px; font-weight: 600; color: #A8A0D8; margin-top: 8px;">
-                By ${creator}
-              </div>
-            </div>
-
-            <div style="display: flex; align-items: center; background: rgba(28, 26, 56, 0.8); border: 1px solid rgba(168, 160, 216, 0.2); border-radius: 16px; padding: 16px 24px; font-size: 22px; color: #A8A0D8;">
-              <div style="display: flex; color: #F0EFF8;">[ File ]</div>
-              <div style="display: flex; margin: 0 12px; opacity: 0.7;">➔</div>
-              <div style="display: flex; color: #6C3EF4;">(SHA-256)</div>
-              <div style="display: flex; margin: 0 12px; opacity: 0.7;">➔</div>
-              <div style="display: flex; color: #00D4AA; background: rgba(0, 212, 170, 0.1); padding: 2px 8px; border-radius: 4px;">[${hash.substring(0, 12)}...]</div>
-              <div style="display: flex; margin: 0 12px; opacity: 0.7;">➔</div>
-              <div style="display: flex; color: #6C3EF4;">(RFC3161)</div>
-              <div style="display: flex; margin: 0 12px; opacity: 0.7;">➔</div>
-              <div style="display: flex; color: #00D4AA; background: rgba(0, 212, 170, 0.1); padding: 2px 8px; border-radius: 4px;">[${timestamp}]</div>
-            </div>
-
+        </div>
+        <div style="display: flex; flex-direction: column;">
+          <div style="display: flex; flex-direction: column; margin-bottom: 24px;">
+            <div style="display: flex; font-size: 64px; font-weight: 900; color: #F0EFF8; line-height: 1.1; max-width: 1080px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${title}</div>
+            <div style="display: flex; font-size: 32px; font-weight: 600; color: #A8A0D8; margin-top: 8px;">By ${creator}</div>
+          </div>
+          <div style="display: flex; flex-direction: row; align-items: center; background-color: rgba(28, 26, 56, 0.8); border: 1px solid rgba(168, 160, 216, 0.2); border-radius: 16px; padding: 16px 24px; font-size: 22px; color: #A8A0D8;">
+            <div style="display: flex; color: #F0EFF8;">[ File ]</div>
+            <div style="display: flex; margin: 0 12px; opacity: 0.7;">➔</div>
+            <div style="display: flex; color: #6C3EF4;">(SHA-256)</div>
+            <div style="display: flex; margin: 0 12px; opacity: 0.7;">➔</div>
+            <div style="display: flex; color: #00D4AA; background-color: rgba(0, 212, 170, 0.1); padding: 2px 8px; border-radius: 4px;">[${hash.substring(0, 12)}...]</div>
+            <div style="display: flex; margin: 0 12px; opacity: 0.7;">➔</div>
+            <div style="display: flex; color: #6C3EF4;">(RFC3161)</div>
+            <div style="display: flex; margin: 0 12px; opacity: 0.7;">➔</div>
+            <div style="display: flex; color: #00D4AA; background-color: rgba(0, 212, 170, 0.1); padding: 2px 8px; border-radius: 4px;">[${timestamp}]</div>
           </div>
         </div>
       </div>
-    `;
+    </div>`;
 
         // 5. SatoriでSVGを生成
         const svg = await satori(markup as any, {

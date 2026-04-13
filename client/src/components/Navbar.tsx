@@ -57,7 +57,7 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
           </span>
         </Link>
 
-        {/* 2. Desktop Navigation (中央・絶対配置を廃止しFlexで押し出し) */}
+        {/* 2. Desktop Navigation (中央) - xl(1280px)以上で表示 */}
         <div className="hidden xl:flex flex-1 justify-center items-center gap-6">
           <Link href="/how-it-works">
             <span className={`text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${location === '/how-it-works' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>仕組み</span>
@@ -76,8 +76,8 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
           </Link>
         </div>
 
-        {/* 3. User Actions (右側) */}
-        <div className="hidden lg:flex items-center gap-2 shrink-0">
+        {/* 3. User Actions (右側) - xl(1280px)以上で表示 */}
+        <div className="hidden xl:flex items-center gap-2 shrink-0">
           {user ? (
             <>
               <NavLink href="/dashboard" icon={LayoutDashboard} active={location === '/dashboard'}>管理画面</NavLink>
@@ -104,8 +104,8 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
           )}
         </div>
 
-        {/* Tablet/Mobile Action & Hamburger */}
-        <div className="flex items-center gap-2 lg:hidden">
+        {/* Tablet/Mobile Action & Hamburger - xl(1280px)未満で表示 */}
+        <div className="flex items-center gap-2 xl:hidden">
           {user && (
             <Link href="/dashboard">
               <span className="w-10 h-10 flex items-center justify-center bg-[#6C3EF4]/10 rounded-xl text-[#00D4AA] border border-[#6C3EF4]/30">
@@ -124,7 +124,7 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
 
       {/* Mobile Menu Dropdown */}
       {isMenuOpen && (
-        <div className="lg:hidden absolute top-full left-0 w-full max-h-[calc(100dvh-70px)] overflow-y-auto overscroll-contain bg-[#0D0B24]/95 backdrop-blur-2xl border-b border-[#1C1A38] p-6 shadow-2xl animate-in slide-in-from-top-4 duration-300">
+        <div className="xl:hidden absolute top-full left-0 w-full max-h-[calc(100dvh-70px)] overflow-y-auto overscroll-contain bg-[#0D0B24]/95 backdrop-blur-2xl border-b border-[#1C1A38] p-6 shadow-2xl animate-in slide-in-from-top-4 duration-300">
           <div className="flex flex-col gap-5">
             {user ? (
               <div className="grid grid-cols-1 gap-1">
