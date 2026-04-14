@@ -31,6 +31,8 @@ import TrustCenter from "./pages/TrustCenter";
 // ▼ ここに追加：管理画面用コンポーネントのインポート
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
+import AdminCertificates from "./pages/admin/AdminCertificates";
+import AdminUsers from "./pages/admin/AdminUsers";
 
 function Router() {
   return (
@@ -57,8 +59,8 @@ function Router() {
       <Route path="/blog/monetization" component={ArticleMonetization} />
       {/* ▼ ここに追加：管理画面のルーティング */}
       <Route path="/admin" component={AdminDashboard} />
-      <Route path="/admin/certificates"><AdminPlaceholder title="Certificates Management" /></Route>
-      <Route path="/admin/users"><AdminPlaceholder title="User Management" /></Route>
+      <Route path="/admin/certificates" component={AdminCertificates} />
+      <Route path="/admin/users" component={AdminUsers} />
       <Route path="/admin/monitor"><AdminPlaceholder title="System Monitor" /></Route>
       <Route path="/admin/settings"><AdminPlaceholder title="Admin Settings" /></Route>
       <Route path="/404" component={NotFound} />
