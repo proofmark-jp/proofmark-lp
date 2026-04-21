@@ -3,7 +3,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "./hooks/useAuth";
@@ -20,6 +20,7 @@ import Settings from "./pages/Settings";
 import ArticleCopyright from "./pages/ArticleCopyright";
 import ArticleMonetization from "./pages/ArticleMonetization";
 import PublicProfile from "./pages/PublicProfile";
+import EmbedPortfolioPage from "./pages/EmbedPortfolioPage";
 import Faq from "./pages/Faq";
 import WhatItProves from "./pages/WhatItProves";
 import HowItWorks from "./pages/HowItWorks";
@@ -56,6 +57,7 @@ function Router() {
       <Route path="/legal-resources" component={LegalResources} />
       <Route path="/trust-center" component={TrustCenter} />
       <Route path="/u/:username" component={PublicProfile} />
+      <Route path="/embed/:username" component={EmbedPortfolioPage} />
       <Route path="/blog" component={BlogIndex} />
       <Route path="/blog/copyright" component={ArticleCopyright} />
       <Route path="/blog/monetization" component={ArticleMonetization} />
@@ -72,6 +74,9 @@ function Router() {
 }
 
 function App() {
+  const [location] = useLocation();
+  const isEmbedRoute = location.startsWith('/embed/');
+
   return (
     <HelmetProvider>
       <ErrorBoundary>
@@ -81,7 +86,7 @@ function App() {
               <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
                 <Toaster />
                 <Router />
-                <Footer />
+                {!isEmbedRoute ? <Footer /> : null}
               </div>
             </TooltipProvider>
           </AuthProvider>

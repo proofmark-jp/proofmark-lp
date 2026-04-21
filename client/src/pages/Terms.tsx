@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/hooks/useAuth";
 import { fadeInVariants, staggerContainer } from "@/lib/animations";
-import { AlertCircle, FileText, Shield, Gavel, Scale, Ban, CreditCard, Lock, RefreshCw } from "lucide-react";
+import { AlertCircle, FileText, Shield, Gavel, Scale, Ban, CreditCard, Lock, RefreshCw, Trash2 } from "lucide-react";
 import SEO from "@/components/SEO";
 
 export default function Terms() {
@@ -127,6 +127,12 @@ export default function Terms() {
                   <h3 className="font-bold flex items-center gap-2"><Gavel className="w-4 h-4 text-slate-400" /> 第9条 準拠法・裁判管轄</h3>
                   <p className="text-sm text-[#A8A0D8] leading-relaxed">
                     本規約の解釈にあたっては日本法を準拠法とし、紛争が生じた場合は当事務局所在地を管轄する裁判所を第一審の専属的合意管轄裁判所とします。
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <h3 className="font-bold flex items-center gap-2"><Trash2 className="w-4 h-4 text-red-400" /> 第10条 退会・解約</h3>
+                  <p className="text-sm text-[#A8A0D8] leading-relaxed">
+                    お客様は、本サービス内の所定の手続き（設定画面）により、いつでも退会することができます。退会に伴い、お客様のデータは完全に消去され復旧することはできません。有料プランをご利用の場合、退会と同時にサブスクリプション契約も解約となります。
                   </p>
                 </div>
               </div>

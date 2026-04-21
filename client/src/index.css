@@ -408,3 +408,25 @@
     color: #374151 !important;
   }
 }
+
+@layer components {
+  .proofmark-widget-shell {
+    isolation: isolate;
+    contain: layout paint style;
+  }
+
+  .proofmark-widget-grid {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-position: center;
+  }
+}
+
+@layer utilities {
+  .proofmark-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(108, 62, 244, 0.48) transparent;
+  }
+}

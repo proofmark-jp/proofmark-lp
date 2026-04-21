@@ -84,12 +84,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
         }
 
-        // 6. Supabaseの該当証明書データを更新（先ほど作った関門1のカラムに注入）
-        const updateRes = await fetch(`${supabaseUrl}/rest/v1/certificates?id=eq.${certId}`, {
+        // 6. Supabaseの該当証明書データを更新
+        
+        // 👑 環境変数がない場合でも動くように、フロントエンドから送られた値を優先取得
+        const finalUrl = (req.headers['x-supabase-url'] as string) || supabaseUrl;
+        const finalApiKey = (req.headers['apikey'] as string) || supabaseKey;
+        
+        // 🛡️ 安全装置：URLとAPIキーの最終チェック
+        if (!finalUrl || !finalApiKey) {
+            throw new Error("SupabaseのURLまたはAPIキーが取得できません。フロントエンドからの送信を確認してください。");
+        }
+        
+        // 👑 フロントエンドから送られた身分証の受け取りと検証
+        const authHeader = req.headers.authorization;
+        if (!authHeader || authHeader.includes('undefined')) {
+            throw new Error("フロントエンドからユーザーの身分証（トークン）が正しく送られていません。");
+        }
+
+        const updateRes = await fetch(`${finalUrl}/rest/v1/certificates?id=eq.${certId}`, {
             method: 'PATCH',
             headers: {
-                'apikey': supabaseKey,
-                'Authorization': `Bearer ${supabaseKey}`,
+                'apikey': finalApiKey,       // 👈 確実なアプリの通行証
+                'Authorization': authHeader,           // 👈 ユーザーの身分証
                 'Content-Type': 'application/json',
                 'Prefer': 'return=minimal'
             },
@@ -101,7 +117,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
 
         if (!updateRes.ok) {
-            throw new Error('Failed to update Supabase record');
+            const errText = await updateRes.text();
+            throw new Error(`DB更新エラー: ${errText}`);
         }
 
         // 全て成功したらフロントエンドに完了を伝える
