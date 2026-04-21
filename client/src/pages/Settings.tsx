@@ -469,32 +469,56 @@ export default function Settings() {
               </span>
             </div>
 
-            {profileData?.username ? (
-              <div className="relative group">
-                {/* 🌟 アンビエント・グロウ（ホバー時に脈動する発光エフェクト） */}
-                <div className="absolute -inset-1 bg-gradient-to-r from-[#00D4AA]/20 to-[#6C3EF4]/20 rounded-[1.6rem] blur-md opacity-30 group-hover:opacity-60 transition duration-1000 group-hover:duration-300" />
-                <div className="relative">
+            <div className="relative group">
+              {/* 🌟 アンビエント・グロウ */}
+              <div className="absolute -inset-1 bg-gradient-to-r from-[#00D4AA]/20 to-[#6C3EF4]/20 rounded-[1.6rem] blur-md opacity-30 group-hover:opacity-60 transition duration-1000 group-hover:duration-300" />
+              
+              <div className="relative">
+                {profileData?.username ? (
                   <WidgetBuilder username={profileData.username} />
-                </div>
+                ) : (
+                  <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.02] p-5 lg:p-8 relative overflow-hidden min-h-[500px] flex items-center justify-center">
+                    {/* 👑 ティザー（魅せプ）UI：背後にうっすらとビルダーのシルエットを配置し、価値を暗示する */}
+                    <div className="absolute inset-0 opacity-20 blur-[5px] pointer-events-none select-none p-5 lg:p-8 flex flex-col gap-8">
+                       <div className="h-8 bg-white/20 rounded w-1/3" />
+                       <div className="grid gap-8 lg:grid-cols-[340px_1fr] flex-1">
+                         <div className="space-y-5">
+                           <div className="h-12 bg-white/20 rounded-lg" />
+                           <div className="h-12 bg-white/20 rounded-lg" />
+                           <div className="h-8 bg-white/20 rounded w-3/4" />
+                         </div>
+                         <div className="bg-[#02040A] rounded-2xl border border-white/5 h-full" />
+                       </div>
+                    </div>
+
+                    {/* 👑 グラスモーフィズム・ロックパネル：明確な価値提案とアクション誘導 */}
+                    <div className="relative z-10 bg-[#0A0F24]/85 backdrop-blur-xl border border-[#00D4AA]/30 rounded-3xl p-8 sm:p-10 text-center max-w-lg shadow-[0_0_80px_rgba(0,212,170,0.15)] transform transition-all hover:scale-[1.02]">
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#00D4AA]/20 to-[#6C3EF4]/20 flex items-center justify-center mx-auto mb-6 border border-[#00D4AA]/50 shadow-[0_0_30px_rgba(0,212,170,0.3)]">
+                        <Code className="w-8 h-8 text-[#00D4AA]" />
+                      </div>
+                      <h4 className="text-xl text-white font-black mb-3 tracking-tight">バイラルエンジンを解放する</h4>
+                      <p className="text-sm text-[#A8A0D8] leading-relaxed mb-8">
+                        あなたの作品を世界中のWebサイトに美しく埋め込むための専用ウィジェットです。<br/>
+                        利用を開始するには、まず基本情報で<strong className="text-white">ユーザー名（ID）</strong>を確定し、ポートフォリオを公開してください。
+                      </p>
+                      <button 
+                        onClick={() => {
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          setTimeout(() => {
+                            const input = document.querySelector('input[name="social_link_X (Twitter)"]') as HTMLInputElement;
+                            // 注意: 実際にはユーザー名入力欄をフォーカスしたいが、現在のSettings.tsxの構造に合わせて上部にスクロール
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }, 100);
+                        }}
+                        className="w-full py-4 rounded-xl bg-gradient-to-r from-[#00D4AA] to-[#00A383] text-white text-sm font-black tracking-wider shadow-[0_0_20px_rgba(0,212,170,0.4)] hover:shadow-[0_0_30px_rgba(0,212,170,0.6)] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        ユーザー名（ID）を設定する
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="bg-[#151D2F]/30 border border-[#1C1A38] rounded-2xl p-10 text-center flex flex-col items-center justify-center relative overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-br from-[#00D4AA]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                <div className="w-12 h-12 rounded-full bg-[#1C1A38] flex items-center justify-center mb-4 border border-[#2a2a4e] relative z-10">
-                  <Code className="w-5 h-5 text-[#00D4AA]/60" />
-                </div>
-                <p className="text-sm text-white font-bold mb-2 relative z-10">ウィジェットの準備ができていません</p>
-                <p className="text-xs text-[#A8A0D8] max-w-sm leading-relaxed mb-6 relative z-10">
-                  バイラルエンジンを稼働させるには、まず基本情報で「ユーザー名 (ID)」を入力し、プロフィールを保存して公開ポートフォリオを有効化してください。
-                </p>
-                <button 
-                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                  className="px-5 py-2 rounded-full bg-[#00D4AA]/10 text-[#00D4AA] text-xs font-bold border border-[#00D4AA]/20 hover:bg-[#00D4AA]/20 transition-all relative z-10 cursor-pointer"
-                >
-                  基本情報へ戻る
-                </button>
-              </div>
-            ) }
+            </div>
           </div>
 
           {/* 👑 サブスクリプション＆プラン情報 */}
