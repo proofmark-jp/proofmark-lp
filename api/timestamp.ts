@@ -262,7 +262,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     //      If RLS denies it, we correctly get an empty row — not 500.
     const { data: cert, error: certErr } = await userClient
       .from('certificates')
-      .select('id, user_id, file_hash, timestamp_token, certified_at')
+      .select('id, user_id, hash, timestamp_token, certified_at')
       .eq('id', body.certId)
       .maybeSingle();
 
@@ -271,7 +271,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (cert.user_id !== userId) {
       return res.status(403).json({ error: 'Forbidden', reqId });
     }
-    if (cert.file_hash && cert.file_hash.toLowerCase() !== body.hash) {
+    // 🛡️ カラム名を file_hash から hash に修正
+    if (cert.hash && cert.hash.toLowerCase() !== body.hash) {
       return res.status(409).json({ error: 'Hash mismatch against stored certificate', reqId });
     }
 
