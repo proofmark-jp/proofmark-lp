@@ -1,133 +1,370 @@
+/**
+ * api/timestamp.ts — RFC3161 Timestamp Issuer (Server Authority)
+ *
+ * Design principles (post-audit, v2):
+ * 1. Server is the single source of truth for Supabase URL, service role key, and TSA endpoint.
+ * Client-supplied `x-supabase-url` / `apikey` headers are NEVER accepted.
+ * 2. Zero trust input: certId is validated as UUID, hash is validated as 64-char lowercase hex,
+ * Authorization header is parsed and verified via Supabase Auth before any write.
+ * 3. Ownership is enforced server-side: the authenticated user must own the target certificate row.
+ * 4. RFC3161 TSQ is built with a cryptographic nonce (replay resistance) and parsed with a
+ * minimal but correct DER walker — no fragile byte-scanning heuristics.
+ * 5. Idempotent: if certified_at already exists, we return the stored token without re-issuing.
+ * 6. Observability: structured logs, request id, and Sentry with PII scrubbed.
+ * 7. Rate-limited and method/origin guarded.
+ *
+ * Environment variables (server-side only, never exposed to the browser):
+ * SUPABASE_URL                 — Supabase project URL (required)
+ * SUPABASE_SERVICE_ROLE_KEY    — service_role key, used with caller's JWT for ownership check
+ * SUPABASE_JWKS_URL            — optional, for local JWT verification
+ * TSA_URL                      — RFC3161 TSA endpoint (default: https://freetsa.org/tsr)
+ * TSA_PROVIDER                 — provider label stored alongside the token (default: "freetsa")
+ * ALLOWED_ORIGINS              — comma-separated list of allowed Origin values
+ * SENTRY_DSN                   — optional
+ */
+
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import * as Sentry from "@sentry/node";
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { randomBytes, randomUUID } from 'node:crypto';
+import * as Sentry from '@sentry/node';
+
+// ──────────────────────────────────────────────────────────────────────────
+// 0. Config — all server-side, fail fast on boot if misconfigured
+// ──────────────────────────────────────────────────────────────────────────
+const SUPABASE_URL = requireEnv('SUPABASE_URL');
+const SUPABASE_SERVICE_ROLE_KEY = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+const TSA_URL = process.env.TSA_URL || 'https://freetsa.org/tsr';
+const TSA_PROVIDER = process.env.TSA_PROVIDER || 'freetsa';
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://proofmark.jp,https://www.proofmark.jp')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 Sentry.init({
-  dsn: process.env.SENTRY_DSN || "",
-  tracesSampleRate: 1.0,
+  dsn: process.env.SENTRY_DSN || '',
+  tracesSampleRate: 0.1,
+  beforeSend(event) {
+    // Scrub obvious PII before it leaves the server
+    if (event.request?.headers) {
+      delete (event.request.headers as Record<string, string>).authorization;
+      delete (event.request.headers as Record<string, string>).cookie;
+    }
+    return event;
+  },
 });
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`[config] Missing required env: ${name}`);
+  return v;
+}
 
-// FreeTSAのエンドポイント（将来有料プランに切り替える際はこちらを変更します）
-const TSA_URL = 'https://freetsa.org/tsr';
+// ──────────────────────────────────────────────────────────────────────────
+// 1. Lightweight in-memory rate limit (per-user, per-IP).
+//    For multi-instance deployments, back this with Upstash Redis.
+// ──────────────────────────────────────────────────────────────────────────
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 20;
+const hits = new Map<string, { count: number; resetAt: number }>();
 
+function rateLimit(key: string): { ok: boolean; retryAfter: number } {
+  const now = Date.now();
+  const entry = hits.get(key);
+  if (!entry || entry.resetAt < now) {
+    hits.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { ok: true, retryAfter: 0 };
+  }
+  entry.count += 1;
+  if (entry.count > RATE_LIMIT_MAX) {
+    return { ok: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  return { ok: true, retryAfter: 0 };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 2. Input validation
+// ──────────────────────────────────────────────────────────────────────────
+const HEX64 = /^[0-9a-f]{64}$/;
+const UUID_V4 =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+interface TimestampRequestBody {
+  hash: string;
+  certId: string;
+}
+
+function parseBody(body: unknown): TimestampRequestBody | null {
+  if (!body || typeof body !== 'object') return null;
+  const b = body as Record<string, unknown>;
+  if (typeof b.hash !== 'string' || typeof b.certId !== 'string') return null;
+  const hash = b.hash.toLowerCase();
+  if (!HEX64.test(hash)) return null;
+  if (!UUID_V4.test(b.certId)) return null;
+  return { hash, certId: b.certId };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 3. RFC3161 TSQ construction (SHA-256 + nonce + certReq=true)
+//    Structured DER encoding — no magic byte blobs.
+// ──────────────────────────────────────────────────────────────────────────
+const OID_SHA256 = Buffer.from([
+  0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01,
+]);
+const ASN1_NULL = Buffer.from([0x05, 0x00]);
+
+function derLength(len: number): Buffer {
+  if (len < 0x80) return Buffer.from([len]);
+  const bytes: number[] = [];
+  let n = len;
+  while (n > 0) {
+    bytes.unshift(n & 0xff);
+    n >>= 8;
+  }
+  return Buffer.from([0x80 | bytes.length, ...bytes]);
+}
+
+function derTLV(tag: number, value: Buffer): Buffer {
+  return Buffer.concat([Buffer.from([tag]), derLength(value.length), value]);
+}
+
+function derSequence(...parts: Buffer[]): Buffer {
+  return derTLV(0x30, Buffer.concat(parts));
+}
+
+function derInteger(value: Buffer): Buffer {
+  // Prepend 0x00 if high bit is set to keep it positive
+  const needsPad = value.length > 0 && (value[0] & 0x80) !== 0;
+  return derTLV(0x02, needsPad ? Buffer.concat([Buffer.from([0x00]), value]) : value);
+}
+
+function buildTsq(hashHex: string, nonce: Buffer): Buffer {
+  const version = derTLV(0x02, Buffer.from([0x01])); // INTEGER 1
+  const algId = derSequence(OID_SHA256, ASN1_NULL);
+  const msgImprint = derSequence(algId, derTLV(0x04, Buffer.from(hashHex, 'hex'))); // OCTET STRING
+  const nonceDer = derInteger(nonce);
+  const certReq = derTLV(0x01, Buffer.from([0xff])); // BOOLEAN TRUE
+  return derSequence(version, msgImprint, nonceDer, certReq);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 4. Minimal DER walker — extract genTime (GeneralizedTime) from TSTInfo.
+//    We walk the tree rather than scanning for a tag byte so that ASCII
+//    inside unrelated fields cannot be mistaken for a timestamp.
+// ──────────────────────────────────────────────────────────────────────────
+interface DerNode {
+  tag: number;
+  start: number;
+  contentStart: number;
+  contentEnd: number;
+}
+
+function readDer(buf: Buffer, offset: number): DerNode {
+  const tag = buf[offset];
+  let i = offset + 1;
+  let len = buf[i++];
+  if (len & 0x80) {
+    const n = len & 0x7f;
+    len = 0;
+    for (let k = 0; k < n; k++) len = (len << 8) | buf[i++];
+  }
+  return { tag, start: offset, contentStart: i, contentEnd: i + len };
+}
+
+function walkChildren(buf: Buffer, parent: DerNode): DerNode[] {
+  const out: DerNode[] = [];
+  let cursor = parent.contentStart;
+  while (cursor < parent.contentEnd) {
+    const node = readDer(buf, cursor);
+    out.push(node);
+    cursor = node.contentEnd;
+  }
+  return out;
+}
+
+function findGenTime(buf: Buffer, root: DerNode, depth = 0): string | null {
+  if (depth > 8) return null;
+  if (root.tag === 0x18) {
+    // GeneralizedTime
+    return buf.subarray(root.contentStart, root.contentEnd).toString('ascii');
+  }
+  // Only descend into constructed types (SEQUENCE / SET / context-specific constructed)
+  if ((root.tag & 0x20) === 0) return null;
+  for (const child of walkChildren(buf, root)) {
+    const found = findGenTime(buf, child, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+function parseGenTime(s: string): Date | null {
+  // RFC 3161 TSTInfo.genTime MUST be GeneralizedTime "YYYYMMDDHHMMSS[.fff]Z"
+  const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(?:\.(\d{1,3}))?Z$/.exec(s);
+  if (!m) return null;
+  const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}${m[7] ? '.' + m[7].padEnd(3, '0') : ''}Z`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 5. Handler
+// ──────────────────────────────────────────────────────────────────────────
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    // セキュリティ対策：POSTリクエスト以外は弾く
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
+  const reqId = randomUUID();
+  res.setHeader('x-request-id', reqId);
+
+  // 5-1. Method + Origin guard
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed', reqId });
+  }
+  const origin = (req.headers.origin as string) || '';
+  if (origin && !ALLOWED_ORIGINS.includes(origin)) {
+    return res.status(403).json({ error: 'Origin not allowed', reqId });
+  }
+
+  try {
+    // 5-2. Auth — bearer JWT required
+    const authHeader = (req.headers.authorization as string) || '';
+    if (!/^Bearer\s+[\w-]+\.[\w-]+\.[\w-]+$/.test(authHeader)) {
+      return res.status(401).json({ error: 'Missing or malformed Authorization header', reqId });
+    }
+    const jwt = authHeader.slice(7);
+
+    // 5-3. Validate body
+    const body = parseBody(req.body);
+    if (!body) {
+      return res
+        .status(400)
+        .json({ error: 'Invalid body. Expected { hash: hex64, certId: uuid }.', reqId });
     }
 
+    // 5-4. Build a user-scoped Supabase client to enforce RLS on reads
+    //      and an admin client to write idempotently after ownership check.
+    const userClient: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const { data: userData, error: userErr } = await userClient.auth.getUser(jwt);
+    if (userErr || !userData?.user) {
+      return res.status(401).json({ error: 'Invalid session', reqId });
+    }
+    const userId = userData.user.id;
+
+    // 5-5. Rate limit (per user + per IP)
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || 'unknown';
+    const rl = rateLimit(`${userId}:${ip}`);
+    if (!rl.ok) {
+      res.setHeader('Retry-After', String(rl.retryAfter));
+      return res.status(429).json({ error: 'Too many requests', reqId });
+    }
+
+    // 5-6. Load the target certificate with the *user-scoped* client.
+    //      If RLS denies it, we correctly get an empty row — not 500.
+    const { data: cert, error: certErr } = await userClient
+      .from('certificates')
+      .select('id, user_id, file_hash, timestamp_token, certified_at')
+      .eq('id', body.certId)
+      .maybeSingle();
+
+    if (certErr) throw certErr;
+    if (!cert) return res.status(404).json({ error: 'Certificate not found', reqId });
+    if (cert.user_id !== userId) {
+      return res.status(403).json({ error: 'Forbidden', reqId });
+    }
+    if (cert.file_hash && cert.file_hash.toLowerCase() !== body.hash) {
+      return res.status(409).json({ error: 'Hash mismatch against stored certificate', reqId });
+    }
+
+    // 5-7. Idempotency — if already timestamped, return the stored value.
+    if (cert.timestamp_token && cert.certified_at) {
+      return res.status(200).json({
+        success: true,
+        certified_at: cert.certified_at,
+        idempotent: true,
+        reqId,
+      });
+    }
+
+    // 5-8. Build TSQ with a 16-byte cryptographic nonce
+    const nonce = randomBytes(16);
+    const tsq = buildTsq(body.hash, nonce);
+
+    // 5-9. Call TSA with a hard timeout
+    const tsaController = new AbortController();
+    const tsaTimer = setTimeout(() => tsaController.abort(), 8_000);
+    let tsr: Buffer;
     try {
-        const { hash, certId } = req.body;
-        if (!hash || !certId) {
-            return res.status(400).json({ error: 'Missing hash or certId' });
-        }
-
-        // 1. クライアントから送られたハッシュ値(16進数文字列)を純粋なバイナリ(Buffer)に変換
-        const hashBuffer = Buffer.from(hash, 'hex');
-        if (hashBuffer.length !== 32) {
-            return res.status(400).json({ error: 'Invalid SHA-256 hash length' });
-        }
-
-        // 2. ASN.1 タイムスタンプ要求(TSQ)の純粋なバイナリ構築（ライブラリ依存ゼロの魔術）
-        // SHA-256用の国際規格プレフィックス（固定）とサフィックス（証明書要求=true）
-        const prefix = Buffer.from([
-            0x30, 0x3A, 0x02, 0x01, 0x01, 0x30, 0x33, 0x30, 0x0D,
-            0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04,
-            0x02, 0x01, 0x05, 0x00, 0x04, 0x20
-        ]);
-        const suffix = Buffer.from([0x01, 0x01, 0xFF]);
-
-        // これらを結合して「タイムスタンプ要求データ」を完成させる
-        const tsqBuffer = Buffer.concat([prefix, hashBuffer, suffix]);
-
-        // 3. FreeTSAのサーバーへ暗号通信（HTTP POST）を実行
-        const tsaResponse = await fetch(TSA_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/timestamp-query',
-                'Accept': 'application/timestamp-reply',
-            },
-            body: tsqBuffer
-        });
-
-        if (!tsaResponse.ok) {
-            throw new Error(`TSA responded with status: ${tsaResponse.status}`);
-        }
-
-        // 4. FreeTSAから返ってきたトークン(TSR)の受け取りと保存用Base64化
-        const tsrArrayBuffer = await tsaResponse.arrayBuffer();
-        const tsrBuffer = Buffer.from(tsrArrayBuffer);
-        const timestampTokenBase64 = tsrBuffer.toString('base64'); // ← これが最強の証拠になります
-
-        // 5. TSRバイナリから「国際標準時（GeneralizedTime）」を超高速で抽出
-        // （ライブラリを使わず、バイナリ配列の中から直接タグ(0x18)を探し出して解析します）
-        let certifiedAt = new Date(); // フォールバック（万が一見つからなかった時用）
-        for (let i = 0; i < tsrBuffer.length - 16; i++) {
-            if (tsrBuffer[i] === 0x18) { // GeneralizedTimeのタグ
-                const len = tsrBuffer[i + 1];
-                if (len >= 15 && len <= 19) {
-                    const timeStr = tsrBuffer.subarray(i + 2, i + 2 + len).toString('ascii');
-                    // YYYYMMDDHHMMSSZ のフォーマットか検証
-                    if (/^20\d{12,16}Z$/.test(timeStr)) {
-                        const y = timeStr.slice(0, 4);
-                        const m = timeStr.slice(4, 6);
-                        const d = timeStr.slice(6, 8);
-                        const h = timeStr.slice(8, 10);
-                        const min = timeStr.slice(10, 12);
-                        const s = timeStr.slice(12, 14);
-                        certifiedAt = new Date(`${y}-${m}-${d}T${h}:${min}:${s}Z`);
-                        break; // 見つけたら即終了（超高速）
-                    }
-                }
-            }
-        }
-
-        // 6. Supabaseの該当証明書データを更新
-        
-        // 👑 環境変数がない場合でも動くように、フロントエンドから送られた値を優先取得
-        const finalUrl = (req.headers['x-supabase-url'] as string) || supabaseUrl;
-        const finalApiKey = (req.headers['apikey'] as string) || supabaseKey;
-        
-        // 🛡️ 安全装置：URLとAPIキーの最終チェック
-        if (!finalUrl || !finalApiKey) {
-            throw new Error("SupabaseのURLまたはAPIキーが取得できません。フロントエンドからの送信を確認してください。");
-        }
-        
-        // 👑 フロントエンドから送られた身分証の受け取りと検証
-        const authHeader = req.headers.authorization;
-        if (!authHeader || authHeader.includes('undefined')) {
-            throw new Error("フロントエンドからユーザーの身分証（トークン）が正しく送られていません。");
-        }
-
-        const updateRes = await fetch(`${finalUrl}/rest/v1/certificates?id=eq.${certId}`, {
-            method: 'PATCH',
-            headers: {
-                'apikey': finalApiKey,       // 👈 確実なアプリの通行証
-                'Authorization': authHeader,           // 👈 ユーザーの身分証
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-            },
-            body: JSON.stringify({
-                timestamp_token: timestampTokenBase64,
-                tsa_provider: 'freetsa',
-                certified_at: certifiedAt.toISOString()
-            })
-        });
-
-        if (!updateRes.ok) {
-            const errText = await updateRes.text();
-            throw new Error(`DB更新エラー: ${errText}`);
-        }
-
-        // 全て成功したらフロントエンドに完了を伝える
-        return res.status(200).json({ success: true, certified_at: certifiedAt.toISOString() });
-
-    } catch (error: any) {
-        console.error('RFC3161 Timestamp Error:', error);
-        Sentry.captureException(error);
-        await Sentry.flush(2000); // 🌟 追加: 送信完了まで最大2秒待機する
-        return res.status(500).json({ error: error.message });
+      const resp = await fetch(TSA_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/timestamp-query',
+          Accept: 'application/timestamp-reply',
+        },
+        body: tsq,
+        signal: tsaController.signal,
+      });
+      if (!resp.ok) throw new Error(`TSA HTTP ${resp.status}`);
+      const ab = await resp.arrayBuffer();
+      tsr = Buffer.from(ab);
+    } finally {
+      clearTimeout(tsaTimer);
     }
+
+    // 5-10. Parse TSR → extract genTime via structured DER walk
+    const root = readDer(tsr, 0);
+    const gt = findGenTime(tsr, root);
+    const certifiedAt = gt ? parseGenTime(gt) : null;
+    if (!certifiedAt) {
+      throw new Error('TSA response did not contain a parsable GeneralizedTime');
+    }
+
+    const timestampTokenBase64 = tsr.toString('base64');
+
+    // 5-11. Persist with an admin client but filter by (id, user_id) so we
+    //       still require ownership at SQL level. Double locking.
+    const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const { error: updErr } = await adminClient
+      .from('certificates')
+      .update({
+        timestamp_token: timestampTokenBase64,
+        tsa_provider: TSA_PROVIDER,
+        tsa_url: TSA_URL,
+        certified_at: certifiedAt.toISOString(),
+      })
+      .eq('id', body.certId)
+      .eq('user_id', userId)
+      .is('timestamp_token', null); // only overwrite if still blank
+
+    if (updErr) throw updErr;
+
+    // 5-12. Structured audit log (no PII, hash + cert id only)
+    console.log(
+      JSON.stringify({
+        reqId,
+        event: 'rfc3161.issued',
+        userId,
+        certId: body.certId,
+        hash: body.hash,
+        tsa: TSA_PROVIDER,
+        certified_at: certifiedAt.toISOString(),
+      })
+    );
+
+    return res.status(200).json({
+      success: true,
+      certified_at: certifiedAt.toISOString(),
+      tsa_provider: TSA_PROVIDER,
+      reqId,
+    });
+  } catch (error: any) {
+    Sentry.captureException(error, { tags: { reqId } });
+    await Sentry.flush(1500).catch(() => void 0);
+    console.error(
+      JSON.stringify({ reqId, event: 'rfc3161.error', message: String(error?.message || error) })
+    );
+    return res.status(500).json({ error: 'Internal error', reqId });
+  }
 }
