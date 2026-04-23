@@ -154,7 +154,7 @@ export default function Home() {
     <>
       <SEO 
         title="ProofMark | AI生成作品の改ざん防止・存在証明インフラ"
-        description="「どうせAIでしょ？」を検証可能な事実で終わらせる。画像データのSHA-256ハッシュをブラウザ内で計算し、時間的証拠とともに刻印するプライバシー完全保護のタイムスタンプサービス。著作権侵害や無断転載からクリエイターの権利を守ります。"
+        description="「どうせAIでしょ？」を、検証可能な事実で終わらせる。ファイルのSHA-256ハッシュをブラウザ内で計算し、RFC3161準拠のタイムスタンプを付与。あなたの作品が特定の日時に、その内容で存在していたことを第三者が独立して検証できる、プライバシーファーストの存在証明インフラです。"
         url="https://proofmark.jp/"
         type="website"
         jsonLd={{
@@ -216,8 +216,8 @@ export default function Home() {
                 </span>
               </h1>
               <p className="text-[#A8A0D8] text-base sm:text-xl max-w-3xl mx-auto mb-10 leading-relaxed text-center">
-                画像のSHA-256ハッシュをブラウザ内で計算し（Client-side Hashing）、作成時点の証拠を暗号学的に記録。<br className="hidden md:block" />
-                公開検証URL・PDF・QRコードで、あなたの創作の事実を第三者に堂々と共有できます。
+                ファイルのSHA-256ハッシュをブラウザ内で計算し（Client-side Hashing）、RFC3161準拠のタイムスタンプを付与。<br className="hidden md:block" />
+                「特定の日時にその内容で存在していた」という客観的な事実を、ProofMarkに依存せず第三者が独立検証できます。
               </p>
 
               {/* Hero form / Dashboard CTA based on auth state */}
@@ -357,11 +357,27 @@ export default function Home() {
         <section className="py-20 px-6 sm:px-12">
           <div className="max-w-4xl mx-auto bg-[#15132D] rounded-2xl border border-[#2a2a4e] p-8 sm:p-10 text-center">
             <Lock className="w-10 h-10 text-slate-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-white mb-4">この証明が意味すること、保証しないこと</h2>
-            <p className="text-sm text-[#A8A0D8] leading-relaxed text-left sm:text-center">
-              ProofMarkは、「特定の日時において、特定のハッシュ値を持つファイルが存在した」という客観的な事実を暗号技術を用いて記録・証明するインフラストラクチャです。<br className="hidden sm:block" />
-              <span className="text-yellow-500/90 font-bold">本サービスは、当該ファイルの「著作権の帰属」や「作品の独自性・適法性」そのものを最終的に判定・保証するものではありません。</span><br className="hidden sm:block" />
-              無断転載時の証拠提示や、クライアントへの納品時の信頼性担保としてご活用ください。また、Private Proofモードにおいて運営側がユーザーの元データを閲覧・取得することは技術的に不可能です。
+            <h2 className="text-xl font-bold text-white mb-4">ProofMarkが証明すること、証明しないこと</h2>
+            <div className="grid sm:grid-cols-2 gap-6 text-left">
+              <div className="bg-[#00D4AA]/5 border border-[#00D4AA]/20 rounded-xl p-5">
+                <p className="text-xs font-bold tracking-widest text-[#00D4AA] uppercase mb-3">✓ 証明すること</p>
+                <ul className="space-y-2 text-sm text-[#D4D0F4] leading-relaxed">
+                  <li>・特定のSHA-256ハッシュを持つファイルが、RFC3161タイムスタンプの発行時刻に存在していた事実</li>
+                  <li>・発行後、そのファイルが1ビットも改変されていないこと</li>
+                  <li>・ProofMarkに依存せず、OpenSSL等で独立検証できること</li>
+                </ul>
+              </div>
+              <div className="bg-[#F0BB38]/5 border border-[#F0BB38]/20 rounded-xl p-5">
+                <p className="text-xs font-bold tracking-widest text-[#F0BB38] uppercase mb-3">✗ 証明しないこと</p>
+                <ul className="space-y-2 text-sm text-[#D4D0F4] leading-relaxed">
+                  <li>・著作権の帰属、作品の独自性、合法性</li>
+                  <li>・世界で最初にその作品を作ったという事実</li>
+                  <li>・特定の裁判・行政手続で証拠として採用されること（採否は事案と法域に依存）</li>
+                </ul>
+              </div>
+            </div>
+            <p className="text-xs text-[#A8A0D8]/80 mt-6 leading-relaxed">
+              ProofMarkは、無断転載時の証拠提示や、クライアントへの納品時の信頼性担保を目的とした「存在証明インフラ」です。Private Proofモードにおいては、原本ファイルがProofMarkのサーバーに到達することはありません。現在利用中のTSA（時刻認証局）と信頼レベルは <a href="/trust-center#s4" className="text-[#00D4AA] underline hover:no-underline">Trust Center</a> で随時公開しています。
             </p>
           </div>
         </section>
@@ -427,7 +443,7 @@ export default function Home() {
             </div>
 
             <h2 className="text-4xl md:text-5xl font-extrabold text-[#F0EFF8] mb-4 tracking-tight">
-              <span className="text-[#00D4AA] mr-1">3</span>ステップで「先取権」を確定
+              <span className="text-[#00D4AA] mr-1">3</span>ステップで「存在の事実」を刻む
             </h2>
             <p className="text-[#A8A0D8] mb-16 text-lg">あなたの作品を、未来に残る証拠に変える仕組み</p>
 
@@ -458,7 +474,7 @@ export default function Home() {
                 </div>
                 <h3 className="relative z-10 text-xl font-bold text-[#F0EFF8] mb-4 group-hover:text-[#6C3EF4] transition-colors">タイムスタンプ刻印</h3>
                 <p className="relative z-10 text-[#A8A0D8] leading-relaxed text-sm md:text-base">
-                  計算されたハッシュ値と現在日時（タイムスタンプ）をセキュアなデータベースに記録し、あなたの「先取権」を裏付ける客観的な証拠を確立します。
+                  計算されたハッシュ値に対し、RFC3161準拠のTSA（時刻認証局）が署名付きタイムスタンプを発行。「特定の日時にその内容で存在していた」という客観的な事実を、第三者が独立検証できる形で記録します。
                 </p>
               </div>
 

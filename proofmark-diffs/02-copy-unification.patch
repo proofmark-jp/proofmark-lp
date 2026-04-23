@@ -1,0 +1,141 @@
+diff --git a/src/pages/Home.tsx b/src/pages/Home.tsx
+index 1a2b3c4..5d6e7f8 100644
+--- a/src/pages/Home.tsx
++++ b/src/pages/Home.tsx
+@@ -155,7 +155,7 @@ export default function Home() {
+     <>
+       <SEO 
+         title="ProofMark | AI生成作品の改ざん防止・存在証明インフラ"
+-        description="「どうせAIでしょ？」を検証可能な事実で終わらせる。画像データのSHA-256ハッシュをブラウザ内で計算し、時間的証拠とともに刻印するプライバシー完全保護のタイムスタンプサービス。著作権侵害や無断転載からクリエイターの権利を守ります。"
++        description="「どうせAIでしょ？」を、検証可能な事実で終わらせる。ファイルのSHA-256ハッシュをブラウザ内で計算し、RFC3161準拠のタイムスタンプを付与。あなたの作品が特定の日時に、その内容で存在していたことを第三者が独立して検証できる、プライバシーファーストの存在証明インフラです。"
+         url="https://proofmark.jp/"
+         type="website"
+         jsonLd={{
+@@ -210,7 +210,7 @@ export default function Home() {
+                 Securing Creative Assets: <span className="text-white ml-1">{totalCerts}</span>
+               </div>
+               <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight mb-6 leading-tight text-center">
+                 「どうせAIでしょ？」を、<br className="hidden sm:block" />
+                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00D4AA] to-[#6C3EF4]">
+                   検証可能な事実で終わらせる。
+                 </span>
+               </h1>
+               <p className="text-[#A8A0D8] text-base sm:text-xl max-w-3xl mx-auto mb-10 leading-relaxed text-center">
+-                画像のSHA-256ハッシュをブラウザ内で計算し（Client-side Hashing）、作成時点の証拠を暗号学的に記録。<br className="hidden md:block" />
+-                公開検証URL・PDF・QRコードで、あなたの創作の事実を第三者に堂々と共有できます。
++                ファイルのSHA-256ハッシュをブラウザ内で計算し（Client-side Hashing）、RFC3161準拠のタイムスタンプを付与。<br className="hidden md:block" />
++                「特定の日時にその内容で存在していた」という客観的な事実を、ProofMarkに依存せず第三者が独立検証できます。
+               </p>
+ 
+@@ -356,15 +356,43 @@ export default function Home() {
+         {/* --- 免責事項セクション --- */}
+         <section className="py-20 px-6 sm:px-12">
+           <div className="max-w-4xl mx-auto bg-[#15132D] rounded-2xl border border-[#2a2a4e] p-8 sm:p-10 text-center">
+             <Lock className="w-10 h-10 text-slate-400 mx-auto mb-4" />
+-            <h2 className="text-xl font-bold text-white mb-4">この証明が意味すること、保証しないこと</h2>
+-            <p className="text-sm text-[#A8A0D8] leading-relaxed text-left sm:text-center">
+-              ProofMarkは、「特定の日時において、特定のハッシュ値を持つファイルが存在した」という客観的な事実を暗号技術を用いて記録・証明するインフラストラクチャです。<br className="hidden sm:block" />
+-              <span className="text-yellow-500/90 font-bold">本サービスは、当該ファイルの「著作権の帰属」や「作品の独自性・適法性」そのものを最終的に判定・保証するものではありません。</span><br className="hidden sm:block" />
+-              無断転載時の証拠提示や、クライアントへの納品時の信頼性担保としてご活用ください。また、Private Proofモードにおいて運営側がユーザーの元データを閲覧・取得することは技術的に不可能です。
+-            </p>
++            <h2 className="text-xl font-bold text-white mb-4">ProofMarkが証明すること、証明しないこと</h2>
++            <div className="grid sm:grid-cols-2 gap-6 text-left">
++              <div className="bg-[#00D4AA]/5 border border-[#00D4AA]/20 rounded-xl p-5">
++                <p className="text-xs font-bold tracking-widest text-[#00D4AA] uppercase mb-3">✓ 証明すること</p>
++                <ul className="space-y-2 text-sm text-[#D4D0F4] leading-relaxed">
++                  <li>・特定のSHA-256ハッシュを持つファイルが、RFC3161タイムスタンプの発行時刻に存在していた事実</li>
++                  <li>・発行後、そのファイルが1ビットも改変されていないこと</li>
++                  <li>・ProofMarkに依存せず、OpenSSL等で独立検証できること</li>
++                </ul>
++              </div>
++              <div className="bg-[#F0BB38]/5 border border-[#F0BB38]/20 rounded-xl p-5">
++                <p className="text-xs font-bold tracking-widest text-[#F0BB38] uppercase mb-3">✗ 証明しないこと</p>
++                <ul className="space-y-2 text-sm text-[#D4D0F4] leading-relaxed">
++                  <li>・著作権の帰属、作品の独自性、合法性</li>
++                  <li>・世界で最初にその作品を作ったという事実</li>
++                  <li>・特定の裁判・行政手続で証拠として採用されること（採否は事案と法域に依存）</li>
++                </ul>
++              </div>
++            </div>
++            <p className="text-xs text-[#A8A0D8]/80 mt-6 leading-relaxed">
++              ProofMarkは、無断転載時の証拠提示や、クライアントへの納品時の信頼性担保を目的とした「存在証明インフラ」です。Private Proofモードにおいては、原本ファイルがProofMarkのサーバーに到達することはありません。現在利用中のTSA（時刻認証局）と信頼レベルは <a href="/trust-center#s4" className="text-[#00D4AA] underline hover:no-underline">Trust Center</a> で随時公開しています。
++            </p>
+           </div>
+         </section>
+ 
+@@ -426,8 +454,8 @@ export default function Home() {
+               <Zap className="w-3 h-3" /> HOW IT WORKS
+             </div>
+ 
+             <h2 className="text-4xl md:text-5xl font-extrabold text-[#F0EFF8] mb-4 tracking-tight">
+-              <span className="text-[#00D4AA] mr-1">3</span>ステップで「先取権」を確定
++              <span className="text-[#00D4AA] mr-1">3</span>ステップで「存在の事実」を刻む
+             </h2>
+             <p className="text-[#A8A0D8] mb-16 text-lg">あなたの作品を、未来に残る証拠に変える仕組み</p>
+ 
+@@ -458,8 +486,8 @@ export default function Home() {
+                 </div>
+                 <h3 className="relative z-10 text-xl font-bold text-[#F0EFF8] mb-4 group-hover:text-[#6C3EF4] transition-colors">タイムスタンプ刻印</h3>
+                 <p className="relative z-10 text-[#A8A0D8] leading-relaxed text-sm md:text-base">
+-                  計算されたハッシュ値と現在日時（タイムスタンプ）をセキュアなデータベースに記録し、あなたの「先取権」を裏付ける客観的な証拠を確立します。
++                  計算されたハッシュ値に対し、RFC3161準拠のTSA（時刻認証局）が署名付きタイムスタンプを発行。「特定の日時にその内容で存在していた」という客観的な事実を、第三者が独立検証できる形で記録します。
+                 </p>
+               </div>
+ 
+diff --git a/src/pages/HowItWorks.tsx b/src/pages/HowItWorks.tsx
+index 2a3b4c5..6e7f8a9 100644
+--- a/src/pages/HowItWorks.tsx
++++ b/src/pages/HowItWorks.tsx
+@@ -30,14 +30,14 @@ export default function HowItWorks() {
+     },
+     {
+       number: "03",
+       title: "タイムスタンプの付与（RFC3161準拠）",
+-      description: "生成されたSHA-256ハッシュ値に対し、信頼できる時刻認証局（TSA）から「タイムスタンプ」を付与します。このタイムスタンプは、**RFC3161**という国際標準規格に準拠しており、ハッシュ値が特定の日時に存在したことを客観的に証明します。",
++      description: "生成されたSHA-256ハッシュ値に対し、RFC3161準拠の時刻認証局（TSA）が発行する署名付きタイムスタンプトークン（TST）を付与します。これにより、「そのハッシュ値に紐づくファイルが特定の日時に存在していたこと」を、ProofMarkに依存せず第三者が独立して検証できます。",
+       details: [
+-        "法的証拠力: RFC3161準拠 of タイムスタンプは、電子署名法に基づく時刻認証の要件を満たし、法的証拠力を持ちます。",
+-        "客観性: 第三者機関が時刻を証明するため、後からの時刻改ざんが極めて困難になります。"
++        "独立検証可能性: TST単体でOpenSSL等により検証できるため、ProofMark停止後も有効性を確認できます。",
++        "証拠用途: 納品時の信頼性担保、無断転載発覚時の時系列提示、取引先への制作事実の説明などに利用できます。",
++        "法的採否について: 個別の紛争での証拠採用可否・証拠価値は、事案・法域・裁判所の裁量に依存します。現在利用中のTSAと信頼レベルは Trust Center で公開しています。"
+       ],
+       icon: <Clock className="w-8 h-8 text-[#00D4AA]" />,
+       color: "from-[#00D4AA]/20 to-transparent",
+       borderColor: "border-[#00D4AA]/30"
+     },
+     {
+diff --git a/src/pages/Faq.tsx b/src/pages/Faq.tsx
+index 3b4c5d6..7a8b9c0 100644
+--- a/src/pages/Faq.tsx
++++ b/src/pages/Faq.tsx
+@@ -84,14 +84,52 @@ const faqData: FAQItem[] = [
+   },
+   {
+     id: "legal",
+-    question: "裁判で使えますか？",
++    question: "裁判や紛争の証拠として使えますか？",
+     answer: (
+       <>
+-        <p>ProofMarkが発行するRFC3161準拠のタイムスタンプは、日本の電子署名法において「時刻認証業務の認定に関する指針」を満たすものであり、<strong>法的証拠力を持つ</strong>とされています。これにより、デジタルコンテンツの存在時期と非改ざん性を証明する客観的な証拠として、裁判などの法的な場で活用できる可能性があります。</p>
+-        <p>ただし、個別の裁判における証拠としての採用の可否や、その証拠価値の判断は、裁判所の裁量や具体的な事案によって異なります。最終的な法的判断については、必ず弁護士などの専門家にご相談ください。</p>
++        <p>ProofMarkが発行するのは、RFC3161という国際標準規格に準拠した<strong>タイムスタンプトークン（TST）</strong>です。TSTは、「ハッシュ値Hを持つファイルが、時刻Tに存在していた」という事実を、TSA（時刻認証局）の電子署名によって裏付ける客観的なデータです。</p>
++        <p>このTSTは、存在時期・非改ざん性を示す技術的証拠として、納品時の信頼性担保、取引先への説明、無断転載時の時系列提示、プラットフォームへの通報補強など、さまざまな場面で活用できます。また、TSTはProofMarkに依存せずOpenSSL等の標準ツールで独立に検証できます。</p>
++        <p><strong>一方で、個別の裁判・調停・行政手続で証拠として採用されるか、およびその証拠価値は、事案・法域・裁判所の裁量によって判断されます。</strong>ProofMarkは「法的に有効な証拠を保証する」立場ではなく、「事実関係を技術的に裏付けるデータを提供する」立場です。現在利用中のTSAと、その信頼レベル（ルート証明書の収録状況・SLA等）は <a href="/trust-center#s4" style={{ color: "#00D4AA" }}>Trust Center §4</a> で最新状態を公開しています。</p>
++        <p>重要な紛争・訴訟を想定する場合は、必ず弁護士などの専門家にご相談のうえ、用途に合うTSAクラスをご検討ください。</p>
+       </>
+     ),
+   },
++  {
++    id: "shutdown",
++    question: "運営が終了した場合、証明書は有効なままですか？",
++    answer: (
++      <>
++        <p>はい。ProofMarkが発行するタイムスタンプトークン（TST）は、RFC3161という国際標準規格に基づいたデータです。TSTを手元に保存しておけば、<strong>ProofMarkのサービス提供が終了した後でも、OpenSSL等の標準ツールとTSAの公開証明書のみで、第三者が独立して有効性を検証できます。</strong></p>
++        <p>具体的な検証手順は <a href="/trust-center#s7" style={{ color: "#00D4AA" }}>Trust Center §7</a> に、検証用スクリプトは <a href="https://github.com/proofmark-jp/verify" target="_blank" rel="noopener noreferrer" style={{ color: "#00D4AA" }}>公開リポジトリ</a> に掲載しています。</p>
++      </>
++    ),
++  },
+   {
+     id: "compression",
+     question: "SNSで画像が圧縮されても意味はありますか？",
