@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Shield, Eye, ShieldCheck, UploadCloud, Lock, Star } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useHashFile } from '../hooks/useHashFile';
+import { prepareEvidencePayload } from '../lib/evidence-prep';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -49,12 +50,30 @@ export default function CertificateUpload() {
 
       setProcessStatus('証明書とセキュアストレージデータをサーバーで処理中...');
 
+      let payload;
+      try {
+        setProcessStatus('ペイロードを最適化中（画像の場合は軽量プレビューを生成）...');
+        payload = await prepareEvidencePayload(file, fileHash);
+      } catch (prepErr: any) {
+        alert('ペイロード生成エラー: ' + prepErr.message);
+        setProcessStatus('エラーが発生しました。もう一度お試しください。');
+        setIsProcessing(false);
+        return;
+      }
+
+      const metadataJson = JSON.stringify({
+        original_filename: payload.originalName,
+        original_size: payload.originalSize,
+        is_preview_compressed: payload.isCompressed,
+      });
+
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', payload.fileToSend);
       formData.append('title', file.name);
-      formData.append('sha256', fileHash);
+      formData.append('sha256', payload.originalSha256);
       formData.append('proofMode', proofMode);
       formData.append('visibility', proofMode === 'shareable' ? visibility : 'private');
+      formData.append('metadataJson', metadataJson);
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
