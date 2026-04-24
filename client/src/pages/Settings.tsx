@@ -8,6 +8,8 @@ import AdminSafetyPanel from '../components/AdminSafetyPanel';
 import { supabase } from '../lib/supabase';
 
 export default function Settings() {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
   const [, setLocation] = useLocation();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -44,7 +46,7 @@ export default function Settings() {
     try {
       setIsImpersonating(true);
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session) throw new Error("セッションが見つかりません");
 
       // 👑 究極の明示的fetch呼び出し（迷子を防ぎ、確実な身分証を届ける）
@@ -59,22 +61,22 @@ export default function Settings() {
       });
 
       if (!response.ok) {
-         const errorData = await response.json().catch(() => ({}));
-         throw new Error(errorData.error || `代理ログイン拒否 (HTTP ${response.status})`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `代理ログイン拒否 (HTTP ${response.status})`);
       }
-      
+
       const data = await response.json();
       if (!data.loginUrl) throw new Error("リンクの取得に失敗しました");
 
       toast.success('代理ログインの準備が整いました。リダイレクトします...');
-      
+
       // 👑 管理者モードであるフラグを永続化（バナー表示用）
       localStorage.setItem('proofmark_impersonating', 'true');
       localStorage.setItem('admin_email', user.email); // 戻る時のための記憶
-      
+
       // 魔法のリンクへジャンプすることで、自動的に対象ユーザーとしてログインされます
       window.location.href = data.loginUrl;
-      
+
     } catch (err: any) {
       toast.error('代理ログインに失敗しました', { description: err.message });
     } finally {
@@ -116,7 +118,7 @@ export default function Settings() {
       setLoading(false);
     }
     loadUser();
-  // 🛡️ 致命的バグ修正：setLocationを依存配列から外し、初回マウント時のみの実行に固定して無限フェッチを防ぐ
+    // 🛡️ 致命的バグ修正：setLocationを依存配列から外し、初回マウント時のみの実行に固定して無限フェッチを防ぐ
   }, []);
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -285,34 +287,28 @@ export default function Settings() {
       setUpdatingSecurity(true);
       toast.loading('退会処理を実行しています...');
 
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
 
-      if (sessionError || !session) {
-        throw new Error("セッションが無効です。再ログインしてください。");
-      }
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      // 👑 究極の明示的fetch呼び出し（ブラックボックスを排除し、必要な鍵をすべて手動で装填）
-      const response = await fetch(`${supabaseUrl}/functions/v1/delete-user`, {
+      const res = await fetch('/api/user/delete-account', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`, // ユーザーの身分証
-          'apikey': supabaseKey,                             // アプリの通行証
-          'Content-Type': 'application/json'
-        }
+        headers,
       });
 
-      if (!response.ok) {
-        // エラーメッセージを安全に抽出
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `退会エラー (HTTP ${response.status})`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || '退会処理に失敗しました');
       }
-
-      // API側で物理削除が成功したら、フロント側でも即座にログアウト
-      await supabase.auth.signOut();
 
       toast.success('退会処理が完了しました。ご利用ありがとうございました。');
 
-      // 4. トップページへ強制リダイレクト
+      // 成功時：サインアウトしてトップページへ遷移
+      await supabase.auth.signOut();
       setTimeout(() => {
         window.location.href = '/';
       }, 1500);
@@ -468,7 +464,7 @@ export default function Settings() {
             <div className="relative group">
               {/* 🌟 アンビエント・グロウ */}
               <div className="absolute -inset-1 bg-gradient-to-r from-[#00D4AA]/20 to-[#6C3EF4]/20 rounded-[1.6rem] blur-md opacity-30 group-hover:opacity-60 transition duration-1000 group-hover:duration-300" />
-              
+
               <div className="relative">
                 {profileData?.username ? (
                   <WidgetBuilder username={profileData.username} />
@@ -476,15 +472,15 @@ export default function Settings() {
                   <div className="rounded-[1.4rem] border border-white/10 bg-white/[0.02] p-5 lg:p-8 relative overflow-hidden min-h-[500px] flex items-center justify-center">
                     {/* 👑 ティザー（魅せプ）UI：背後にうっすらとビルダーのシルエットを配置し、価値を暗示する */}
                     <div className="absolute inset-0 opacity-20 blur-[5px] pointer-events-none select-none p-5 lg:p-8 flex flex-col gap-8">
-                       <div className="h-8 bg-white/20 rounded w-1/3" />
-                       <div className="grid gap-8 lg:grid-cols-[340px_1fr] flex-1">
-                         <div className="space-y-5">
-                           <div className="h-12 bg-white/20 rounded-lg" />
-                           <div className="h-12 bg-white/20 rounded-lg" />
-                           <div className="h-8 bg-white/20 rounded w-3/4" />
-                         </div>
-                         <div className="bg-[#02040A] rounded-2xl border border-white/5 h-full" />
-                       </div>
+                      <div className="h-8 bg-white/20 rounded w-1/3" />
+                      <div className="grid gap-8 lg:grid-cols-[340px_1fr] flex-1">
+                        <div className="space-y-5">
+                          <div className="h-12 bg-white/20 rounded-lg" />
+                          <div className="h-12 bg-white/20 rounded-lg" />
+                          <div className="h-8 bg-white/20 rounded w-3/4" />
+                        </div>
+                        <div className="bg-[#02040A] rounded-2xl border border-white/5 h-full" />
+                      </div>
                     </div>
 
                     {/* 👑 グラスモーフィズム・ロックパネル：明確な価値提案とアクション誘導 */}
@@ -494,10 +490,10 @@ export default function Settings() {
                       </div>
                       <h4 className="text-xl text-white font-black mb-3 tracking-tight">バイラルエンジンを解放する</h4>
                       <p className="text-sm text-[#A8A0D8] leading-relaxed mb-8">
-                        あなたの作品を世界中のWebサイトに美しく埋め込むための専用ウィジェットです。<br/>
+                        あなたの作品を世界中のWebサイトに美しく埋め込むための専用ウィジェットです。<br />
                         利用を開始するには、まず基本情報で<strong className="text-white">ユーザー名（ID）</strong>を確定し、ポートフォリオを公開してください。
                       </p>
-                      <button 
+                      <button
                         onClick={() => {
                           window.scrollTo({ top: 0, behavior: 'smooth' });
                           setTimeout(() => {
@@ -696,7 +692,7 @@ export default function Settings() {
                           className="w-full bg-[#07061A] border border-[#F0BB38]/30 text-white rounded-lg pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-[#F0BB38] font-mono"
                         />
                       </div>
-                      <button 
+                      <button
                         onClick={handleImpersonate}
                         disabled={!targetUserId || isImpersonating}
                         className="bg-[#F0BB38] hover:bg-[#FFD700] text-black disabled:opacity-50 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-2"

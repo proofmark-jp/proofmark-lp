@@ -365,17 +365,33 @@ export default function Dashboard() {
   }, []);
 
   const handleArchive = async (cert: Certificate, next: boolean) => {
-    setCerts((prev) => prev.map((c) => (c.id === cert.id ? { ...c, is_archived: next } : c)));
-    const { error } = await supabase
-      .from("certificates")
-      .update({ is_archived: next })
-      .eq("id", cert.id);
-    if (error) {
-      setCerts((prev) => prev.map((c) => (c.id === cert.id ? { ...c, is_archived: !next } : c)));
-      toast.error("アーカイブ状態を更新できませんでした", { description: error.message });
-      return;
+    try {
+      // Authのセッショントークンを取得
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      // バックエンドの完全消去APIを叩く
+      const res = await fetch('/api/certificates/delete', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ id: cert.id }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || '削除に失敗しました');
+      }
+
+      setCerts((prev) => prev.filter((c) => c.id !== cert.id));
+      toast.success("証明書を完全に削除しました");
+    } catch (error: any) {
+      toast.error("削除エラー", { description: error.message });
     }
-    toast.success(next ? "アーカイブしました" : "アーカイブから戻しました");
   };
 
   const handleAssignProject = async (cert: Certificate) => {

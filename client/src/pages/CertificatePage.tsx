@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRoute, useLocation, Link } from 'wouter';
 import { QRCodeSVG } from 'qrcode.react';
-import { CheckCircle, Clock, ShieldCheck, Image as ImageIcon, Copy, Check, FileText, Lock } from 'lucide-react';
+import { CheckCircle, Clock, ShieldCheck, Image as ImageIcon, Copy, Check, FileText, Lock, ShieldAlert, Flag } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import Navbar from '../components/Navbar';
 import SEO from '../components/SEO';
@@ -160,6 +160,22 @@ export default function CertificatePage() {
                 <ShieldCheck className="w-16 h-16 text-slate-600" />
                 <h1 className="text-xl font-bold tracking-widest">証明書が見つかりません</h1>
                 <button onClick={() => setLocation('/')} className="text-[#00D4AA] hover:text-white transition-colors border-b border-[#00D4AA] pb-1 print:hidden">トップに戻る</button>
+            </div>
+        );
+    }
+
+    if (cert.moderation_status === 'suspended') {
+        return (
+            <div className="min-h-screen bg-[#050505] flex items-center justify-center p-6">
+                <div className="max-w-md w-full bg-red-950/20 border border-red-900/50 rounded-2xl p-8 text-center">
+                    <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <ShieldAlert className="w-8 h-8 text-red-500" />
+                    </div>
+                    <h2 className="text-xl font-bold text-red-400 mb-2">この証明書は凍結されています</h2>
+                    <p className="text-sm text-slate-400">
+                        利用規約違反、または第三者からの権利侵害の申し立てにより、この証明書の公開は一時的または恒久的に停止されています。
+                    </p>
+                </div>
             </div>
         );
     }
@@ -473,6 +489,19 @@ export default function CertificatePage() {
                         <ProofBundleTimelineCard bundle={bundle} />
                     </div>
                 )}
+
+                {/* 🚨 通報導線 (Report Abuse) */}
+                <div className="mt-12 text-center pb-8 print:hidden">
+                  <a 
+                    href="https://forms.gle/YOUR_GOOGLE_FORM_ID_HERE" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs text-slate-600 hover:text-slate-400 underline transition-colors flex items-center justify-center gap-1"
+                  >
+                    <Flag className="w-3 h-3" />
+                    違法・悪質なコンテンツを通報する (Report Abuse)
+                  </a>
+                </div>
 
             </div>
         </>
