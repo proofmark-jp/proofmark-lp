@@ -204,7 +204,7 @@ function buildZip(entries: ZipEntry[]): Buffer {
         cdh.writeUInt16LE(0, 32);                    // comment
         cdh.writeUInt16LE(0, 34);                    // disk no
         cdh.writeUInt16LE(0, 36);                    // internal attrs
-        cdh.writeUInt32LE(0o100644 << 16, 38);       // external attrs (unix 0644)
+        cdh.writeUInt32LE((0o100644 << 16) >>> 0, 38);       // external attrs (unix 0644)
         cdh.writeUInt32LE(offset, 42);               // local header offset
         central.push(cdh, nameBuf);
 
