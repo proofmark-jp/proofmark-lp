@@ -1,0 +1,27 @@
+diff --git a/vercel.json b/vercel.json
+--- a/vercel.json
++++ b/vercel.json
+@@
+   "functions": {
+     "api/timestamp.ts":     { "maxDuration": 15 },
+     "api/og.ts":            { "maxDuration": 30 },
+     "api/cert.ts":          { "maxDuration": 10 },
+-    "api/save-certificate.ts": { "maxDuration": 10 }
++    "api/save-certificate.ts": { "maxDuration": 10 },
++    "api/evidence-pack.ts": { "maxDuration": 30 }
+   },
+   "headers": [
+     {
+       "source": "/api/evidence-pack",
+       "headers": [
+         { "key": "Cache-Control",                    "value": "private, max-age=0, must-revalidate" },
+         { "key": "X-Content-Type-Options",           "value": "nosniff" },
+         { "key": "Referrer-Policy",                  "value": "no-referrer" },
+         { "key": "Access-Control-Allow-Origin",      "value": "https://proofmark.jp" },
+         { "key": "Access-Control-Allow-Methods",     "value": "GET, OPTIONS" },
+         { "key": "Access-Control-Allow-Headers",     "value": "Authorization, Content-Type, Accept" },
+         { "key": "Access-Control-Expose-Headers",    "value": "Content-Disposition, X-Request-Id, X-Evidence-Cert-Id, X-Evidence-Trust-Tier" }
+       ]
+     }
+   ]
+ }

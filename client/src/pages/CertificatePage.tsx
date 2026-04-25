@@ -23,8 +23,6 @@ const applyRFC3161Timestamp = async (certId: string, hash: string) => {
       headers: { 
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session?.access_token}`,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,      // 👑 環境変数の壁を越えてAPIキーを渡す
-        'x-supabase-url': import.meta.env.VITE_SUPABASE_URL    // 👑 URLも確実にバックエンドへ渡す
       },
       body: JSON.stringify({ certId, hash }),
     });

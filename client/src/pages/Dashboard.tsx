@@ -340,25 +340,50 @@ export default function Dashboard() {
   }, []);
 
   const handleDownloadEvidencePack = useCallback(async (cert: Certificate) => {
-    // Evidence Pack: PDF証明書 + TST(.tsr) + 検証手順 + カバーレター草案 を ZIP で返す API。
-    // 未実装でも UI から呼び出し先だけ固定しておくと、後続実装で UI 側差分がゼロになる。
     try {
+      toast.loading("Evidence Packを生成しています...", { id: `evidence-${cert.id}` });
+      const { data: { session } } = await supabase.auth.getSession();
+
       const res = await fetch(`/api/evidence-pack?certId=${cert.id}`, {
         headers: {
-          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`,
+          Authorization: `Bearer ${session?.access_token ?? ""}`,
         },
+        credentials: "omit",
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = await res.json();
+          if (j?.error) msg = `${j.error}${j.reqId ? ` (req: ${j.reqId})` : ""}`;
+        } catch { /* non-JSON body */ }
+        throw new Error(msg);
+      }
+
+      // Content-Disposition からファイル名を取り出す（RFC 5987 日本語対応）
+      const cd = res.headers.get("content-disposition") || "";
+      const m5987 = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(cd);
+      const mPlain = /filename\s*=\s*"?([^";]+)"?/i.exec(cd);
+      const filename = m5987
+        ? decodeURIComponent(m5987[1])
+        : mPlain
+        ? mPlain[1]
+        : `proofmark-evidence-${cert.id.slice(0, 8)}.zip`;
+
       const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `proofmark-evidence-${cert.id.slice(0, 8)}.zip`;
+      a.href = href;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      toast.success("Evidence Pack をダウンロードしました");
+      URL.revokeObjectURL(href); // メモリ解放
+
+      toast.success("Evidence Pack をダウンロードしました", { id: `evidence-${cert.id}` });
     } catch (e: any) {
       toast.error("Evidence Pack 生成に失敗しました", {
+        id: `evidence-${cert.id}`,
         description: e?.message ?? "API をご確認ください。",
       });
     }

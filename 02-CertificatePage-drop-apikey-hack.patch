@@ -1,0 +1,59 @@
+diff --git a/src/pages/CertificatePage.tsx b/src/pages/CertificatePage.tsx
+--- a/src/pages/CertificatePage.tsx
++++ b/src/pages/CertificatePage.tsx
+@@
+-// ---- RFC3161 FreeTSA Timestamp API ----
+-const applyRFC3161Timestamp = async (certId: string, hash: string) => {
+-  try {
+-    // 👑 ユーザーの現在の身分証（トークン）を取得
+-    const { data: { session } } = await supabase.auth.getSession();
+-    
+-    const response = await fetch('/api/timestamp', {
+-      method: 'POST',
+-      headers: { 
+-        'Content-Type': 'application/json',
+-        'Authorization': `Bearer ${session?.access_token}`,
+-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,      // 👑 環境変数の壁を越えてAPIキーを渡す
+-        'x-supabase-url': import.meta.env.VITE_SUPABASE_URL    // 👑 URLも確実にバックエンドへ渡す
+-      },
+-      body: JSON.stringify({ certId, hash }),
+-    });
+-    if (!response.ok) {
+-      const errorData = await response.json();
+-      throw new Error(errorData.error || 'タイムスタンプの取得に失敗しました');
+-    }
+-    return await response.json();
+-  } catch (error) {
+-    console.error('Timestamp request failed:', error);
+-    throw error;
+-  }
+-};
++// ---- RFC3161 FreeTSA Timestamp API ----
++// NOTE: api/timestamp.ts v2.1 はサーバー側で SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY を
++// 環境変数から取得し、ユーザー識別は JWT のみで完結する。
++// 旧仕様で必要だった `apikey` / `x-supabase-url` のクライアント送信は、ゼロトラスト設計上
++// 脆弱性源であるため完全に撤廃する（開発戦記 §21 準拠）。
++const applyRFC3161Timestamp = async (certId: string, hash: string) => {
++  const { data: { session } } = await supabase.auth.getSession();
++  if (!session?.access_token) {
++    throw new Error('セッションが切れています。再ログインしてください。');
++  }
++  const response = await fetch('/api/timestamp', {
++    method: 'POST',
++    headers: {
++      'Content-Type': 'application/json',
++      Authorization: `Bearer ${session.access_token}`,
++    },
++    credentials: 'omit',
++    body: JSON.stringify({ certId, hash }),
++  });
++  if (!response.ok) {
++    let msg = `HTTP ${response.status}`;
++    try {
++      const j = await response.json();
++      if (j?.error) msg = `${j.error}${j.reqId ? ` (req: ${j.reqId})` : ''}`;
++    } catch { /* non-JSON */ }
++    throw new Error(msg);
++  }
++  return response.json();
++};
