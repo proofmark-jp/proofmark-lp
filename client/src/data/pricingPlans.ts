@@ -1,7 +1,15 @@
 /**
  * Pricing SSOT
- * Home.tsx と Pricing.tsx の値ズレ・特徴ズレを構造的に防ぐ。
- * Free PDF発行可否、Lightの内容、Spot価格などはこのファイルだけが正。
+ * ─────────────────────────────────────────────
+ * Home / Pricing / FAQ の値ズレ・特徴ズレを構造的に防ぐ。
+ * 価格・機能・対象顧客の単一の正はこのファイルだけ。
+ *
+ * 設計：
+ *  - Free は "本番に足りない" 設計（試用・入口）。
+ *  - Spot はアカウント不要のワンショット販売。月額を嫌う層を回収。
+ *  - Creator は "案件単位の証拠運用" の主戦場。
+ *  - Studio はチーム / 監査 / 案件台帳 で LTV を取りに行く本命。
+ *  - Business / API は今は表に出しすぎない（信頼基盤が整うまで保留）。
  */
 
 export type PlanId = 'free' | 'spot' | 'creator' | 'studio' | 'business';
@@ -31,7 +39,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'free',
     name: 'Free',
-    tagline: 'まずは無料で試したい方',
+    tagline: 'まずは「証跡が残る」を体感したい方',
     priceLabel: '¥0',
     priceUnit: '/月',
     audience: 'ProofMarkを試したい個人クリエイター',
@@ -42,31 +50,32 @@ export const PRICING_PLANS: PricingPlan[] = [
       { label: '公開ポートフォリオ機能', state: 'include' },
       { label: '検証URLの発行・共有', state: 'include' },
       { label: 'PDF証明書の発行', state: 'exclude' },
-      { label: 'Evidence Pack の納品形式ダウンロード', state: 'exclude' },
+      { label: 'Evidence Pack（納品形式ダウンロード）', state: 'exclude' },
     ],
   },
   {
     id: 'spot',
     name: 'Spot',
-    tagline: '必要な時だけ手軽に使いたい方',
-    priceLabel: '¥100',
-    priceUnit: '/回',
-    audience: '単発で1件だけ証明を残したい方',
+    tagline: '今この1案件だけ、納品信頼を添えたい',
+    priceLabel: '¥480',
+    priceUnit: '/件',
+    audience: '単発で1案件だけEvidence Packを使いたい方',
     ctaLabel: { authed: '今すぐ1件発行する', guest: '今すぐ1件発行する' },
     ctaHref: { authed: '/spot-issue', guest: '/spot-issue' },
     features: [
       { label: 'アカウント登録不要', state: 'include', highlight: 'accent' },
-      { label: 'PDF証明書（1件発行）', state: 'include' },
+      { label: '提出用PDF証明書（1案件発行）', state: 'include' },
       { label: 'Webタイムスタンプ証明', state: 'include' },
-      { label: 'Evidence Pack（簡易版）ダウンロード', state: 'include' },
-      { label: '公開ポートフォリオ保存', state: 'exclude' },
+      { label: 'Evidence Pack ダウンロード', state: 'include', highlight: 'accent' },
+      { label: 'NDA案件の非公開モード', state: 'include' },
+      { label: '履歴の保存・案件整理（使い切り）', state: 'exclude' },
     ],
   },
   {
     id: 'creator',
     name: 'Creator',
-    tagline: '本気で納品信頼を運用したい個人',
-    priceLabel: '¥980',
+    tagline: '受託案件の「納品の説明コスト」を構造的に下げる',
+    priceLabel: '¥1,480',
     priceUnit: '/月',
     audience: '受注クリエイター・有償案件を持つ個人',
     recommended: true,
@@ -75,19 +84,19 @@ export const PRICING_PLANS: PricingPlan[] = [
     ctaHref: { authed: '/settings#plan', guest: '/auth?mode=signup&plan=creator' },
     features: [
       { label: 'PDF証明書 無制限', state: 'include', highlight: 'primary' },
-      { label: 'Webタイムスタンプ証明 無制限', state: 'include', highlight: 'primary' },
-      { label: 'Evidence Pack 納品形式ダウンロード', state: 'include', highlight: 'accent' },
+      { label: 'Evidence Pack（フル版）ダウンロード', state: 'include', highlight: 'accent' },
       { label: '案件・クライアント単位の整理', state: 'include' },
-      { label: 'クライアント提出用テンプレート', state: 'include' },
+      { label: 'クライアント提出用テンプレ（日/英）', state: 'include' },
       { label: '公開ポートフォリオ + 埋め込みウィジェット', state: 'include' },
-      { label: 'C2PAメタデータ読取', state: 'planned' },
+      { label: 'NDA案件の“黒い石板”表示モード', state: 'include' },
+      { label: 'C2PAメタデータ読取連携', state: 'planned' },
     ],
   },
   {
     id: 'studio',
     name: 'Studio',
     tagline: 'チームで案件信頼を運用するスタジオ向け',
-    priceLabel: '¥3,980',
+    priceLabel: '¥4,980',
     priceUnit: '/月',
     audience: '小規模制作会社・チーム',
     ctaLabel: { authed: 'Studioに切り替える', guest: 'Studioを予約する' },
@@ -104,7 +113,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'business',
     name: 'Business / API',
-    tagline: 'API・SLA・商用TSAが必要な企業向け',
+    tagline: 'API・SLA・商用TSAが必要な制作会社・出版社向け',
     priceLabel: 'お問い合わせ',
     priceUnit: '',
     audience: '制作会社・出版社・プラットフォーム',
@@ -112,14 +121,27 @@ export const PRICING_PLANS: PricingPlan[] = [
     ctaHref: { authed: '/contact', guest: '/contact' },
     features: [
       { label: 'API / Webhook', state: 'include' },
-      { label: '商用TSA・SLA', state: 'include' },
-      { label: '導入支援・DPA', state: 'include' },
-      { label: '監査証跡 / 長期検証', state: 'include' },
+      { label: '商用TSA（GlobalSign/DigiCert級）への切替', state: 'include' },
+      { label: 'SLA / DPA', state: 'include' },
+      { label: '導入支援・監査証跡 / 長期検証 (LTV)', state: 'include' },
     ],
   },
 ];
 
 export const FOUNDER_OFFER = {
-  text: '※ 先着100名はCreatorプラン3ヶ月無料 + 創設者バッジ',
+  text: '※ 先着100名は Creator プラン 3ヶ月無料 + 創設者バッジ',
   highlight: '#BC78FF',
 };
+
+/**
+ * Pricing 設計の前提（コードを編集する人へのメモ）
+ * ─────────────────────────────────────────────
+ *  1. 値の正は本ファイルのみ。Home.tsx / Pricing.tsx / Faq.tsx は
+ *     PRICING_PLANS を import して描画すること（直書き禁止）。
+ *  2. priceLabel と features の文言は、PROOFMARK_COPY と矛盾しないこと。
+ *     特に "改ざん不可能" "法的に勝てる" 等の断定は禁止。
+ *  3. Creator を ¥1,480 にしているのは「重要なものを安すぎて売らない」
+ *     という意思決定。値下げ提案は Mixpanel/Posthog でのCVRデータ取得後に行う。
+ *  4. Free は本番運用に足りない設計（PDFとEvidence Packを除外）にする。
+ *     "Free無制限" は信頼商品では危険なので避ける。
+ */

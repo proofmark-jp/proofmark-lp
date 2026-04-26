@@ -1,81 +1,115 @@
+import { motion } from 'framer-motion';
 import { Link } from 'wouter';
-import { ShieldCheck, ShieldAlert, Activity } from 'lucide-react';
-import { PROOFMARK_COPY } from '../lib/proofmark-copy';
+import { CheckCircle2, XCircle, Activity, ArrowRight } from 'lucide-react';
+import { PROOFMARK_COPY } from '@/lib/proofmark-copy';
 
 /**
- * ヒーロー直下に固定表示する3カード。
- * レポート指摘の「ヒーロー直下に証明する/しない/現在TSA」をそのまま実装。
- * UI言語と Trust Center / FAQ の表現を一致させるため、本コンポーネントは
- * proofmark-copy.ts (SSOT) のテキストだけを使う。
+ * TrustSignalRow
+ * ─────────────────────────────────────────────
+ * ヒーロー直下に「証明する / 証明しない / 現在のTSA運用」を3カードで固定表示する。
+ * 信頼商品としてのページ間整合を、最初のスクロール領域で担保する最重要セクション。
+ *
+ * - 文言は PROOFMARK_COPY.trustSignals が単一の正。
+ * - "誠実な開示" を視覚的にダウングレードしないよう、
+ *   ✓ / ✗ / ▲ で同列に扱う（×を強調しすぎない）。
+ * - "現在の運用" カードは Trust Center §4 への導線として機能する。
  */
+
+const cardBase =
+  'group relative overflow-hidden rounded-2xl border bg-[#0D0B24]/85 p-6 backdrop-blur-md transition-all duration-300';
+
 export default function TrustSignalRow() {
-  const c = PROOFMARK_COPY;
+  const t = PROOFMARK_COPY.trustSignals;
 
   return (
     <section
-      aria-label="ProofMarkの整合性ステータス"
-      className="relative z-10 mx-auto -mt-8 w-full max-w-6xl px-4 sm:px-6 lg:px-8"
+      aria-label="ProofMarkが証明すること、証明しないこと、現在の運用"
+      className="relative z-10 mx-auto -mt-12 max-w-6xl px-4 sm:px-6 lg:px-8"
     >
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-[#00D4AA]/25 bg-[#0A0F1F]/85 p-6 backdrop-blur-md shadow-[0_10px_60px_rgba(0,212,170,0.10)]">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#00D4AA]/30 bg-[#00D4AA]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#00D4AA]">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            証明すること
-          </div>
-          <h3 className="text-base font-bold text-white">{c.proves.title}</h3>
-          <ul className="mt-3 space-y-2 text-sm leading-6 text-[#C8C2EA]">
-            {c.proves.bullets.map((line) => (
-              <li key={line} className="flex gap-2">
-                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#00D4AA]" aria-hidden />
-                <span>{line}</span>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-5">
+        {/* ✓ 証明すること */}
+        <motion.article
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-40px' }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          className={`${cardBase} border-[#00D4AA]/25 hover:border-[#00D4AA]/55`}
+        >
+          <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-[#00D4AA]/10 blur-2xl" />
+          <header className="mb-3 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-[#00D4AA]" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#00D4AA]">
+              {t.proves.label}
+            </span>
+          </header>
+          <h3 className="mb-3 text-lg font-bold text-white">{t.proves.title}</h3>
+          <ul className="space-y-2 text-sm leading-relaxed text-[#D4D0F4]">
+            {t.proves.points.map((p) => (
+              <li key={p} className="flex gap-2">
+                <span className="mt-[6px] inline-block h-1 w-1 shrink-0 rounded-full bg-[#00D4AA]" />
+                <span>{p}</span>
               </li>
             ))}
           </ul>
-        </div>
+        </motion.article>
 
-        <div className="rounded-2xl border border-[#F0BB38]/25 bg-[#0A0F1F]/85 p-6 backdrop-blur-md shadow-[0_10px_60px_rgba(240,187,56,0.08)]">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#F0BB38]/30 bg-[#F0BB38]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#F0BB38]">
-            <ShieldAlert className="h-3.5 w-3.5" />
-            証明しないこと
-          </div>
-          <h3 className="text-base font-bold text-white">{c.notProves.title}</h3>
-          <ul className="mt-3 space-y-2 text-sm leading-6 text-[#C8C2EA]">
-            {c.notProves.bullets.map((line) => (
-              <li key={line} className="flex gap-2">
-                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#F0BB38]" aria-hidden />
-                <span>{line}</span>
+        {/* ✗ 証明しないこと */}
+        <motion.article
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-40px' }}
+          transition={{ duration: 0.45, delay: 0.07, ease: [0.22, 1, 0.36, 1] }}
+          className={`${cardBase} border-[#F0BB38]/25 hover:border-[#F0BB38]/55`}
+        >
+          <div className="pointer-events-none absolute -left-10 -top-10 h-32 w-32 rounded-full bg-[#F0BB38]/10 blur-2xl" />
+          <header className="mb-3 flex items-center gap-2">
+            <XCircle className="h-4 w-4 text-[#F0BB38]" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#F0BB38]">
+              {t.notProves.label}
+            </span>
+          </header>
+          <h3 className="mb-3 text-lg font-bold text-white">{t.notProves.title}</h3>
+          <ul className="space-y-2 text-sm leading-relaxed text-[#D4D0F4]">
+            {t.notProves.points.map((p) => (
+              <li key={p} className="flex gap-2">
+                <span className="mt-[6px] inline-block h-1 w-1 shrink-0 rounded-full bg-[#F0BB38]" />
+                <span>{p}</span>
               </li>
             ))}
           </ul>
-        </div>
+        </motion.article>
 
-        <div className="rounded-2xl border border-[#6C3EF4]/30 bg-[#0A0F1F]/85 p-6 backdrop-blur-md shadow-[0_10px_60px_rgba(108,62,244,0.10)]">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#6C3EF4]/30 bg-[#6C3EF4]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-[#BC78FF]">
-            <Activity className="h-3.5 w-3.5" />
-            現在のTSAステータス
-          </div>
-          <h3 className="text-base font-bold text-white">{c.trust.title}</h3>
-          <ul className="mt-3 space-y-2 text-sm leading-6 text-[#C8C2EA]">
-            <li className="flex gap-2">
-              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#BC78FF]" aria-hidden />
-              <span>{c.trust.rfc3161}</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#BC78FF]" aria-hidden />
-              <span>{c.trust.privateProof}</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#BC78FF]" aria-hidden />
-              <span>{c.trust.independent}</span>
-            </li>
+        {/* ▲ 現在の運用（TSAステータスへの導線） */}
+        <motion.article
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-40px' }}
+          transition={{ duration: 0.45, delay: 0.14, ease: [0.22, 1, 0.36, 1] }}
+          className={`${cardBase} border-[#6C3EF4]/30 hover:border-[#6C3EF4]/60`}
+        >
+          <div className="pointer-events-none absolute -right-12 -bottom-12 h-36 w-36 rounded-full bg-[#6C3EF4]/15 blur-2xl" />
+          <header className="mb-3 flex items-center gap-2">
+            <Activity className="h-4 w-4 text-[#BC78FF]" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#BC78FF]">
+              {t.operation.label}
+            </span>
+          </header>
+          <h3 className="mb-3 text-lg font-bold text-white">{t.operation.title}</h3>
+          <ul className="space-y-2 text-sm leading-relaxed text-[#D4D0F4]">
+            {t.operation.points.map((p) => (
+              <li key={p} className="flex gap-2">
+                <span className="mt-[6px] inline-block h-1 w-1 shrink-0 rounded-full bg-[#BC78FF]" />
+                <span>{p}</span>
+              </li>
+            ))}
           </ul>
-          <Link
-            href={c.trust.tsaLinkHref}
-            className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-[#00D4AA] hover:text-white transition-colors"
-          >
-            {c.trust.tsaLinkLabel} →
+          <Link href={t.operation.ctaHref}>
+            <button className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-[#BC78FF] transition-colors hover:text-white">
+              {t.operation.ctaLabel}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
           </Link>
-        </div>
+        </motion.article>
       </div>
     </section>
   );

@@ -53,7 +53,7 @@ export default function Footer() {
               </span>
             </Link>
             <p className="text-[#A8A0D8] text-sm leading-relaxed max-w-md">
-              {PROOFMARK_COPY.brandLong}。SHA-256ハッシュとRFC3161タイムスタンプによる「制作事実の客観証拠」を、
+              {PROOFMARK_COPY.brandLong}SHA-256ハッシュとRFC3161タイムスタンプによる「制作事実の客観証拠」を、
               Evidence Pack として納品できる SaaS。著作権を保証する代わりに、
               <span className="text-[#F0EFF8]"> あなたの制作と納品を「客観証拠つき」で運用できる状態にします。</span>
             </p>

@@ -1,6 +1,7 @@
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Article } from "@/data/articles";
 import { Clock, ExternalLink, ArrowRight, X, BookOpen } from "lucide-react";
+import { useAuth } from '@/hooks/useAuth';
 
 interface ArticleDrawerProps {
   article: Article | null;
@@ -15,6 +16,7 @@ export default function ArticleDrawer({
   onClose,
   onRegisterClick,
 }: ArticleDrawerProps) {
+  const { user } = useAuth();
   if (!article) return null;
 
   return (
@@ -134,26 +136,28 @@ export default function ArticleDrawer({
         </div>
 
         {/* 固定CTA（ドロワー下部） */}
-        <div className="border-t border-border px-6 py-5 space-y-3 bg-background">
-          <p className="text-sm text-muted text-center">
-            学んだら、次のステップへ
-          </p>
-          <button
-            onClick={() => {
-              onClose();
-              if (onRegisterClick) {
-                setTimeout(onRegisterClick, 300);
-              }
-            }}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-primary/80 px-6 py-3 font-semibold text-primary-foreground transition-all duration-300 hover:gap-3 hover:shadow-lg hover:shadow-primary/30 active:scale-95"
-          >
-            無料で先行登録する
-            <ArrowRight className="h-4 w-4" />
-          </button>
-          <p className="text-xs text-muted text-center">
-            クレジットカード不要・いつでも解除OK
-          </p>
-        </div>
+        {!user && (
+          <div className="border-t border-border px-6 py-5 space-y-3 bg-background">
+            <p className="text-sm text-muted text-center">
+              学んだら、次のステップへ
+            </p>
+            <button
+              onClick={() => {
+                onClose();
+                if (onRegisterClick) {
+                  setTimeout(onRegisterClick, 300);
+                }
+              }}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-primary/80 px-6 py-3 font-semibold text-primary-foreground transition-all duration-300 hover:gap-3 hover:shadow-lg hover:shadow-primary/30 active:scale-95"
+            >
+              無料で先行登録する
+              <ArrowRight className="h-4 w-4" />
+            </button>
+            <p className="text-xs text-muted text-center">
+              クレジットカード不要・いつでも解除OK
+            </p>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );

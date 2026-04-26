@@ -1,11 +1,14 @@
-import { useState } from "react";
-import { ChevronDown, ArrowRight } from "lucide-react";
-import { Link } from "wouter";
+import { useState } from 'react';
+import { ChevronDown, ArrowRight } from 'lucide-react';
+import { Link } from 'wouter';
+import { PRICING_PLANS } from '@/data/pricingPlans';
 
 /**
- * FAQAccordion Component
- * 修正版：最新のシステム仕様（ブラウザ内ハッシュ計算・ハイブリッドクラウド保存）に完全準拠
- * 追加：AIクリエイター向けのプライバシー・学習利用に関するFAQを強化
+ * FAQAccordion (Home 用ショート版)
+ * ─────────────────────────────────────────────
+ * - 価格表記は data/pricingPlans.ts と完全一致させる。
+ * - 「絶対」「100%」「必ず」など断定表現は廃し、Trust Center の誠実な開示と整合させる。
+ * - 詳細は /faq に誘導し、ホームでは「不安を増幅しない」最重要4問のみ。
  */
 
 interface FAQItem {
@@ -14,35 +17,70 @@ interface FAQItem {
   answer: React.ReactNode;
 }
 
+const getPrice = (planId: string) => {
+  const plan = PRICING_PLANS.find(p => p.id === planId);
+  return plan ? `${plan.priceLabel}${plan.priceUnit}` : '';
+};
+
 const faqItems: FAQItem[] = [
   {
-    id: "is-data-safe",
-    question: "データは本当に安全ですか？",
-    answer: "はい。ProofMarkの最も重要な特徴として、ハッシュ計算（暗号化）はすべて「あなたのブラウザ内」で完結し、サーバーに負荷や情報を渡しません。その後、ポートフォリオ公開用の作品データのみが、アプリサーバー（Vercel）を一切バイパスして、堅牢なSupabase Storageへ直接暗号化転送されます。通信経路での漏洩リスクを極限まで抑えた設計です。",
-  },
-  {
-    id: "ai-training-use",
-    question: "アップロードした画像がAIの学習に使われることはありますか？",
-    answer: "絶対に（100%）ありません。ProofMarkはクリエイターの権利を保護するためのサービスであり、お預かりしたポートフォリオ用のデータを生成AIの学習データとして第三者に提供したり、自社で利用したりすることは一切ありません。",
-  },
-  {
-    id: "admin-visibility",
-    question: "画像データは運営側に見られませんか？",
-    answer: "ハッシュ値はユーザーのブラウザ内で計算されるため、証明書を発行するだけであれば運営が画像の内容を知ることはシステム上不可能です。また、クラウドに保存されたポートフォリオ用の画像データについても、厳格なセキュリティポリシー（RLS）で保護されており、運営スタッフが意図的にユーザーの非公開画像を閲覧する仕組みにはなっていません。",
-  },
-  {
-    id: "pricing",
-    question: "料金プランについて教えてください",
+    id: 'is-data-safe',
+    question: '原画はサーバーに送られますか？',
     answer: (
       <>
-        <p>ProofMarkは「証明回数」ではなく「納品信頼の運用」に基づいた料金体系です。</p>
+        <p>
+          Private Proof モードでは、原画はサーバーに送信されません。ハッシュ計算（SHA-256）はあなたのブラウザ内で完結し、ProofMark が受け取るのはハッシュ値とメタデータのみです。
+        </p>
+        <p className="mt-2">
+          Shareable Proof モードを選んだ場合のみ、SNS共有・ポートフォリオ表示用の画像が、Vercelをバイパスして Supabase Storage に直接転送されます。どちらのモードを使っているかはダッシュボードで明示されます。
+        </p>
+      </>
+    ),
+  },
+  {
+    id: 'ai-training-use',
+    question: 'アップロードした画像がAIの学習に使われることはありますか？',
+    answer:
+      'ProofMarkは、お預かりした画像データを生成AIの学習データとして外部提供したり、自社で利用することはありません。Private Proof モードではそもそも画像がサーバーに到達しないため、構造的に学習利用が不可能です。',
+  },
+  {
+    id: 'admin-visibility',
+    question: '画像データは運営側に見られませんか？',
+    answer:
+      'ハッシュ値はユーザーのブラウザ内で計算されるため、Private Proof モードで証明書を発行する場合、運営が画像の内容を知ることはシステム上不可能です。Shareable Proof でクラウド保存される画像は厳格なRLSで保護され、運営スタッフが意図的に非公開画像を閲覧できる導線は実装されていません。',
+  },
+  {
+    id: 'pricing',
+    question: '料金プランについて教えてください',
+    answer: (
+      <>
+        <p>
+          ProofMarkは「証明回数」ではなく「納品信頼の運用」に基づいた料金体系です。
+        </p>
         <ul className="list-disc pl-5 space-y-1 my-4">
-          <li><strong>Free（0円）</strong>: 月30件までのWeb証明（PDF発行は含みません）</li>
-          <li><strong>Spot（1回100円）</strong>: 単発でのEvidence Pack発行（登録不要）</li>
-          <li><strong>Creator（月額980円）</strong>: 無制限の証明とEvidence Pack納品機能</li>
-          <li><strong>Studio（月額3,980円）</strong>: チーム管理、監査ログを含むスタジオ向け</li>
+          <li>
+            <strong>Free（{getPrice('free')}）</strong>: 月30件までのWeb証明（PDF発行は含みません）
+          </li>
+          <li>
+            <strong>Spot（{getPrice('spot')}）</strong>: 単発でのEvidence Pack発行（登録不要）
+          </li>
+          <li>
+            <strong>Creator（{getPrice('creator')}）</strong>: 無制限PDF・Evidence Pack・案件単位整理・NDA表示
+          </li>
+          <li>
+            <strong>Studio（{getPrice('studio')}）</strong>: チーム管理・WORM監査ログ・Chain of Evidence
+          </li>
         </ul>
-        <p>詳細は<a href="/pricing" style={{ color: "#00D4AA", textDecoration: "underline" }}>料金プランページ</a>をご確認ください。</p>
+        <p>
+          詳細は
+          <Link
+            href="/pricing"
+            style={{ color: '#00D4AA', textDecoration: 'underline' }}
+          >
+            料金プランページ
+          </Link>
+          をご確認ください。
+        </p>
       </>
     ),
   },
@@ -57,7 +95,7 @@ export const FAQAccordion = () => {
         <div className="text-center mb-12">
           <h2 className="text-4xl font-black mb-4">よくある質問</h2>
           <p className="text-muted max-w-2xl mx-auto">
-            AIクリエイターが疑問に思うことを、すべてお答えします。
+            運用前に知っておきたい、最重要の4問。
           </p>
         </div>
 
@@ -73,10 +111,11 @@ export const FAQAccordion = () => {
                 aria-expanded={openId === item.id}
                 aria-controls={`faq-${item.id}`}
               >
-                <span className="font-bold text-foreground pr-4">{item.question}</span>
+                <span className="font-bold text-foreground pr-4">
+                  {item.question}
+                </span>
                 <ChevronDown
-                  className={`w-5 h-5 text-primary flex-shrink-0 transition-transform duration-300 ${openId === item.id ? "rotate-180" : ""
-                    }`}
+                  className={`w-5 h-5 text-primary flex-shrink-0 transition-transform duration-300 ${openId === item.id ? 'rotate-180' : ''}`}
                 />
               </button>
 
@@ -85,7 +124,9 @@ export const FAQAccordion = () => {
                   id={`faq-${item.id}`}
                   className="px-6 py-4 border-t border-border bg-secondary/30 animate-in fade-in duration-200"
                 >
-                  <p className="text-muted leading-relaxed text-sm">{item.answer}</p>
+                  <div className="text-muted leading-relaxed text-sm">
+                    {item.answer}
+                  </div>
                 </div>
               )}
             </div>
@@ -95,16 +136,25 @@ export const FAQAccordion = () => {
         <div className="mt-12 p-6 rounded-xl bg-primary/10 border border-primary/20">
           <p className="text-sm text-muted text-center">
             その他のご質問は、
-            <a href="https://x.com/ProofMark_jp" target="_blank" rel="noopener noreferrer" style={{ color: "#6C3EF4", textDecoration: "underline" }}>
+            <a
+              href="https://x.com/ProofMark_jp"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: '#6C3EF4', textDecoration: 'underline' }}
+            >
               お問い合わせ
             </a>
             までお気軽にどうぞ。
           </p>
         </div>
-        
+
         <div className="mt-8 flex justify-center">
-          <Link href="/faq" className="inline-flex items-center gap-2 text-[#00D4AA] hover:text-white font-bold transition-colors">
-            詳細なFAQ・法的有効性について確認する <ArrowRight className="w-4 h-4" />
+          <Link
+            href="/faq"
+            className="inline-flex items-center gap-2 text-[#00D4AA] hover:text-white font-bold transition-colors"
+          >
+            詳細なFAQ・法的有効性について確認する{' '}
+            <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       </div>

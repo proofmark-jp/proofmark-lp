@@ -1,39 +1,52 @@
-import { useState, useEffect } from "react";
-import { Link } from "wouter";
-import { toast } from "sonner";
-import { Lock, Database, Check, Shield, Zap, Award, Share2, CheckCircle } from "lucide-react";
-import { motion, useScroll, useTransform } from "framer-motion";
-
-import CertificateUpload from "@/components/CertificateUpload";
-import { useAuth } from "@/hooks/useAuth";
-import { FAQAccordion } from "@/components/FAQAccordion";
-import { SupportedToolsSection } from "@/components/SupportedToolsSection";
-import { DeveloperMessage } from "@/components/DeveloperMessage";
-import { sendConfirmationEmail } from "@/lib/email";
-import LearningSection from "@/components/LearningSection";
-import { SchemaScript } from "@/components/SchemaScript";
-import Navbar from "@/components/Navbar";
-import { supabase } from "@/lib/supabase";
-import SEO from "@/components/SEO";
-import TrustSignalRow from "@/components/TrustSignalRow";
-import EvidencePackTeaser from "@/components/EvidencePackTeaser";
-import { PROOFMARK_COPY } from "@/lib/proofmark-copy";
-import { PRICING_PLANS, FOUNDER_OFFER } from "@/data/pricingPlans";
-import founderBadge from "../assets/logo/badges/proofmark-badge-founder.svg";
+import type React from 'react';
+import { useState, useEffect } from 'react';
+import { Link } from 'wouter';
+import { toast } from 'sonner';
 import {
-  fadeInVariants,
+  Lock,
+  Shield,
+  Share2,
+  CheckCircle,
+  ArrowRight,
+  Minus,
+  Star,
+} from 'lucide-react';
+import { motion, useScroll, useTransform } from 'framer-motion';
+
+import CertificateUpload from '@/components/CertificateUpload';
+import { useAuth } from '@/hooks/useAuth';
+import { FAQAccordion } from '@/components/FAQAccordion';
+import { SupportedToolsSection } from '@/components/SupportedToolsSection';
+import { DeveloperMessage } from '@/components/DeveloperMessage';
+import { sendConfirmationEmail } from '@/lib/email';
+import LearningSection from '@/components/LearningSection';
+import { SchemaScript } from '@/components/SchemaScript';
+import Navbar from '@/components/Navbar';
+import { supabase } from '@/lib/supabase';
+import SEO from '@/components/SEO';
+import TrustSignalRow from '@/components/TrustSignalRow';
+import EvidencePackTeaser from '@/components/EvidencePackTeaser';
+import EngineeringPillarsSection from '@/components/EngineeringPillarsSection';
+import UseCasesSection from '@/components/UseCasesSection';
+import { PROOFMARK_COPY } from '@/lib/proofmark-copy';
+import { PRICING_PLANS, FOUNDER_OFFER } from '@/data/pricingPlans';
+import founderBadge from '../assets/logo/badges/proofmark-badge-founder.svg';
+import {
   slideInVariants,
   staggerContainer,
   buttonVariants,
-} from "@/lib/animations";
+} from '@/lib/animations';
 
-// ── Reusable scroll-triggered wrapper ──────────────────────────
+/* ────────────────────────────────────────────
+ * Reusable scroll-triggered wrapper
+ * children を optional にして空ラッパーの誤検出（TS2741）を回避する
+ * ──────────────────────────────────────────── */
 const FadeInSection = ({
   children,
   delay = 0,
-  className = "",
+  className = '',
 }: {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   delay?: number;
   className?: string;
 }) => (
@@ -41,14 +54,16 @@ const FadeInSection = ({
     className={className}
     initial={{ opacity: 0, y: 24 }}
     whileInView={{ opacity: 1, y: 0 }}
-    viewport={{ once: true, margin: "-80px" }}
+    viewport={{ once: true, margin: '-80px' }}
     transition={{ duration: 0.5, delay, ease: [0.22, 1, 0.36, 1] }}
   >
     {children}
   </motion.div>
 );
 
-// ── Spinning Glow Orb (hero BG decoration) ─────────────────────
+/* ────────────────────────────────────────────
+ * Hero glow orb decoration
+ * ──────────────────────────────────────────── */
 const GlowOrb = ({
   color,
   size,
@@ -77,8 +92,8 @@ const GlowOrb = ({
 );
 
 export default function Home() {
-  const [heroEmail, setHeroEmail] = useState("");
-  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [heroEmail, setHeroEmail] = useState('');
+  const [waitlistEmail, setWaitlistEmail] = useState('');
   const [isHeroSubmitting, setIsHeroSubmitting] = useState(false);
   const [isWaitlistSubmitting, setIsWaitlistSubmitting] = useState(false);
 
@@ -86,8 +101,8 @@ export default function Home() {
   SchemaScript();
 
   /**
-   * 公開数バッジ。レポート指摘どおり、件数が少ない間は逆効果になり得るため、
-   * 一定閾値（DISPLAY_THRESHOLD）を満たさない場合は "β版公開中" 表示に切り替える。
+   * 公開数バッジ。件数が少ない間は逆効果のため、
+   * 一定閾値（DISPLAY_THRESHOLD）未満は "β版公開中" 表示に切り替える。
    */
   const DISPLAY_THRESHOLD = 1000;
   const [totalCerts, setTotalCerts] = useState<number | null>(null);
@@ -96,11 +111,11 @@ export default function Home() {
     async function fetchTotalCerts() {
       try {
         const { count } = await supabase
-          .from("certificates")
-          .select("*", { count: "exact", head: true });
+          .from('certificates')
+          .select('*', { count: 'exact', head: true });
         if (count !== null) setTotalCerts(count);
       } catch (err) {
-        console.error("Failed to fetch cert count:", err);
+        console.error('Failed to fetch cert count:', err);
       }
     }
     fetchTotalCerts();
@@ -124,17 +139,19 @@ export default function Home() {
       .insert([{ email: heroEmail }]);
 
     if (dbError && dbError.code === '23505') {
-      toast.info("このメールアドレスは既に先行登録されています。ご期待いただきありがとうございます！");
+      toast.info(
+        'このメールアドレスは既に先行登録されています。ご期待いただきありがとうございます！',
+      );
       setIsHeroSubmitting(false);
       return;
     }
 
     const emailResult = await sendConfirmationEmail(heroEmail);
     if (emailResult.success) {
-      toast.success("登録完了！確認メールをお送りしました。");
-      setHeroEmail("");
+      toast.success('登録完了！確認メールをお送りしました。');
+      setHeroEmail('');
     } else {
-      toast.error(emailResult.error || "登録に失敗しました");
+      toast.error(emailResult.error || '登録に失敗しました');
     }
     setIsHeroSubmitting(false);
   };
@@ -149,17 +166,19 @@ export default function Home() {
       .insert([{ email: waitlistEmail }]);
 
     if (dbError && dbError.code === '23505') {
-      toast.info("このメールアドレスは既に先行登録されています。ご期待いただきありがとうございます！");
+      toast.info(
+        'このメールアドレスは既に先行登録されています。ご期待いただきありがとうございます！',
+      );
       setIsWaitlistSubmitting(false);
       return;
     }
 
     const emailResult = await sendConfirmationEmail(waitlistEmail);
     if (emailResult.success) {
-      toast.success("ウェイティングリストに追加されました！");
-      setWaitlistEmail("");
+      toast.success('ウェイティングリストに追加されました！');
+      setWaitlistEmail('');
     } else {
-      toast.error(emailResult.error || "登録に失敗しました");
+      toast.error(emailResult.error || '登録に失敗しました');
     }
     setIsWaitlistSubmitting(false);
   };
@@ -172,26 +191,31 @@ export default function Home() {
         url="https://proofmark.jp/"
         type="website"
         jsonLd={{
-          "@context": "https://schema.org",
-          "@type": "WebSite",
-          "url": "https://proofmark.jp/",
-          "name": "ProofMark",
-          "description": "AIクリエイターのためのデジタル存在証明インフラ",
-          "publisher": {
-            "@type": "Organization",
-            "name": "ProofMark",
-            "logo": {
-              "@type": "ImageObject",
-              "url": "https://proofmark.jp/ogp-image.png"
-            }
-          }
+          '@context': 'https://schema.org',
+          '@type': 'WebSite',
+          url: 'https://proofmark.jp/',
+          name: 'ProofMark',
+          description: PROOFMARK_COPY.metaDescription,
+          publisher: {
+            '@type': 'Organization',
+            name: 'ProofMark',
+            logo: {
+              '@type': 'ImageObject',
+              url: 'https://proofmark.jp/ogp-image.png',
+            },
+          },
         }}
       />
-      <div id="top" className="min-h-screen bg-background text-foreground overflow-clip">
+      <div
+        id="top"
+        className="min-h-screen bg-background text-foreground overflow-clip"
+      >
         <Navbar user={user} signOut={signOut} />
 
-        {/* ── Hero Section ────────────────────────────────────── */}
-        <section className="relative min-h-[90vh] flex items-center overflow-hidden">
+        {/* ─────────────────────────────────
+         * Hero
+         * ───────────────────────────────── */}
+        <section className="relative min-h-[92vh] flex items-center overflow-hidden">
           <GlowOrb color="#6c3ef4" size={520} top="-10%" left="-8%" opacity={0.18} />
           <GlowOrb color="#00d4aa" size={380} top="50%" left="60%" opacity={0.12} />
           <GlowOrb color="#6c3ef4" size={260} top="70%" left="10%" opacity={0.1} />
@@ -200,8 +224,8 @@ export default function Home() {
             className="absolute inset-0 pointer-events-none"
             style={{
               backgroundImage:
-                "linear-gradient(rgba(108,62,244,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(108,62,244,0.04) 1px, transparent 1px)",
-              backgroundSize: "60px 60px",
+                'linear-gradient(rgba(108,62,244,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(108,62,244,0.04) 1px, transparent 1px)',
+              backgroundSize: '60px 60px',
             }}
           />
 
@@ -219,21 +243,45 @@ export default function Home() {
             className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-24"
             style={{ y: heroY }}
           >
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%" }}>
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#00D4AA]/10 border border-[#00D4AA]/30 text-[#00D4AA] text-xs sm:text-sm font-bold tracking-widest uppercase mb-8">
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '100%',
+              }}
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#00D4AA]/10 border border-[#00D4AA]/30 text-[#00D4AA] text-[11px] sm:text-xs font-bold tracking-widest uppercase mb-8">
                 {heroEyebrowLabel}
               </div>
-              <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight mb-6 leading-tight text-center">
-                {PROOFMARK_COPY.hero.title1}<br className="hidden sm:block" />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00D4AA] to-[#6C3EF4]">
+
+              <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight mb-6 leading-[1.08] text-center">
+                {PROOFMARK_COPY.hero.title1}
+                <br className="hidden sm:block" />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00D4AA] to-[#BC78FF] whitespace-nowrap">
                   {PROOFMARK_COPY.hero.title2}
                 </span>
               </h1>
-              <p className="text-[#A8A0D8] text-base sm:text-xl max-w-3xl mx-auto mb-10 leading-relaxed text-center">
+
+              <p className="text-[#A8A0D8] text-base sm:text-lg max-w-2xl mx-auto mb-8 leading-relaxed text-center">
                 {PROOFMARK_COPY.hero.subtitle}
               </p>
 
-              {/* Hero form / Dashboard CTA based on auth state */}
+              {/* hero badge row（補助訴求） */}
+              <div className="flex flex-wrap items-center justify-center gap-2 mb-10">
+                {PROOFMARK_COPY.hero.badges.map((b) => (
+                  <span
+                    key={b}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-[#D4D0F4] backdrop-blur-md"
+                  >
+                    <CheckCircle className="h-3 w-3 text-[#00D4AA]" />
+                    {b}
+                  </span>
+                ))}
+              </div>
+
+              {/* Hero CTA */}
               {user ? (
                 <motion.div
                   initial={{ opacity: 0, y: 16 }}
@@ -251,12 +299,14 @@ export default function Home() {
                 <>
                   <motion.form
                     onSubmit={handleHeroSubmit}
-                    className="flex flex-col sm:flex-row gap-3 mb-6 max-w-md w-full mx-auto"
+                    className="flex flex-col sm:flex-row gap-3 mb-4 max-w-md w-full mx-auto"
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.65, duration: 0.4 }}
                   >
-                    <label htmlFor="hero-email" className="sr-only">メールアドレス</label>
+                    <label htmlFor="hero-email" className="sr-only">
+                      メールアドレス
+                    </label>
                     <input
                       id="hero-email"
                       type="email"
@@ -266,17 +316,17 @@ export default function Home() {
                       disabled={isHeroSubmitting}
                       className="flex-1 px-6 py-4 rounded-full border transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
                       style={{
-                        background: "rgba(21,29,47,0.85)",
-                        borderColor: "rgba(42,42,78,0.8)",
-                        backdropFilter: "blur(8px)",
+                        background: 'rgba(21,29,47,0.85)',
+                        borderColor: 'rgba(42,42,78,0.8)',
+                        backdropFilter: 'blur(8px)',
                       }}
                       onFocus={(e) => {
-                        e.currentTarget.style.borderColor = "rgba(108,62,244,0.7)";
-                        e.currentTarget.style.boxShadow = "0 0 0 3px rgba(108,62,244,0.15)";
+                        e.currentTarget.style.borderColor = 'rgba(108,62,244,0.7)';
+                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(108,62,244,0.15)';
                       }}
                       onBlur={(e) => {
-                        e.currentTarget.style.borderColor = "rgba(42,42,78,0.8)";
-                        e.currentTarget.style.boxShadow = "none";
+                        e.currentTarget.style.borderColor = 'rgba(42,42,78,0.8)';
+                        e.currentTarget.style.boxShadow = 'none';
                       }}
                       required
                       aria-label="先行登録用のメールアドレス"
@@ -285,7 +335,7 @@ export default function Home() {
                       type="submit"
                       disabled={isHeroSubmitting}
                       className="px-8 py-4 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-70 disabled:cursor-wait"
-                      style={{ boxShadow: "0 0 20px rgba(108,62,244,0.4)" }}
+                      style={{ boxShadow: '0 0 20px rgba(108,62,244,0.4)' }}
                       variants={buttonVariants}
                       initial="rest"
                       whileHover="hover"
@@ -293,39 +343,76 @@ export default function Home() {
                     >
                       {isHeroSubmitting ? (
                         <>
-                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          <svg
+                            className="animate-spin h-4 w-4"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            />
                           </svg>
                           暗号化通信中...
                         </>
-                      ) : "先行アクセスを確保 ➔"}
+                      ) : (
+                        '無料で試す ➔'
+                      )}
                     </motion.button>
                   </motion.form>
+
+                  <Link href={PROOFMARK_COPY.hero.secondaryCta.href}>
+                    <button className="inline-flex items-center gap-2 text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors mb-6">
+                      {PROOFMARK_COPY.hero.secondaryCta.label}
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </Link>
 
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.8 }}
-                    style={{ fontSize: "14px", color: "#A8A0D8", marginTop: "16px", lineHeight: "1.5", wordBreak: "break-word", whiteSpace: "normal", textAlign: "center" }}
+                    style={{
+                      fontSize: '14px',
+                      color: '#A8A0D8',
+                      marginTop: '8px',
+                      lineHeight: '1.5',
+                      wordBreak: 'break-word',
+                      whiteSpace: 'normal',
+                      textAlign: 'center',
+                    }}
                   >
                     <p className="text-xs text-muted flex items-center justify-center gap-2 mb-3">
                       <Lock className="w-4 h-4 text-accent" />
                       メールアドレスはSSL/TLSで保護されます
                     </p>
                     <p>
-                      <span className="text-[#ffd966] font-bold">🎁 先着100名限定</span>：β版優先招待 + 3ヶ月無料 + 創設者バッジ<br />
+                      <span className="text-[#ffd966] font-bold">
+                        🎁 先着100名限定
+                      </span>
+                      ：β版優先招待 + Creator 3ヶ月無料 + 創設者バッジ
+                      <br />
                       クレジットカード不要・いつでも解除OK
                     </p>
                   </motion.div>
                 </>
               )}
 
-              {/* ヒーロー画像：証明書モックアップ（/mockup.avif に置き換え） */}
+              {/* 証明書モックアップ */}
               <motion.div
                 initial={{ opacity: 0, y: 40 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.0, duration: 0.8, ease: "easeOut" }}
+                transition={{ delay: 1.0, duration: 0.8, ease: 'easeOut' }}
                 className="w-full"
               >
                 <img
@@ -339,196 +426,192 @@ export default function Home() {
           </motion.div>
         </section>
 
-        {/* 【REPORT】ヒーロー直下に「証明する/しない/現在のTSA」を3カードで固定表示。コピーは SSOT経由。 */}
+        {/* 信頼整合性の最重要セクション：ヒーロー直下に固定表示 */}
         <TrustSignalRow />
 
-        {/* 【REPORT】Evidence Pack セクションを追加。「信用を納品できるSaaS」を一目で伝える。 */}
+        {/* Evidence Pack（差別化のコア） */}
         <EvidencePackTeaser />
 
-        {/* --- 2モード解説セクション --- */}
-        <section className="py-24 px-6 sm:px-12 bg-[#0D0B24] border-y border-[#1C1A38]">
+        {/* ─────────────────────────────────
+         * Pain Points（営業文脈）
+         * ───────────────────────────────── */}
+        <section
+          aria-labelledby="pain-heading"
+          className="py-24 relative overflow-hidden"
+          style={{ background: 'rgba(15,22,41,0.6)' }}
+        >
+          <GlowOrb color="#00d4aa" size={360} top="10%" left="-8%" opacity={0.07} />
+          <GlowOrb color="#6c3ef4" size={300} top="60%" left="75%" opacity={0.07} />
+
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <FadeInSection className="text-center mb-16">
+              <div
+                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold text-primary mb-4"
+                style={{
+                  background: 'rgba(108,62,244,0.1)',
+                  border: '1px solid rgba(108,62,244,0.25)',
+                }}
+              >
+                <Shield className="w-3 h-3" /> Pain Points
+              </div>
+              <h2
+                id="pain-heading"
+                className="text-3xl sm:text-4xl font-black mb-4"
+              >
+                {PROOFMARK_COPY.pains.heading}
+              </h2>
+              <p className="text-muted max-w-2xl mx-auto">
+                {PROOFMARK_COPY.pains.subheading}
+              </p>
+            </FadeInSection>
+
+            <motion.div
+              className="grid grid-cols-1 md:grid-cols-3 gap-6"
+              variants={staggerContainer}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: '-60px' }}
+            >
+              {PROOFMARK_COPY.pains.items.map((pain, i) => (
+                <motion.div
+                  key={i}
+                  className="p-8 rounded-2xl border relative overflow-hidden group"
+                  style={{
+                    background: 'rgba(21,29,47,0.75)',
+                    backdropFilter: 'blur(12px)',
+                    borderColor: 'rgba(42,42,78,0.7)',
+                  }}
+                  variants={slideInVariants}
+                  whileHover={{
+                    borderColor: 'rgba(108,62,244,0.4)',
+                    boxShadow: '0 8px 32px rgba(108,62,244,0.12)',
+                    y: -4,
+                  }}
+                  transition={{ duration: 0.25 }}
+                >
+                  <span
+                    className="inline-block text-xs font-bold px-3 py-1 rounded-full mb-4"
+                    style={{
+                      background: 'rgba(108,62,244,0.15)',
+                      color: '#6c3ef4',
+                      border: '1px solid rgba(108,62,244,0.2)',
+                    }}
+                  >
+                    {pain.tag}
+                  </span>
+                  <div className="text-4xl mb-4">{pain.emoji}</div>
+                  <h3 className="text-lg font-bold mb-3 leading-snug">
+                    {pain.title}
+                  </h3>
+                  <p className="text-muted text-sm leading-relaxed">
+                    {pain.desc}
+                  </p>
+                  <div
+                    className="absolute bottom-0 left-0 right-0 h-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                    style={{ background: 'linear-gradient(90deg, #6c3ef4, #00d4aa)' }}
+                  />
+                </motion.div>
+              ))}
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Two modes（Private / Shareable） */}
+        <section
+          aria-labelledby="modes-heading"
+          className="py-24 px-6 sm:px-12 bg-[#0D0B24] border-y border-[#1C1A38]"
+        >
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-16">
-              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">選べる2つの証明モード</h2>
-              <p className="text-[#A8A0D8]">デフォルトは Private Proof。「原本をサーバーに送信しない」を、UXレベルで実現します。</p>
+              <h2
+                id="modes-heading"
+                className="text-3xl sm:text-4xl font-bold text-white mb-4"
+              >
+                {PROOFMARK_COPY.modes.heading}
+              </h2>
+              <p className="text-[#A8A0D8]">
+                {PROOFMARK_COPY.modes.subheading}
+              </p>
             </div>
             <div className="grid md:grid-cols-2 gap-8">
+              {/* Private */}
               <div className="bg-[#07061A] border border-[#1C1A38] rounded-3xl p-8 sm:p-10 relative overflow-hidden group hover:border-[#00D4AA]/50 transition-colors">
                 <Shield className="w-12 h-12 text-[#00D4AA] mb-6" />
-                <h3 className="text-2xl font-bold text-white mb-3">Private Proof <span className="text-sm font-normal text-slate-400 ml-2">(推奨)</span></h3>
-                <p className="text-[#A8A0D8] mb-6 leading-relaxed">原画はサーバーに送信されません。ブラウザ内で SHA-256 を計算し、ハッシュとメタデータだけを ProofMark が受け取ります。運営側も原画を視認できません。</p>
+                <h3 className="text-2xl font-bold text-white mb-1">
+                  {PROOFMARK_COPY.modes.private.name}
+                </h3>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00D4AA] mb-3">
+                  {PROOFMARK_COPY.modes.private.tagline}
+                </p>
+                <p className="text-[#A8A0D8] mb-6 leading-relaxed">
+                  {PROOFMARK_COPY.modes.private.description}
+                </p>
                 <ul className="space-y-3">
-                  <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle className="w-5 h-5 text-[#00D4AA]" /> 原画はブラウザ外に出ない</li>
-                  <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle className="w-5 h-5 text-[#00D4AA]" /> 独立検証可能なRFC3161トークン</li>
+                  {PROOFMARK_COPY.modes.private.points.map((p) => (
+                    <li
+                      key={p}
+                      className="flex items-center gap-3 text-sm text-slate-300"
+                    >
+                      <CheckCircle className="w-5 h-5 text-[#00D4AA]" />
+                      {p}
+                    </li>
+                  ))}
                 </ul>
               </div>
+
+              {/* Shareable */}
               <div className="bg-[#07061A] border border-[#1C1A38] rounded-3xl p-8 sm:p-10 relative overflow-hidden group hover:border-[#6C3EF4]/50 transition-colors">
                 <Share2 className="w-12 h-12 text-[#6C3EF4] mb-6" />
-                <h3 className="text-2xl font-bold text-white mb-3">Shareable Proof</h3>
-                <p className="text-[#A8A0D8] mb-6 leading-relaxed">SNSシェア・ポートフォリオ掲載・納品に使う表示用画像のみ、セキュアストレージに保存します。クリエイターがコントロールした状態で検証ページを公開できます。</p>
+                <h3 className="text-2xl font-bold text-white mb-1">
+                  {PROOFMARK_COPY.modes.shareable.name}
+                </h3>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#6C3EF4] mb-3">
+                  {PROOFMARK_COPY.modes.shareable.tagline}
+                </p>
+                <p className="text-[#A8A0D8] mb-6 leading-relaxed">
+                  {PROOFMARK_COPY.modes.shareable.description}
+                </p>
                 <ul className="space-y-3">
-                  <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle className="w-5 h-5 text-[#6C3EF4]" /> 公開検証ページ + OG カード</li>
-                  <li className="flex items-center gap-3 text-sm text-slate-300"><CheckCircle className="w-5 h-5 text-[#6C3EF4]" /> ポートフォリオ埋め込みウィジェット</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* --- 免責事項セクション --- */}
-        <section className="py-20 px-6 sm:px-12">
-          <div className="max-w-4xl mx-auto bg-[#15132D] rounded-2xl border border-[#2a2a4e] p-8 sm:p-10 text-center">
-            <Lock className="w-10 h-10 text-slate-400 mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-white mb-4">ProofMarkが証明すること、証明しないこと</h2>
-            <div className="grid sm:grid-cols-2 gap-6 text-left">
-              <div className="bg-[#00D4AA]/5 border border-[#00D4AA]/20 rounded-xl p-5">
-                <p className="text-xs font-bold tracking-widest text-[#00D4AA] uppercase mb-3">✓ 証明すること</p>
-                <ul className="space-y-2 text-sm text-[#D4D0F4] leading-relaxed">
-                  <li>・特定のSHA-256ハッシュを持つファイルが、RFC3161タイムスタンプの発行時刻に存在していた事実</li>
-                  <li>・発行後、そのファイルが1ビットも改変されていないこと</li>
-                  <li>・ProofMarkに依存せず、OpenSSL等で独立検証できること</li>
-                </ul>
-              </div>
-              <div className="bg-[#F0BB38]/5 border border-[#F0BB38]/20 rounded-xl p-5">
-                <p className="text-xs font-bold tracking-widest text-[#F0BB38] uppercase mb-3">✗ 証明しないこと</p>
-                <ul className="space-y-2 text-sm text-[#D4D0F4] leading-relaxed">
-                  <li>・著作権の帰属、作品の独自性、合法性</li>
-                  <li>・世界で最初にその作品を作ったという事実</li>
-                  <li>・特定の裁判・行政手続で証拠として採用されること（採否は事案と法域に依存）</li>
-                </ul>
-              </div>
-            </div>
-            <p className="text-xs text-[#A8A0D8]/80 mt-6 leading-relaxed">
-              ProofMarkは、無断転載時の証拠提示や、クライアントへの納品時の信頼性担保を目的とした「存在証明インフラ」です。Private Proofモードにおいては、原本ファイルがProofMarkのサーバーに到達することはありません。現在利用中のTSA（時刻認証局）と信頼レベルは <a href="/trust-center#s4" className="text-[#00D4AA] underline hover:no-underline">Trust Center</a> で随時公開しています。
-            </p>
-          </div>
-        </section>
-
-        {/* ── Stats Bar ───────────────────────────────────────── */}
-        <FadeInSection>
-          <div
-            className="border-y border-border/50 py-6"
-            style={{ background: "rgba(21,29,47,0.6)", backdropFilter: "blur(8px)" }}
-          >
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <motion.div
-                className="flex flex-wrap justify-center gap-8 md:gap-16"
-                variants={staggerContainer}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-              >
-                {[
-                  { value: "SHA-256", label: "暗号ハッシュ" },
-                  { value: "RFC3161", label: "タイムスタンプ規格" },
-                  { value: "Independent", label: "独立検証可能" },
-                  { value: "C2PA", label: "連携計画中" },
-                ].map((stat) => (
-                  <motion.div key={stat.value} className="text-center" variants={slideInVariants}>
-                    <div
-                      className="text-2xl font-black mb-1 stats-keyword"
-                      style={{
-                        backgroundImage: "linear-gradient(135deg, #6c3ef4, #00d4aa)",
-                        WebkitBackgroundClip: "text",
-                        WebkitTextFillColor: "transparent",
-                        backgroundClip: "text",
-                        transition: "filter 0.3s ease",
-                      }}
+                  {PROOFMARK_COPY.modes.shareable.points.map((p) => (
+                    <li
+                      key={p}
+                      className="flex items-center gap-3 text-sm text-slate-300"
                     >
-                      {stat.value}
-                    </div>
-                    <div className="text-xs text-muted">{stat.label}</div>
-                  </motion.div>
-                ))}
-                <style>{`
-                  .stats-keyword:hover {
-                    filter: drop-shadow(0 0 8px rgba(0, 212, 170, 0.55)) drop-shadow(0 0 16px rgba(0, 212, 170, 0.30));
-                    -webkit-text-fill-color: transparent;
-                    cursor: default;
-                  }
-                `}</style>
-              </motion.div>
-            </div>
-          </div>
-        </FadeInSection>
-
-        {/* ── How it Works Section - 数字＋アイコンのハイブリッドUI ── */}
-        <section id="how-it-works" className="relative py-24 bg-[#07061A] border-y border-[#1C1A38] overflow-hidden">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-[#6C3EF4] opacity-[0.05] blur-[120px] rounded-full pointer-events-none" />
-
-          <div className="relative z-10 max-w-6xl mx-auto px-6 text-center">
-            <div
-              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold text-[#00D4AA] mb-4"
-              style={{ background: "rgba(0,212,170,0.1)", border: "1px solid rgba(0,212,170,0.25)" }}
-            >
-              <Zap className="w-3 h-3" /> HOW IT WORKS
-            </div>
-
-            <h2 className="text-4xl md:text-5xl font-extrabold text-[#F0EFF8] mb-4 tracking-tight">
-              <span className="text-[#00D4AA] mr-1">3</span>ステップで「存在の事実」を刻む
-            </h2>
-            <p className="text-[#A8A0D8] mb-16 text-lg">あなたの作品を、未来に残る証拠に変える仕組み</p>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
-              {/* Step 1 */}
-              <div className="group relative bg-[#0D0B24] border border-[#1C1A38] hover:border-[#00D4AA]/50 p-8 rounded-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_8px_32px_rgba(0,212,170,0.15)] overflow-hidden">
-                <div className="absolute -right-4 -top-8 text-[120px] font-black text-white/[0.02] group-hover:text-[#00D4AA]/[0.05] transition-colors duration-500 pointer-events-none select-none" style={{ fontFamily: "'Syne', sans-serif" }}>
-                  01
-                </div>
-                <div className="relative z-10 w-16 h-16 rounded-2xl mb-6 flex items-center justify-center border border-[#00D4AA]/20 bg-gradient-to-br from-[#00D4AA]/10 to-transparent group-hover:from-[#00D4AA]/20 transition-all duration-500">
-                  <span className="absolute top-1 left-2 text-xs font-bold text-[#00D4AA]/60 font-mono">1</span>
-                  <Lock className="w-7 h-7 text-[#00D4AA] group-hover:scale-110 transition-transform duration-500 drop-shadow-[0_0_8px_rgba(0,212,170,0.5)]" />
-                </div>
-                <h3 className="relative z-10 text-xl font-bold text-[#F0EFF8] mb-4 group-hover:text-[#00D4AA] transition-colors">ブラウザ内ハッシュ計算</h3>
-                <p className="relative z-10 text-[#A8A0D8] leading-relaxed text-sm md:text-base">
-                  Client-side Hashing技術により、計算はブラウザ内で完結。原画データをサーバーに送信することなく証明が可能です。<span className="text-[#00D4AA] opacity-80 text-xs block mt-2">（※Shareable Proofモードを選択した場合のみ、公開用画像が安全に保管されます）</span>
-                </p>
-              </div>
-
-              {/* Step 2 */}
-              <div className="group relative bg-[#0D0B24] border border-[#1C1A38] hover:border-[#6C3EF4]/50 p-8 rounded-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_8px_32px_rgba(108,62,244,0.15)] overflow-hidden">
-                <div className="absolute -right-4 -top-8 text-[120px] font-black text-white/[0.02] group-hover:text-[#6C3EF4]/[0.05] transition-colors duration-500 pointer-events-none select-none" style={{ fontFamily: "'Syne', sans-serif" }}>
-                  02
-                </div>
-                <div className="relative z-10 w-16 h-16 rounded-2xl mb-6 flex items-center justify-center border border-[#6C3EF4]/20 bg-gradient-to-br from-[#6C3EF4]/10 to-transparent group-hover:from-[#6C3EF4]/20 transition-all duration-500">
-                  <span className="absolute top-1 left-2 text-xs font-bold text-[#6C3EF4]/60 font-mono">2</span>
-                  <Database className="w-7 h-7 text-[#6C3EF4] group-hover:scale-110 transition-transform duration-500 drop-shadow-[0_0_8px_rgba(108,62,244,0.5)]" />
-                </div>
-                <h3 className="relative z-10 text-xl font-bold text-[#F0EFF8] mb-4 group-hover:text-[#6C3EF4] transition-colors">タイムスタンプ刻印</h3>
-                <p className="relative z-10 text-[#A8A0D8] leading-relaxed text-sm md:text-base">
-                  計算されたハッシュ値に対し、RFC3161準拠のTSA（時刻認証局）が署名付きタイムスタンプを発行。「特定の日時にその内容で存在していた」という客観的な事実を、第三者が独立検証できる形で記録します。
-                </p>
-              </div>
-
-              {/* Step 3 */}
-              <div className="group relative bg-[#0D0B24] border border-[#1C1A38] hover:border-[#F0BB38]/50 p-8 rounded-2xl transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_8px_32px_rgba(240,187,56,0.15)] overflow-hidden">
-                <div className="absolute -right-4 -top-8 text-[120px] font-black text-white/[0.02] group-hover:text-[#F0BB38]/[0.05] transition-colors duration-500 pointer-events-none select-none" style={{ fontFamily: "'Syne', sans-serif" }}>
-                  03
-                </div>
-                <div className="relative z-10 w-16 h-16 rounded-2xl mb-6 flex items-center justify-center border border-[#F0BB38]/20 bg-gradient-to-br from-[#F0BB38]/10 to-transparent group-hover:from-[#F0BB38]/20 transition-all duration-500">
-                  <span className="absolute top-1 left-2 text-xs font-bold text-[#F0BB38]/60 font-mono">3</span>
-                  <Award className="w-7 h-7 text-[#F0BB38] group-hover:scale-110 transition-transform duration-500 drop-shadow-[0_0_8px_rgba(240,187,56,0.5)]" />
-                </div>
-                <h3 className="relative z-10 text-xl font-bold text-[#F0EFF8] mb-4 group-hover:text-[#F0BB38] transition-colors">デジタル証明書の発行</h3>
-                <p className="relative z-10 text-[#A8A0D8] leading-relaxed text-sm md:text-base">
-                  ワンクリックでクライアント提出用のPDF証明書を発行。公開ポートフォリオとしても機能し、SNSでの無断転載を抑止します。
-                </p>
+                      <CheckCircle className="w-5 h-5 text-[#6C3EF4]" />
+                      {p}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           </div>
         </section>
 
-        {/* ── Upload Section ───────────────────────────────────── */}
+        {/* Engineering Pillars（信頼の裏付け） */}
+        <EngineeringPillarsSection />
+
+        {/* Quick try / Upload */}
         <FadeInSection delay={0.1}>
-          <div style={{ padding: "64px 20px", background: "#07061A" }}>
-            <div style={{ maxWidth: "720px", margin: "0 auto", textAlign: "center" }}>
+          <div style={{ padding: '64px 20px', background: '#07061A' }}>
+            <div
+              style={{
+                maxWidth: '720px',
+                margin: '0 auto',
+                textAlign: 'center',
+              }}
+            >
               <div
                 className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold text-primary mb-3"
-                style={{ background: "rgba(108,62,244,0.1)", border: "1px solid rgba(108,62,244,0.25)" }}
+                style={{
+                  background: 'rgba(108,62,244,0.1)',
+                  border: '1px solid rgba(108,62,244,0.25)',
+                }}
               >
-                ⬡ 証明書を発行する
+                ⬡ 1分で試す
               </div>
-              <h3 className="text-2xl font-black mb-2">作品をアップロードして証明を開始</h3>
+              <h3 className="text-2xl font-black mb-2">
+                作品をアップロードして証明を開始
+              </h3>
               <p className="text-muted text-sm max-w-lg mx-auto mb-8">
                 ハッシュ計算はブラウザ内で完結します。ログイン不要でSHA-256計算とタイムスタンプを即時確認できます。
               </p>
@@ -539,96 +622,17 @@ export default function Home() {
           </div>
         </FadeInSection>
 
-        {/* ── Pain Points ─────────────────────────────────────── */}
+        {/* Use Cases（誰の・どこで） */}
+        <UseCasesSection />
+
+        {/* ─────────────────────────────────
+         * Pricing (mini, SSOT-driven)
+         * ───────────────────────────────── */}
         <section
+          id="pricing"
+          aria-labelledby="pricing-heading"
           className="py-24 relative overflow-hidden"
-          style={{ background: "rgba(15,22,41,0.6)" }}
         >
-          <GlowOrb color="#00d4aa" size={360} top="10%" left="-8%" opacity={0.07} />
-          <GlowOrb color="#6c3ef4" size={300} top="60%" left="75%" opacity={0.07} />
-
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <FadeInSection className="text-center mb-16">
-              <div
-                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold text-primary mb-4"
-                style={{ background: "rgba(108,62,244,0.1)", border: "1px solid rgba(108,62,244,0.25)" }}
-              >
-                <Shield className="w-3 h-3" /> PAIN POINTS
-              </div>
-              <h2 className="text-4xl font-black mb-4">こんな経験、ありませんか？</h2>
-              <p className="text-muted max-w-2xl mx-auto">
-                AIクリエイターが直面する、リアルな悩みと解決策
-              </p>
-            </FadeInSection>
-
-            <motion.div
-              className="grid grid-cols-1 md:grid-cols-3 gap-6"
-              variants={staggerContainer}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-60px" }}
-            >
-              {[
-                {
-                  emoji: "😤",
-                  title: "「どうせAIでしょ？」と言われた",
-                  desc: "何時間も試行錯誤した制作プロセスを、たった一言で否定される悔しさ。",
-                  tag: "信用問題",
-                },
-                {
-                  emoji: "😰",
-                  title: "作品を転載されたが証拠が手元にない",
-                  desc: "「いつ・その状態で・手元にあった」客観データがあれば、交渉や申し立てを進めるスタートラインに立てる。",
-                  tag: "トラブル予防",
-                },
-                {
-                  emoji: "📁",
-                  title: "クライアントに「信じてもいい」と思わせたい",
-                  desc: "納品時に、疑いの余地がない独立検証可能な証拠を添えて提出したい。",
-                  tag: "納品信頼",
-                },
-              ].map((pain, i) => (
-                <motion.div
-                  key={i}
-                  className="p-8 rounded-2xl border relative overflow-hidden group"
-                  style={{
-                    background: "rgba(21,29,47,0.75)",
-                    backdropFilter: "blur(12px)",
-                    borderColor: "rgba(42,42,78,0.7)",
-                  }}
-                  variants={slideInVariants}
-                  whileHover={{
-                    borderColor: "rgba(108,62,244,0.4)",
-                    boxShadow: "0 8px 32px rgba(108,62,244,0.12)",
-                    y: -4,
-                  }}
-                  transition={{ duration: 0.25 }}
-                >
-                  <span
-                    className="inline-block text-xs font-bold px-3 py-1 rounded-full mb-4"
-                    style={{
-                      background: "rgba(108,62,244,0.15)",
-                      color: "#6c3ef4",
-                      border: "1px solid rgba(108,62,244,0.2)",
-                    }}
-                  >
-                    {pain.tag}
-                  </span>
-                  <div className="text-4xl mb-4">{pain.emoji}</div>
-                  <h3 className="text-lg font-bold mb-3 leading-snug">{pain.title}</h3>
-                  <p className="text-muted text-sm leading-relaxed">{pain.desc}</p>
-                  <div
-                    className="absolute bottom-0 left-0 right-0 h-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                    style={{ background: "linear-gradient(90deg, #6c3ef4, #00d4aa)" }}
-                  />
-                </motion.div>
-              ))}
-            </motion.div>
-          </div>
-        </section>
-
-        {/* ── Pricing (SSOT-driven mini view) ─────────────────────────── */}
-        <section id="pricing" className="py-24 relative overflow-hidden">
           <GlowOrb color="#6c3ef4" size={500} top="20%" left="45%" opacity={0.07} />
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -636,16 +640,21 @@ export default function Home() {
               <div
                 className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold mb-4"
                 style={{
-                  background: "rgba(255,217,102,0.1)",
-                  border: "1px solid rgba(255,217,102,0.25)",
-                  color: "#ffd966",
+                  background: 'rgba(255,217,102,0.1)',
+                  border: '1px solid rgba(255,217,102,0.25)',
+                  color: '#ffd966',
                 }}
               >
-                <Award className="w-3 h-3" /> PRICING
+                Pricing
               </div>
-              <h2 className="text-4xl font-black mb-4">証拠を、納品できる状態に。</h2>
+              <h2
+                id="pricing-heading"
+                className="text-3xl sm:text-4xl font-black mb-4"
+              >
+                “証明回数”ではなく、納品で使える価値に課金します。
+              </h2>
               <p className="text-muted max-w-xl mx-auto">
-                ProofMarkの料金は「証明回数」ではなく「納品信頼の運用機能」で設計されています。詳細は料金ページへ。
+                Free で月30件まで試せます。本番運用は Creator、チームは Studio で。
               </p>
             </FadeInSection>
 
@@ -665,11 +674,17 @@ export default function Home() {
                     key={plan.id}
                     className="p-7 rounded-2xl border relative overflow-hidden flex flex-col"
                     style={{
-                      background: isRecommended ? "linear-gradient(135deg, rgba(108,62,244,0.2) 0%, rgba(21,29,47,0.95) 60%)" : "rgba(21,29,47,0.8)",
-                      backdropFilter: "blur(12px)",
-                      borderColor: isRecommended ? "rgba(108,62,244,0.5)" : "rgba(42,42,78,0.7)",
+                      background: isRecommended
+                        ? 'linear-gradient(135deg, rgba(108,62,244,0.2) 0%, rgba(21,29,47,0.95) 60%)'
+                        : 'rgba(21,29,47,0.8)',
+                      backdropFilter: 'blur(12px)',
+                      borderColor: isRecommended
+                        ? 'rgba(108,62,244,0.5)'
+                        : 'rgba(42,42,78,0.7)',
                       borderWidth: isRecommended ? 2 : 1,
-                      boxShadow: isRecommended ? "0 0 30px rgba(108,62,244,0.18)" : undefined,
+                      boxShadow: isRecommended
+                        ? '0 0 30px rgba(108,62,244,0.18)'
+                        : undefined,
                     }}
                     variants={slideInVariants}
                     whileHover={{ y: -4 }}
@@ -678,29 +693,46 @@ export default function Home() {
                     {plan.badge ? (
                       <div
                         className="absolute top-4 right-4 text-xs font-black px-3 py-1 rounded-full"
-                        style={{ background: "linear-gradient(135deg, #6c3ef4, #00d4aa)", color: "#f0f0fa" }}
+                        style={{
+                          background:
+                            'linear-gradient(135deg, #6c3ef4, #00d4aa)',
+                          color: '#f0f0fa',
+                        }}
                       >
                         {plan.badge}
                       </div>
                     ) : null}
-                    <div className="text-xs font-bold text-muted uppercase tracking-widest mb-2">{plan.name}</div>
+                    <div className="text-xs font-bold text-muted uppercase tracking-widest mb-2">
+                      {plan.name}
+                    </div>
                     <div className="text-3xl font-black mb-1">
                       {plan.priceLabel}
-                      {plan.priceUnit ? <span className="text-base text-muted font-normal">{plan.priceUnit}</span> : null}
+                      {plan.priceUnit ? (
+                        <span className="text-base text-muted font-normal">
+                          {plan.priceUnit}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="text-sm text-muted mb-5">{plan.tagline}</p>
                     <ul className="space-y-2.5 mb-6 flex-1">
-                      {plan.features.slice(0, 4).map((feature) => (
+                      {plan.features.map((feature) => (
                         <li
                           key={feature.label}
-                          className={"flex items-start gap-2 text-sm " + (feature.state === 'exclude' ? 'opacity-60' : '')}
+                          className={
+                            'flex items-start gap-2 text-sm ' +
+                            (feature.state === 'exclude' ? 'opacity-60' : '')
+                          }
                         >
                           {feature.state === 'exclude' ? (
-                            <span className="w-4 h-4 text-center text-muted/40 flex-shrink-0 select-none mt-0.5">—</span>
+                            <Minus className="w-4 h-4 text-[#48456A] shrink-0 mt-0.5" />
+                          ) : feature.state === 'planned' ? (
+                            <Star className="w-4 h-4 text-[#F0BB38] shrink-0 mt-0.5" />
                           ) : (
-                            <Check className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+                            <CheckCircle className="w-4 h-4 text-[#00D4AA] flex-shrink-0 mt-0.5" />
                           )}
-                          <span className={feature.state === 'exclude' ? 'line-through text-muted' : ''}>{feature.label}</span>
+                          <span className={feature.state === 'exclude' ? 'text-[#A8A0D8]' : 'text-white'}>
+                            {feature.label}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -709,8 +741,17 @@ export default function Home() {
                       className="block w-full px-6 py-3 rounded-full font-bold text-sm text-center mt-auto"
                       style={
                         isRecommended
-                          ? { background: "linear-gradient(135deg, #6C3EF4, #8B61FF)", color: "#f0f0fa", boxShadow: "0 0 20px rgba(108,62,244,0.4)" }
-                          : { borderColor: "rgba(108,62,244,0.4)", color: "#6c3ef4", border: "1px solid rgba(108,62,244,0.4)" }
+                          ? {
+                            background:
+                              'linear-gradient(135deg, #6C3EF4, #8B61FF)',
+                            color: '#f0f0fa',
+                            boxShadow: '0 0 20px rgba(108,62,244,0.4)',
+                          }
+                          : {
+                            borderColor: 'rgba(108,62,244,0.4)',
+                            color: '#6c3ef4',
+                            border: '1px solid rgba(108,62,244,0.4)',
+                          }
                       }
                     >
                       {ctaLabel}
@@ -722,40 +763,46 @@ export default function Home() {
 
             <FadeInSection>
               <div className="text-center">
-                <Link href="/pricing" className="inline-flex items-center gap-2 text-sm font-bold text-[#00D4AA] hover:text-white transition-colors">
+                <Link
+                  href="/pricing"
+                  className="inline-flex items-center gap-2 text-sm font-bold text-[#00D4AA] hover:text-white transition-colors"
+                >
                   すべてのプランを比較する →
                 </Link>
               </div>
-              <p className="text-center text-sm font-bold mt-6" style={{ color: FOUNDER_OFFER.highlight }}>
+              <p
+                className="text-center text-sm font-bold mt-6"
+                style={{ color: FOUNDER_OFFER.highlight }}
+              >
                 {FOUNDER_OFFER.text}
               </p>
             </FadeInSection>
           </div>
         </section>
 
-        {/* ── Supported Tools ──────────────────────────────────── */}
         <SupportedToolsSection />
 
-        {/* ── Learning Section ─────────────────────────────────── */}
         <div id="learning">
-          <LearningSection onRegisterClick={() => {
-            const el = document.getElementById("waitlist-section");
-            if (el) el.scrollIntoView({ behavior: "smooth" });
-          }} />
+          <LearningSection
+            onRegisterClick={() => {
+              const el = document.getElementById('waitlist-section');
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }}
+          />
         </div>
 
-        {/* ── FAQ ─────────────────────────────────────────────── */}
         <FAQAccordion />
 
-        {/* ── Developer Message ────────────────────────────────── */}
         <DeveloperMessage />
 
-        {/* ── Waitlist CTA ─────────────────────────────────────── */}
+        {/* ─────────────────────────────────
+         * Final CTA / Waitlist
+         * ───────────────────────────────── */}
         {!user && (
           <section
             id="waitlist-section"
             className="py-24 relative overflow-hidden border-t border-b border-border/50"
-            style={{ background: "rgba(15,22,41,0.5)" }}
+            style={{ background: 'rgba(15,22,41,0.5)' }}
           >
             <GlowOrb color="#6c3ef4" size={600} top="50%" left="50%" opacity={0.08} />
             <GlowOrb color="#00d4aa" size={300} top="10%" left="10%" opacity={0.06} />
@@ -763,8 +810,8 @@ export default function Home() {
               className="absolute inset-0 pointer-events-none"
               style={{
                 backgroundImage:
-                  "linear-gradient(rgba(108,62,244,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(108,62,244,0.03) 1px, transparent 1px)",
-                backgroundSize: "60px 60px",
+                  'linear-gradient(rgba(108,62,244,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(108,62,244,0.03) 1px, transparent 1px)',
+                backgroundSize: '60px 60px',
               }}
             />
 
@@ -773,22 +820,38 @@ export default function Home() {
                 <motion.div
                   className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full border mb-8"
                   style={{
-                    background: "rgba(108,62,244,0.12)",
-                    borderColor: "rgba(108,62,244,0.35)",
-                    boxShadow: "0 0 16px rgba(108,62,244,0.15)",
+                    background: 'rgba(108,62,244,0.12)',
+                    borderColor: 'rgba(108,62,244,0.35)',
+                    boxShadow: '0 0 16px rgba(108,62,244,0.15)',
                   }}
-                  animate={{ boxShadow: ["0 0 16px rgba(108,62,244,0.15)", "0 0 28px rgba(108,62,244,0.3)", "0 0 16px rgba(108,62,244,0.15)"] }}
-                  transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+                  animate={{
+                    boxShadow: [
+                      '0 0 16px rgba(108,62,244,0.15)',
+                      '0 0 28px rgba(108,62,244,0.3)',
+                      '0 0 16px rgba(108,62,244,0.15)',
+                    ],
+                  }}
+                  transition={{
+                    duration: 2.5,
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                  }}
                 >
                   <span className="text-lg">🚀</span>
-                  <span className="text-sm font-bold text-primary">β版アーリーアクセス受付中</span>
+                  <span className="text-sm font-bold text-primary">
+                    β版アーリーアクセス受付中
+                  </span>
                 </motion.div>
 
-                <h2 className="text-4xl font-black mb-4">今すぐ先行登録する</h2>
+                <h2 className="text-3xl sm:text-4xl font-black mb-4">
+                  {PROOFMARK_COPY.finalCta.title}
+                </h2>
                 <p className="text-muted mb-2">
-                  ProofMarkは現在、開発の最終フェーズにあります。初期メンバーとして参加し、AIクリエイターのための新しい基準を一緒に作りませんか？
+                  {PROOFMARK_COPY.finalCta.subtitle}
                 </p>
-                <p className="text-muted mb-8 text-sm">スパムなし・クレカ不要。いつでも解除できます。</p>
+                <p className="text-muted mb-8 text-sm">
+                  スパムなし・クレカ不要。いつでも解除できます。
+                </p>
               </FadeInSection>
 
               <FadeInSection delay={0.1}>
@@ -800,34 +863,66 @@ export default function Home() {
                   viewport={{ once: true }}
                 >
                   {[
-                    { emoji: "🚀", text: "β版優先招待" },
-                    { emoji: "🎁", text: "3ヶ月無料" },
+                    { emoji: '🚀', text: 'β版優先招待' },
+                    { emoji: '🎁', text: 'Creator 3ヶ月無料' },
                   ].map((badge, i) => (
                     <motion.div
                       key={i}
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold"
                       style={{
-                        background: "rgba(21,29,47,0.7)",
-                        borderColor: "rgba(42,42,78,0.7)",
-                        backdropFilter: "blur(8px)",
+                        background: 'rgba(21,29,47,0.7)',
+                        borderColor: 'rgba(42,42,78,0.7)',
+                        backdropFilter: 'blur(8px)',
                       }}
                       variants={slideInVariants}
-                      whileHover={{ scale: 1.05, borderColor: "rgba(108,62,244,0.5)" }}
+                      whileHover={{
+                        scale: 1.05,
+                        borderColor: 'rgba(108,62,244,0.5)',
+                      }}
                     >
                       <span>{badge.emoji}</span>
                       {badge.text}
                     </motion.div>
                   ))}
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(108, 62, 244, 0.1)", padding: "8px 16px", borderRadius: "100px", border: "1px solid rgba(108, 62, 244, 0.5)", boxShadow: "0 0 12px rgba(108, 62, 244, 0.4)" }}>
-                    <img src={founderBadge} alt="Founder Badge" style={{ height: "16px", width: "16px" }} />
-                    <span style={{ fontSize: "14px", fontWeight: "bold", color: "#BC78FF", whiteSpace: "nowrap" }}>Founderバッジ</span>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background: 'rgba(108, 62, 244, 0.1)',
+                      padding: '8px 16px',
+                      borderRadius: '100px',
+                      border: '1px solid rgba(108, 62, 244, 0.5)',
+                      boxShadow: '0 0 12px rgba(108, 62, 244, 0.4)',
+                    }}
+                  >
+                    <img
+                      src={founderBadge}
+                      alt="Founder Badge"
+                      style={{ height: '16px', width: '16px' }}
+                    />
+                    <span
+                      style={{
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        color: '#BC78FF',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Founderバッジ
+                    </span>
                   </div>
                 </motion.div>
               </FadeInSection>
 
               <FadeInSection delay={0.15}>
-                <form onSubmit={handleWaitlistSubmit} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-                  <label htmlFor="waitlist-email" className="sr-only">メールアドレス</label>
+                <form
+                  onSubmit={handleWaitlistSubmit}
+                  className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto"
+                >
+                  <label htmlFor="waitlist-email" className="sr-only">
+                    メールアドレス
+                  </label>
                   <input
                     id="waitlist-email"
                     type="email"
@@ -837,17 +932,17 @@ export default function Home() {
                     disabled={isWaitlistSubmitting}
                     className="flex-1 px-6 py-4 rounded-full border transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
                     style={{
-                      background: "rgba(21,29,47,0.85)",
-                      borderColor: "rgba(42,42,78,0.8)",
-                      backdropFilter: "blur(8px)",
+                      background: 'rgba(21,29,47,0.85)',
+                      borderColor: 'rgba(42,42,78,0.8)',
+                      backdropFilter: 'blur(8px)',
                     }}
                     onFocus={(e) => {
-                      e.currentTarget.style.borderColor = "rgba(108,62,244,0.7)";
-                      e.currentTarget.style.boxShadow = "0 0 0 3px rgba(108,62,244,0.15)";
+                      e.currentTarget.style.borderColor = 'rgba(108,62,244,0.7)';
+                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(108,62,244,0.15)';
                     }}
                     onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "rgba(42,42,78,0.8)";
-                      e.currentTarget.style.boxShadow = "none";
+                      e.currentTarget.style.borderColor = 'rgba(42,42,78,0.8)';
+                      e.currentTarget.style.boxShadow = 'none';
                     }}
                     required
                     aria-label="ウェイティングリスト登録用のメールアドレス"
@@ -857,8 +952,9 @@ export default function Home() {
                     disabled={isWaitlistSubmitting}
                     className="px-8 py-4 rounded-full text-primary-foreground font-bold flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-70 disabled:cursor-wait"
                     style={{
-                      background: "linear-gradient(135deg, #6c3ef4, rgba(108,62,244,0.85))",
-                      boxShadow: "0 0 20px rgba(108,62,244,0.4)",
+                      background:
+                        'linear-gradient(135deg, #6c3ef4, rgba(108,62,244,0.85))',
+                      boxShadow: '0 0 20px rgba(108,62,244,0.4)',
                     }}
                     variants={buttonVariants}
                     initial="rest"
@@ -867,13 +963,31 @@ export default function Home() {
                   >
                     {isWaitlistSubmitting ? (
                       <>
-                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        <svg
+                          className="animate-spin h-4 w-4"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          />
                         </svg>
                         暗号化通信中...
                       </>
-                    ) : "登録する"}
+                    ) : (
+                      '登録する'
+                    )}
                   </motion.button>
                 </form>
                 <p className="text-xs text-muted flex items-center justify-center gap-2 mt-3">
@@ -884,8 +998,6 @@ export default function Home() {
             </div>
           </section>
         )}
-
-        {/* ── Footer ──────────────────────────────────────────── */}
       </div>
     </>
   );
