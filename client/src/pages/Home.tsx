@@ -244,48 +244,55 @@ export default function Home() {
             className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24"
             style={{ y: heroY }}
           >
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-              {/* 左側：既存のテキストとCTAボタン */}
-              <div className="text-left flex flex-col items-center lg:items-start">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#00D4AA]/10 border border-[#00D4AA]/30 text-[#00D4AA] text-[11px] sm:text-xs font-bold tracking-widest uppercase mb-8">
-                  {heroEyebrowLabel}
-                </div>
+            {/* --- 置き換え後 --- */}
+            <div className="flex flex-col items-center text-center max-w-4xl mx-auto">
+              {/* Eyebrow */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#00D4AA]/10 border border-[#00D4AA]/30 text-[#00D4AA] text-[11px] sm:text-xs font-bold tracking-widest uppercase mb-8"
+              >
+                {heroEyebrowLabel}
+              </motion.div>
 
-                <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight mb-6 leading-[1.08] text-center lg:text-left">
-                  {PROOFMARK_COPY.hero.title1}
-                  <br className="hidden sm:block" />
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00D4AA] to-[#BC78FF] whitespace-nowrap">
-                    {PROOFMARK_COPY.hero.title2}
+              {/* H1 */}
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}
+                className="text-4xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight mb-6 leading-[1.08]"
+              >
+                {PROOFMARK_COPY.hero.title1}
+                <br className="hidden sm:block" />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00D4AA] to-[#BC78FF] whitespace-nowrap">
+                  {PROOFMARK_COPY.hero.title2}
+                </span>
+              </motion.h1>
+
+              {/* Subtitle */}
+              <motion.p
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}
+                className="text-[#A8A0D8] text-base sm:text-lg max-w-2xl mx-auto mb-8 leading-relaxed"
+              >
+                {PROOFMARK_COPY.hero.subtitle}
+              </motion.p>
+
+              {/* Badges */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}
+                className="flex flex-wrap items-center justify-center gap-2 mb-10"
+              >
+                {PROOFMARK_COPY.hero.badges.map((b) => (
+                  <span key={b} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-[#D4D0F4] backdrop-blur-md">
+                    <CheckCircle className="h-3 w-3 text-[#00D4AA]" />
+                    {b}
                   </span>
-                </h1>
+                ))}
+              </motion.div>
 
-                <p className="text-[#A8A0D8] text-base sm:text-lg max-w-2xl mx-auto lg:mx-0 mb-8 leading-relaxed text-center lg:text-left">
-                  {PROOFMARK_COPY.hero.subtitle}
-                </p>
-
-                {/* hero badge row（補助訴求） */}
-                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 mb-10">
-                  {PROOFMARK_COPY.hero.badges.map((b) => (
-                    <span
-                      key={b}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-[#D4D0F4] backdrop-blur-md"
-                    >
-                      <CheckCircle className="h-3 w-3 text-[#00D4AA]" />
-                      {b}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Hero CTA */}
+              {/* CTA Area */}
+              <div className="w-full max-w-md mx-auto z-20 relative">
                 {user ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.65, duration: 0.4 }}
-                    className="mb-10 w-full"
-                  >
+                  <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.4 }}>
                     <Link href="/dashboard">
-                      <button className="px-10 py-5 rounded-full bg-primary text-white font-black text-lg hover:scale-105 transition-all shadow-[0_0_40px_rgba(108,62,244,0.4)] block mx-auto lg:mx-0">
+                      <button className="w-full px-10 py-5 rounded-full bg-primary text-white font-black text-lg hover:scale-105 transition-all shadow-[0_0_40px_rgba(108,62,244,0.4)]">
                         管理画面へ進む (Go to Dashboard) ➔
                       </button>
                     </Link>
@@ -294,122 +301,60 @@ export default function Home() {
                   <>
                     <motion.form
                       onSubmit={handleHeroSubmit}
-                      className="flex flex-col sm:flex-row gap-3 mb-4 max-w-md w-full mx-auto lg:mx-0"
-                      initial={{ opacity: 0, y: 16 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.65, duration: 0.4 }}
+                      className="flex flex-col sm:flex-row gap-3 mb-4 w-full"
+                      initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.4 }}
                     >
-                      <label htmlFor="hero-email" className="sr-only">
-                        メールアドレス
-                      </label>
+                      <label htmlFor="hero-email" className="sr-only">メールアドレス</label>
                       <input
-                        id="hero-email"
-                        type="email"
-                        placeholder="your@email.com"
-                        value={heroEmail}
-                        onChange={(e) => setHeroEmail(e.target.value)}
-                        disabled={isHeroSubmitting}
+                        id="hero-email" type="email" placeholder="your@email.com" value={heroEmail}
+                        onChange={(e) => setHeroEmail(e.target.value)} disabled={isHeroSubmitting}
                         className="flex-1 px-6 py-4 rounded-full border transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
-                        style={{
-                          background: 'rgba(21,29,47,0.85)',
-                          borderColor: 'rgba(42,42,78,0.8)',
-                          backdropFilter: 'blur(8px)',
-                        }}
-                        onFocus={(e) => {
-                          e.currentTarget.style.borderColor = 'rgba(108,62,244,0.7)';
-                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(108,62,244,0.15)';
-                        }}
-                        onBlur={(e) => {
-                          e.currentTarget.style.borderColor = 'rgba(42,42,78,0.8)';
-                          e.currentTarget.style.boxShadow = 'none';
-                        }}
-                        required
-                        aria-label="先行登録用のメールアドレス"
+                        style={{ background: 'rgba(21,29,47,0.85)', borderColor: 'rgba(42,42,78,0.8)', backdropFilter: 'blur(8px)' }}
+                        onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(108,62,244,0.7)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(108,62,244,0.15)'; }}
+                        onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(42,42,78,0.8)'; e.currentTarget.style.boxShadow = 'none'; }}
+                        required aria-label="先行登録用のメールアドレス"
                       />
                       <motion.button
-                        type="submit"
-                        disabled={isHeroSubmitting}
+                        type="submit" disabled={isHeroSubmitting}
                         className="px-8 py-4 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-70 disabled:cursor-wait"
                         style={{ boxShadow: '0 0 20px rgba(108,62,244,0.4)' }}
-                        variants={buttonVariants}
-                        initial="rest"
-                        whileHover="hover"
-                        whileTap="tap"
+                        variants={buttonVariants} initial="rest" whileHover="hover" whileTap="tap"
                       >
-                        {isHeroSubmitting ? (
-                          <>
-                            <svg
-                              className="animate-spin h-4 w-4"
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                            >
-                              <circle
-                                className="opacity-25"
-                                cx="12"
-                                cy="12"
-                                r="10"
-                                stroke="currentColor"
-                                strokeWidth="4"
-                              />
-                              <path
-                                className="opacity-75"
-                                fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                              />
-                            </svg>
-                            暗号化通信中...
-                          </>
-                        ) : (
-                          '無料で試す ➔'
-                        )}
+                        {isHeroSubmitting ? '暗号化通信中...' : '無料で試す ➔'}
                       </motion.button>
                     </motion.form>
 
-                    <div className="flex justify-center lg:justify-start w-full">
+                    <div className="flex justify-center w-full">
                       <Link href={PROOFMARK_COPY.hero.secondaryCta.href}>
                         <button className="inline-flex items-center gap-2 text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors mb-6">
-                          {PROOFMARK_COPY.hero.secondaryCta.label}
-                          <ArrowRight className="h-4 w-4" />
+                          {PROOFMARK_COPY.hero.secondaryCta.label} <ArrowRight className="h-4 w-4" />
                         </button>
                       </Link>
                     </div>
 
                     <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.8 }}
-                      style={{
-                        fontSize: '14px',
-                        color: '#A8A0D8',
-                        marginTop: '8px',
-                        lineHeight: '1.5',
-                        wordBreak: 'break-word',
-                        whiteSpace: 'normal',
-                      }}
-                      className="text-center lg:text-left"
+                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
+                      className="text-center text-[14px] text-[#A8A0D8] mt-2 leading-relaxed"
                     >
-                      <p className="text-xs text-muted flex items-center justify-center lg:justify-start gap-2 mb-3">
-                        <Lock className="w-4 h-4 text-accent" />
-                        メールアドレスはSSL/TLSで保護されます
+                      <p className="text-xs text-muted flex items-center justify-center gap-2 mb-3">
+                        <Lock className="w-4 h-4 text-accent" /> メールアドレスはSSL/TLSで保護されます
                       </p>
                       <p>
-                        <span className="text-[#ffd966] font-bold">
-                          🎁 先着100名限定
-                        </span>
-                        ：β版優先招待 + Creator 3ヶ月無料 + 創設者バッジ
-                        <br />
-                        クレジットカード不要・いつでも解除OK
+                        <span className="text-[#ffd966] font-bold">🎁 先着100名限定</span>
+                        ：β版優先招待 + Creator 3ヶ月無料 + 創設者バッジ<br />クレジットカード不要・いつでも解除OK
                       </p>
                     </motion.div>
                   </>
                 )}
               </div>
 
-              {/* 右側：HeroMockupコンポーネント */}
-              <div className="relative w-full flex justify-center lg:justify-end mt-12 lg:mt-0">
+              {/* Morphing Trust Core (HeroMockup) を中央直下に配置 */}
+              <motion.div
+                initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.5 }}
+                className="w-full relative z-10 mt-16 sm:mt-24 pointer-events-none"
+              >
                 <HeroMockup />
-              </div>
+              </motion.div>
             </div>
           </motion.div>
         </section>
