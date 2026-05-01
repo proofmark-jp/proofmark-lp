@@ -39,7 +39,6 @@ interface CertRecord {
     user_id: string | null;
     title: string | null;
     sha256: string | null;
-    file_hash: string | null;
     proof_mode: string | null;
     visibility: string | null;
     public_image_url: string | null;
@@ -82,7 +81,7 @@ function safeFilename(input: string | null | undefined, fallback: string): strin
 function buildClientLetter(cert: CertRecord, verifyUrl: string): string {
     const issuedAt = cert.certified_at ?? cert.proven_at ?? cert.created_at ?? '';
     const niceTitle = cert.title ?? cert.original_filename ?? cert.file_name ?? 'Verified Digital Artwork';
-    const sha256 = cert.sha256 ?? cert.file_hash ?? '';
+    const sha256 = cert.sha256 ?? '';
     return [
         'ProofMark Evidence Pack — Client Hand-off Letter',
         '',
@@ -227,7 +226,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             const { data, error } = await admin
                 .from('certificates')
-                .select('id, user_id, title, sha256, file_hash, proof_mode, visibility, public_image_url, storage_path, original_filename, file_name, certified_at, proven_at, created_at, timestamp_token, tsa_provider, tsa_url, team_id')
+                .select('id, user_id, title, sha256, proof_mode, visibility, public_image_url, storage_path, original_filename, file_name, certified_at, proven_at, created_at, timestamp_token, tsa_provider, tsa_url, team_id')
                 .eq('id', certParam)
                 .maybeSingle();
 
@@ -279,7 +278,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         archive.pipe(res);
 
         if (downloadKind === 'auth' && cert) {
-            const sha256 = cert.sha256 ?? cert.file_hash ?? '';
+            const sha256 = cert.sha256 ?? '';
             const verifyUrl = `https://proofmark.jp/cert/${cert.id}`;
             const baseFile = safeFilename(cert.original_filename ?? cert.file_name, 'asset.bin');
 
