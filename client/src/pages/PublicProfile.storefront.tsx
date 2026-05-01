@@ -22,6 +22,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useRoute } from 'wouter';
 import { motion } from 'framer-motion';
 import { ArrowDownToLine, Layers3, ShieldCheck } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
 
 import { VerifiedStudioHeader } from '../components/storefront/VerifiedStudioHeader';
 import {
@@ -94,6 +95,9 @@ export default function PublicProfileStorefront() {
   const [activeProjectId, setActiveProjectId] = useState<string>(ALL_ID);
   const [auditCertId, setAuditCertId] = useState<string | null>(null);
   const [auditCertTitle, setAuditCertTitle] = useState<string | null>(null);
+
+  const { user } = useAuth();
+  const isOwner = !!(user && data?.profile && user.id === data.profile.id);
 
   // ── データフェッチ ─────────────────────────────────────────
   useEffect(() => {
@@ -226,6 +230,7 @@ export default function PublicProfileStorefront() {
                   <StorefrontProofCard
                     cert={c}
                     ndaMode={profile.nda_default_mode}
+                    isOwner={isOwner}
                     onOpenAudit={(cert) => {
                       setAuditCertId(cert.id);
                       setAuditCertTitle(cert.title);

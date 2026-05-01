@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useRoute, useLocation, Link } from 'wouter';
 import { QRCodeSVG } from 'qrcode.react';
 import { CheckCircle, Clock, ShieldCheck, Image as ImageIcon, Copy, Check, FileText, Lock, ShieldAlert, Flag, Package } from 'lucide-react';
+import { motion } from 'framer-motion';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { evidencePackDownloadUrl } from '../lib/checkout';
 import { useAuth } from '../hooks/useAuth';
 import Navbar from '../components/Navbar';
@@ -315,16 +317,64 @@ export default function CertificatePage() {
                                 <div className="aspect-square w-full rounded-2xl border border-[#1C1A38] bg-[#07061A] flex flex-col items-center justify-center overflow-hidden relative shadow-inner print:border-gray-300 print:bg-gray-50 print:shadow-none">
                                     {cert.proof_mode === 'shareable' && cert.public_image_url && (cert.visibility === 'public' || (user && user.id === cert.user_id)) ? (
                                         <img src={cert.public_image_url} alt="Artwork" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="flex flex-col items-center justify-center text-center p-8 w-full h-full bg-[#0D0B24] rounded-xl border border-[#1C1A38]">
-                                            <div className="flex items-center px-4 py-2 bg-[#00D4AA]/10 border border-[#00D4AA]/30 text-[#00D4AA] text-xs font-bold tracking-widest uppercase rounded-full mb-6">
-                                                CLIENT-SIDE HASHING
-                                            </div>
-                                            <div className="text-2xl font-bold text-white mb-2">Image Data Hidden</div>
-                                            <div className="text-[#A8A0D8] text-sm max-w-[250px]">
-                                                Verified in a complete zero-knowledge state.
-                                            </div>
+                                    ) : user && user.id === cert.user_id && cert.public_image_url ? (
+                                        /* Owner: Translucent Vault preview */
+                                        <div className="relative w-full h-full">
+                                          <img
+                                            src={cert.public_image_url}
+                                            alt=""
+                                            aria-hidden="true"
+                                            className="w-full h-full object-cover"
+                                            style={{ filter: 'blur(16px) grayscale(100%) opacity(0.6)' }}
+                                          />
+                                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0e27]/40">
+                                            <Lock className="w-8 h-8 text-[#f0f0fa]/50 mb-3" />
+                                            <span className="font-bold text-xs tracking-wider text-[#f0f0fa]/70 uppercase">Owner Preview</span>
+                                            <span className="font-mono text-[10px] tracking-widest text-[#00d4aa]/50 uppercase mt-1">NDA Protected</span>
+                                          </div>
                                         </div>
+                                    ) : (
+                                        /* Third party: The Vault */
+                                        <Tooltip.Provider delayDuration={200}>
+                                          <Tooltip.Root>
+                                            <Tooltip.Trigger asChild>
+                                              <div
+                                                className="flex flex-col items-center justify-center w-full h-full cursor-default overflow-hidden"
+                                                style={{
+                                                  backgroundColor: '#0a0e27',
+                                                  backgroundImage: 'radial-gradient(circle at center, rgba(108,62,244,0.08) 0%, transparent 60%)',
+                                                }}
+                                              >
+                                                <div
+                                                  className="absolute inset-0 pointer-events-none"
+                                                  style={{
+                                                    backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px)',
+                                                    mixBlendMode: 'overlay' as const,
+                                                  }}
+                                                />
+                                                <Lock className="w-10 h-10 text-[#6c3ef4]/50 mb-4" />
+                                                <h4 className="font-bold tracking-wide text-[#f0f0fa] text-base mb-1.5 opacity-90">NDA Protected</h4>
+                                                <p className="font-mono text-[10px] tracking-widest text-[#00d4aa] opacity-70">ZERO-KNOWLEDGE ENCRYPTION</p>
+                                              </div>
+                                            </Tooltip.Trigger>
+                                            <Tooltip.Portal>
+                                              <Tooltip.Content
+                                                sideOffset={8}
+                                                className="z-50 max-w-[280px] px-4 py-3 rounded-xl shadow-2xl text-xs leading-relaxed"
+                                                style={{ backgroundColor: '#151d2f', border: '1px solid #2a2a4e', color: '#a0a0c0' }}
+                                              >
+                                                <motion.div
+                                                  initial={{ opacity: 0, y: 4 }}
+                                                  animate={{ opacity: 1, y: 0 }}
+                                                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                                                >
+                                                  この作品は機密保持契約（NDA）に基づき、高度な暗号化技術で保護されています。元の画像はクリエイターのローカル環境から一切送信されていません。
+                                                </motion.div>
+                                                <Tooltip.Arrow className="fill-[#2a2a4e] w-3 h-1.5" />
+                                              </Tooltip.Content>
+                                            </Tooltip.Portal>
+                                          </Tooltip.Root>
+                                        </Tooltip.Provider>
                                     )}
                                 </div>
                             </div>

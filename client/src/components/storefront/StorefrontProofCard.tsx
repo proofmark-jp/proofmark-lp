@@ -42,12 +42,14 @@ interface Props {
   /** 親で監査チェーン整合のフェッチ結果がある場合のみ true / false。未取得は undefined。 */
   chainOk?: boolean;
   ndaMode?: NdaMode;
+  /** 現在の閲覧者がこの証明書のオーナーか否か */
+  isOwner?: boolean;
   onOpenAudit?: (cert: StorefrontCertModel) => void;
 }
 
 const NDA_VISIBILITY = new Set(['unlisted', 'private']);
 
-export function StorefrontProofCard({ cert, chainOk, ndaMode = 'masked', onOpenAudit }: Props) {
+export function StorefrontProofCard({ cert, chainOk, ndaMode = 'masked', isOwner = false, onOpenAudit }: Props) {
   const isMasked = NDA_VISIBILITY.has(cert.visibility ?? 'public') || ndaMode !== 'open';
   const ndaToken = isMasked ? NDA_TOKENS[ndaMode] : NDA_TOKENS.open;
   const tsa = deriveTsaTier({
@@ -88,6 +90,8 @@ export function StorefrontProofCard({ cert, chainOk, ndaMode = 'masked', onOpenA
               decoding="async"
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
             />
+          ) : isOwner && cert.public_image_url ? (
+            <TranslucentVault imageUrl={cert.public_image_url} />
           ) : (
             <TheVault />
           )}
@@ -232,7 +236,7 @@ function TheVault() {
             }}
           >
             {/* 走査線・チタンテクスチャ */}
-            <div 
+            <div
               className="absolute inset-0 pointer-events-none"
               style={{
                 backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px)',
@@ -255,7 +259,7 @@ function TheVault() {
                   boxShadow: '0 0 20px rgba(0, 212, 170, 0.4)',
                 }}
               />
-              
+
               <motion.div
                 variants={{
                   initial: { y: 0, color: '#6c3ef4', opacity: 0.5 },
@@ -301,5 +305,50 @@ function TheVault() {
         </Tooltip.Portal>
       </Tooltip.Root>
     </Tooltip.Provider>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────── */
+
+/**
+ * TranslucentVault — オーナー専用のすりガラスプレビュー。
+ * 実画像を極度のBlur + モノクロ化で表示し、中央にウォーターマークを重ねる。
+ * これにより「どれがどの案件か」がオーナーにだけ判別できる。
+ */
+function TranslucentVault({ imageUrl }: { imageUrl: string }) {
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      {/* Blurred + Grayscale actual image */}
+      <img
+        src={imageUrl}
+        alt=""
+        aria-hidden="true"
+        loading="lazy"
+        decoding="async"
+        className="w-full h-full object-cover"
+        style={{
+          filter: 'blur(16px) grayscale(100%) opacity(0.6)',
+        }}
+      />
+      {/* Watermark overlay */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0e27]/40">
+        <motion.div
+          variants={{
+            initial: { y: 0, opacity: 0.6 },
+            animate: { y: 0, opacity: 0.6 },
+            hover: { y: -2, opacity: 1 },
+          }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+        >
+          <Lock className="w-6 h-6 text-[#f0f0fa]/60 mb-2 mx-auto" />
+        </motion.div>
+        <span className="font-bold text-[11px] tracking-wider text-[#f0f0fa]/70 uppercase">
+          Owner Preview
+        </span>
+        <span className="font-mono text-[9px] tracking-widest text-[#00d4aa]/50 uppercase mt-0.5">
+          NDA Protected
+        </span>
+      </div>
+    </div>
   );
 }
