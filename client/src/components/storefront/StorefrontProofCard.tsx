@@ -92,6 +92,8 @@ export function StorefrontProofCard({ cert, chainOk, ndaMode = 'masked', isOwner
             />
           ) : isOwner && cert.public_image_url ? (
             <TranslucentVault imageUrl={cert.public_image_url} />
+          ) : isOwner ? (
+            <OwnerVault />
           ) : (
             <TheVault />
           )}
@@ -349,6 +351,51 @@ function TranslucentVault({ imageUrl }: { imageUrl: string }) {
           NDA Protected
         </span>
       </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────── */
+
+/**
+ * OwnerVault — オーナー用の「識別可能な石板」。
+ * 実画像URLが存在しない場合でも、本人だけがオーナーと分かる
+ * パープルアクセントの石板を表示する。
+ */
+function OwnerVault() {
+  return (
+    <div
+      className="absolute inset-0 flex flex-col items-center justify-center cursor-default overflow-hidden"
+      style={{
+        backgroundColor: '#0a0e27',
+        backgroundImage: 'radial-gradient(circle at center, rgba(108,62,244,0.12) 0%, transparent 60%)',
+      }}
+    >
+      {/* 走査線 */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px)',
+          mixBlendMode: 'overlay',
+        }}
+      />
+      <motion.div
+        variants={{
+          initial: { y: 0, opacity: 0.5 },
+          animate: { y: 0, opacity: 0.5 },
+          hover: { y: -4, opacity: 1 },
+        }}
+        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+        className="mb-3"
+      >
+        <Lock className="w-8 h-8 text-[#6c3ef4]" />
+      </motion.div>
+      <h4 className="relative z-10 font-bold tracking-wide text-[#f0f0fa] text-sm/none mb-1 opacity-90">
+        NDA Protected
+      </h4>
+      <span className="font-mono text-[9px] tracking-widest text-[#6c3ef4] opacity-70 uppercase">
+        Owner View
+      </span>
     </div>
   );
 }

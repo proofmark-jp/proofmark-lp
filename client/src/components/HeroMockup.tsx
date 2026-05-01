@@ -7,7 +7,7 @@ type Phase = 'idle' | 'dropping' | 'scanning' | 'verified' | 'packed';
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 // Apple風の極めて滑らかなイージング
-const appleEase = [0.22, 1, 0.36, 1];
+const appleEase = [0.22, 1, 0.36, 1] as [number, number, number, number];
 
 export default function HeroMockup() {
   const [phase, setPhase] = useState<Phase>('idle');
