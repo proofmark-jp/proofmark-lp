@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 
-import CertificateUpload from '@/components/CertificateUpload';
+import CertificateUpload from '@/components/CertificateUpload.c2pa-patch';
 import { useAuth } from '@/hooks/useAuth';
 import HeroMockup from '../components/HeroMockup';
 import { FAQAccordion } from '@/components/FAQAccordion';

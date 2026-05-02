@@ -1,5 +1,6 @@
 export const config = { runtime: 'edge' };
 import { getAuthenticatedUserId, getOrigin, json, supabaseAdmin } from '../_shared.js';
+import { resolveC2paForPersistence } from '../_lib/c2pa-validate.js';
 import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
 
@@ -51,6 +52,7 @@ export default async function handler(request: Request) {
   const proofMode = String(formData.get('proofMode') || 'shareable');
   const visibility = String(formData.get('visibility') || 'public');
   const metadataJsonRaw = String(formData.get('metadataJson') || '{}');
+  const c2paRaw = formData.get('c2paManifest');
 
   if (!file || typeof file === 'string' || !('name' in file)) return json(400, { error: 'file is required' });
 
@@ -75,6 +77,21 @@ export default async function handler(request: Request) {
     userId = await getAuthenticatedUserId(request);
   } catch (error) {
     return json(401, { error: error instanceof Error ? error.message : 'Unauthorized' });
+  }
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('plan_tier')
+    .eq('id', userId)
+    .single();
+  const planTier = profile?.plan_tier ?? 'free';
+
+  if (c2paRaw instanceof File) {
+    console.warn({ event: 'c2pa.binary_field_ignored' });
+  }
+  const { value: c2paValue, gate } = resolveC2paForPersistence(c2paRaw instanceof File ? null : c2paRaw, planTier);
+  if (gate.kind === 'reject') {
+    console.warn({ event: 'c2pa.rejected', reason: gate.reason });
   }
 
   const duplicate = await supabaseAdmin
@@ -130,6 +147,7 @@ export default async function handler(request: Request) {
         ...parsedMetadata,
         integrity_model: 'proofmark.chain-ready.v1',
       },
+      c2pa_manifest: c2paValue,
     })
     .select('*')
     .single();
