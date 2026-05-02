@@ -97,6 +97,21 @@ export function useC2pa(planTier: string | null | undefined, opts: UseC2paOption
     return w;
   }, [enabled]);
 
+  // ── dispose ─────────────────────────────────────────────────────
+  const dispose = useCallback(() => {
+    const w = workerRef.current;
+    if (w) {
+      try { w.terminate(); } catch { /* noop */ }
+    }
+    workerRef.current = null;
+    for (const [, entry] of pendingRef.current) {
+      clearTimeout(entry.timerId);
+      entry.resolve({ kind: 'no_manifest', reason: 'disposed' });
+    }
+    pendingRef.current.clear();
+    setParsing(false);
+  }, []);
+
   // ── parse() ─────────────────────────────────────────────────────
   const parse = useCallback(async (file: File): Promise<C2paParseResult> => {
     if (!enabled) return { kind: 'no_manifest', reason: 'plan_locked' };
@@ -137,20 +152,7 @@ export function useC2pa(planTier: string | null | undefined, opts: UseC2paOption
     });
   }, [enabled, ensureWorker, opts.sdkUrl, opts.wasmUrl, dispose]);
 
-  // ── dispose ─────────────────────────────────────────────────────
-  const dispose = useCallback(() => {
-    const w = workerRef.current;
-    if (w) {
-      try { w.terminate(); } catch { /* noop */ }
-    }
-    workerRef.current = null;
-    for (const [, entry] of pendingRef.current) {
-      clearTimeout(entry.timerId);
-      entry.resolve({ kind: 'no_manifest', reason: 'disposed' });
-    }
-    pendingRef.current.clear();
-    setParsing(false);
-  }, []);
+
 
   // unmount で必ず Worker を畳む
   useEffect(() => {
