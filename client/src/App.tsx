@@ -27,6 +27,7 @@ import HowItWorks from "./pages/HowItWorks";
 import CompareC2PA from "./pages/CompareC2PA";
 import Footer from "./components/Footer";
 import Pricing from "./pages/Pricing";
+import Business from "./pages/Business";
 import LegalResources from "./pages/LegalResources";
 import TrustCenter from "./pages/TrustCenter";
 import SpotIssue from "./pages/SpotIssue";
@@ -72,6 +73,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/pricing" component={Pricing} />
+      <Route path="/business" component={Business} />
       <Route path="/cert/:id" component={CertificatePage} />
       <Route path="/auth" component={Auth} />
       <Route path="/dashboard" component={Dashboard} />

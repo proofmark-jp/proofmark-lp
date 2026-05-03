@@ -1,5 +1,16 @@
 import React, { useState } from 'react';
-import { Check, Minus, Tag, Loader2, Star } from 'lucide-react';
+import {
+  Check,
+  Minus,
+  Tag,
+  Loader2,
+  Star,
+  Sparkles,
+  Zap,
+  Crown,
+  Users,
+  ArrowRight,
+} from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { motion } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
@@ -16,9 +27,60 @@ import { startCheckout } from '../lib/checkout';
 
 /* ────────────────────────────────────────────
  * Pricing Page
+ * Phase 11.A — ROI Navigation + ¥0 SEO/A11y Fix
  *  - Home / FAQ / Pricing は PRICING_PLANS（SSOT）のみを参照する。
- *  - Business / API は別カードに分離し、メイン4枚の比較を綺麗にする。
+ *  - 価格表示の SEO/A11y バグを修正：
+ *      <p className="text-4xl">{plan.priceLabel}</p>
+ *    の中で priceLabel が空文字や undefined になるとレンダリングが消失するため、
+ *    Free（'¥0'）を含めて全プランで明示的に "数値部" と "通貨記号" を分離して
+ *    aria-label を付与する。
+ *  - プランカードの直上に ROI ナビゲーション（4ユースケース・マッピング）を追加。
+ *    認知負荷5秒以内で「自分はどのプランか」を判断できる導線を構築する。
  * ──────────────────────────────────────────── */
+
+/* ────────────────────────────────────────────
+ * Price renderer
+ *   "¥0" や "¥1,480" のような文字列を、
+ *   currency symbol + amount に分離して描画する。
+ *   Free プランの ¥0 が DOM 上に確実に出力されることを保証する。
+ * ──────────────────────────────────────────── */
+function PriceLabel({ priceLabel, priceUnit }: { priceLabel: string; priceUnit: string }) {
+  // 「¥1,480」「¥480」「¥0」「お問い合わせ」のいずれにも耐える
+  const m = priceLabel.match(/^([¥$€£])(.+)$/);
+
+  if (!m) {
+    // "お問い合わせ" 等の純文字列
+    return (
+      <span
+        className="text-4xl font-extrabold text-white"
+        aria-label={priceLabel + (priceUnit ? ` ${priceUnit}` : '')}
+        data-testid="price-label"
+      >
+        {priceLabel}
+      </span>
+    );
+  }
+
+  const [, symbol, amount] = m;
+  // ¥0 を含めて確実に描画されるよう、空文字列の混入を排除
+  const safeAmount = amount && amount.length > 0 ? amount : '0';
+
+  return (
+    <span
+      className="inline-flex items-baseline gap-0.5"
+      aria-label={`${symbol}${safeAmount}${priceUnit ? ` ${priceUnit}` : ''}`}
+      data-testid="price-label"
+    >
+      <span className="text-2xl font-bold text-white/85 leading-none">{symbol}</span>
+      <span className="text-4xl font-extrabold text-white leading-none">
+        {safeAmount}
+      </span>
+      {priceUnit && (
+        <span className="ml-1 text-base font-medium text-[#A8A0D8]">{priceUnit}</span>
+      )}
+    </span>
+  );
+}
 
 function FeatureRow({
   label,
@@ -95,11 +157,13 @@ function PlanCard({
   };
 
   return (
-    <motion.div
+    <motion.article
+      id={`plan-${plan.id}`}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 + index * 0.08 }}
       className={`relative flex flex-col bg-[#0D0B24] rounded-2xl p-8 transition-all duration-300 ${cardClass}`}
+      aria-labelledby={`plan-${plan.id}-name`}
     >
       {plan.badge && (
         <div className="absolute top-0 right-8 transform -translate-y-1/2">
@@ -110,19 +174,15 @@ function PlanCard({
       )}
 
       <div className={`mb-8 ${isRecommended ? 'mt-2' : ''}`}>
-        <h3 className="text-xl font-black text-white tracking-wider mb-2 uppercase">
+        <h3
+          id={`plan-${plan.id}-name`}
+          className="text-xl font-black text-white tracking-wider mb-2 uppercase"
+        >
           {plan.name}
         </h3>
         <p className="text-[#A8A0D8] text-sm h-10">{plan.tagline}</p>
         <div className="mt-6 flex items-baseline">
-          <span className="text-4xl font-extrabold text-white">
-            {plan.priceLabel}
-          </span>
-          {plan.priceUnit && (
-            <span className="text-[#A8A0D8] ml-2 font-medium">
-              {plan.priceUnit}
-            </span>
-          )}
+          <PriceLabel priceLabel={plan.priceLabel} priceUnit={plan.priceUnit} />
         </div>
         <p className="mt-3 text-xs text-[#A8A0D8]/80">対象: {plan.audience}</p>
       </div>
@@ -151,7 +211,115 @@ function PlanCard({
           </button>
         </Link>
       )}
-    </motion.div>
+    </motion.article>
+  );
+}
+
+/* ────────────────────────────────────────────
+ * ROI Navigation
+ *   ユースケース → プランへの 5秒マッピング。
+ *   Spot 4件 = Creator 1ヶ月 という ROI 計算をマイクロコピーで明示。
+ * ──────────────────────────────────────────── */
+interface RoiNavItem {
+  icon: typeof Sparkles;
+  label: string;
+  plan: string;
+  planId: string;
+  micro: string;
+  accent: string;
+  recommended?: boolean;
+}
+
+const ROI_NAV: RoiNavItem[] = [
+  {
+    icon: Sparkles,
+    label: 'とりあえず試したい',
+    plan: 'Free',
+    planId: 'free',
+    micro: '月30件まで無料で発行',
+    accent: '#A8A0D8',
+  },
+  {
+    icon: Zap,
+    label: '1案件だけ重要',
+    plan: 'Spot',
+    planId: 'spot',
+    micro: '登録不要 / Evidence Pack 即発行',
+    accent: '#00D4AA',
+  },
+  {
+    icon: Crown,
+    label: '月3件以上発行する',
+    plan: 'Creator',
+    planId: 'creator',
+    micro: 'Spot 4件で元が取れる',
+    accent: '#BC78FF',
+    recommended: true,
+  },
+  {
+    icon: Users,
+    label: '2人以上で運用',
+    plan: 'Studio',
+    planId: 'studio',
+    micro: 'WORM監査ログ + チーム席',
+    accent: '#F0BB38',
+  },
+];
+
+function RoiNavigation() {
+  return (
+    <section
+      aria-label="プラン選択ガイド"
+      className="mx-auto max-w-6xl mb-12"
+    >
+      <div className="text-center mb-6">
+        <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.28em] text-[#A8A0D8]">
+          5-Second ROI
+        </span>
+        <h2 className="mt-3 text-xl sm:text-2xl font-black text-white">
+          あなたに合うプランを、5秒で。
+        </h2>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {ROI_NAV.map((item) => {
+          const Icon = item.icon;
+          return (
+            <a
+              key={item.planId}
+              href={`#plan-${item.planId}`}
+              className={`group relative rounded-2xl border bg-[#0D0B24]/85 p-4 backdrop-blur-md transition-all hover:-translate-y-0.5 ${item.recommended
+                  ? 'border-[#6C3EF4]/50 shadow-[0_0_18px_rgba(108,62,244,0.18)]'
+                  : 'border-[#1C1A38] hover:border-white/20'
+                }`}
+            >
+              {item.recommended && (
+                <span className="absolute -top-2 left-4 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white">
+                  おすすめ
+                </span>
+              )}
+              <div className="flex items-center gap-2 mb-2">
+                <Icon className="h-4 w-4" style={{ color: item.accent }} />
+                <span
+                  className="text-[10px] font-bold uppercase tracking-[0.18em]"
+                  style={{ color: item.accent }}
+                >
+                  {item.plan}
+                </span>
+              </div>
+              <p className="text-sm font-bold text-white leading-snug mb-1.5">
+                {item.label}
+              </p>
+              <p className="text-[11px] leading-relaxed text-[#A8A0D8]">
+                {item.micro}
+              </p>
+              <div className="mt-3 inline-flex items-center gap-1 text-[10px] font-bold text-white/60 group-hover:text-white">
+                プランを見る <ArrowRight className="h-3 w-3" />
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -181,12 +349,30 @@ export default function Pricing() {
     <div className="min-h-screen bg-[#07061A] text-[#F0EFF8] font-sans selection:bg-[#6C3EF4]/30">
       <SEO
         title="料金プラン | ProofMark"
-        description={`${PROOFMARK_COPY.brandShort}の料金プラン。Free(月30件)、Spot(¥480/件)、Creator(¥1,480/月)、Studio(¥4,980/月)。Evidence Pack 納品形式・案件単位整理・WORM監査ログまで、納品信頼の運用に必要な機能を段階的に提供します。`}
+        description={`${PROOFMARK_COPY.brandShort}の料金プラン。Free(¥0/月、月30件)、Spot(¥480/件)、Creator(¥1,480/月)、Studio(¥4,980/月)。Evidence Pack 納品形式・案件単位整理・WORM監査ログまで、納品信頼の運用に必要な機能を段階的に提供します。`}
         url="https://proofmark.jp/pricing"
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'Product',
+          name: 'ProofMark',
+          description: 'AI Delivery Trust Infrastructure',
+          offers: visiblePlans.map((p) => ({
+            '@type': 'Offer',
+            name: p.name,
+            // SEO 上 ¥0 を確実に伝えるため、Free は "0" を明示
+            price:
+              p.id === 'free'
+                ? '0'
+                : (p.priceLabel.match(/[\d,]+/)?.[0] ?? '').replace(/,/g, ''),
+            priceCurrency: 'JPY',
+            availability: 'https://schema.org/InStock',
+          })),
+        }}
       />
+
       <div className="max-w-7xl mx-auto pt-32 pb-24 px-4 sm:px-6 lg:px-8">
         {/* ── Header ───────────────────────── */}
-        <div className="text-center mb-16 flex flex-col items-center">
+        <div className="text-center mb-12 flex flex-col items-center">
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -215,14 +401,22 @@ export default function Pricing() {
             transition={{ delay: 0.2 }}
             className="text-[#A8A0D8] text-base sm:text-lg max-w-2xl mx-auto leading-relaxed"
           >
-            まずはFreeで月30件まで試せます。本番運用は<span className="text-white">Creator</span>、
+            まずは Free で月30件まで試せます。本番運用は{' '}
+            <span className="text-white">Creator</span>、
             <br className="hidden md:block" />
-            チーム運用は<span className="text-white">Studio</span>、API/SLAが必要な制作会社向けは<span className="text-white">Business</span>へ。
+            チーム運用は <span className="text-white">Studio</span>、API/SLAが必要な制作会社向けは{' '}
+            <span className="text-white">Business</span> へ。
           </motion.p>
         </div>
 
+        {/* ── ROI Navigation（5-Second ROI Map） ── */}
+        <RoiNavigation />
+
         {/* ── Plan Grid ───────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-stretch max-w-7xl mx-auto">
+        <div
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-stretch max-w-7xl mx-auto"
+          role="list"
+        >
           {visiblePlans.map((plan, idx) => (
             <PlanCard
               key={plan.id}
@@ -237,7 +431,7 @@ export default function Pricing() {
 
         {/* ── Footer Cards: Business / Trust ─ */}
         <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-          <Link href="/contact">
+          <Link href="/business">
             <div className="group rounded-2xl border border-[#1C1A38] bg-[#0D0B24]/80 p-6 transition-all hover:border-[#00D4AA]/30 cursor-pointer">
               <div className="text-xs font-bold tracking-widest uppercase text-[#00D4AA] mb-2">
                 Business / API
@@ -246,7 +440,7 @@ export default function Pricing() {
                 API・Webhook・SLA・商用TSA・DPAが必要な制作会社/出版社/プラットフォーム向け。導入支援・監査証跡まで個別対応します。
               </p>
               <span className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-white group-hover:text-[#00D4AA]">
-                相談する →
+                法人向けページを開く →
               </span>
             </div>
           </Link>
@@ -284,12 +478,20 @@ export default function Pricing() {
           </p>
         </motion.div>
 
-        {/* ── FAQ短答（Pricingに重要な疑問だけ） ── */}
+        {/* ── Pricing FAQ（重要3問） ── */}
         <div className="mt-20 max-w-3xl mx-auto">
           <h3 className="text-center text-sm font-bold uppercase tracking-[0.24em] text-[#A8A0D8] mb-6">
             Pricing FAQ
           </h3>
           <div className="space-y-3">
+            <div className="rounded-xl border border-[#1C1A38] bg-[#0D0B24]/70 p-5">
+              <p className="font-bold text-white text-sm mb-1.5">
+                Q. Free と Spot と Creator の違いを30秒で
+              </p>
+              <p className="text-sm text-[#A8A0D8] leading-relaxed">
+                Free は「証跡が残ることを体感する」ためのお試し（PDFと Evidence Pack は除外）。Spot は「登録不要で1案件だけ Evidence Pack を出したい」場合の単発購入（¥480/件）。Creator は「月3件以上の納品で説明コストを下げたい」場合の本番運用プラン（¥1,480/月、Spot 4件相当で元が取れます）。
+              </p>
+            </div>
             <div className="rounded-xl border border-[#1C1A38] bg-[#0D0B24]/70 p-5">
               <p className="font-bold text-white text-sm mb-1.5">
                 Q. なぜ Creator は ¥1,480 ですか？
@@ -300,26 +502,25 @@ export default function Pricing() {
             </div>
             <div className="rounded-xl border border-[#1C1A38] bg-[#0D0B24]/70 p-5">
               <p className="font-bold text-white text-sm mb-1.5">
-                Q. 月額は嫌だが、特定の案件だけ使いたい
-              </p>
-              <p className="text-sm text-[#A8A0D8] leading-relaxed">
-                その場合は{' '}
-                <strong className="text-[#00D4AA]">
-                  Spot {PRICING_PLANS.find((p) => p.id === 'spot')?.priceLabel}/件
-                </strong>{' '}
-                をお使いください。アカウント登録不要で、1案件分の Evidence Pack が即時発行されます。
-              </p>
-            </div>
-            <div className="rounded-xl border border-[#1C1A38] bg-[#0D0B24]/70 p-5">
-              <p className="font-bold text-white text-sm mb-1.5">
                 Q. 運営が終了したら証明書は無効になりますか？
               </p>
               <p className="text-sm text-[#A8A0D8] leading-relaxed">
                 いいえ。発行されるタイムスタンプトークン（TST）はRFC3161の国際標準であり、ProofMarkの存続に依存しません。
                 <Link href="/trust-center#s7">
-                  <span className="text-[#00D4AA] underline hover:no-underline">Trust Center §7</span>
+                  <span className="text-[#00D4AA] underline hover:no-underline">
+                    Trust Center §7
+                  </span>
                 </Link>
-                に独立検証の手順を、<a href="https://github.com/proofmark-jp/verify" target="_blank" rel="noopener noreferrer" className="text-[#00D4AA] underline hover:no-underline">公開リポジトリ</a>に検証スクリプトを公開しています。
+                に独立検証の手順を、
+                <a
+                  href="https://github.com/proofmark-jp/verify"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#00D4AA] underline hover:no-underline"
+                >
+                  公開リポジトリ
+                </a>
+                に検証スクリプトを公開しています。
               </p>
             </div>
           </div>

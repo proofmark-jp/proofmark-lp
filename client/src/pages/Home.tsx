@@ -7,7 +7,6 @@ import {
   Shield,
   Share2,
   CheckCircle,
-  ArrowRight,
   Minus,
   Star,
 } from 'lucide-react';
@@ -29,6 +28,9 @@ import TrustSignalRow from '@/components/TrustSignalRow';
 import EvidencePackTeaser from '@/components/EvidencePackTeaser';
 import EngineeringPillarsSection from '@/components/EngineeringPillarsSection';
 import UseCasesSection from '@/components/UseCasesSection';
+import NdaPortfolioSection from '@/components/NdaPortfolioSection';
+import VendorLockInFreeSection from '@/components/VendorLockInFreeSection';
+import HeroCtaSingular from '@/components/HeroCtaSingular';
 import { PROOFMARK_COPY } from '@/lib/proofmark-copy';
 import { PRICING_PLANS, FOUNDER_OFFER } from '@/data/pricingPlans';
 import founderBadge from '../assets/logo/badges/proofmark-badge-founder.svg';
@@ -93,9 +95,7 @@ const GlowOrb = ({
 );
 
 export default function Home() {
-  const [heroEmail, setHeroEmail] = useState('');
   const [waitlistEmail, setWaitlistEmail] = useState('');
-  const [isHeroSubmitting, setIsHeroSubmitting] = useState(false);
   const [isWaitlistSubmitting, setIsWaitlistSubmitting] = useState(false);
 
   const { user, signOut } = useAuth();
@@ -129,33 +129,6 @@ export default function Home() {
 
   const { scrollYProgress } = useScroll();
   const heroY = useTransform(scrollYProgress, [0, 0.3], [0, -60]);
-
-  const handleHeroSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!heroEmail) return;
-    setIsHeroSubmitting(true);
-
-    const { error: dbError } = await supabase
-      .from('waitlist')
-      .insert([{ email: heroEmail }]);
-
-    if (dbError && dbError.code === '23505') {
-      toast.info(
-        'このメールアドレスは既に先行登録されています。ご期待いただきありがとうございます！',
-      );
-      setIsHeroSubmitting(false);
-      return;
-    }
-
-    const emailResult = await sendConfirmationEmail(heroEmail);
-    if (emailResult.success) {
-      toast.success('登録完了！確認メールをお送りしました。');
-      setHeroEmail('');
-    } else {
-      toast.error(emailResult.error || '登録に失敗しました');
-    }
-    setIsHeroSubmitting(false);
-  };
 
   const handleWaitlistSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -289,63 +262,7 @@ export default function Home() {
 
               {/* CTA Area */}
               <div className="w-full max-w-md mx-auto z-20 relative">
-                {user ? (
-                  <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.4 }}>
-                    <Link href="/dashboard">
-                      <button className="w-full px-10 py-5 rounded-full bg-primary text-white font-black text-lg hover:scale-105 transition-all shadow-[0_0_40px_rgba(108,62,244,0.4)]">
-                        管理画面へ進む (Go to Dashboard) ➔
-                      </button>
-                    </Link>
-                  </motion.div>
-                ) : (
-                  <>
-                    <motion.form
-                      onSubmit={handleHeroSubmit}
-                      className="flex flex-col sm:flex-row gap-3 mb-4 w-full"
-                      initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.4 }}
-                    >
-                      <label htmlFor="hero-email" className="sr-only">メールアドレス</label>
-                      <input
-                        id="hero-email" type="email" placeholder="your@email.com" value={heroEmail}
-                        onChange={(e) => setHeroEmail(e.target.value)} disabled={isHeroSubmitting}
-                        className="flex-1 px-6 py-4 rounded-full border transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
-                        style={{ background: 'rgba(21,29,47,0.85)', borderColor: 'rgba(42,42,78,0.8)', backdropFilter: 'blur(8px)' }}
-                        onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(108,62,244,0.7)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(108,62,244,0.15)'; }}
-                        onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(42,42,78,0.8)'; e.currentTarget.style.boxShadow = 'none'; }}
-                        required aria-label="先行登録用のメールアドレス"
-                      />
-                      <motion.button
-                        type="submit" disabled={isHeroSubmitting}
-                        className="px-8 py-4 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-70 disabled:cursor-wait"
-                        style={{ boxShadow: '0 0 20px rgba(108,62,244,0.4)' }}
-                        variants={buttonVariants} initial="rest" whileHover="hover" whileTap="tap"
-                      >
-                        {isHeroSubmitting ? '暗号化通信中...' : '無料で試す ➔'}
-                      </motion.button>
-                    </motion.form>
-
-                    <div className="flex justify-center w-full">
-                      <Link href={PROOFMARK_COPY.hero.secondaryCta.href}>
-                        <button className="inline-flex items-center gap-2 text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors mb-6">
-                          {PROOFMARK_COPY.hero.secondaryCta.label} <ArrowRight className="h-4 w-4" />
-                        </button>
-                      </Link>
-                    </div>
-
-                    <motion.div
-                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
-                      className="text-center text-[14px] text-[#A8A0D8] mt-2 leading-relaxed"
-                    >
-                      <p className="text-xs text-muted flex items-center justify-center gap-2 mb-3">
-                        <Lock className="w-4 h-4 text-accent" /> メールアドレスはSSL/TLSで保護されます
-                      </p>
-                      <p>
-                        <span className="text-[#ffd966] font-bold">🎁 先着100名限定</span>
-                        ：β版優先招待 + Creator 3ヶ月無料 + 創設者バッジ<br />クレジットカード不要・いつでも解除OK
-                      </p>
-                    </motion.div>
-                  </>
-                )}
+                <HeroCtaSingular authed={!!user} />
               </div>
 
               {/* Morphing Trust Core (HeroMockup) を中央直下に配置 */}
@@ -522,6 +439,7 @@ export default function Home() {
 
         {/* Engineering Pillars（信頼の裏付け） */}
         <EngineeringPillarsSection />
+        <VendorLockInFreeSection />
 
         {/* Quick try / Upload */}
         <FadeInSection delay={0.1}>
@@ -557,6 +475,7 @@ export default function Home() {
 
         {/* Use Cases（誰の・どこで） */}
         <UseCasesSection />
+        <NdaPortfolioSection />
 
         {/* ─────────────────────────────────
          * Pricing (mini, SSOT-driven)

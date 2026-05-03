@@ -4,15 +4,25 @@ import { PROOFMARK_COPY } from '@/lib/proofmark-copy';
 /**
  * UseCasesSection
  * ─────────────────────────────────────────────
- * 「誰の・どの場面で使われるか」をLP上で明示するセクション。
+ * Phase 11.A — NDA Portfolio を独立セクションへ抽出
  *
- * - 文言は PROOFMARK_COPY.useCases が唯一の正。
- * - "防衛 < 営業加速" の文脈で並べ替えた6つの場面。
- * - カードは情報密度を抑え、絵文字で視認性を担保。
+ * 旧版にあった "🤐 NDA案件の営業実績づくりに" は NdaPortfolioSection.tsx に
+ * 独立化したため、本セクションからは除外する。
+ *
+ * UseCasesSection は「日常運用シーン」の網羅的提示にフォーカスし、
+ * NDA案件の文脈は専用セクションが担う。
+ *
+ * 設計：
+ *  - 文言は PROOFMARK_COPY.useCases が唯一の正。
+ *  - "防衛 < 営業加速" の文脈は維持。
+ *  - NDA関連タイトル（"NDA"を含むもの）は本セクションでは描画しない。
  */
 
 export default function UseCasesSection() {
     const u = PROOFMARK_COPY.useCases;
+
+    // NDA Portfolio 独立化に伴い、NDA に関するユースケースは本セクションでは表示しない
+    const items = u.items.filter((item) => !/NDA|nda/.test(item.title));
 
     return (
         <section
@@ -39,7 +49,7 @@ export default function UseCasesSection() {
                     viewport={{ once: true, margin: '-60px' }}
                     variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
                 >
-                    {u.items.map((item) => (
+                    {items.map((item) => (
                         <motion.article
                             key={item.title}
                             variants={{
@@ -64,6 +74,18 @@ export default function UseCasesSection() {
                         </motion.article>
                     ))}
                 </motion.div>
+
+                {/* NDA Portfolio への導線 */}
+                <div className="mt-10 text-center">
+                    <a
+                        href="#nda-portfolio"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-[#A8A0D8] hover:text-white transition-colors"
+                    >
+                        <span>NDA案件の活用方法は専用セクション</span>
+                        <span className="text-[#00D4AA]">「NDA Portfolio」</span>
+                        <span>へ →</span>
+                    </a>
+                </div>
             </div>
         </section>
     );

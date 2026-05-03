@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { ChevronDown, ArrowRight } from 'lucide-react';
+import { ChevronDown, ArrowRight, Sparkles, Zap, Crown, Users } from 'lucide-react';
 import { Link } from 'wouter';
 import { PRICING_PLANS } from '@/data/pricingPlans';
 
 /**
  * FAQAccordion (Home 用ショート版)
  * ─────────────────────────────────────────────
- * - 価格表記は data/pricingPlans.ts と完全一致させる。
- * - 「絶対」「100%」「必ず」など断定表現は廃し、Trust Center の誠実な開示と整合させる。
- * - 詳細は /faq に誘導し、ホームでは「不安を増幅しない」最重要4問のみ。
+ * Phase 11.A — ROI Snapshot を埋め込み
+ *  - 価格表記は data/pricingPlans.ts と完全一致させる。
+ *  - Trust Center / FAQ §legal の誠実トーンと整合（断定表現は廃止）。
+ *  - FAQの最上部に「5秒ROIスナップショット」を表示し、Pricingページへ誘導。
+ *  - 詳細は /faq、価格詳細は /pricing。
  */
 
 interface FAQItem {
@@ -18,9 +20,30 @@ interface FAQItem {
 }
 
 const getPrice = (planId: string) => {
-  const plan = PRICING_PLANS.find(p => p.id === planId);
+  const plan = PRICING_PLANS.find((p) => p.id === planId);
   return plan ? `${plan.priceLabel}${plan.priceUnit}` : '';
 };
+
+interface RoiSnapshotItem {
+  icon: typeof Sparkles;
+  label: string;
+  plan: string;
+  accent: string;
+  highlight?: boolean;
+}
+
+const ROI_SNAPSHOT: RoiSnapshotItem[] = [
+  { icon: Sparkles, label: 'とりあえず試す', plan: 'Free', accent: '#A8A0D8' },
+  { icon: Zap, label: '1案件だけ重要', plan: 'Spot', accent: '#00D4AA' },
+  {
+    icon: Crown,
+    label: '月3件以上発行',
+    plan: 'Creator',
+    accent: '#BC78FF',
+    highlight: true,
+  },
+  { icon: Users, label: '2人以上で運用', plan: 'Studio', accent: '#F0BB38' },
+];
 
 const faqItems: FAQItem[] = [
   {
@@ -66,6 +89,7 @@ const faqItems: FAQItem[] = [
           </li>
           <li>
             <strong>Creator（{getPrice('creator')}）</strong>: 無制限PDF・Evidence Pack・案件単位整理・NDA表示
+            <span className="text-[11px] text-[#A8A0D8]/70"> ※ Spot 4件で元が取れます</span>
           </li>
           <li>
             <strong>Studio（{getPrice('studio')}）</strong>: チーム管理・WORM監査ログ・Chain of Evidence
@@ -92,11 +116,41 @@ export const FAQAccordion = () => {
   return (
     <section className="py-20">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
+        <div className="text-center mb-10">
           <h2 className="text-4xl font-black mb-4">よくある質問</h2>
           <p className="text-muted max-w-2xl mx-auto">
             運用前に知っておきたい、最重要の4問。
           </p>
+        </div>
+
+        {/* ── 5-Second ROI Snapshot（FAQの直前に配置） ── */}
+        <div className="mb-10 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {ROI_SNAPSHOT.map((s) => {
+            const Icon = s.icon;
+            return (
+              <Link key={s.plan} href={`/pricing#plan-${s.plan.toLowerCase()}`}>
+                <div
+                  className={`cursor-pointer rounded-xl border bg-[#0D0B24]/70 px-3 py-3 backdrop-blur-md transition-all hover:-translate-y-0.5 ${s.highlight
+                      ? 'border-[#6C3EF4]/50 shadow-[0_0_14px_rgba(108,62,244,0.16)]'
+                      : 'border-[#1C1A38] hover:border-white/20'
+                    }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Icon className="h-3.5 w-3.5" style={{ color: s.accent }} />
+                    <span
+                      className="text-[9px] font-bold uppercase tracking-[0.18em]"
+                      style={{ color: s.accent }}
+                    >
+                      {s.plan}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[11px] font-semibold leading-tight text-white">
+                    {s.label}
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
         </div>
 
         <div className="space-y-3">
@@ -111,11 +165,10 @@ export const FAQAccordion = () => {
                 aria-expanded={openId === item.id}
                 aria-controls={`faq-${item.id}`}
               >
-                <span className="font-bold text-foreground pr-4">
-                  {item.question}
-                </span>
+                <span className="font-bold text-foreground pr-4">{item.question}</span>
                 <ChevronDown
-                  className={`w-5 h-5 text-primary flex-shrink-0 transition-transform duration-300 ${openId === item.id ? 'rotate-180' : ''}`}
+                  className={`w-5 h-5 text-primary flex-shrink-0 transition-transform duration-300 ${openId === item.id ? 'rotate-180' : ''
+                    }`}
                 />
               </button>
 
@@ -153,8 +206,7 @@ export const FAQAccordion = () => {
             href="/faq"
             className="inline-flex items-center gap-2 text-[#00D4AA] hover:text-white font-bold transition-colors"
           >
-            詳細なFAQ・法的有効性について確認する{' '}
-            <ArrowRight className="w-4 h-4" />
+            詳細なFAQ・法的有効性について確認する <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       </div>
