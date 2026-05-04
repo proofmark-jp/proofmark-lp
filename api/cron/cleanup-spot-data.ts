@@ -16,6 +16,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getAdminClient, json, makeLogger, methodGuard, requireEnv } from '../_lib/server.js';
 
+export const config = { maxDuration: 300 };
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
 interface SpotOrderRow {

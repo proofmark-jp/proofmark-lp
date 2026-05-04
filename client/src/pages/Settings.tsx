@@ -20,6 +20,7 @@ export default function Settings() {
   // Form State
   const [username, setUsername] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarCacheKey, setAvatarCacheKey] = useState(Date.now());
   const [bio, setBio] = useState('');
   const [x_url, setXUrl] = useState('');
   const [instagram_url, setInstagramUrl] = useState('');
@@ -144,13 +145,14 @@ export default function Settings() {
       // パブリックURLの取得
       const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
 
-      // 🌟 追加: URLの末尾に「?t=現在時刻」を付与してブラウザのキャッシュを強制的に無効化する
-      const publicUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`;
-      setAvatarUrl(publicUrl);
+      // 🌟 追加: DB保存用には cleanUrl を使い、画面の即時反映のみ displayUrl を使用する
+      const cleanUrl = publicUrlData.publicUrl;
+      setAvatarUrl(cleanUrl); // 🌟 StateにはクリーンなURLだけを入れる
+      setAvatarCacheKey(Date.now()); // 🌟 画像を強制リロードするためのキーを更新
 
       // 🌟 AuthのメタデータにURLを書き込む
       const { error: updateError } = await supabase.auth.updateUser({
-        data: { avatar_url: publicUrl }
+        data: { avatar_url: cleanUrl }
       });
 
       if (updateError) {
@@ -162,7 +164,7 @@ export default function Settings() {
           .upsert({
             id: user.id,
             username: username,
-            avatar_url: publicUrl,
+            avatar_url: cleanUrl,
             updated_at: new Date().toISOString()
           });
 
@@ -320,6 +322,7 @@ export default function Settings() {
   };
 
   const currentPlan = user?.user_metadata?.plan_type || 'free';
+  const isAdmin = user?.email === 'fiftyfifty.ok@gmail.com';
 
   if (loading) return <div className="min-h-screen bg-[#07061A] flex justify-center items-center text-[#00D4AA] tracking-widest font-bold">LOADING...</div>;
 
@@ -333,11 +336,17 @@ export default function Settings() {
               <LayoutGrid className="w-3.5 h-3.5 text-[#6C3EF4]" /> 管理画面に戻る
             </span>
           </Link>
-          <Link href={`/u/${username}`}>
-            <span className="inline-flex items-center gap-2 text-xs font-bold text-[#00D4AA] hover:text-white transition-colors cursor-pointer bg-[#00D4AA]/10 border border-[#00D4AA]/20 px-4 py-2 rounded-full shadow-sm">
+          {username ? (
+            <Link href={`/u/${username}`}>
+              <span className="inline-flex items-center gap-2 text-xs font-bold text-[#00D4AA] hover:text-white transition-colors cursor-pointer bg-[#00D4AA]/10 border border-[#00D4AA]/20 px-4 py-2 rounded-full shadow-sm">
+                <Globe className="w-3.5 h-3.5" /> 公開ギャラリーを確認
+              </span>
+            </Link>
+          ) : (
+            <span className="inline-flex items-center gap-2 text-xs font-bold text-[#00D4AA] bg-[#00D4AA]/10 border border-[#00D4AA]/20 px-4 py-2 rounded-full shadow-sm cursor-not-allowed opacity-50">
               <Globe className="w-3.5 h-3.5" /> 公開ギャラリーを確認
             </span>
-          </Link>
+          )}
         </div>
         <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
           <Edit3 className="w-8 h-8 text-[#6C3EF4]" /> プロフィール構築
@@ -353,7 +362,7 @@ export default function Settings() {
             <div className="relative group">
               <div className="w-28 h-28 rounded-full bg-gradient-to-br from-[#6C3EF4] to-[#00D4AA] flex items-center justify-center overflow-hidden border-2 border-[#1C1A38] shadow-lg">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  <img src={`${avatarUrl}?t=${avatarCacheKey}`} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-4xl font-extrabold text-white">{username.charAt(0).toUpperCase()}</span>
                 )}
@@ -526,7 +535,7 @@ export default function Settings() {
               <div className="relative z-10">
                 <div className="flex items-center gap-3 mb-2">
                   <h5 className="text-xl font-black text-white tracking-wider uppercase">
-                    {currentPlan === 'admin' ? 'ADMIN PLAN' : currentPlan === 'light' ? 'LIGHT PLAN' : 'FREE PLAN'}
+                    {currentPlan === 'studio' ? 'STUDIO PLAN' : currentPlan === 'creator' ? 'CREATOR PLAN' : 'FREE PLAN'}
                   </h5>
                   {profileData?.is_founder && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFD700]/10 border border-[#FFD700]/30 text-[#FFD700] text-[9px] font-bold tracking-widest uppercase shadow-[0_0_10px_rgba(255,215,0,0.2)]">
@@ -535,11 +544,11 @@ export default function Settings() {
                   )}
                 </div>
                 <p className="text-sm text-[#A8A0D8] leading-relaxed max-w-md">
-                  {currentPlan === 'admin'
-                    ? '管理者権限です。全機能の利用およびシステム管理パネルへアクセス可能です。'
-                    : currentPlan === 'light'
-                      ? 'PDF証明書の発行・Webタイムスタンプ証明が無制限で利用可能です。'
-                      : '無料で月30件までのWebタイムスタンプ証明が利用可能です。全機能の解放にはアップグレードが必要です。'}
+                  {currentPlan === 'studio'
+                    ? 'チーム管理、監査ログ(WORM)、Chain of Evidenceを利用可能なエンタープライズ運用プランです。'
+                    : currentPlan === 'creator'
+                      ? '無制限のPDF証明書・Evidence Pack発行、案件単位整理、NDA表示モードが利用可能な本番運用プランです。'
+                      : '無料で月30件までのWebタイムスタンプ証明が利用可能です。Evidence Packの出力など全機能の解放にはアップグレードが必要です。'}
                 </p>
               </div>
 
@@ -711,7 +720,7 @@ export default function Settings() {
                       UIの表示テスト用に、自身のアカウントの擬似プランを変更します。
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {['free', 'light', 'admin'].map((p) => (
+                      {['free', 'creator', 'studio'].map((p) => (
                         <button
                           key={p}
                           onClick={() => handlePlanChange(p)}
@@ -726,8 +735,8 @@ export default function Settings() {
                 </div>
 
                 <div className="mt-8 space-y-6">
-                  {currentPlan === 'admin' && <AdminStorageSimulator />}
-                  {currentPlan === 'admin' && <AdminSafetyPanel />}
+                  {isAdmin && <AdminStorageSimulator />}
+                  {isAdmin && <AdminSafetyPanel />}
                 </div>
               </div>
             </div>
