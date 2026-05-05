@@ -93,6 +93,14 @@ export default function CertificateUpload() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       
+      if (!token) {
+        setIsProcessing(false);
+        setProcessStatus('');
+        alert('セッションの有効期限が切れました。安全のため、再度ログインをお願いします。');
+        window.location.href = '/auth'; // ログイン画面へ強制リダイレクト
+        return;
+      }
+
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
