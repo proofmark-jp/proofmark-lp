@@ -36,7 +36,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import LpNavbar from '../components/lp/Navbar';
-import HeroMockup from '../components/HeroMockup';
+import HeroMockup from '../components/HeroAnimation';
 
 /* Apple-grade easing と統一トランジション (仕様書 §1-3) */
 const PM_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
@@ -404,13 +404,6 @@ export default function Home() {
             />
           </motion.div>
 
-          <motion.p
-            className="mt-8 text-center text-[13px]"
-            style={{ color: 'rgba(255,255,255,0.45)' }}
-            {...fadeInProps(0.10)}
-          >
-            複雑な上位プランは廃止しました。誰もが直感的に使える 2 軸 + 1 単発 に絞っています。
-          </motion.p>
         </div>
       </section>
 

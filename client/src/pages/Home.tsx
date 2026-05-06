@@ -38,7 +38,7 @@ import {
   Star,
 } from 'lucide-react';
 import LpNavbar from '../components/lp/Navbar';
-import HeroMockup from '../components/HeroMockup';
+import HeroDemoOrFallback from '../components/HeroDemoOrFallback';
 
 // Added for integration
 import TrustSignalRow from '@/components/TrustSignalRow';
@@ -184,8 +184,12 @@ export default function Home() {
             </div>
 
             {/* 右 45% — Lottie/Motion デモのコンテナ (Task D 受け入れ準備) */}
-            <motion.div {...fadeInProps(0.10)}>
-              <HeroMockup />
+            <motion.div {...fadeInProps(0.10)} className="w-full">
+              <HeroDemoOrFallback
+                thumbnailSrc="/fantasy_artwork_final.jpg"
+                fallbackWebpSrc="/hero-demo.webp"
+                initialCount={12846}
+              />
             </motion.div>
           </div>
         </div>
@@ -646,7 +650,7 @@ function PricingCard({ tier, price, cadence, tagline, features, ctaLabel, ctaHre
           let Icon = CheckCircle2;
           let iconColor = '#00D4AA';
           let textColor = 'rgba(255,255,255,0.78)';
-          
+
           if (f.state === 'exclude') {
             Icon = Minus;
             iconColor = 'rgba(255,255,255,0.3)';
@@ -656,7 +660,7 @@ function PricingCard({ tier, price, cadence, tagline, features, ctaLabel, ctaHre
             iconColor = '#F0BB38';
             textColor = 'rgba(255,255,255,0.78)';
           }
-          
+
           return (
             <li key={f.label} className="flex items-start gap-2.5 text-[14px]" style={{ color: textColor }}>
               <Icon className="mt-[2px] h-4 w-4 shrink-0" style={{ color: iconColor }} aria-hidden="true" />

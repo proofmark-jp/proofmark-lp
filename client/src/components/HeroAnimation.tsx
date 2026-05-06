@@ -151,7 +151,7 @@ export default function HeroMockup({
           />
         ) : (
           <div className="relative w-full max-w-[540px] mx-auto h-[320px] flex flex-col items-center justify-center select-none font-sans mt-4 sm:mt-12">
-            
+
             {/* ━━ 浮遊するファイル（ドラッグ＆ドロップの暗示） ━━ */}
             <div className="absolute top-0 w-full flex justify-center z-30 pointer-events-none h-[80px]">
               <AnimatePresence>
@@ -159,13 +159,13 @@ export default function HeroMockup({
                   <motion.div
                     key="floating-file"
                     initial={{ opacity: 0, y: -20, scale: 0.8 }}
-                    animate={{ 
-                      opacity: phase === 'idle' ? 1 : 0, 
+                    animate={{
+                      opacity: phase === 'idle' ? 1 : 0,
                       y: phase === 'idle' ? [0, -8, 0] : 60,
-                      scale: phase === 'idle' ? 1 : 0.6 
+                      scale: phase === 'idle' ? 1 : 0.6
                     }}
                     exit={{ opacity: 0, scale: 0 }}
-                    transition={{ 
+                    transition={{
                       y: { repeat: phase === 'idle' ? Infinity : 0, duration: 3, ease: 'easeInOut' },
                       duration: 0.4,
                       ease: appleEase
@@ -201,18 +201,18 @@ export default function HeroMockup({
                 borderRadius: phase === 'idle' || phase === 'dropping' ? 32 : phase === 'scanning' || phase === 'verified' ? 64 : 24,
                 borderColor: phase === 'verified' ? 'rgba(0,212,170,0.5)' : phase === 'packed' ? 'rgba(108,62,244,0.4)' : 'rgba(108,62,244,0.2)',
                 borderWidth: 1,
-                boxShadow: phase === 'verified' 
-                  ? '0 0 40px rgba(0,212,170,0.15), inset 0 0 20px rgba(0,212,170,0.05)' 
-                  : phase === 'packed' 
-                  ? '0 20px 40px rgba(0,0,0,0.4), 0 0 30px rgba(108,62,244,0.15)' 
-                  : phase === 'scanning'
-                  ? '0 0 30px rgba(108,62,244,0.1)'
-                  : '0 24px 48px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)',
+                boxShadow: phase === 'verified'
+                  ? '0 0 40px rgba(0,212,170,0.15), inset 0 0 20px rgba(0,212,170,0.05)'
+                  : phase === 'packed'
+                    ? '0 20px 40px rgba(0,0,0,0.4), 0 0 30px rgba(108,62,244,0.15)'
+                    : phase === 'scanning'
+                      ? '0 0 30px rgba(108,62,244,0.1)'
+                      : '0 24px 48px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)',
               }}
               transition={{ type: "spring", stiffness: 350, damping: 30, mass: 0.8 }}
             >
               <AnimatePresence mode="wait" custom={phase}>
-                
+
                 {/* 1. IDLE / DROPPING: グラスモーフィズム・ドロップゾーン */}
                 {(phase === 'idle' || phase === 'dropping') && (
                   <motion.div
@@ -236,8 +236,8 @@ export default function HeroMockup({
                     </AnimatePresence>
 
                     <div className="absolute inset-3 border-2 border-dashed border-[#6c3ef4]/30 rounded-[24px] bg-[#6c3ef4]/[0.02]" />
-                    
-                    <motion.div 
+
+                    <motion.div
                       animate={{ scale: phase === 'dropping' ? 1.1 : 1 }}
                       className="w-14 h-14 rounded-full bg-[#151d2f] border border-[#2a2a4e] flex items-center justify-center mb-4 z-10 shadow-lg"
                     >
@@ -269,7 +269,7 @@ export default function HeroMockup({
                         <span className="text-[10px] font-bold uppercase tracking-widest text-[#00d4aa]">Certifying...</span>
                       </div>
                       <div className="w-full h-1.5 bg-[#0a0e27] rounded-full overflow-hidden shadow-inner">
-                        <motion.div 
+                        <motion.div
                           className="h-full bg-gradient-to-r from-[#00d4aa] to-[#6c3ef4]"
                           initial={{ width: '0%' }}
                           animate={{ width: '100%' }}
@@ -291,9 +291,9 @@ export default function HeroMockup({
                     transition={{ duration: 0.3, ease: appleEase }}
                     className="flex items-center justify-center gap-3 w-full"
                   >
-                    <motion.div 
-                      initial={{ scale: 0, rotate: -45 }} 
-                      animate={{ scale: 1, rotate: 0 }} 
+                    <motion.div
+                      initial={{ scale: 0, rotate: -45 }}
+                      animate={{ scale: 1, rotate: 0 }}
                       transition={{ type: "spring", stiffness: 400, damping: 20, delay: 0.1 }}
                       className="bg-[#00d4aa] rounded-full p-1 shadow-[0_0_15px_rgba(0,212,170,0.4)]"
                     >
@@ -328,7 +328,7 @@ export default function HeroMockup({
                         </div>
                       </div>
                     </div>
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.3 }}
