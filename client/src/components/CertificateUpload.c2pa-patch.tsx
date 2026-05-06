@@ -149,6 +149,15 @@ export default function CertificateUpload() {
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
+
+      if (!token) {
+        setIsProcessing(false);
+        setProcessStatus('');
+        alert('セッションの有効期限が切れました（または認証情報が取得できません）。安全のため、再度ログインをお願いします。');
+        window.location.href = '/auth'; // ログイン画面へ強制リダイレクト
+        return; // これ以上処理を進めない
+      }
+
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -205,11 +214,10 @@ export default function CertificateUpload() {
       {!file ? (
         <div
           {...getRootProps()}
-          className={`border-2 border-dashed rounded-2xl p-16 text-center cursor-pointer transition-all duration-300 ${
-            isDragActive
-              ? 'border-[#00D4AA] bg-[#00D4AA]/10'
-              : 'border-slate-700 hover:border-[#6C3EF4] hover:bg-[#15132D]'
-          }`}
+          className={`border-2 border-dashed rounded-2xl p-16 text-center cursor-pointer transition-all duration-300 ${isDragActive
+            ? 'border-[#00D4AA] bg-[#00D4AA]/10'
+            : 'border-slate-700 hover:border-[#6C3EF4] hover:bg-[#15132D]'
+            }`}
         >
           <input {...getInputProps()} />
           <UploadCloud className="w-12 h-12 mx-auto mb-4 text-slate-400" />
@@ -244,9 +252,8 @@ export default function CertificateUpload() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div
                 onClick={() => !isProcessing && setProofMode('private')}
-                className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all ${
-                  proofMode === 'private' ? 'border-[#00D4AA] bg-[#00D4AA]/5' : 'border-[#1C1A38] bg-[#07061A] hover:border-slate-600'
-                } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all ${proofMode === 'private' ? 'border-[#00D4AA] bg-[#00D4AA]/5' : 'border-[#1C1A38] bg-[#07061A] hover:border-slate-600'
+                  } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <Shield className={`w-5 h-5 ${proofMode === 'private' ? 'text-[#00D4AA]' : 'text-slate-500'}`} />
@@ -263,11 +270,10 @@ export default function CertificateUpload() {
                   setProofMode('shareable');
                   setVisibility('public');
                 }}
-                className={`relative p-5 rounded-2xl border-2 transition-all ${
-                  !isPaidPlan ? 'opacity-60 cursor-not-allowed bg-[#07061A] border-[#1C1A38]'
+                className={`relative p-5 rounded-2xl border-2 transition-all ${!isPaidPlan ? 'opacity-60 cursor-not-allowed bg-[#07061A] border-[#1C1A38]'
                   : proofMode === 'shareable' ? 'cursor-pointer border-[#6C3EF4] bg-[#6C3EF4]/5'
-                  : 'cursor-pointer border-[#1C1A38] bg-[#07061A] hover:border-slate-600'
-                }`}
+                    : 'cursor-pointer border-[#1C1A38] bg-[#07061A] hover:border-slate-600'
+                  }`}
               >
                 {!isPaidPlan && (
                   <div className="absolute top-3 right-3 bg-gradient-to-r from-[#F0BB38] to-[#E5A822] text-[#1A1200] text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1">
