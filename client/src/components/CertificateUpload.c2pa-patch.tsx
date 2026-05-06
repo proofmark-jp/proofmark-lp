@@ -153,7 +153,7 @@ export default function CertificateUpload() {
       if (!token) {
         setIsProcessing(false);
         setProcessStatus('');
-        alert('セッションの有効期限が切れました（または認証情報が取得できません）。安全のため、再度ログインをお願いします。');
+        alert('安全のため、自動的にログアウトしました。お手数ですが、もう一度ログインをお願いします。');
         window.location.href = '/auth'; // ログイン画面へ強制リダイレクト
         return; // これ以上処理を進めない
       }

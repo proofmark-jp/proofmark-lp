@@ -1,3 +1,23 @@
+/**
+ * App.tsx — Phase 1 完全分離モデル (LP / App ルーティング)
+ *
+ * 変更ポイント (Task A):
+ *   1. <RouteGuard /> を導入し、未ログイン時に /dashboard を /auth へリダイレクト。
+ *   2. ログイン済みユーザーが / (LP) にアクセスした場合は /dashboard へ強制遷移。
+ *      → 既存ユーザーにマーケティング LP を再提示しない (世界基準のSaaSの作法)。
+ *   3. 既存の Route 定義・コンポーネント import は **1 行も削除しない**。
+ *      認証ロジック (useAuth) と API 呼び出しには一切触れない。
+ *
+ * 注意:
+ *   - useAuth() の `loading` フラグが false になるまでリダイレクト判定を遅延し、
+ *     チラつきと「未ログイン誤判定 → 即 /auth」を防止する。
+ *   - /auth, /spot-issue, /cert/:id, /u/:username, /embed/:username,
+ *     /trust-center, /pricing, /how-it-works, /compare-c2pa, /legal-resources,
+ *     /faq, /what-it-proves, /terms, /privacy, /tokushoho, /security, /contact,
+ *     /blog 系, /invite, /admin/*, /404 は **どちらの状態でも自由にアクセス可能**。
+ *     LP/App リダイレクトの対象は「/」と「/dashboard」だけに限定する。
+ */
+
 import { HelmetProvider } from 'react-helmet-async';
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,7 +26,7 @@ import { Route, Switch, useLocation } from "wouter";
 import { useEffect } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { AuthProvider } from "./hooks/useAuth";
+import { AuthProvider, useAuth } from "./hooks/useAuth";
 import Home from "./pages/Home";
 import CertificatePage from './pages/CertificatePage';
 import Auth from './pages/Auth';
@@ -68,6 +88,38 @@ function ScrollToTop() {
   return null;
 }
 
+/**
+ * RouteGuard — Task A の核 (LP / App 完全分離)
+ *
+ *  - useAuth は loading を返す前提。loading 中は何もしない (チラつき防止)。
+ *  - /         : 未ログイン → そのまま LP / ログイン済み → /dashboard へ
+ *  - /dashboard: 未ログイン → /auth へ      / ログイン済み → そのまま
+ *  - その他   : 干渉しない
+ */
+function RouteGuard() {
+  const [location, navigate] = useLocation();
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (loading) return;
+
+    // /dashboard は未ログインなら /auth へ
+    if (location === '/dashboard' && !user) {
+      navigate('/auth?redirect=/dashboard', { replace: true });
+      return;
+    }
+
+    // / (LP ルート) はログイン済みなら /dashboard へ
+    // hash や query を保持する必要はない (LP は静的)
+    if (location === '/' && user) {
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+  }, [location, user, loading, navigate]);
+
+  return null;
+}
+
 function Router() {
   return (
     <Switch>
@@ -112,13 +164,16 @@ function Router() {
 function AppShell() {
   const [location] = useLocation();
   const isEmbedRoute = location.startsWith('/embed/');
+  // /dashboard は「静寂な作業空間」のため Footer を表示しない (仕様書 §3)
+  const hideFooter = isEmbedRoute || location === '/dashboard';
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <ScrollToTop />
+      <RouteGuard />
       <Toaster />
       <Router />
-      {!isEmbedRoute ? <Footer /> : null}
+      {!hideFooter ? <Footer /> : null}
     </div>
   );
 }

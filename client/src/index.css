@@ -1,9 +1,29 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
+
+/* ─────────────────────────────────────────────────────────────────────
+ * ProofMark Design System — Phase 1 (世界基準・完全分離モデル)
+ *
+ * 仕様書「1. デザインシステム（厳格な制約）」に厳密準拠。
+ *
+ *  - Background (全セクション統一): #07061A
+ *  - Interactive (Primary CTA)   : #6C3EF4
+ *  - Success / Proof             : #00D4AA
+ *  - Text Primary                : #FFFFFF
+ *  - Text Secondary              : rgba(255,255,255,0.55)
+ *  - Accent Gradient             : linear-gradient(135deg, #6C3EF4, #00D4AA)
+ *  - Display (H1)                : 72px / 700 / 1.04 / -0.03em
+ *  - Section Headline (H2)       : 48px / 700 / 1.1  / -0.02em
+ *  - Label (uppercase)           : 11px / 600 / 0.12em / #00D4AA
+ *  - Section spacing             : 160px (Mobile 96px)
+ *  - Easing (ease-out-expo相当)  : cubic-bezier(0.16, 1, 0.3, 1)
+ *
+ *  既存の Tailwind v4 トークン (--background, --primary, --accent, --card 等)
+ *  はダッシュボード等の既存ページが依存しているため**温存**する。
+ *  LP 専用トークンは "--pm-*" のネームスペースで追加する (衝突回避)。
+ * ─────────────────────────────────────────────────────────────────── */
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -42,59 +62,79 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --font-heading: var(--font-display);
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-  /* Custom shadow tokens */
-  --shadow-glow-primary: 0 0 20px rgba(108, 62, 244, 0.4);
-  --shadow-glow-accent: 0 0 20px rgba(0, 212, 170, 0.4);
-  --shadow-glow-sm: 0 0 10px rgba(108, 62, 244, 0.2);
+
+  /* ── Phase 1: ProofMark LP DNA tokens (公開) ──────────────────── */
+  --color-pm-bg: var(--pm-bg);
+  --color-pm-interactive: var(--pm-interactive);
+  --color-pm-success: var(--pm-success);
+  --color-pm-text: var(--pm-text);
+  --color-pm-text-secondary: var(--pm-text-secondary);
+  --color-pm-border: var(--pm-border);
+  --color-pm-surface: var(--pm-surface);
 }
 
 :root {
-  /* ProofMark Design: Cyber-Minimalist Security */
-  --primary: #6c3ef4;              /* 紫 - 創造性とテクノロジーの融合 */
-  --primary-foreground: #f0f0fa;   /* 明るいグレー */
-  --accent: #00d4aa;               /* シアン - セキュリティ・保護 */
-  --accent-foreground: #0a0e27;    /* 深い紺 */
-  --gold: #ffd966;                 /* ゴールド - 希少性・価値 */
-  --destructive: #e74c3c;          /* 赤 - エラー・警告 */
+  /* ── Existing Tailwind tokens (Dashboard 等の既存ページが依存) ── */
+  --primary: #6c3ef4;
+  --primary-foreground: #f0f0fa;
+  --accent: #00d4aa;
+  --accent-foreground: #0a0e27;
+  --gold: #ffd966;
+  --destructive: #e74c3c;
   --destructive-foreground: #f0f0fa;
 
   --radius: 0.65rem;
-  --background: #0a0e27;           /* 深い紺 - 信頼感と集中力 */
-  --foreground: #f0f0fa;           /* 明るいグレー - 読みやすさ */
-  --card: #151d2f;                 /* カード背景 */
+  --background: #0a0e27;
+  --foreground: #f0f0fa;
+  --card: #151d2f;
   --card-foreground: #f0f0fa;
   --popover: #151d2f;
   --popover-foreground: #f0f0fa;
-  --secondary: #0f1629;            /* サーフェス層 */
-  --secondary-foreground: #a0a0c0; /* 薄いグレー */
-  --muted: #a0a0c0;               /* 薄いグレー */
-  --muted-foreground: #6b7280;    /* より薄いグレー */
-  --border: #2a2a4e;              /* ボーダー色 */
-  --input: #151d2f;               /* 入力フィールド背景 */
-  --ring: #6c3ef4;                /* フォーカスリング */
+  --secondary: #0f1629;
+  --secondary-foreground: #a0a0c0;
+  --muted: #a0a0c0;
+  --muted-foreground: #6b7280;
+  --border: #2a2a4e;
+  --input: #151d2f;
+  --ring: #6c3ef4;
   --sidebar: #0a0e27;
   --sidebar-foreground: #f0f0fa;
   --sidebar-accent: #6c3ef4;
   --sidebar-accent-foreground: #f0f0fa;
   --sidebar-border: #2a2a4e;
   --sidebar-ring: #6c3ef4;
-  --sidebar-primary: #6c3ef4;
-  --sidebar-primary-foreground: #f0f0fa;
-  --chart-1: #6c3ef4;
-  --chart-2: #00d4aa;
-  --chart-3: #ffd966;
-  --chart-4: #e74c3c;
-  --chart-5: #a0a0c0;
+
+  /* ── Phase 1 ProofMark DNA (LP 専用) ─────────────────────────── */
+  --pm-bg: #07061A;
+  /* 全セクション統一の深いダークネイビー */
+  --pm-interactive: #6C3EF4;
+  /* Primary CTA */
+  --pm-success: #00D4AA;
+  /* 証明完了・信頼 */
+  --pm-text: #FFFFFF;
+  /* Text Primary */
+  --pm-text-secondary: rgba(255, 255, 255, 0.55);
+  /* Text Secondary */
+  --pm-border: rgba(255, 255, 255, 0.08);
+  --pm-surface: rgba(255, 255, 255, 0.03);
+  --pm-accent-gradient: linear-gradient(135deg, #6C3EF4 0%, #00D4AA 100%);
+
+  /* タイポグラフィ */
+  --pm-font-display: 72px;
+  --pm-font-display-mobile: 40px;
+  --pm-font-h2: 48px;
+  --pm-font-h2-mobile: 32px;
+  --pm-font-label: 11px;
+
+  /* 余白 */
+  --pm-section-gap: 160px;
+  --pm-section-gap-mobile: 96px;
+
+  /* イージング (ease-out-expo 相当) */
+  --pm-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dark {
-  /* ProofMark Dark Mode - same as :root (always dark by design) */
   --primary: #6c3ef4;
   --primary-foreground: #f0f0fa;
   --accent: #00d4aa;
@@ -120,58 +160,47 @@
   --sidebar-accent-foreground: #f0f0fa;
   --sidebar-border: #2a2a4e;
   --sidebar-ring: #6c3ef4;
-  --sidebar-primary: #6c3ef4;
-  --sidebar-primary-foreground: #f0f0fa;
-  --chart-1: #6c3ef4;
-  --chart-2: #00d4aa;
-  --chart-3: #ffd966;
-  --chart-4: #e74c3c;
-  --chart-5: #a0a0c0;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  html {
-    color-scheme: dark;
-  }
+
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    /* 日本語テキストの最適な改行設定 */
-    overflow-wrap: break-word;
-    word-break: normal;
-    line-break: strict;
   }
-  h1, h2, h3, h4, h5, h6 {
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-weight: 800;
     letter-spacing: -0.02em;
-    /* 見出しも日本語改行を自然に */
-    overflow-wrap: break-word;
-    word-break: auto-phrase;
   }
-  p, li, span, label {
-    overflow-wrap: break-word;
-    word-break: normal;
-    line-break: strict;
-  }
+
   h1 {
     font-size: 56px;
     font-weight: 900;
     line-height: 1.1;
   }
+
   h2 {
     font-size: 36px;
     font-weight: 800;
     line-height: 1.2;
   }
+
   h3 {
     font-size: 24px;
     font-weight: 700;
     line-height: 1.3;
   }
+
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
   [type="button"]:not(:disabled),
@@ -183,15 +212,21 @@
   input[type="radio"]:not(:disabled) {
     @apply cursor-pointer;
   }
+
   @media (max-width: 680px) {
     h1 {
       font-size: 40px;
     }
+
     h2 {
       font-size: 28px;
     }
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Phase 1 LP utilities — 既存スコープに干渉しないよう .pm- prefix で隔離
+ * ─────────────────────────────────────────────────────────────────── */
 
 @layer components {
   .container {
@@ -222,211 +257,286 @@
     }
   }
 
-  /* ── ProofMark Design Utilities ── */
+  /* LP セクション (背景は変えない・余白で区切る) */
+  .pm-section {
+    background: var(--pm-bg);
+    padding-top: var(--pm-section-gap-mobile);
+    padding-bottom: var(--pm-section-gap-mobile);
+  }
 
-  .gradient-primary {
-    background: linear-gradient(135deg, #6c3ef4 0%, #00d4aa 100%);
+  @media (min-width: 1024px) {
+    .pm-section {
+      padding-top: var(--pm-section-gap);
+      padding-bottom: var(--pm-section-gap);
+    }
   }
-  .gradient-accent {
-    background: linear-gradient(135deg, #00d4aa 0%, #6c3ef4 100%);
+
+  .pm-container {
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 24px;
+    padding-right: 24px;
   }
-  .gradient-dark {
-    background: linear-gradient(135deg, #0a0e27 0%, #151d2f 100%);
+
+  @media (min-width: 768px) {
+    .pm-container {
+      padding-left: 40px;
+      padding-right: 40px;
+    }
   }
-  .gradient-text {
-    background: linear-gradient(135deg, #6c3ef4, #00d4aa);
+
+  /* Display (H1) — 仕様書 1-2 厳密準拠 */
+  .pm-display {
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: var(--pm-font-display-mobile);
+    font-weight: 700;
+    line-height: 1.04;
+    letter-spacing: -0.03em;
+    color: var(--pm-text);
+  }
+
+  @media (min-width: 768px) {
+    .pm-display {
+      font-size: var(--pm-font-display);
+    }
+  }
+
+  /* Section Headline (H2) */
+  .pm-h2 {
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: var(--pm-font-h2-mobile);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--pm-text);
+  }
+
+  @media (min-width: 768px) {
+    .pm-h2 {
+      font-size: var(--pm-font-h2);
+    }
+  }
+
+  /* Eyebrow / Label */
+  .pm-label {
+    display: inline-block;
+    font-size: var(--pm-font-label);
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--pm-success);
+  }
+
+  /* Body Text */
+  .pm-body {
+    color: var(--pm-text-secondary);
+    font-size: 17px;
+    line-height: 1.55;
+    letter-spacing: -0.005em;
+  }
+
+  /* Accent Gradient — テキストクリップ専用 (仕様書) */
+  .pm-accent-text {
+    background: var(--pm-accent-gradient);
     -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
     background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
   }
 
-  .glow-primary {
-    box-shadow: 0 0 20px rgba(108, 62, 244, 0.4);
-  }
-  .glow-accent {
-    box-shadow: 0 0 20px rgba(0, 212, 170, 0.4);
-  }
-  .glow-sm {
-    box-shadow: 0 0 10px rgba(108, 62, 244, 0.2);
-  }
-
-  .shadow-hover {
-    transition: box-shadow 0.3s ease;
-  }
-  .shadow-hover:hover {
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  }
-
-  .border-glow {
-    border: 1px solid #2a2a4e;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
-  }
-  .border-glow:hover {
-    border-color: rgba(108, 62, 244, 0.5);
-    box-shadow: 0 0 12px rgba(108, 62, 244, 0.2);
+  /* Primary CTA */
+  .pm-cta-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 52px;
+    padding: 0 28px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+    color: var(--pm-text);
+    background: var(--pm-interactive);
+    box-shadow: 0 12px 30px -10px rgba(108, 62, 244, 0.65);
+    transition: transform 240ms var(--pm-ease), box-shadow 240ms var(--pm-ease), background 240ms var(--pm-ease);
   }
 
-  /* Glassmorphism card */
-  .glass-card {
-    background: rgba(21, 29, 47, 0.8);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(42, 42, 78, 0.6);
+  .pm-cta-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 18px 40px -12px rgba(108, 62, 244, 0.75);
+    background: #7c52ff;
   }
 
-  /* Cyber accent line */
-  .accent-line {
+  .pm-cta-primary:focus-visible {
+    outline: 2px solid var(--pm-success);
+    outline-offset: 3px;
+  }
+
+  /* Ghost CTA */
+  .pm-cta-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 52px;
+    padding: 0 26px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+    color: var(--pm-text);
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    transition: border-color 240ms var(--pm-ease), background 240ms var(--pm-ease), transform 240ms var(--pm-ease);
+  }
+
+  .pm-cta-ghost:hover {
+    border-color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.04);
+    transform: translateY(-1px);
+  }
+
+  .pm-cta-ghost:focus-visible {
+    outline: 2px solid var(--pm-success);
+    outline-offset: 3px;
+  }
+
+  /* Glass card (Problem セクション等) */
+  .pm-glass {
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid var(--pm-border);
+    border-radius: 24px;
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  /* スクロール出現アニメ用ベースクラス
+   * (Framer Motion で実装する場合は不要だが、IntersectionObserver +
+   *  純CSS で実装した場合のフォールバック) */
+  .pm-fade-in {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 700ms var(--pm-ease), transform 700ms var(--pm-ease);
+    will-change: opacity, transform;
+  }
+
+  .pm-fade-in.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Hero Demo container — Task D の受け入れ準備
+   *
+   * 1. アニメーション本体は別チームから後日納品される (背景透過)。
+   *    待機中は内側で「回転するグラデーションボーダー」を呈示する。
+   * 2. 完了 phase (1100ms 相当) で .is-resolved を React 側から付与し、
+   *    背景を Purple → Teal にトランジションする (感情の遷移)。 */
+  .pm-hero-demo {
     position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border-radius: 28px;
+    overflow: hidden;
+    isolation: isolate;
+    background: rgba(108, 62, 244, 0.08);
+    transition: background 1200ms var(--pm-ease);
   }
-  .accent-line::before {
+
+  .pm-hero-demo.is-resolved {
+    background: rgba(0, 212, 170, 0.10);
+  }
+
+  /* 回転するグラデーションボーダー (待機時のみ可視) */
+  .pm-hero-demo::before {
     content: '';
     position: absolute;
-    left: 0;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(from 0deg,
+        rgba(108, 62, 244, 0.0) 0deg,
+        rgba(108, 62, 244, 0.85) 90deg,
+        rgba(0, 212, 170, 0.85) 220deg,
+        rgba(108, 62, 244, 0.0) 360deg);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: pm-orbit 12s linear infinite;
+    opacity: 1;
+    transition: opacity 800ms var(--pm-ease);
+  }
+
+  .pm-hero-demo.is-resolved::before {
+    opacity: 0.35;
+  }
+
+  /* 内側ハロー */
+  .pm-hero-demo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      radial-gradient(50% 50% at 50% 50%, rgba(108, 62, 244, 0.18), transparent 70%);
+    transition: background 1200ms var(--pm-ease);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .pm-hero-demo.is-resolved::after {
+    background:
+      radial-gradient(50% 50% at 50% 50%, rgba(0, 212, 170, 0.20), transparent 70%);
+  }
+
+  @keyframes pm-orbit {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Navbar — スクロール時 Blur 強化用クラス (Task C) */
+  .pm-navbar {
+    position: sticky;
     top: 0;
-    bottom: 0;
-    width: 3px;
-    background: linear-gradient(180deg, #6c3ef4, #00d4aa);
-    border-radius: 2px;
-  }
-}
-
-/* ── ProofMark Keyframe Animations ── */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes fadeOut {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
-@keyframes slideIn {
-  from { transform: translateY(10px); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
-}
-@keyframes slideOut {
-  from { transform: translateY(0);    opacity: 1; }
-  to   { transform: translateY(10px); opacity: 0; }
-}
-@keyframes pulseSoft {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.8; }
-}
-@keyframes glow {
-  0%, 100% { box-shadow: 0 0 5px  rgba(108, 62, 244, 0.3); }
-  50%       { box-shadow: 0 0 20px rgba(108, 62, 244, 0.6); }
-}
-@keyframes glowAccent {
-  0%, 100% { box-shadow: 0 0 5px  rgba(0, 212, 170, 0.3); }
-  50%       { box-shadow: 0 0 20px rgba(0, 212, 170, 0.6); }
-}
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50%       { transform: translateY(-6px); }
-}
-@keyframes shimmer {
-  0%   { background-position: -200% center; }
-  100% { background-position: 200% center; }
-}
-@keyframes orbit {
-  from { transform: rotate(0deg) translateX(120px) rotate(0deg); }
-  to   { transform: rotate(360deg) translateX(120px) rotate(-360deg); }
-}
-
-@layer utilities {
-  .animate-fade-in    { animation: fadeIn    0.3s ease-in-out; }
-  .animate-fade-out   { animation: fadeOut   0.3s ease-in-out; }
-  .animate-slide-in   { animation: slideIn   0.3s ease-out; }
-  .animate-slide-out  { animation: slideOut  0.3s ease-in; }
-  .animate-pulse-soft { animation: pulseSoft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-  .animate-glow       { animation: glow      2s ease-in-out infinite; }
-  .animate-glow-accent { animation: glowAccent 2s ease-in-out infinite; }
-  .animate-float      { animation: float     3s ease-in-out infinite; }
-  .animate-shimmer    { animation: shimmer   2.5s linear infinite; }
-  .animate-orbit      { animation: orbit     8s linear infinite; }
-}
-
-/* ── ProofMark Print Styles (Optimized) ── */
-@media print {
-  /* 1. 全体の背景と文字色の強制リセット */
-  body {
-    background: white !important;
-    color: #111827 !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    z-index: 50;
+    background: transparent;
+    border-bottom: 1px solid transparent;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+    transition:
+      background 280ms var(--pm-ease),
+      border-color 280ms var(--pm-ease),
+      backdrop-filter 280ms var(--pm-ease);
   }
 
-  /* 2. 印刷に絶対不要な要素を消し去る（ボタン、ナビ、フッターなど） */
-  header, footer, nav, aside, button, .no-print, [role="button"] {
-    display: none !important;
+  .pm-navbar.is-scrolled {
+    background: rgba(7, 6, 26, 0.72);
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
   }
 
-  /* 3. 【重要】「TY」や「Hidden」の正体である隠しテキストを完全に消す */
-  .sr-only, 
-  [aria-hidden="true"], 
-  .hidden,
-  [style*="position: absolute"][style*="width: 1px"] {
-    display: none !important;
-    visibility: hidden !important;
-  }
+  /* prefers-reduced-motion: アニメ完全停止 (Task D 必須) */
+  @media (prefers-reduced-motion: reduce) {
 
-  /* 4. 証明書カード（print-container）のレイアウトを整える */
-  .print-container {
-    display: block !important;
-    position: relative !important;
-    width: 95% !important;
-    max-width: 700px !important;
-    margin: 20mm auto !important;
-    padding: 40px !important;
-    border: 1px solid #e5e7eb !important;
-    border-radius: 12px !important;
-    background: white !important;
-    box-shadow: none !important;
-    overflow: visible !important;
-    page-break-inside: avoid;
-  }
+    .pm-hero-demo::before,
+    .pm-hero-demo::after {
+      animation: none !important;
+      transition: none !important;
+    }
 
-  /* 5. 枠線や背景色の維持（ブラウザ設定を無視して色を出す） */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
+    .pm-fade-in {
+      opacity: 1 !important;
+      transform: none !important;
+      transition: none !important;
+    }
 
-  /* 6. 「Verified Founder」バッジなどの色の強制指定 */
-  .print-badge {
-    background-color: #fefce8 !important;
-    border: 1px solid #fde047 !important;
-    color: #854d0e !important;
-    padding: 4px 12px !important;
-    border-radius: 9999px !important;
-  }
-
-  /* 7. ハッシュ値（英数字）が途中で切れないように折り返す */
-  code, .break-all {
-    word-break: break-all !important;
-    white-space: pre-wrap !important;
-    font-size: 10pt !important;
-    color: #374151 !important;
-  }
-}
-
-@layer components {
-  .proofmark-widget-shell {
-    isolation: isolate;
-    contain: layout paint style;
-  }
-
-  .proofmark-widget-grid {
-    background-image:
-      linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-    background-size: 24px 24px;
-    background-position: center;
-  }
-}
-
-@layer utilities {
-  .proofmark-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(108, 62, 244, 0.48) transparent;
+    .pm-cta-primary,
+    .pm-cta-ghost {
+      transition: none !important;
+    }
   }
 }

@@ -34,17 +34,9 @@ import {
   Palette,
   Code2,
   AlertTriangle,
-  Minus,
-  Star,
 } from 'lucide-react';
 import LpNavbar from '../components/lp/Navbar';
 import HeroMockup from '../components/HeroMockup';
-
-// Added for integration
-import TrustSignalRow from '@/components/TrustSignalRow';
-import EvidencePackTeaser from '@/components/EvidencePackTeaser';
-import C2paComparisonRow from '@/components/lp/C2paComparisonRow';
-import { PRICING_PLANS, FOUNDER_OFFER } from '@/data/pricingPlans';
 
 /* Apple-grade easing と統一トランジション (仕様書 §1-3) */
 const PM_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
@@ -188,15 +180,6 @@ export default function Home() {
               <HeroMockup />
             </motion.div>
           </div>
-        </div>
-      </section>
-
-      {/* トラスト・コンポーネント（安全な復元） */}
-      <section className="pm-section">
-        <div className="pm-container space-y-24 md:space-y-32">
-          <TrustSignalRow />
-          <EvidencePackTeaser />
-          <C2paComparisonRow />
         </div>
       </section>
 
@@ -370,22 +353,55 @@ export default function Home() {
           />
 
           <motion.div
-            className="mx-auto mt-16 grid w-full max-w-7xl grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4 md:gap-6"
+            className="mx-auto mt-16 grid w-full max-w-5xl grid-cols-1 gap-5 md:grid-cols-3 md:gap-6"
             {...fadeInProps(0.05)}
           >
-            {PRICING_PLANS.filter((plan) => plan.id !== 'business').map((plan) => (
-              <PricingCard
-                key={plan.id}
-                tier={plan.name}
-                price={plan.priceLabel}
-                cadence={plan.priceUnit || ''}
-                tagline={plan.tagline}
-                features={plan.features}
-                ctaLabel={plan.ctaLabel.guest}
-                ctaHref={plan.ctaHref.guest}
-                highlighted={plan.recommended}
-              />
-            ))}
+            {/* Free (強調) */}
+            <PricingCard
+              tier="Free"
+              price="¥0"
+              cadence="ずっと無料"
+              tagline="クリエイターが、まず始めるべき場所。"
+              points={[
+                '月30件まで証明書発行',
+                'SHA-256 + RFC3161 タイムスタンプ',
+                '検証 URL の発行',
+                'クレジットカード不要',
+              ]}
+              ctaLabel="無料で始める"
+              ctaHref="/auth?mode=signup"
+              highlighted
+            />
+            {/* Light */}
+            <PricingCard
+              tier="Light"
+              price="¥1,480"
+              cadence="月額"
+              tagline="納品の信頼を担保したいフリーランスへ。"
+              points={[
+                '月間発行数の上限なし',
+                'PDF・Evidence Pack ダウンロード',
+                'NDA 表示モード',
+                '案件単位の整理',
+              ]}
+              ctaLabel="プラン詳細"
+              ctaHref="/pricing#light"
+            />
+            {/* Spot */}
+            <PricingCard
+              tier="Spot"
+              price="¥480"
+              cadence="1案件あたり"
+              tagline="アカウント不要で、今この1案件だけ。"
+              points={[
+                '1案件分の Evidence Pack',
+                '登録不要・即時発行',
+                'PDF + RFC3161 + 検証スクリプト',
+                '24時間後にデータ削除',
+              ]}
+              ctaLabel="Spotで発行"
+              ctaHref="/spot-issue"
+            />
           </motion.div>
 
           <motion.p
@@ -394,14 +410,6 @@ export default function Home() {
             {...fadeInProps(0.10)}
           >
             複雑な上位プランは廃止しました。誰もが直感的に使える 2 軸 + 1 単発 に絞っています。
-          </motion.p>
-
-          <motion.p
-            className="mt-6 text-center text-[14px] font-bold"
-            style={{ color: FOUNDER_OFFER.highlight }}
-            {...fadeInProps(0.15)}
-          >
-            {FOUNDER_OFFER.text}
           </motion.p>
         </div>
       </section>
@@ -586,28 +594,18 @@ function UseCaseCard({ title, body, icon }: UseCaseSpec) {
   );
 }
 
-interface PricingFeature {
-  label: string;
-  state: 'include' | 'exclude' | 'planned';
-  highlight?: 'accent' | 'gold' | 'primary';
-}
-
 interface PricingSpec {
   tier: string;
   price: string;
   cadence: string;
   tagline: string;
-  features: PricingFeature[];
+  points: string[];
   ctaLabel: string;
   ctaHref: string;
   highlighted?: boolean;
 }
 
-function PricingCard({ tier, price, cadence, tagline, features, ctaLabel, ctaHref, highlighted }: PricingSpec) {
-  const m = price.match(/^([¥$€£])(.*)$/);
-  const symbol = m ? m[1] : '';
-  const amount = m && m[2] ? m[2] : (m ? '0' : price);
-
+function PricingCard({ tier, price, cadence, tagline, points, ctaLabel, ctaHref, highlighted }: PricingSpec) {
   return (
     <article
       className="relative flex h-full flex-col rounded-3xl p-7"
@@ -633,37 +631,20 @@ function PricingCard({ tier, price, cadence, tagline, features, ctaLabel, ctaHre
         <p className="text-[12px] font-bold uppercase tracking-[0.18em]" style={{ color: '#00D4AA' }}>
           {tier}
         </p>
-        <p className="mt-4 flex items-baseline gap-1">
-          {symbol && <span className="text-[20px] font-bold text-white/80">{symbol}</span>}
-          <span className="text-[40px] font-extrabold tracking-tight text-white">{amount}</span>
-          <span className="text-[13px] ml-1" style={{ color: 'rgba(255,255,255,0.55)' }}>{cadence}</span>
+        <p className="mt-4 flex items-baseline gap-2">
+          <span className="text-[40px] font-extrabold tracking-tight text-white">{price}</span>
+          <span className="text-[13px]" style={{ color: 'rgba(255,255,255,0.55)' }}>{cadence}</span>
         </p>
         <p className="mt-3 text-[14px] font-semibold text-white">{tagline}</p>
       </header>
 
       <ul className="mt-6 flex-1 space-y-3" role="list">
-        {features.map((f) => {
-          let Icon = CheckCircle2;
-          let iconColor = '#00D4AA';
-          let textColor = 'rgba(255,255,255,0.78)';
-          
-          if (f.state === 'exclude') {
-            Icon = Minus;
-            iconColor = 'rgba(255,255,255,0.3)';
-            textColor = 'rgba(255,255,255,0.4)';
-          } else if (f.state === 'planned') {
-            Icon = Star;
-            iconColor = '#F0BB38';
-            textColor = 'rgba(255,255,255,0.78)';
-          }
-          
-          return (
-            <li key={f.label} className="flex items-start gap-2.5 text-[14px]" style={{ color: textColor }}>
-              <Icon className="mt-[2px] h-4 w-4 shrink-0" style={{ color: iconColor }} aria-hidden="true" />
-              <span>{f.label}</span>
-            </li>
-          );
-        })}
+        {points.map((p) => (
+          <li key={p} className="flex items-start gap-2.5 text-[14px]" style={{ color: 'rgba(255,255,255,0.78)' }}>
+            <CheckCircle2 className="mt-[2px] h-4 w-4 shrink-0" style={{ color: '#00D4AA' }} aria-hidden="true" />
+            <span>{p}</span>
+          </li>
+        ))}
       </ul>
 
       <Link href={ctaHref}>
