@@ -37,7 +37,7 @@ import {
   Minus,
   Star,
 } from 'lucide-react';
-import Navbar from '@/components/Navbar';
+import LpNavbar from '../components/lp/Navbar';
 import { useAuth } from '@/hooks/useAuth';
 import HeroDemoOrFallback from '../components/HeroDemoOrFallback';
 
@@ -101,7 +101,7 @@ export default function Home() {
 
   return (
     <div style={{ background: '#07061A', minHeight: '100vh', color: '#FFFFFF' }}>
-      <Navbar user={user} signOut={signOut} />
+      <LpNavbar />
 
       {/* [S1] Hero — 即座の確信・期待 */}
       <section

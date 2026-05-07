@@ -22,6 +22,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { ArrowRight, Menu, X } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import navbarLogo from '../../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
 
 interface NavLinkSpec {
   href: string;
@@ -79,6 +80,15 @@ export default function LpNavbar() {
 
   const close = () => setOpen(false);
 
+  /* ロゴクリック時のルーティング（トップに戻る） */
+  const handleLogoClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (location === '/') {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    close();
+  };
+
   /* ログイン済みなら CTA は「ダッシュボードへ」 */
   const ctaHref = user ? '/dashboard' : '/auth?mode=signup';
   const ctaLabel = user ? 'ダッシュボードへ' : '無料で始める';
@@ -87,16 +97,14 @@ export default function LpNavbar() {
     <nav
       aria-label="グローバルナビゲーション"
       className={`pm-navbar ${scrolled ? 'is-scrolled' : ''}`}
+      style={{ zIndex: 110 }}
     >
       <div className="pm-container flex h-[72px] items-center justify-between">
-        <Link href="/" className="group inline-flex items-center gap-2">
-          <span aria-hidden="true" className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
-            <span
-              className="absolute inset-0 rounded-xl"
-              style={{ background: 'linear-gradient(135deg, #6C3EF4 0%, #00D4AA 100%)', opacity: 0.85 }}
-            />
-            <span className="relative font-extrabold text-[15px] tracking-tight text-white">P</span>
-          </span>
+        <Link href="/" onClick={handleLogoClick} className="group inline-flex items-center gap-2">
+          <div className="relative">
+            <div className="absolute inset-0 bg-[#00D4AA]/20 blur-lg rounded-full group-hover:bg-[#00D4AA]/40 transition-all opacity-0 group-hover:opacity-100" />
+            <img src={navbarLogo} alt="ProofMark" className="h-7 w-auto relative z-10" />
+          </div>
           <span className="text-[17px] font-extrabold tracking-tight text-white">
             Proof<span style={{ color: '#00D4AA' }}>Mark</span>
           </span>
@@ -175,7 +183,7 @@ export default function LpNavbar() {
         style={{
           position: 'fixed',
           inset: '72px 0 0 0',
-          zIndex: 49,
+          zIndex: 100, // Z-index bug fix
           background: 'rgba(7,6,26,0.96)',
           backdropFilter: 'saturate(160%) blur(18px)',
           WebkitBackdropFilter: 'saturate(160%) blur(18px)',
