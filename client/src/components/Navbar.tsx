@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'wouter';
 import {
   LogOut,
@@ -23,6 +23,20 @@ import { useAuth } from '../hooks/useAuth';
 export default function Navbar({ user, signOut }: { user: any, signOut: () => void }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [location] = useLocation();
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onScroll = () => {
+      const y = window.scrollY || window.pageYOffset || 0;
+      setScrolled(y > 12);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const isHomePage = location === '/';
   const displayUsername = user?.user_metadata?.username || user?.email?.split('@')[0] || 'sinn';
   
   const isAdmin = user?.user_metadata?.username === 'sinn' || user?.email?.includes('ogurishinya') || user?.user_metadata?.is_founder === true;
@@ -46,7 +60,11 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
   );
 
   return (
-    <nav className="w-full border-b border-[#1C1A38] bg-[#0D0B24]/80 backdrop-blur-md sticky top-0 z-50 no-print transition-all duration-300">
+    <nav className={`w-full border-b sticky top-0 z-[110] no-print transition-all duration-300 ${
+      isHomePage && !scrolled 
+        ? 'bg-transparent border-transparent' 
+        : 'bg-[#0D0B24]/80 backdrop-blur-md border-[#1C1A38]'
+    }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-6 relative">
         {/* 1. Logo (左側) */}
         <Link href="/" className="flex items-center gap-2 sm:gap-3 text-decoration-none group shrink-0">
