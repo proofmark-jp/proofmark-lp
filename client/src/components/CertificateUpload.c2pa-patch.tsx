@@ -26,7 +26,11 @@ import { useLocation } from 'wouter';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   CheckCircle2, Eye, Lock, Shield, ShieldCheck, Sparkles, Star, UploadCloud,
+  AlertTriangle, FileSearch
 } from 'lucide-react';
+
+import { cn } from '../lib/utils';
+import { PM, EASE, D } from './dashboard/obsidian-tokens';
 
 import { useAuth } from '../hooks/useAuth';
 import { useHashFile } from '../hooks/useHashFile';
@@ -51,6 +55,36 @@ export default function CertificateUpload() {
   const [visibility, setVisibility] = useState<VisibilityMode>('private');
   const [processStatus, setProcessStatus] = useState<string>('');
   const [, setLocation] = useLocation();
+
+  // Obsidian Desk UI States
+  const [windowDragActive, setWindowDragActive] = useState(false);
+  const [shellError, setShellError] = useState<string | null>(null);
+
+  // グローバルドラッグ検知
+  useEffect(() => {
+    // タッチデバイスではドラッグUIを無効化
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return;
+
+    const onEnter = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes('Files')) setWindowDragActive(true);
+    };
+    const onLeave = (e: DragEvent) => {
+      if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+        setWindowDragActive(false);
+      }
+    };
+    const onDrop = () => setWindowDragActive(false);
+    
+    window.addEventListener('dragenter', onEnter);
+    window.addEventListener('dragleave', onLeave);
+    window.addEventListener('drop', onDrop);
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    return () => {
+      window.removeEventListener('dragenter', onEnter);
+      window.removeEventListener('dragleave', onLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, []);
 
   const { user, profile } = useAuth();
 
@@ -187,7 +221,9 @@ export default function CertificateUpload() {
       }, 500);
     } catch (e) {
       console.error(e);
-      alert('アップロードエラー: ' + (e as Error).message);
+      const errMsg = (e as Error).message || 'エラーが発生しました';
+      setShellError(errMsg.length > 50 ? `${errMsg.slice(0, 48)}...` : errMsg);
+      setTimeout(() => setShellError(null), 4200);
       setProcessStatus('エラーが発生しました。もう一度お試しください。');
       setIsProcessing(false);
     }
@@ -199,8 +235,45 @@ export default function CertificateUpload() {
     maxFiles: 1,
   });
 
+  const computedPhase = shellError ? 'error' : (isProcessing || c2paSignal === 'analysing') ? 'active' : windowDragActive ? 'hover' : 'idle';
+
   return (
-    <div className="w-full max-w-3xl mx-auto p-6 bg-[#0D0B24] rounded-3xl border border-[#1C1A38] text-white shadow-2xl">
+    <div className="relative w-full max-w-3xl mx-auto rounded-[32px] overflow-hidden" style={{ background: PM.surface }}>
+      {/* Dimmer (hover時) */}
+      <motion.div
+        initial={false}
+        animate={{ opacity: computedPhase === 'hover' ? 1 : 0 }}
+        transition={{ duration: D.fast, ease: EASE }}
+        className="pointer-events-none absolute inset-0 z-0 backdrop-blur-[2px]"
+        style={{ background: 'rgba(7,6,26,0.55)' }}
+      />
+      {/* パルスボーダー (hover時) */}
+      <motion.div
+        initial={false}
+        animate={{ opacity: computedPhase === 'hover' ? 1 : 0 }}
+        transition={{ duration: D.base, ease: EASE, repeat: Infinity, repeatType: 'reverse' }}
+        className="pointer-events-none absolute inset-0 z-0 rounded-[32px] border-[3px]"
+        style={{ borderColor: PM.primary }}
+      />
+      {/* 枠発光 (error時) */}
+      <motion.div
+        initial={false}
+        animate={{ opacity: computedPhase === 'error' ? 1 : 0 }}
+        transition={{ duration: D.base, ease: EASE }}
+        className="pointer-events-none absolute inset-0 z-0 rounded-[32px] border-2"
+        style={{ borderColor: PM.error, boxShadow: `inset 0 0 40px ${PM.errorSoft}` }}
+      />
+
+      {/* ここから内側のコンテンツ (z-[1]) */}
+      <div className="relative z-[1] p-6 sm:p-10">
+        {shellError && (
+           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute top-6 left-0 right-0 flex justify-center z-50 pointer-events-none">
+             <div className="flex items-center gap-2 rounded-full px-4 py-2 shadow-2xl backdrop-blur-md" style={{ background: 'rgba(255,69,58,0.15)', border: `1px solid ${PM.errorRing}` }}>
+               <AlertTriangle className="w-4 h-4" style={{ color: PM.error }} />
+               <span className="text-[13px] font-bold tracking-wide text-white">{shellError}</span>
+             </div>
+           </motion.div>
+        )}
       {/* Free 検出時のアップセル (Worker は起動しない) */}
       <AnimatePresence>
         {c2paUpsellOpen && !c2paUpsellDismissed && !isPaidPlan && (
@@ -220,9 +293,7 @@ export default function CertificateUpload() {
             }`}
         >
           <input {...getInputProps()} />
-          <UploadCloud className="w-12 h-12 mx-auto mb-4 text-slate-400" />
-          <p className="text-white font-bold text-xl mb-2">作品をドラッグ&ドロップして証明を開始</p>
-          <p className="text-[#A8A0D8] text-sm">またはクリックしてファイルを選択 (最大 20MB)</p>
+          <IdleHero maxSizeMB={15} />
         </div>
       ) : (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -265,8 +336,16 @@ export default function CertificateUpload() {
               <div
                 onClick={() => {
                   if (isProcessing) return;
-                  if (!user) { alert('ログインが必要です'); return; }
-                  if (!isPaidPlan) { alert('Shareable Proof は有料プラン専用です'); return; }
+                  if (!user) {
+                    setShellError('ログインが必要です');
+                    setTimeout(() => setShellError(null), 4200);
+                    return;
+                  }
+                  if (!isPaidPlan) {
+                    setShellError('Shareable Proof は有料プラン専用です');
+                    setTimeout(() => setShellError(null), 4200);
+                    return;
+                  }
                   setProofMode('shareable');
                   setVisibility('public');
                 }}
@@ -289,20 +368,22 @@ export default function CertificateUpload() {
             </div>
           </div>
 
+        {isProcessing || c2paSignal === 'analysing' ? (
+          <div className="w-full">
+            <SilentProgress caption={processStatus || '処理中...'} />
+          </div>
+        ) : (
           <button
             onClick={handleIssueCertificate}
             disabled={isProcessing || c2paSignal === 'analysing'}
-            className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-[#00D4AA] to-[#6C3EF4] hover:opacity-90 transition-opacity text-white disabled:opacity-50 flex flex-col items-center justify-center gap-1"
+            className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-[#00D4AA] to-[#6C3EF4] hover:opacity-90 transition-opacity text-white disabled:opacity-50 flex items-center justify-center"
           >
-            {isProcessing ? (
-              <>
-                <span>処理を実行中...</span>
-                <span className="text-xs font-normal opacity-80">{processStatus}</span>
-              </>
-            ) : c2paSignal === 'analysing' ? 'C2PAデータを解析中...' : 'デジタル存在証明を発行する'}
+            デジタル存在証明を発行する
           </button>
+        )}
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -350,3 +431,127 @@ function C2paInlineSignal({
     </p>
   );
 }
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/**
+ * IdleHero — ドロップゾーンが空のときに「子の上」に重ねる薄い導入レイヤー。
+ *
+ * 仕様: 「破線ボーダーと控えめなアイコン（UploadCloud等）のみの極めてミニマル」
+ *       「マーケティング的な長文は全削除」
+ *       「証明したいファイルをドロップ（SHA-256 / 15MBまで）」
+ *
+ * ※ 子コンポーネントの DOM は壊さず、IdleHero は別ノードとして並列描画する。
+ *    本ラッパーを使う側（Dashboard.obsidian.tsx）が、現行 CertificateUpload の
+ *    既定ヘッダ文言を非表示にしたいときに opt-in で使うためのプレゼン層。
+ */
+export function IdleHero({
+  title = '証明したいファイルをドロップ',
+  subtitle,
+  maxSizeMB = 15,
+  isMobile = false,
+}: {
+  title?: string;
+  subtitle?: string;
+  maxSizeMB?: number;
+  isMobile?: boolean;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cn(
+        'pointer-events-none flex flex-col items-center justify-center text-center',
+        'rounded-2xl',
+        'select-none',
+      )}
+      style={{
+        color: PM.textMuted,
+      }}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: D.slow / 1000, ease: EASE }}
+        className="flex flex-col items-center gap-3"
+      >
+        <div
+          className="w-14 h-14 rounded-2xl flex items-center justify-center"
+          style={{
+            background: PM.surface,
+            border: `1px solid ${PM.border}`,
+          }}
+        >
+          <UploadCloud className="w-6 h-6" aria-hidden="true" style={{ color: PM.textMuted }} />
+        </div>
+        <p
+          className={cn(
+            'font-semibold tracking-tight',
+            isMobile ? 'text-[17px]' : 'text-[18px]',
+          )}
+          style={{ color: PM.textMain }}
+        >
+          {title}
+        </p>
+        <p
+          className="text-[12px] tracking-wider"
+          style={{ color: PM.textSubtle, fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}
+        >
+          SHA-256 / {maxSizeMB}MB まで
+        </p>
+        {subtitle && (
+          <p className="text-[12px]" style={{ color: PM.textMuted }}>
+            {subtitle}
+          </p>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/**
+ * SilentProgress — Apple-like 上品なプログレス表現。
+ *
+ * 仕様: 「単なる汎用スピナーは不可。Apple製品のような、ソリッドで高級感のある
+ *        プログレスバー、またはハッシュ計算を暗示する静かなスキャンアニメーション」
+ *
+ * ※ 子の disabled ボタンを観測した結果に応じて、UploadShell が active に入った
+ *    タイミングでこのレイヤーを表示することを意図している。
+ */
+export function SilentProgress({ caption }: { caption?: string }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex items-center gap-3 px-4 py-3 rounded-xl"
+      style={{
+        background: PM.surface,
+        border: `1px solid ${PM.border}`,
+      }}
+    >
+      <FileSearch className="w-4 h-4" aria-hidden="true" style={{ color: PM.success }} />
+      <div className="flex-1">
+        <div
+          className="h-[3px] rounded-full overflow-hidden"
+          style={{ background: 'rgba(255,255,255,0.06)' }}
+        >
+          <motion.div
+            className="h-full"
+            initial={{ width: '0%', x: 0 }}
+            animate={{ width: ['18%', '38%', '62%', '82%', '92%'] }}
+            transition={{ duration: 2.4, ease: EASE, repeat: Infinity, repeatType: 'reverse' }}
+            style={{
+              background: `linear-gradient(90deg, ${PM.primary}, ${PM.success})`,
+            }}
+          />
+        </div>
+        <p
+          className="mt-1.5 text-[11px] tracking-wider"
+          style={{ color: PM.textSubtle, fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}
+        >
+          {caption ?? 'Hashing · Timestamping · Anchoring'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
