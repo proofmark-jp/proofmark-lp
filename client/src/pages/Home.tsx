@@ -39,7 +39,7 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/hooks/useAuth';
-import HeroDemoOrFallback from '../components/HeroDemoOrFallback';
+import HeroDemo from '../components/HeroDemo';
 import InlineHashDemo from '../components/InlineHashDemo';
 
 // Added for integration
@@ -187,13 +187,18 @@ export default function Home() {
               </motion.div>
             </div>
 
-            {/* 右 45% — Lottie/Motion デモのコンテナ (Task D 受け入れ準備) */}
-            <motion.div {...fadeInProps(0.10)} className="w-full">
-              <HeroDemoOrFallback
-                thumbnailSrc="/fantasy_artwork_final.jpg"
-                fallbackWebpSrc="/hero-demo.webp"
-                initialCount={12846}
-              />
+            {/* 右 45% — 静的モックアップ（視線をコピーとCTAに集中させる） */}
+            <motion.div {...fadeInProps(0.10)} className="w-full perspective-1000">
+              <div
+                className="relative overflow-hidden rounded-[24px] border border-white/10 shadow-[0_20px_80px_-20px_rgba(108,62,244,0.4)]"
+                style={{ transform: 'rotateY(-5deg) rotateX(2deg)' }}
+              >
+                <img
+                  src="/fantasy_artwork_final.jpg"
+                  alt="ProofMark Showcase"
+                  className="w-full h-auto object-cover opacity-90 hover:opacity-100 transition-opacity"
+                />
+              </div>
             </motion.div>
           </div>
         </div>
@@ -281,6 +286,18 @@ export default function Home() {
               index="04"
               title="検証 URL"
               body="発行直後に検証 URL とPDFを取得。納品時はそのURLを添えるだけで第三者が再検証できます。"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* [S3] 自動再生デモ（ProofMarkの凄さを視覚的に理解させる） */}
+      <section className="pm-section bg-[#07061A]" aria-label="動作デモ">
+        <div className="pm-container max-w-5xl">
+          <div className="relative mx-auto max-w-[800px] rounded-[32px] p-2 sm:p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <HeroDemo
+              thumbnailSrc="/fantasy_artwork_final.jpg"
+              initialCount={12846}
             />
           </div>
         </div>

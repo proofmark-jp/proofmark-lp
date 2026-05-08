@@ -62,7 +62,7 @@ export default function InlineHashDemo() {
     const hashBuffer = await window.crypto.subtle.digest('SHA-256', buffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-    const actualelapsed = Math.round(performance.now() - t0);
+    const actualElapsed = Math.round(performance.now() - t0);
 
     // 👇 追加：計算が早すぎる場合、スキャンアニメーションを見せるために最低でも600ms待たせる
     const minDelay = 600;
@@ -75,7 +75,7 @@ export default function InlineHashDemo() {
       fileName: file.name,
       fileSize: file.size,
       hash: hashHex,
-      elapsed,
+      elapsed: actualElapsed, // 実際の驚異的なスピード(ms)は正直に表示する
     });
     setPhase('done');
   }, []);
