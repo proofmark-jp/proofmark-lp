@@ -39,7 +39,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'free',
     name: 'Free',
-    tagline: 'まずは「証跡が残る」を体感したい方',
+    tagline: 'まず試したい・月数件のライトユーザー向け',
     priceLabel: '¥0',
     priceUnit: '/月',
     audience: 'ProofMarkを試したい個人クリエイター',
@@ -74,7 +74,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'creator',
     name: 'Creator',
-    tagline: '受託案件の「納品の説明コスト」を構造的に下げる',
+    tagline: '毎月作品を発表するクリエイターの月額保険',
     priceLabel: '¥1,480',
     priceUnit: '/月',
     audience: '受注クリエイター・有償案件を持つ個人',
@@ -95,7 +95,7 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'studio',
     name: 'Studio',
-    tagline: 'チームで案件信頼を運用するスタジオ向け',
+    tagline: 'チームで制作・複数案件を一元管理したい人向け',
     priceLabel: '¥4,980',
     priceUnit: '/月',
     audience: '小規模制作会社・チーム',

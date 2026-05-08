@@ -40,6 +40,7 @@ import {
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/hooks/useAuth';
 import HeroDemoOrFallback from '../components/HeroDemoOrFallback';
+import InlineHashDemo from '../components/InlineHashDemo';
 
 // Added for integration
 import TrustSignalRow from '@/components/TrustSignalRow';
@@ -144,24 +145,24 @@ export default function Home() {
                 className="pm-body mt-7 max-w-[520px]"
                 {...fadeInProps(0.10)}
               >
-                AIで生成した作品に、世界標準のタイムスタンプを。
+                あなたの作品を、見知らぬ誰かが「自分が作った」と言い始めたとき——証明できますか？
                 <br className="hidden md:inline" />
-                無料で、今すぐ。
+                AIで生成した作品に、世界標準のタイムスタンプを。無料で、今すぐ。
               </motion.p>
 
               <motion.div
                 className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4"
                 {...fadeInProps(0.15)}
               >
-                <Link href="/auth?mode=signup">
+                <Link href="/spot-issue">
                   <span className="pm-cta-primary">
-                    無料で証明書を発行する
+                    今すぐ1件だけ試す（登録不要）
                     <ArrowRight className="h-4 w-4" aria-hidden="true" />
                   </span>
                 </Link>
-                <Link href="/spot-issue">
+                <Link href="/auth?mode=signup">
                   <span className="pm-cta-ghost">
-                    登録不要で1件だけ発行
+                    アカウントを作って無制限に使う
                   </span>
                 </Link>
               </motion.div>
@@ -285,6 +286,13 @@ export default function Home() {
         </div>
       </section>
 
+      {/* [S3.5] インラインハッシュデモ */}
+      <section id="try" aria-label="ハッシュデモ" className="pm-section bg-[#07061A]">
+        <div className="pm-container">
+          <InlineHashDemo />
+        </div>
+      </section>
+
       {/* [S4] Technology — 確信・信頼 */}
       <section aria-labelledby="tech-title" className="pm-section">
         <div className="pm-container">
@@ -395,12 +403,38 @@ export default function Home() {
             ))}
           </motion.div>
 
-          <motion.p
-            className="mt-8 text-center text-[13px]"
-            style={{ color: 'rgba(255,255,255,0.45)' }}
-            {...fadeInProps(0.10)}
+          {/* インライン異議処理 */}
+          <motion.div
+            className="mt-14 grid gap-4 sm:grid-cols-3 max-w-4xl mx-auto"
+            {...fadeInProps(0.1)}
           >
-          </motion.p>
+            {[
+              {
+                q: "FreeTSAって信頼できるの？",
+                a: "Trust Centerで第三者検証済み。OpenSSL等で誰でも再検証可能であり、特定の企業に依存しません。",
+              },
+              {
+                q: "解約したら証明書は消えるの？",
+                a: "取得したZIPファイル（Evidence Pack）がお手元にあれば、サービス終了後も法的効力は永続します。",
+              },
+              {
+                q: "法的な場面で本当に使えるの？",
+                a: "RFC3161は電子署名法に対応。発行された証明書はそのまま弁護士・裁判所に提出可能な形式です。",
+              },
+            ].map(({ q, a }) => (
+              <div
+                key={q}
+                className="p-5 rounded-2xl"
+                style={{
+                  background: "rgba(255,255,255,0.025)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                <p className="text-[13px] font-bold text-white/80 mb-2">Q: {q}</p>
+                <p className="text-[12px] text-white/50 leading-relaxed">{a}</p>
+              </div>
+            ))}
+          </motion.div>
 
           <motion.p
             className="mt-6 text-center text-[14px] font-bold"
@@ -549,22 +583,22 @@ interface UseCaseSpec {
 const USE_CASES: ReadonlyArray<UseCaseSpec> = [
   {
     title: 'AIイラストレーター',
-    body: '生成直後の作品にタイムスタンプ。SNSアップ前に「私が先」を確定。',
+    body: 'Xに投稿した作品が2週間後に別アカウントで商用利用されていた。ProofMarkの証拠があったため、プラットフォーム申告で即座に解決できた。',
     icon: <Palette className="h-5 w-5" />,
   },
   {
     title: '小説家・脚本家',
-    body: '原稿の各バージョンに証明書。改稿の歴史と先行性を残します。',
+    body: 'プロットを共同制作する際、どこまでが自分のアイデアかをタイムスタンプで保全。その後の権利交渉がスムーズに運んだ。',
     icon: <BookOpen className="h-5 w-5" />,
   },
   {
     title: 'デザイナー・写真家',
-    body: '納品物に検証 URL を添付。クライアントの安心と二次利用への抑止力。',
+    body: '納品物に検証URLを添付するようにしてから、クライアントからの著作権に関する問い合わせがゼロになった。',
     icon: <PenTool className="h-5 w-5" />,
   },
   {
     title: '開発者',
-    body: 'リリースアセットや学習データに証明。第三者検証可能な納品履歴。',
+    body: 'ゲームのリリース前にProofMarkで証明。リリース後に類似アセットの盗用申告を受けたが、タイムスタンプの日付で即座に反証できた。',
     icon: <Code2 className="h-5 w-5" />,
   },
 ];
