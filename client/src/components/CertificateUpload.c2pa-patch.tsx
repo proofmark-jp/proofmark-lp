@@ -20,13 +20,14 @@
  *   に変更するだけで OK。
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useLocation } from 'wouter';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   CheckCircle2, Eye, Lock, Shield, ShieldCheck, Sparkles, Star, UploadCloud,
-  AlertTriangle, FileSearch
+  AlertTriangle, FileSearch,
+  Archive, FileText, Palette, Code2, File,
 } from 'lucide-react';
 
 import { cn } from '../lib/utils';
@@ -44,6 +45,16 @@ type ProofMode = 'private' | 'shareable';
 type VisibilityMode = 'private' | 'public';
 
 const PAID_TIERS = new Set(['creator', 'studio', 'business', 'light', 'admin']);
+
+/** ファイル拡張子からLucideアイコンを返すヘルパー */
+function getFileIcon(fileName: string) {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return Archive;
+  if (ext === 'pdf') return FileText;
+  if (['psd', 'ai', 'sketch', 'fig', 'xd'].includes(ext)) return Palette;
+  if (['txt', 'md', 'js', 'ts', 'jsx', 'tsx', 'py', 'rb', 'go', 'rs', 'c', 'cpp', 'h', 'java', 'swift', 'kt', 'css', 'html', 'json', 'yaml', 'yml', 'toml', 'xml', 'sh'].includes(ext)) return Code2;
+  return File;
+}
 
 export default function CertificateUpload() {
   const { hashFile } = useHashFile();
@@ -103,13 +114,48 @@ export default function CertificateUpload() {
   const [c2paUpsellOpen, setC2paUpsellOpen] = useState(false);
   const [c2paUpsellDismissed, setC2paUpsellDismissed] = useState(false);
 
+  // ── proofMode 切替時のファイルバリデーション安全装置 ──────────────
+  useEffect(() => {
+    if (!file) return;
+    if (proofMode === 'shareable' && !file.type.startsWith('image/')) {
+      // Shareable に切り替えたが、選択中のファイルが画像でない → クリア
+      setFile(null);
+      setPreview(null);
+      setC2paManifest(null);
+      setC2paSignal('idle');
+      setShellError('Shareable Proof は画像ファイル専用です。ファイルをクリアしました。');
+      setTimeout(() => setShellError(null), 4200);
+    }
+  }, [proofMode]); // file は意図的に deps から外す（モード切替時のみ発火）
+
+  // ── 動的 Dropzone accept（proofMode 連動） ──────────────────────
+  const dropzoneAccept = useMemo(() => {
+    if (proofMode === 'shareable') return { 'image/*': [] };
+    return undefined; // Private: 全ファイル受け入れ
+  }, [proofMode]);
+
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const selectedFile = acceptedFiles[0];
     if (!selectedFile) return;
 
+    // TODO: [Phase 2] 500MB以上のファイル対応。Web WorkerとChunkingを用いたストリーミングハッシュ計算エンジンへリプレイスすること。
+    const HARD_LIMIT = 500 * 1024 * 1024; // 500MB
+    if (selectedFile.size > HARD_LIMIT) {
+      setFile(null);
+      setPreview(null);
+      setShellError('ブラウザのメモリ制限（500MB）を超過しました。超大容量アセットの証明に対応した次世代エンジンを現在開発中です。');
+      setTimeout(() => setShellError(null), 6000);
+      return;
+    }
+
     // プレビュー / state リセット
     setFile(selectedFile);
-    setPreview(URL.createObjectURL(selectedFile));
+    // 画像ファイルのみプレビュー生成（非画像は null）
+    if (selectedFile.type.startsWith('image/')) {
+      setPreview(URL.createObjectURL(selectedFile));
+    } else {
+      setPreview(null);
+    }
     setC2paManifest(null);
     setC2paUpsellDismissed(false);
     setC2paUpsellOpen(false);
@@ -158,22 +204,30 @@ export default function CertificateUpload() {
       const { sha256: fileHash } = await hashFile(file);
       setHash(fileHash);
 
-      setProcessStatus('ペイロードを最適化中...');
-      const payload = await prepareEvidencePayload(file, fileHash);
-
-      const metadataJson = JSON.stringify({
-        original_filename: payload.originalName,
-        original_size: payload.originalSize,
-        is_preview_compressed: payload.isCompressed,
-      });
-
       const formData = new FormData();
-      formData.append('file', payload.fileToSend);
       formData.append('title', file.name);
-      formData.append('sha256', payload.originalSha256);
+      formData.append('sha256', fileHash);
       formData.append('proofMode', proofMode);
       formData.append('visibility', proofMode === 'shareable' ? visibility : 'private');
-      formData.append('metadataJson', metadataJson);
+
+      if (proofMode === 'shareable') {
+        // ── Shareable: プレビュー用にファイル本体を送信 ──
+        setProcessStatus('ペイロードを最適化中...');
+        const payload = await prepareEvidencePayload(file, fileHash);
+        formData.append('file', payload.fileToSend);
+        formData.append('metadataJson', JSON.stringify({
+          original_filename: payload.originalName,
+          original_size: payload.originalSize,
+          is_preview_compressed: payload.isCompressed,
+        }));
+      } else {
+        // ── Private: ゼロ知識。ファイル実体は絶対に送信しない ──
+        formData.append('metadataJson', JSON.stringify({
+          original_filename: file.name,
+          original_size: file.size,
+          is_preview_compressed: false,
+        }));
+      }
 
       // ── Phase 10: scrubbed C2PA をペイロードに付ける (有料プランのみ) ──
       if (isPaidPlan && c2paManifest) {
@@ -231,7 +285,7 @@ export default function CertificateUpload() {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'image/*': [] },
+    accept: dropzoneAccept,
     maxFiles: 1,
   });
 
@@ -293,16 +347,59 @@ export default function CertificateUpload() {
             }`}
         >
           <input {...getInputProps()} />
-          <IdleHero maxSizeMB={15} />
+          <IdleHero
+            maxSizeMB={15}
+            title={proofMode === 'shareable'
+              ? '画像ファイル（JPEG, PNG等）をドロップ'
+              : 'ファイル（画像・PDF・ZIP等）をドロップ'}
+          />
         </div>
       ) : (
         <div className="space-y-8 animate-in fade-in duration-500">
           <div className="flex flex-col sm:flex-row gap-6 items-center bg-[#07061A] p-6 rounded-2xl border border-[#1C1A38]">
-            <img src={preview!} alt="Preview" className="w-32 h-32 object-cover rounded-xl border border-slate-700" />
+            {preview ? (
+              <img src={preview} alt="Preview" className="w-32 h-32 object-cover rounded-xl border border-slate-700" />
+            ) : (() => {
+              const IconComponent = getFileIcon(file.name);
+              const ext = file.name.split('.').pop()?.toUpperCase() ?? '';
+              return (
+                <div
+                  className="w-32 h-32 rounded-xl border border-[#1C1A38] flex flex-col items-center justify-center gap-2 relative overflow-hidden"
+                  style={{
+                    background: 'rgba(13,11,36,0.85)',
+                    backdropFilter: 'blur(12px)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                  }}
+                >
+                  <IconComponent className="w-9 h-9" style={{ color: PM.primary, opacity: 0.7 }} />
+                  <span
+                    className="text-[10px] font-bold tracking-[0.15em] uppercase px-2 py-0.5 rounded"
+                    style={{ color: PM.textSubtle, background: 'rgba(108,62,244,0.1)' }}
+                  >
+                    .{ext}
+                  </span>
+                  {/* Private Mode バッジ */}
+                  <span
+                    className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex items-center gap-1 text-[7px] font-semibold tracking-wider uppercase whitespace-nowrap"
+                    style={{ color: PM.success, opacity: 0.55 }}
+                  >
+                    <Lock className="w-2 h-2" />
+                    Zero-Knowledge
+                  </span>
+                </div>
+              );
+            })()}
             <div className="flex-1 w-full text-left">
               <p className="text-xs text-[#00D4AA] font-bold uppercase tracking-widest mb-1">Target Asset</p>
               <p className="text-lg font-bold truncate">{file.name}</p>
               <p className="text-sm text-[#A8A0D8]">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+              {/* Private Mode: ゼロ知識バッジ (非画像ファイル時) */}
+              {!preview && proofMode === 'private' && (
+                <p className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase" style={{ color: PM.success, opacity: 0.7 }}>
+                  <Lock className="w-3 h-3" />
+                  Private Mode — No data sent to server
+                </p>
+              )}
               {/* Phase 10: Content Credentials Found シグナル (有料時のみ) */}
               <C2paInlineSignal signal={c2paSignal} manifest={c2paManifest} />
             </div>
