@@ -65,10 +65,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let q = admin
       .from('certificates')
       .select(
-        'id, user_id, title, original_filename, file_name, sha256, file_hash, ' +
-        'proven_at, certified_at, tsa_provider, visibility, is_archived, badge_tier',
+        'id, user_id, title, original_filename, file_name, sha256, ' +
+        'proven_at, certified_at, tsa_provider, visibility, is_archived, badge_tier'
       )
-      .or(`sha256.eq.${sha256Raw},file_hash.eq.${sha256Raw}`)
+      .eq('sha256', sha256Raw)
       .eq('visibility', 'public')
       .eq('is_archived', false)
       .order('proven_at', { ascending: false })

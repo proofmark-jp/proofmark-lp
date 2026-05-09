@@ -34,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (cert) {
       const originalName = cert.original_filename || cert.file_name || 'Verified Artwork';
       const title = `ProofMark Certificate: ${originalName}`;
-      const description = `This artwork has been verified on ProofMark. SHA-256: ${cert.sha256 || cert.file_hash}`;
+      const description = `This artwork has been verified on ProofMark. SHA-256: ${cert.sha256}`;
       const ogImageUrl = `${baseUrl}/api/og?id=${id}`;
 
       html = html.replaceAll('ProofMark | AI作品のデジタル存在証明・無断転載防止サービス', title);
