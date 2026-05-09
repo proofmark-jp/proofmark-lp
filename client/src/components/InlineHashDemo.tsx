@@ -1,347 +1,333 @@
 "use client";
 
-/**
- * InlineHashDemo.tsx — ブラウザ完結SHA-256ハッシュ体験デモ
- *
- * LP訪問者に「ファイルはサーバーに送られず、ブラウザ内で計算される」ことを
- * 体感させるためのインタラクティブデモ。
- *
- * - ドラッグ＆ドロップ or クリックでファイル選択
- * - モバイル向け: 1タップでサンプルファイルのハッシュ化を体験
- * - done 状態で /spot-issue への導線を表示
- */
+import React, { useCallback, useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { UploadCloud, Hash, AlertTriangle, ShieldCheck, FileIcon, CheckCircle2 } from "lucide-react";
+import { Link } from "wouter";
 
-import { useCallback, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Hash, ShieldCheck, ArrowRight, UploadCloud, Sparkles } from 'lucide-react';
-import { Link } from 'wouter';
+/* ── Sample Asset ───────────────────────────────────────────────────────── */
+const SAMPLE_IMAGE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6C3EF4" />
+      <stop offset="100%" stop-color="#00D4AA" />
+    </linearGradient>
+  </defs>
+  <rect width="800" height="800" fill="#07061A" />
+  <circle cx="400" cy="400" r="240" fill="url(#g)" opacity="0.8" />
+  <text x="400" y="420" font-family="sans-serif" font-size="48" font-weight="bold" fill="#fff" text-anchor="middle">ProofMark Demo Asset</text>
+</svg>`;
 
-/* ── Theme tokens ──────────────────────────────────────────────────── */
-
+/* ── Theme ─────────────────────────────────────────────────────────────── */
 const THEME = {
-  bg: '#07061A',
-  surface: 'rgba(108,62,244,0.04)',
-  border: '#1C1A38',
-  primary: '#6C3EF4',
-  accent: '#00D4AA',
-  accentRing: 'rgba(0,212,170,0.25)',
-  accentSoft: 'rgba(0,212,170,0.08)',
-  textMain: '#EEEDF5',
-  textMuted: '#7B7896',
-  textSubtle: '#5A5775',
-} as const;
+  bg: "#0A0E27",
+  surface: "rgba(255, 255, 255, 0.03)",
+  border: "rgba(255, 255, 255, 0.1)",
+  primary: "#6C3EF4",
+  accent: "#00D4AA",
+  textMain: "#F0EFF8",
+  textMuted: "#A8A0D8",
+  error: "#FF4D4D",
+};
 
-const EASE = [0.25, 0.1, 0.25, 1.0] as const;
+/* ── Types ─────────────────────────────────────────────────────────────── */
+type State = "idle" | "reading" | "hashing" | "done" | "error";
 
-/* ── Types ─────────────────────────────────────────────────────────── */
-
-type Phase = 'idle' | 'hashing' | 'done';
-
-interface HashResult {
-  fileName: string;
-  fileSize: number;
-  hash: string;
-  elapsed: number;
-}
-
-/* ── Component ─────────────────────────────────────────────────────── */
-
+/* ── Component ─────────────────────────────────────────────────────────── */
 export default function InlineHashDemo() {
-  const [phase, setPhase] = useState<Phase>('idle');
+  const [state, setState] = useState<State>("idle");
   const [isDragOver, setIsDragOver] = useState(false);
-  const [result, setResult] = useState<HashResult | null>(null);
+  
+  const [fileName, setFileName] = useState("");
+  const [fileSize, setFileSize] = useState(0);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [digest, setDigest] = useState("");
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
+  const [error, setError] = useState("");
+
   const inputRef = useRef<HTMLInputElement>(null);
+  const previousUrlRef = useRef<string>("");
 
-  /* SHA-256 計算（ブラウザ完結） */
-  const computeHash = useCallback(async (file: File) => {
-    setPhase('hashing');
-    setResult(null);
-
-    const t0 = performance.now();
-    const buffer = await file.arrayBuffer();
-    const hashBuffer = await window.crypto.subtle.digest('SHA-256', buffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-    const actualElapsed = Math.round(performance.now() - t0);
-
-    // 👇 追加：計算が早すぎる場合、スキャンアニメーションを見せるために最低でも600ms待たせる
-    const minDelay = 600;
-    if (actualElapsed < minDelay) {
-      await new Promise((r) => setTimeout(r, minDelay - actualElapsed));
-    }
-    // 👆 ここまで
-
-    setResult({
-      fileName: file.name,
-      fileSize: file.size,
-      hash: hashHex,
-      elapsed: actualElapsed, // 実際の驚異的なスピード(ms)は正直に表示する
-    });
-    setPhase('done');
+  // アンマウント時のメモリ解放
+  useEffect(() => {
+    return () => {
+      if (previousUrlRef.current) {
+        URL.revokeObjectURL(previousUrlRef.current);
+      }
+    };
   }, []);
 
-  /* ファイル選択ハンドラ */
-  const handleFile = useCallback(
-    (file: File | undefined) => {
-      if (!file) return;
-      computeHash(file);
-    },
-    [computeHash],
-  );
+  // computeHash 関数
+  async function computeHash(file: File) {
+    try {
+      setError("");
+      setDigest("");
+      setElapsedMs(null);
 
-  /* ドラッグ系イベント */
-  const onDragOver = useCallback((e: React.DragEvent) => {
+      // 🚨 安全装置: 20MB以上のファイルはブラウザクラッシュを防ぐため弾く
+      if (file.size > 20 * 1024 * 1024) {
+        setState("error");
+        setError("デモ環境のため、20MB以下のファイルをご使用ください。");
+        return;
+      }
+
+      setFileName(file.name);
+      setFileSize(file.size);
+
+      // 🚨 メモリリーク防止: 古いプレビューURLを確実に破棄
+      if (previousUrlRef.current) {
+        URL.revokeObjectURL(previousUrlRef.current);
+      }
+      const newUrl = URL.createObjectURL(file);
+      previousUrlRef.current = newUrl;
+      setPreviewUrl(newUrl);
+
+      setState("reading");
+
+      const startedAt = performance.now();
+      const fileBuffer = await file.arrayBuffer();
+
+      // Labor Illusion: 680〜760msの意図的な遅延
+      const dwell = 680 + Math.round(Math.random() * 80);
+      await new Promise((resolve) => window.setTimeout(resolve, dwell));
+
+      setState("hashing");
+      const digestBuffer = await window.crypto.subtle.digest("SHA-256", fileBuffer);
+      
+      const hex = Array.from(new Uint8Array(digestBuffer))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      setDigest(hex);
+      setState("done");
+      setElapsedMs(Math.round(performance.now() - startedAt));
+    } catch (err) {
+      console.error(err);
+      setState("error");
+      setError("この環境ではハッシュ計算を完了できませんでした。");
+    }
+  }
+
+  /* ── Event Handlers ── */
+  const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) computeHash(file);
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(true);
-  }, []);
-  const onDragLeave = useCallback(() => setIsDragOver(false), []);
-  const onDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragOver(false);
-      handleFile(e.dataTransfer.files[0]);
-    },
-    [handleFile],
-  );
+  };
 
+  const onDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
 
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) computeHash(file);
+  };
 
-  /* リセット */
-  const reset = useCallback(() => {
-    setPhase('idle');
-    setResult(null);
-  }, []);
+  const handleSampleClick = () => {
+    const blob = new Blob([SAMPLE_IMAGE_SVG], { type: "image/svg+xml" });
+    const file = new File([blob], "proofmark-sample.svg", { type: "image/svg+xml" });
+    computeHash(file);
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+  };
 
   return (
-    <div
-      className="w-full max-w-xl mx-auto rounded-2xl overflow-hidden"
-      style={{
-        background: THEME.surface,
-        border: `1px solid ${THEME.border}`,
-      }}
-    >
-      <AnimatePresence mode="wait">
-        {/* ── Idle: ドロップゾーン ──────────────────────────────── */}
-        {phase === 'idle' && (
-          <motion.div
-            key="idle"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.35, ease: EASE }}
+    <div className="w-full max-w-5xl mx-auto rounded-3xl overflow-hidden border border-white/10 bg-[#0A0E27] shadow-2xl">
+      <div className="grid grid-cols-1 md:grid-cols-2 min-h-[480px]">
+        
+        {/* ── Left Pane: Dropzone ── */}
+        <div className="relative p-8 md:p-12 flex flex-col justify-center border-b md:border-b-0 md:border-r border-white/10" style={{ background: "rgba(255,255,255,0.015)" }}>
+          <div className="mb-6">
+            <h3 className="text-xl font-bold text-white mb-2 tracking-tight">Try it yourself</h3>
+            <p className="text-sm text-white/50 leading-relaxed">
+              ブラウザ内で SHA-256 ハッシュを計算します。ファイルはサーバーに送信されません。
+            </p>
+          </div>
+
+          <div
+            role="button"
+            tabIndex={0}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            onClick={() => inputRef.current?.click()}
+            onKeyDown={(e) => e.key === "Enter" && inputRef.current?.click()}
+            className="flex-1 min-h-[220px] rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative overflow-hidden group"
+            style={{
+              background: isDragOver ? "rgba(108,62,244,0.1)" : "rgba(255,255,255,0.03)",
+              border: `2px dashed ${isDragOver ? THEME.primary : "rgba(255,255,255,0.15)"}`,
+            }}
           >
-            {/* ドロップゾーン */}
-            <div
-              role="button"
-              tabIndex={0}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              onDrop={onDrop}
-              onClick={() => inputRef.current?.click()}
-              onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
-              className="flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-300 px-6 py-12 sm:py-14 rounded-t-2xl"
+            <input
+              ref={inputRef}
+              type="file"
+              className="hidden"
+              onChange={onFileSelect}
+            />
+            <motion.div animate={{ scale: isDragOver ? 1.1 : 1, color: isDragOver ? THEME.primary : THEME.textMuted }} transition={{ duration: 0.2 }}>
+              <UploadCloud className="w-10 h-10 mb-4 mx-auto opacity-70 group-hover:opacity-100 transition-opacity" />
+            </motion.div>
+            <p className="text-[15px] font-bold text-white/80 group-hover:text-white transition-colors">
+              Click or drag a file
+            </p>
+            <p className="text-[12px] text-white/40 mt-1">
+              Maximum file size: 20MB
+            </p>
+          </div>
+
+          <div className="mt-6 text-center">
+            <button
+              onClick={handleSampleClick}
+              className="text-[13px] font-semibold tracking-wide py-2.5 px-5 rounded-full transition-all hover:bg-white/5"
               style={{
-                borderBottom: `1px dashed ${isDragOver ? THEME.accent : THEME.border}`,
-                background: isDragOver
-                  ? THEME.accentSoft
-                  : 'transparent',
+                color: THEME.accent,
+                background: "rgba(0,212,170,0.1)",
+                border: "1px solid rgba(0,212,170,0.2)",
               }}
             >
-              <input
-                ref={inputRef}
-                type="file"
-                className="hidden"
-                onChange={(e) => handleFile(e.target.files?.[0])}
-              />
+              Test with a sample image
+            </button>
+          </div>
+        </div>
+
+        {/* ── Right Pane: Live Result ── */}
+        <div className="p-8 md:p-12 relative flex flex-col" style={{ background: "#07061A" }}>
+          <h3 className="text-[11px] uppercase tracking-[0.2em] font-bold text-white/40 mb-8 flex items-center gap-2">
+            <Hash className="w-3.5 h-3.5" />
+            Live Result
+          </h3>
+
+          <AnimatePresence mode="wait">
+            {state === "idle" && (
               <motion.div
-                animate={{
-                  scale: isDragOver ? 1.08 : 1,
-                  color: isDragOver ? THEME.accent : THEME.textMuted,
-                }}
-                transition={{ duration: 0.2 }}
+                key="idle"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex-1 flex flex-col items-center justify-center text-white/30"
               >
-                <UploadCloud className="w-10 h-10 mx-auto mb-4" />
+                <FileIcon className="w-12 h-12 mb-4 opacity-50" strokeWidth={1} />
+                <p className="text-sm">Waiting for input...</p>
               </motion.div>
-              <p
-                className="text-[15px] font-semibold tracking-tight"
-                style={{ color: THEME.textMain }}
-              >
-                ファイルをドロップして体験
-              </p>
-              <p
-                className="mt-1.5 text-[12px]"
-                style={{ color: THEME.textMuted }}
-              >
-                ブラウザ内で SHA-256 を計算。サーバーには一切送信されません。
-              </p>
-            </div>
+            )}
 
-            {/* 👇 必須追加：モバイルユーザー向け「1タップ体験」ボタン */}
-            <div style={{ marginTop: 20, textAlign: 'center', paddingBottom: 20 }}>
-              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.40)", marginBottom: 8 }}>手元にファイルがない場合は：</p>
-              <button
-                onClick={() => {
-                  const sampleFile = new File(["ProofMark Demo Asset Data 2026"], "sample_artwork.png", { type: "image/png" });
-                  handleFile(sampleFile); // ファイル処理関数へ渡す
-                }}
-                style={{
-                  padding: "8px 16px", borderRadius: 8,
-                  background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-                  color: "#00D4AA", fontSize: 12, fontWeight: 600, cursor: "pointer"
-                }}
-              >
-                サンプル画像で瞬時計算をテストする
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* ── Hashing: プログレス表示 ─────────────────────────── */}
-        {phase === 'hashing' && (
-          <motion.div
-            key="hashing"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.3, ease: EASE }}
-            className="flex flex-col items-center justify-center text-center px-6 py-16"
-          >
-            {/* スキャンラインアニメーション */}
-            <div
-              className="relative w-16 h-16 rounded-2xl flex items-center justify-center mb-5 overflow-hidden"
-              style={{
-                background: THEME.bg,
-                border: `1px solid ${THEME.border}`,
-              }}
-            >
-              <Hash className="w-7 h-7 relative z-10" style={{ color: THEME.accent }} />
+            {(state === "reading" || state === "hashing") && (
               <motion.div
-                className="absolute inset-x-0 h-[2px]"
-                initial={{ top: '-4px' }}
-                animate={{ top: ['0%', '100%'] }}
-                transition={{ duration: 0.8, ease: 'linear', repeat: Infinity }}
-                style={{
-                  background: `linear-gradient(90deg, transparent, ${THEME.primary} 40%, ${THEME.accent} 60%, transparent)`,
-                }}
-              />
-            </div>
-            <p
-              className="text-[14px] font-semibold"
-              style={{ color: THEME.textMain }}
-            >
-              SHA-256 を計算中…
-            </p>
-            <p
-              className="mt-2 text-[11px] tracking-widest uppercase"
-              style={{
-                color: THEME.textSubtle,
-                fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-              }}
-            >
-              ブラウザ内で処理中
-            </p>
-          </motion.div>
-        )}
-
-        {/* ── Done: ハッシュ結果 + CTA ─────────────────────────── */}
-        {phase === 'done' && result && (
-          <motion.div
-            key="done"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.35, ease: EASE }}
-            className="px-6 py-10 sm:py-12"
-          >
-            {/* 成功ヘッダー */}
-            <div className="flex items-center justify-center gap-2 mb-6">
-              <ShieldCheck className="w-5 h-5" style={{ color: THEME.accent }} />
-              <p
-                className="text-[14px] font-bold tracking-tight"
-                style={{ color: THEME.accent }}
+                key="processing"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="flex-1 flex flex-col"
               >
-                ハッシュ計算完了
-              </p>
-              <span
-                className="text-[11px] tabular-nums"
-                style={{
-                  color: THEME.textSubtle,
-                  fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-                }}
-              >
-                {result.elapsed}ms
-              </span>
-            </div>
+                <div className="flex items-center gap-4 mb-8 p-4 rounded-xl border border-white/5 bg-white/[0.02]">
+                  <div className="w-12 h-12 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                    <FileIcon className="w-6 h-6 text-white/50" />
+                  </div>
+                  <div className="overflow-hidden">
+                    <p className="text-[14px] font-bold text-white truncate">{fileName}</p>
+                    <p className="text-[12px] text-white/40">{formatSize(fileSize)}</p>
+                  </div>
+                </div>
 
-            {/* ファイル情報 */}
-            <div
-              className="rounded-xl px-4 py-3 mb-4"
-              style={{
-                background: THEME.bg,
-                border: `1px solid ${THEME.border}`,
-              }}
-            >
-              <p className="text-[12px] font-semibold truncate" style={{ color: THEME.textMain }}>
-                {result.fileName}
-              </p>
-              <p className="text-[11px] mt-0.5" style={{ color: THEME.textMuted }}>
-                {(result.fileSize / 1024).toFixed(1)} KB
-              </p>
-            </div>
+                <div className="flex-1 flex flex-col items-center justify-center">
+                  <div className="relative w-16 h-16 rounded-2xl flex items-center justify-center mb-6 overflow-hidden border border-white/10 bg-black/50">
+                    <Hash className="w-7 h-7 relative z-10" style={{ color: THEME.accent }} />
+                    <motion.div
+                      className="absolute inset-x-0 h-[2px]"
+                      initial={{ top: "-4px" }}
+                      animate={{ top: ["0%", "100%"] }}
+                      transition={{ duration: 0.8, ease: "linear", repeat: Infinity }}
+                      style={{
+                        background: `linear-gradient(90deg, transparent, ${THEME.primary} 40%, ${THEME.accent} 60%, transparent)`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-[14px] font-bold text-white">
+                    {state === "reading" ? "Reading file buffer..." : "Computing SHA-256..."}
+                  </p>
+                  <p className="text-[12px] text-white/40 mt-1 font-mono uppercase tracking-wider">Browser Sandbox</p>
+                </div>
+              </motion.div>
+            )}
 
-            {/* ハッシュ値 */}
-            <div
-              className="rounded-xl px-4 py-3 mb-6 select-all"
-              style={{
-                background: THEME.bg,
-                border: `1px solid ${THEME.border}`,
-                fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-              }}
-            >
-              <p
-                className="text-[10px] uppercase tracking-widest mb-1.5"
-                style={{ color: THEME.textSubtle }}
+            {state === "done" && (
+              <motion.div
+                key="done"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex-1 flex flex-col h-full"
               >
-                SHA-256
-              </p>
-              <p
-                className="text-[11px] leading-relaxed break-all"
-                style={{ color: THEME.accent }}
-              >
-                {result.hash}
-              </p>
-            </div>
+                {/* プレビュー画像 */}
+                {previewUrl && (
+                  <div className="w-full h-32 md:h-40 rounded-xl overflow-hidden mb-6 border border-white/10 relative shrink-0">
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#07061A]/90 to-transparent z-10" />
+                    <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                    <div className="absolute bottom-3 left-4 z-20">
+                      <p className="text-[13px] font-bold text-white truncate max-w-[200px] md:max-w-[250px]">{fileName}</p>
+                      <p className="text-[11px] text-white/60">{formatSize(fileSize)}</p>
+                    </div>
+                  </div>
+                )}
 
-            {/* CTA */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Link href="/spot-issue" className="flex-1">
-                <span
-                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-[13px] font-bold tracking-wide transition-opacity hover:opacity-90"
-                  style={{
-                    background: `linear-gradient(135deg, ${THEME.accent}, ${THEME.primary})`,
-                    color: '#fff',
-                  }}
+                <div className="mb-4 flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-[#00D4AA]" />
+                  <p className="text-[14px] font-bold text-[#00D4AA]">Hash Computation Complete</p>
+                  <span className="ml-auto text-[11px] font-mono text-white/30">{elapsedMs}ms</span>
+                </div>
+
+                <div className="bg-black/40 border border-white/10 rounded-xl p-4 mb-8 shrink-0">
+                  <p className="text-[10px] uppercase tracking-widest text-white/40 mb-2">SHA-256 Digest</p>
+                  <p className="text-[13px] font-mono text-[#00D4AA] break-all leading-relaxed select-all">
+                    {digest}
+                  </p>
+                </div>
+
+                <div className="mt-auto pt-4">
+                  <Link href="/spot-issue">
+                    <span className="flex items-center justify-center w-full py-3.5 rounded-xl text-[14px] font-bold text-white transition-opacity hover:opacity-90" style={{ background: `linear-gradient(135deg, ${THEME.accent}, ${THEME.primary})`, cursor: "pointer" }}>
+                      このまま証明書を発行する
+                    </span>
+                  </Link>
+                </div>
+              </motion.div>
+            )}
+
+            {state === "error" && (
+              <motion.div
+                key="error"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex-1 flex flex-col items-center justify-center text-center px-4"
+              >
+                <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
+                  <AlertTriangle className="w-8 h-8 text-red-500" />
+                </div>
+                <p className="text-[15px] font-bold text-white mb-2">処理エラー</p>
+                <p className="text-[13px] text-red-400/80 max-w-[240px] leading-relaxed">{error}</p>
+                <button
+                  onClick={() => setState("idle")}
+                  className="mt-6 text-[12px] font-bold text-white/50 hover:text-white/80 transition-colors underline"
                 >
-                  このまま証明書を発行する
-                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
-                </span>
-              </Link>
-              <button
-                type="button"
-                onClick={reset}
-                className="py-3 px-4 rounded-xl text-[12px] font-semibold tracking-wide transition-colors"
-                style={{
-                  background: 'transparent',
-                  border: `1px solid ${THEME.border}`,
-                  color: THEME.textMuted,
-                }}
-              >
-                別のファイルで試す
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  リトライする
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 }

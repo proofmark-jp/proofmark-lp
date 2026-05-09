@@ -114,48 +114,7 @@ const NARRATIONS: NarrationDef[] = [
   },
 ];
 
-/* ──────────────────────────────────────────────────────────────────────────
-   ProofMark Seal SVG（オリジナルを 1:1 保持）
-────────────────────────────────────────────────────────────────────────── */
-const ProofMarkSeal = ({ size = 96 }: { size?: number }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 100 100"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    aria-hidden="true"
-  >
-    <defs>
-      <linearGradient id="pp32-ri" x1="15%" y1="0%" x2="85%" y2="100%">
-        <stop offset="0%" stopColor="#5830CC" />
-        <stop offset="100%" stopColor="#00B896" />
-      </linearGradient>
-      <filter id="seal-glow" x="-50%" y="-50%" width="200%" height="200%">
-        <feGaussianBlur stdDeviation="2.4" result="blur" />
-        <feMerge>
-          <feMergeNode in="blur" />
-          <feMergeNode in="SourceGraphic" />
-        </feMerge>
-      </filter>
-    </defs>
-    <rect width="100" height="100" rx="22" fill="#0D0B24" />
-    <path
-      d="M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 87,25 L 82,29 L 76,18 Z"
-      fill="none"
-      stroke="url(#pp32-ri)"
-      strokeWidth="3.8"
-      strokeLinejoin="round"
-      strokeLinecap="round"
-      opacity=".85"
-    />
-    <polygon
-      points="17,46 27,47 39,62 79,22 83,28 36,70 23,58"
-      fill="#00D4AA"
-      filter="url(#seal-glow)"
-    />
-  </svg>
-);
+
 
 /* ──────────────────────────────────────────────────────────────────────────
    NarrationBanner — ステップに応じてクロスフェードするナレーション領域
@@ -947,47 +906,19 @@ export default function HeroDemo({
             {/* ★ 新規: フェーズラベル（アートワーク左下）*/}
             <PhaseLabel step={displayStep} />
 
-            {/* Seal Drop（Phase 3）*/}
+            {/* 削除したロゴの代わりに、暗号データの機能美を配置 */}
             <motion.div
-              key={`seal-${loopKey}`}
-              initial={{ y: -64, opacity: 0, scale: 1 }}
-              animate={
-                staticView
-                  ? { y: 0, opacity: 1, scale: 1 }
-                  : {
-                    y: [-64, -64, 0, 0, 0, 0],
-                    opacity: [0, 0, 1, 1, 1, 1],
-                    scale: [1, 1, 1, 0.92, 1.0, 1.0],
-                  }
-              }
-              transition={
-                staticView
-                  ? { duration: 0.4, ease: EASE_OUT_EXPO }
-                  : {
-                    duration: TL.total / 1000,
-                    times: [
-                      0,
-                      TL.sealDrop.start / TL.total,
-                      TL.sealImpact.start / TL.total,
-                      (TL.sealImpact.start + 90) / TL.total,
-                      (TL.sealImpact.start + TL.sealImpact.dur) / TL.total,
-                      1,
-                    ],
-                    ease: EASE_OUT_EXPO,
-                  }
-              }
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                marginLeft: -48,
-                marginTop: -48,
-                width: 96,
-                height: 96,
-                filter: "drop-shadow(0 12px 32px rgba(108,62,244,0.55))",
+              className="absolute left-[60%] top-[18%] z-20 -translate-x-1/2 rounded-[16px] border border-white/10 bg-black/40 px-4 py-2 backdrop-blur-md"
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: [0, 1, 1, 0] }}
+              transition={{
+                duration: 7,
+                times: [0, 0.2, 0.8, 1],
+                ease: [0.16, 1, 0.3, 1],
               }}
             >
-              <ProofMarkSeal size={96} />
+              <div className="text-[9px] uppercase tracking-widest text-white/50">Timestamp Signature</div>
+              <div className="font-mono text-sm font-bold text-[#00D4AA]">VERIFIED SIGNATURE</div>
             </motion.div>
           </motion.div>
 
