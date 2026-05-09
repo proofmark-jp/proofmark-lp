@@ -1,9 +1,10 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import type { Database } from '../client/src/types/supabase';
 
 const supabaseUrl = process.env.SUPABASE_URL || "https://layesvzeeaiqqbhwdlgb.supabase.co";
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient<Database>(supabaseUrl, supabaseKey);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // VercelのNode環境で安全にパラメータを取得する強靭なロジック

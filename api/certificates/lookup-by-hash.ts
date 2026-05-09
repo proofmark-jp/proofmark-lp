@@ -92,6 +92,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 最も新しいもの 1 件を「主検証先」、残りを「同一ハッシュの再発行履歴」として返す
     const [primary, ...others] = data;
+
+    // 実行時ガード: 空配列や不正データによるクラッシュを未然に防止
+    if (!primary || !primary.id) {
+      json(res, 200, { match: false, reqId: log.ctx.reqId });
+      return;
+    }
+
     const shape = (c: typeof primary) => ({
       certificate_id: c.id,
       title: c.title ?? c.original_filename ?? c.file_name ?? 'Untitled',

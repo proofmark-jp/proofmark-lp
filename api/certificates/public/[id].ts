@@ -43,14 +43,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq('is_public', true)
         .maybeSingle();
 
-      if (bundleResponse.data) {
+      const bData = bundleResponse.data;
+      if (bData) {
+        // 実行時ガード: 必須フィールドの欠落を検出
+        if (!bData.id) throw new Error('Invalid DB state: bundle ID missing');
+
         const chainSummary = await verifyEvidenceChain({
-          id: bundleResponse.data.id,
-          chain_head_sha256: bundleResponse.data.chain_head_sha256,
-          chain_depth: bundleResponse.data.chain_depth,
-          steps: (bundleResponse.data.steps || []).map((step: any) => ({
+          id: bData.id,
+          chain_head_sha256: bData.chain_head_sha256,
+          chain_depth: bData.chain_depth,
+          steps: (bData.steps || []).map((step) => ({
             id: step.id,
-            bundleId: bundleResponse.data.id,
+            bundleId: bData.id,
             stepIndex: step.step_index,
             stepType: step.step_type,
             title: step.title,
@@ -66,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
 
         bundle = {
-          ...bundleResponse.data,
+          ...bData,
           chain_summary: chainSummary,
         };
       }
