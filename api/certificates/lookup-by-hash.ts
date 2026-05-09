@@ -65,8 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let q = admin
       .from('certificates')
       .select(
-        'id, user_id, title, original_filename, file_name, sha256, ' +
-        'proven_at, certified_at, tsa_provider, visibility, is_archived, badge_tier'
+        'id, user_id, title, original_filename, file_name, sha256, proven_at, certified_at, tsa_provider, visibility, is_archived, badge_tier'
       )
       .eq('sha256', sha256Raw)
       .eq('visibility', 'public')
