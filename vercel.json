@@ -3,12 +3,9 @@
   "public": true,
   "functions": {
     "api/og.ts": {
-      "memory": 1024,
       "maxDuration": 10
     },
-    "api/cert.ts": {
-      "memory": 512
-    },
+    "api/cert.ts": {},
     "api/evidence-pack.ts": {
       "maxDuration": 30
     },
