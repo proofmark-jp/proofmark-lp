@@ -1,21 +1,16 @@
 /**
- * App.tsx — Phase 1 完全分離モデル (LP / App ルーティング)
+ * App.tsx — Phase Studio Repair (Routing rollback)
  *
- * 変更ポイント (Task A):
- *   1. <RouteGuard /> を導入し、未ログイン時に /dashboard を /auth へリダイレクト。
- *   2. ログイン済みユーザーが / (LP) にアクセスした場合は /dashboard へ強制遷移。
- *      → 既存ユーザーにマーケティング LP を再提示しない (世界基準のSaaSの作法)。
- *   3. 既存の Route 定義・コンポーネント import は **1 行も削除しない**。
- *      認証ロジック (useAuth) と API 呼び出しには一切触れない。
- *
- * 注意:
- *   - useAuth() の `loading` フラグが false になるまでリダイレクト判定を遅延し、
- *     チラつきと「未ログイン誤判定 → 即 /auth」を防止する。
- *   - /auth, /spot-issue, /cert/:id, /u/:username, /embed/:username,
- *     /trust-center, /pricing, /how-it-works, /compare-c2pa, /legal-resources,
- *     /faq, /what-it-proves, /terms, /privacy, /tokushoho, /security, /contact,
- *     /blog 系, /invite, /admin/*, /404 は **どちらの状態でも自由にアクセス可能**。
- *     LP/App リダイレクトの対象は「/」と「/dashboard」だけに限定する。
+ * 変更ポイント (Task 2):
+ *   1. /dashboard を Dashboard.obsidian → Dashboard.studio へロールバック。
+ *      Obsidian は美学優先で「検索 / プロジェクト管理 / ステータスバッジ」が
+ *      消失しており SaaS としてポンコツ化したため、強力な管理機能を持つ
+ *      Studio 版に戻す。
+ *   2. RouteGuard / ScrollToTop / 認証ロジック (useAuth) は**1ミリも触らない**。
+ *   3. 既存の <Route> 行・import 行は全て温存。差分は 2 行のみ:
+ *        a) `import DashboardObsidian` → `import DashboardStudio`
+ *        b) `<Route path="/dashboard" component={DashboardObsidian} />`
+ *           → `<Route path="/dashboard" component={DashboardStudio} />`
  */
 
 import { HelmetProvider } from 'react-helmet-async';
@@ -30,8 +25,10 @@ import { AuthProvider, useAuth } from "./hooks/useAuth";
 import Home from "./pages/Home";
 import CertificatePage from './pages/CertificatePage';
 import Auth from './pages/Auth';
-import DashboardObsidian from './pages/Dashboard.obsidian';
+// 🔧 Phase Studio Repair: Obsidian は管理機能を失ったため Studio 版へロールバック
+import DashboardStudio from './pages/Dashboard.studio';
 // import Dashboard from './pages/Dashboard';
+// import DashboardObsidian from './pages/Dashboard.obsidian'; // ← 廃止 (UI 美学のみで失敗)
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import Tokushoho from "./pages/Tokushoho";
@@ -69,13 +66,11 @@ function ScrollToTop() {
 
     const hash = window.location.hash;
     if (hash) {
-      // DOMの描画完了を待つリトライ機構（最大10回、1秒間探す）
       let attempts = 0;
       const checkExist = setInterval(() => {
         const id = hash.substring(1);
         const element = document.getElementById(id);
         if (element) {
-          // Navbarの高さ（約80px）を考慮してスクロール位置を上にズラす
           const y = element.getBoundingClientRect().top + window.scrollY - 80;
           window.scrollTo({ top: y, behavior: 'smooth' });
           clearInterval(checkExist);
@@ -90,12 +85,7 @@ function ScrollToTop() {
 }
 
 /**
- * RouteGuard — Task A の核 (LP / App 完全分離)
- *
- *  - useAuth は loading を返す前提。loading 中は何もしない (チラつき防止)。
- *  - /         : 未ログイン → そのまま LP / ログイン済み → /dashboard へ
- *  - /dashboard: 未ログイン → /auth へ      / ログイン済み → そのまま
- *  - その他   : 干渉しない
+ * RouteGuard — Task A の核 (LP / App 完全分離)。挙動は据え置き。
  */
 function RouteGuard() {
   const [location, navigate] = useLocation();
@@ -103,15 +93,10 @@ function RouteGuard() {
 
   useEffect(() => {
     if (loading) return;
-
-    // /dashboard は未ログインなら /auth へ
     if (location === '/dashboard' && !user) {
       navigate('/auth?redirect=/dashboard', { replace: true });
       return;
     }
-
-    // / (LP ルート) はログイン済みなら /dashboard へ
-    // hash や query を保持する必要はない (LP は静的)
     if (location === '/' && user) {
       navigate('/dashboard', { replace: true });
       return;
@@ -129,7 +114,8 @@ function Router() {
       <Route path="/business" component={Business} />
       <Route path="/cert/:id" component={CertificatePage} />
       <Route path="/auth" component={Auth} />
-      <Route path="/dashboard" component={DashboardObsidian} />
+      {/* 🔧 Phase Studio Repair: Obsidian → Studio へロールバック */}
+      <Route path="/dashboard" component={DashboardStudio} />
       <Route path="/settings" component={Settings} />
       <Route path="/terms" component={Terms} />
       <Route path="/privacy" component={Privacy} />
@@ -165,7 +151,7 @@ function Router() {
 function AppShell() {
   const [location] = useLocation();
   const isEmbedRoute = location.startsWith('/embed/');
-  // /dashboard は「静寂な作業空間」のため Footer を表示しない (仕様書 §3)
+  // /dashboard は Studio 化したため Footer は引き続き非表示 (作業領域の集中度を保つ)
   const hideFooter = isEmbedRoute || location === '/dashboard';
 
   return (

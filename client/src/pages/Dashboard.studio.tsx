@@ -1,56 +1,104 @@
 /**
- * Dashboard.studio.tsx — Sprint 3「Creator First, Studio Ready」
+ * Dashboard.studio.tsx — Phase Studio Repair (Stripe / Vercel-grade Console)
  *
- * これは既存の `Dashboard.tsx` を**置き換えない**形の拡張ラッパーです。
- * Progressive Disclosure を厳守するため、以下の方針で書かれています：
+ * 設計責任:
+ *   1. Hero (上段): SlimUploadDock を常設マウント。画面を占有しない、
+ *      Vercel "New Project" / Stripe "Quick Action" のような細い帯。
+ *      展開時のみ既存 CertificateUpload.c2pa-patch.tsx をフルロードする。
+ *   2. KPI (中段): 「管理中の証明数 / Trusted TSA / 要対応 / 直近発行」。
+ *      "0/34件が証明済み" のような誤読されやすい文言を完全に廃止。
+ *   3. Management (下段): 既存の強力な機能を温存・強化。
+ *        - ProjectRail (案件チップ + 件数 + Trusted カウント)
+ *        - Toolbar (検索 / 信頼 Tab / ソート / Grid・List 切替 / アーカイブ表示)
+ *        - Studio plan のみ AttentionTray + StatusMenu + ProjectComposer + AuditDrawer
+ *        - Free / Creator は CreatorDashboard に委譲することなく、ここで一括描画
  *
- *   1. Free / Creator ユーザー:
- *      - 既存と完全に同じ「フラットで身軽な」体験を保つ。
- *      - Project Composer / AttentionTray / AuditDrawer は描画されない。
- *      - 既存の `client_project` テキストフィールドはそのまま動作。
+ * 厳守事項:
+ *   - 既存型 (proofmark-types.ts) と pm.* デザイントークンを 1mm も壊さない。
+ *   - any キャストは構造起因の境界 1 箇所のみに局所化し、残りは厳密推論。
+ *   - useStudioOps / useC2pa / useAuth / supabase 直接呼び出しのロジックは温存。
+ *   - 削除しない: 検索 / ソート / view モード / アーカイブ / 信頼バッジ / ProjectRail。
  *
- *   2. Studio / Business ユーザー:
- *      - 同じキャンバスの上に、案件フォルダ・要対応バンド・ステータス列・
- *        監査ドロワーが「自然な拡張」として乗る。
- *      - 別アプリ感ゼロ。配色・タイポ・モーションは既存と同一トークン。
- *
- *   3. データ整合性:
- *      - 案件付け替え／ステータス変更は `/api/certificates/assign-project`
- *        を経由し、サーバ側で監査ハッシュチェーンに必ず記録される。
- *      - フロントから直接 `supabase.from("certificates").update` は使わない。
- *
- * 適用方法:
- *   既存の `Dashboard.tsx` をそのまま残し、
- *     <Route path="/dashboard" component={DashboardStudioWrapper} />
- *   と差し替える。中身は plan_tier に応じて Creator / Studio を出し分けます。
+ * 参考実装:
+ *   - 既存 Dashboard.tsx の deriveTrustTier / TrustBadge / ProjectChip / Toolbar
+ *   - 旧 Dashboard.studio.tsx の AttentionTray / StatusMenu / AuditDrawer / ProjectComposer
+ *   - 新規 SlimUploadDock (Hero 部の slim shell)
  */
 
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useLocation } from 'wouter';
 import { motion } from 'framer-motion';
-import { Plus, History, Layers3, ShieldCheck, FolderKanban } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowUpDown,
+  BadgeCheck,
+  Check,
+  Clock3,
+  Copy,
+  ExternalLink,
+  FileDown,
+  FolderKanban,
+  Hash,
+  History,
+  Info,
+  LayoutGrid,
+  Link as LinkIcon,
+  Plus,
+  Rows3,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+  Star,
+} from 'lucide-react';
 import { toast } from 'sonner';
+
+import Navbar from '../components/Navbar';
 import { useAuth } from '../hooks/useAuth';
-import { useStudioOps, type ProjectRecord } from '../hooks/useStudioOps';
+import { useStudioOps } from '../hooks/useStudioOps';
 import { supabase } from '../lib/supabase';
-import { ProjectRail, type ProjectChipModel } from '../components/projects/ProjectRail';
-import { ProjectComposer } from '../components/projects/ProjectComposer';
-import { AttentionTray } from '../components/ops/AttentionTray';
-import { StatusMenu } from '../components/ops/StatusMenu';
-import { AuditDrawer } from '../components/ops/AuditDrawer';
 import {
   DELIVERY_STATUS_TOKENS,
   type DeliveryStatus,
   compareByAttention,
 } from '../lib/proofmark-ops';
+import type { CertificateRecord } from '../lib/proofmark-types';
 
-// 既存 Dashboard を遅延ロードして、Free / Creator にバンドル肥大化を波及させない。
-const CreatorDashboard = lazy(() => import('./Dashboard'));
+import { ProjectRail, type ProjectChipModel } from '../components/projects/ProjectRail';
+import { ProjectComposer } from '../components/projects/ProjectComposer';
+import { AttentionTray } from '../components/ops/AttentionTray';
+import { StatusMenu } from '../components/ops/StatusMenu';
+import { AuditDrawer } from '../components/ops/AuditDrawer';
+import { SlimUploadDock } from '../components/dashboard/SlimUploadDock';
+
+// Process Bundle Composer (Chain of Evidence) は Studio で開く可能性あり。Lazy load。
+const ProcessBundleComposer = lazy(() =>
+  import('../components/proof/ProcessBundleComposer').then((m) => ({
+    default: m.ProcessBundleComposer,
+  })),
+);
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Types — 既存テーブル列のスーパーセット (壊さない)
+────────────────────────────────────────────────────────────────────────── */
+
+type TrustTier = 'beta' | 'trusted' | 'cross' | 'pending';
 
 interface CertRow {
   id: string;
   user_id: string;
   title?: string | null;
+  is_starred?: boolean | null;
   file_name?: string | null;
   file_hash?: string | null;
   sha256?: string | null;
@@ -62,91 +110,162 @@ interface CertRow {
   certified_at?: string | null;
   tsa_provider?: string | null;
   timestamp_token?: string | null;
+  cross_anchors?: Array<{ provider: string; certified_at: string }> | null;
   is_archived?: boolean | null;
   client_project?: string | null;
   /** Sprint 3 — Studio fields */
   project_id?: string | null;
   delivery_status?: DeliveryStatus | null;
   team_id?: string | null;
+  original_filename?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
+interface TrustDescriptor {
+  tier: TrustTier;
+  label: string;
+  sublabel: string;
+  color: string;
+  border: string;
+  bg: string;
+  icon: typeof ShieldCheck;
+  description: string;
+}
+
+const TRUSTED_PROVIDERS: ReadonlySet<string> = new Set([
+  'digicert',
+  'globalsign',
+  'seiko',
+  'sectigo',
+]);
 const ALL_PROJECTS_ID = '__all__';
 const UNASSIGNED_ID = '__unassigned__';
 
+function deriveTrustTier(c: CertRow): TrustDescriptor {
+  const provider = (c.tsa_provider || '').toLowerCase();
+  const hasToken = Boolean(c.timestamp_token && c.certified_at);
+  const anchors = c.cross_anchors?.length ?? 0;
+
+  if (!hasToken) {
+    return {
+      tier: 'pending',
+      label: 'Pending',
+      sublabel: 'TSA発行待ち',
+      color: '#A8A0D8',
+      border: 'rgba(168,160,216,0.35)',
+      bg: 'rgba(168,160,216,0.10)',
+      icon: Clock3,
+      description: 'タイムスタンプトークン未発行。数秒以内にTSAから署名が返る予定です。',
+    };
+  }
+  if (anchors >= 1) {
+    return {
+      tier: 'cross',
+      label: 'Cross-anchored',
+      sublabel: `${anchors + 1} 重TSA`,
+      color: '#F0BB38',
+      border: 'rgba(240,187,56,0.40)',
+      bg: 'rgba(240,187,56,0.12)',
+      icon: Sparkles,
+      description: '複数のTSAで多重発行された証明。鍵失効耐性あり。',
+    };
+  }
+  if (TRUSTED_PROVIDERS.has(provider)) {
+    return {
+      tier: 'trusted',
+      label: 'Trusted TSA',
+      sublabel: provider.toUpperCase(),
+      color: '#00D4AA',
+      border: 'rgba(0,212,170,0.40)',
+      bg: 'rgba(0,212,170,0.12)',
+      icon: ShieldCheck,
+      description: '主要トラストストアに収録された商用TSAによるRFC3161タイムスタンプ。',
+    };
+  }
+  return {
+    tier: 'beta',
+    label: 'Beta TSA',
+    sublabel: provider ? provider.toUpperCase() : 'FREETSA',
+    color: '#9BA3D4',
+    border: 'rgba(155,163,212,0.35)',
+    bg: 'rgba(155,163,212,0.10)',
+    icon: ShieldAlert,
+    description: 'β版TSAによる発行。RFC3161として有効ですがSLAなしです。',
+  };
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Component — Single page, dual capability (Creator + Studio)
+────────────────────────────────────────────────────────────────────────── */
+
 export default function DashboardStudioWrapper() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const ops = useStudioOps();
   const [, navigate] = useLocation();
 
-  // 1. 認証またはOpsデータのロード中はスピナーで完全待機（フラッシュ防止）
-  if (authLoading || ops.loading) {
-    return <MinimalSpinner />;
-  }
+  // 認証ガード
+  useEffect(() => {
+    if (!authLoading && !user) navigate('/auth?redirect=/dashboard');
+  }, [authLoading, user, navigate]);
 
-  // 2. ロード完了後、Studio権限がない場合はCreator版を返す
-  if (!ops.isStudio) {
-    return (
-      <Suspense fallback={<MinimalSpinner />}>
-        <CreatorDashboard />
-      </Suspense>
-    );
-  }
+  if (authLoading || ops.loading) return <MinimalSpinner />;
+  if (!user) return null;
 
-  // 3. Studio権限がある場合のみ、Ops拡張版をマウント
+  const isStudio = ops.isStudio;
+
   return (
-    <StudioDashboard
+    <StudioCanvas
+      user={user}
+      signOut={signOut}
       ops={ops}
-      authLoading={authLoading}
-      onAuthRedirect={() => navigate('/auth')}
+      isStudio={isStudio}
     />
   );
 }
 
-/* ───────────────────────────────────────────────────────────────────── */
+/* ──────────────────────────────────────────────────────────────────────── */
 
-interface StudioProps {
+interface StudioCanvasProps {
+  user: ReturnType<typeof useAuth>['user'];
+  signOut: ReturnType<typeof useAuth>['signOut'];
   ops: ReturnType<typeof useStudioOps>;
-  authLoading: boolean;
-  onAuthRedirect: () => void;
+  isStudio: boolean;
 }
 
-function StudioDashboard({ ops, authLoading, onAuthRedirect }: StudioProps) {
-  const { user } = useAuth();
+function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const [certs, setCerts] = useState<CertRow[]>([]);
   const [loadingCerts, setLoadingCerts] = useState(true);
-  const [showArchived, setShowArchived] = useState(false);
+
+  // フィルタ / ソート / 表示モード — Dashboard.tsx と完全互換
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'newest' | 'starred' | 'trust'>('newest');
+  const [view, setView] = useState<'grid' | 'list'>('list');
   const [activeProjectId, setActiveProjectId] = useState<string>(ALL_PROJECTS_ID);
+  const [showArchived, setShowArchived] = useState(false);
+  const [trustFilter, setTrustFilter] = useState<TrustTier | 'all'>('all');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Studio 専用ドロワー
   const [composerOpen, setComposerOpen] = useState(false);
-  const [composerInitial, setComposerInitial] = useState<Partial<ProjectRecord> | null>(null);
   const [auditCertId, setAuditCertId] = useState<string | null>(null);
   const [auditCertTitle, setAuditCertTitle] = useState<string | null>(null);
+  const [chainCert, setChainCert] = useState<CertificateRecord | null>(null);
 
-  // ── auth gate ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!authLoading && !user) onAuthRedirect();
-  }, [authLoading, user, onAuthRedirect]);
-
-  // ── load certificates (RLS-filtered; Studio: own + team) ──────────────
+  /* ── データ取得 (Studio: 自分 + チーム / Creator: 自分のみ) ── */
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
     (async () => {
       setLoadingCerts(true);
-      let query = supabase
+      let q = supabase
         .from('certificates')
-        .select(
-          'id, user_id, title, file_name, file_hash, sha256, thumbnail_url, public_image_url, ' +
-          'proof_mode, visibility, created_at, certified_at, tsa_provider, timestamp_token, ' +
-          'is_archived, client_project, project_id, delivery_status, team_id',
-        )
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(500);
+      if (!isStudio) q = q.eq('user_id', user.id);
+      if (!showArchived) q = q.eq('is_archived', false);
 
-      if (!showArchived) {
-        query = query.eq('is_archived', false);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await q;
       if (cancelled) return;
       if (error) {
         toast.error('証明書の取得に失敗しました', { description: error.message });
@@ -156,318 +275,636 @@ function StudioDashboard({ ops, authLoading, onAuthRedirect }: StudioProps) {
       }
       setLoadingCerts(false);
     })();
-    return () => { cancelled = true; };
-  }, [user, showArchived]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user, isStudio, showArchived]);
 
-  // ── derived: project chips ────────────────────────────────────────────
-  const projectChips: ProjectChipModel[] = useMemo(() => {
-    const visible = showArchived ? certs : certs.filter((c) => !c.is_archived);
-    const projectMap = new Map(ops.projects.map((p) => [p.id, p]));
+  /* ── 派生: フィルタ済み + 案件適用 ── */
+  const visibleCerts = useMemo(
+    () => (showArchived ? certs : certs.filter((c) => !c.is_archived)),
+    [certs, showArchived],
+  );
 
-    const counters = new Map<string, ProjectChipModel>();
-    counters.set(ALL_PROJECTS_ID, {
-      id: ALL_PROJECTS_ID, name: 'すべての案件', count: visible.length, synthetic: true,
-    });
+  const filteredSortedCerts = useMemo(() => {
+    let r = [...visibleCerts];
 
-    // 既存 Studio プロジェクトを必ず先に並べる（空でも見える）
-    for (const p of ops.projects) {
-      counters.set(p.id, {
-        id: p.id,
-        name: p.name,
-        count: 0,
-        color: p.color,
-        dueAt: p.due_at,
-        needsAttention: 0,
-        trustedCount: 0,
+    // 検索 (Studio時のプロジェクト名検索漏れを修正)
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      // Studio用にプロジェクトIDから名前を引けるMapを事前作成
+      const projectMap = isStudio ? new Map(ops.projects.map((p) => [p.id, p.name.toLowerCase()])) : new Map();
+      
+      r = r.filter((c) => {
+        // StudioならMapから名前を取得、Creatorならclient_projectを直接使用
+        const projectName = isStudio && c.project_id 
+          ? projectMap.get(c.project_id) || '' 
+          : (c.client_project || '').toLowerCase();
+
+        return (
+          (c.title ?? '').toLowerCase().includes(q) ||
+          (c.file_name ?? '').toLowerCase().includes(q) ||
+          projectName.includes(q) ||
+          (c.sha256 ?? c.file_hash ?? '').toLowerCase().includes(q)
+        );
       });
     }
 
-    for (const c of visible) {
-      const id = c.project_id || UNASSIGNED_ID;
-      const existing = counters.get(id) ?? {
-        id,
-        name: id === UNASSIGNED_ID
-          ? '未分類'
-          : projectMap.get(id)?.name ?? c.client_project ?? '未分類',
-        count: 0,
-        color: id === UNASSIGNED_ID ? undefined : projectMap.get(id)?.color,
-        synthetic: id === UNASSIGNED_ID,
-        needsAttention: 0,
-        trustedCount: 0,
-        dueAt: id === UNASSIGNED_ID ? null : projectMap.get(id)?.due_at ?? null,
-      };
-      existing.count += 1;
-      if (c.delivery_status === 'review' || c.delivery_status === 'ready') {
-        existing.needsAttention = (existing.needsAttention ?? 0) + 1;
-      }
-      const provider = (c.tsa_provider ?? '').toLowerCase();
-      if (['digicert', 'globalsign', 'seiko', 'sectigo'].includes(provider)) {
-        existing.trustedCount = (existing.trustedCount ?? 0) + 1;
-      }
-      counters.set(id, existing);
-    }
-    return Array.from(counters.values());
-  }, [certs, ops.projects, showArchived]);
-
-  // ── derived: filtered certificates for the grid ───────────────────────
-  const visibleCerts = useMemo(() => {
-    let r = showArchived ? certs : certs.filter((c) => !c.is_archived);
+    // 案件フィルタ — Studio は project_id, Creator は client_project
     if (activeProjectId !== ALL_PROJECTS_ID) {
-      r = r.filter((c) => (c.project_id || UNASSIGNED_ID) === activeProjectId);
+      if (isStudio) {
+        r = r.filter((c) => (c.project_id || UNASSIGNED_ID) === activeProjectId);
+      } else {
+        r = r.filter((c) => {
+          const key = c.client_project?.trim() || UNASSIGNED_ID;
+          return key === activeProjectId;
+        });
+      }
     }
-    // 要対応 → 進行中 → 納品準備 → … の順
-    r.sort((a, b) => {
-      const c = compareByAttention(a.delivery_status ?? null, b.delivery_status ?? null);
-      if (c !== 0) return c;
-      return (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0);
+
+    // 信頼フィルタ
+    if (trustFilter !== 'all') {
+      r = r.filter((c) => deriveTrustTier(c).tier === trustFilter);
+    }
+
+    // ソート (パフォーマンスチューニング: Dateパースを最小限に)
+    const rank: Record<TrustTier, number> = { cross: 0, trusted: 1, beta: 2, pending: 3 };
+    
+    // 事前にタイムスタンプを計算してキャッシュ (Schwartzian transform的アプローチ)
+    const sorted = r.map(c => ({
+      cert: c,
+      time: new Date(c.created_at).getTime() || 0,
+      trustRank: rank[deriveTrustTier(c).tier]
+    })).sort((a, b) => {
+      if (sortBy === 'starred') {
+        const av = a.cert.is_starred ? 1 : 0;
+        const bv = b.cert.is_starred ? 1 : 0;
+        if (av !== bv) return bv - av;
+      }
+      if (sortBy === 'trust') {
+        const d = a.trustRank - b.trustRank;
+        if (d !== 0) return d;
+      }
+      if (isStudio) {
+        const diff = compareByAttention(a.cert.delivery_status ?? null, b.cert.delivery_status ?? null);
+        if (diff !== 0) return diff;
+      }
+      return b.time - a.time;
     });
-    return r;
-  }, [certs, activeProjectId, showArchived]);
 
-  // ── derived: AttentionTray feed ───────────────────────────────────────
-  const attentionItems = useMemo(() => {
-    const projectMap = new Map(ops.projects.map((p) => [p.id, p]));
-    return (showArchived ? certs : certs.filter((c) => !c.is_archived))
-      .map((c) => ({
-        id: c.id,
-        title: c.title ?? c.file_name ?? 'Untitled',
-        projectName: c.project_id
-          ? projectMap.get(c.project_id)?.name ?? c.client_project ?? '未分類'
-          : c.client_project ?? '未分類',
-        projectColor: c.project_id ? projectMap.get(c.project_id)?.color ?? null : null,
-        deliveryStatus: c.delivery_status ?? null,
-        dueAt: c.project_id ? projectMap.get(c.project_id)?.due_at ?? null : null,
-        certifiedAt: c.certified_at ?? c.created_at,
-      }));
-  }, [certs, ops.projects, showArchived]);
+    return sorted.map(item => item.cert);
+  }, [visibleCerts, activeProjectId, searchQuery, trustFilter, sortBy, isStudio, ops.projects]);
 
-  // ── KPI ───────────────────────────────────────────────────────────────
+  /* ── 派生: ProjectRail の chips ── */
+  const projectChips: ProjectChipModel[] = useMemo(() => {
+    const chips = new Map<string, ProjectChipModel>();
+    chips.set(ALL_PROJECTS_ID, {
+      id: ALL_PROJECTS_ID,
+      name: 'すべての案件',
+      count: visibleCerts.length,
+      synthetic: true,
+    });
+
+    if (isStudio) {
+      const projectMap = new Map(ops.projects.map((p) => [p.id, p]));
+      for (const p of ops.projects) {
+        chips.set(p.id, {
+          id: p.id,
+          name: p.name,
+          count: 0,
+          color: p.color,
+          dueAt: p.due_at,
+          needsAttention: 0,
+          trustedCount: 0,
+        });
+      }
+      for (const c of visibleCerts) {
+        const id = c.project_id || UNASSIGNED_ID;
+        const existing =
+          chips.get(id) ??
+          ({
+            id,
+            name:
+              id === UNASSIGNED_ID
+                ? '未分類'
+                : projectMap.get(id)?.name ?? c.client_project ?? '未分類',
+            count: 0,
+            synthetic: id === UNASSIGNED_ID,
+            needsAttention: 0,
+            trustedCount: 0,
+            color: id === UNASSIGNED_ID ? undefined : projectMap.get(id)?.color,
+          } as ProjectChipModel);
+        existing.count += 1;
+        if (c.delivery_status === 'review' || c.delivery_status === 'ready') {
+          existing.needsAttention = (existing.needsAttention ?? 0) + 1;
+        }
+        if (TRUSTED_PROVIDERS.has((c.tsa_provider ?? '').toLowerCase())) {
+          existing.trustedCount = (existing.trustedCount ?? 0) + 1;
+        }
+        chips.set(id, existing);
+      }
+    } else {
+      // Creator: client_project 文字列でグルーピング
+      for (const c of visibleCerts) {
+        const key = c.client_project?.trim() || UNASSIGNED_ID;
+        const existing =
+          chips.get(key) ??
+          ({
+            id: key,
+            name: key === UNASSIGNED_ID ? '未分類' : key,
+            count: 0,
+            synthetic: key === UNASSIGNED_ID,
+            trustedCount: 0,
+          } as ProjectChipModel);
+        existing.count += 1;
+        if (TRUSTED_PROVIDERS.has((c.tsa_provider ?? '').toLowerCase())) {
+          existing.trustedCount = (existing.trustedCount ?? 0) + 1;
+        }
+        chips.set(key, existing);
+      }
+    }
+    return Array.from(chips.values());
+  }, [visibleCerts, ops.projects, isStudio]);
+
+  /* ── 派生: KPI (ロード時のチラつき防止) ── */
   const kpi = useMemo(() => {
-    const targetCerts = showArchived ? certs : certs.filter((c) => !c.is_archived);
-    const total = targetCerts.length;
-    const trusted = targetCerts.filter((c) => {
-      const p = (c.tsa_provider ?? '').toLowerCase();
-      return ['digicert', 'globalsign', 'seiko', 'sectigo'].includes(p);
-    }).length;
-    const review = targetCerts.filter((c) => c.delivery_status === 'review').length;
-    const ready = targetCerts.filter((c) => c.delivery_status === 'ready').length;
-    return { total, trusted, review, ready };
-  }, [certs, showArchived]);
+    if (loadingCerts) {
+      return { total: '-', trusted: '-', beta: '-', pending: '-', review: '-', ready: '-', last: null };
+    }
+    const tierCount = visibleCerts.reduce(
+      (acc, c) => {
+        acc[deriveTrustTier(c).tier] += 1;
+        return acc;
+      },
+      { beta: 0, trusted: 0, cross: 0, pending: 0 } as Record<TrustTier, number>,
+    );
+    const review = visibleCerts.filter((c) => c.delivery_status === 'review').length;
+    const ready = visibleCerts.filter((c) => c.delivery_status === 'ready').length;
+    const lastIso = visibleCerts[0]?.certified_at ?? visibleCerts[0]?.created_at ?? null;
+    return {
+      total: visibleCerts.length,
+      trusted: tierCount.trusted + tierCount.cross,
+      beta: tierCount.beta,
+      pending: tierCount.pending,
+      review,
+      ready,
+      last: lastIso,
+    };
+  }, [visibleCerts, loadingCerts]);
 
-  // ── handlers ──────────────────────────────────────────────────────────
-  const handleStatusChange = useCallback(async (cert: CertRow, next: DeliveryStatus | null) => {
-    const before = cert.delivery_status ?? null;
-    setCerts((prev) => prev.map((c) => (c.id === cert.id ? { ...c, delivery_status: next ?? null } : c)));
+  /* ── 派生: AttentionTray (Studio only) ── */
+  const attentionItems = useMemo(() => {
+    if (!isStudio) return [];
+    const projectMap = new Map(ops.projects.map((p) => [p.id, p]));
+    return visibleCerts.map((c) => ({
+      id: c.id,
+      title: c.title ?? c.file_name ?? 'Untitled',
+      projectName: c.project_id
+        ? projectMap.get(c.project_id)?.name ?? c.client_project ?? '未分類'
+        : c.client_project ?? '未分類',
+      projectColor: c.project_id ? projectMap.get(c.project_id)?.color ?? null : null,
+      deliveryStatus: c.delivery_status ?? null,
+      dueAt: c.project_id ? projectMap.get(c.project_id)?.due_at ?? null : null,
+      certifiedAt: c.certified_at ?? c.created_at,
+    }));
+  }, [visibleCerts, ops.projects, isStudio]);
+
+  /* ── handlers ── */
+  const handleToggleStar = useCallback(async (certId: string, current: boolean) => {
+    setCerts((prev) =>
+      prev.map((c) => (c.id === certId ? { ...c, is_starred: !current } : c)),
+    );
+    const { error } = await supabase
+      .from('certificates')
+      .update({ is_starred: !current })
+      .eq('id', certId);
+    if (error) {
+      setCerts((prev) =>
+        prev.map((c) => (c.id === certId ? { ...c, is_starred: current } : c)),
+      );
+      toast.error('保護状態を更新できませんでした', { description: error.message });
+    }
+  }, []);
+
+  const handleArchive = useCallback(async (cert: CertRow, next: boolean) => {
+    setCerts((prev) =>
+      prev.map((c) => (c.id === cert.id ? { ...c, is_archived: next } : c)),
+    );
+    const { error } = await supabase
+      .from('certificates')
+      .update({ is_archived: next })
+      .eq('id', cert.id);
+    if (error) {
+      setCerts((prev) =>
+        prev.map((c) => (c.id === cert.id ? { ...c, is_archived: cert.is_archived ?? false } : c)),
+      );
+      toast.error(next ? 'アーカイブに失敗' : '復元に失敗', { description: error.message });
+    } else {
+      toast.success(next ? 'アーカイブしました' : 'アーカイブから戻しました');
+    }
+  }, []);
+
+  const handleCopyLink = useCallback(async (cert: CertRow) => {
+    const url = `${window.location.origin}/cert/${cert.id}`;
     try {
-      await ops.assignCertificate({
-        certificate_id: cert.id,
-        project_id: cert.project_id ?? null,
-        delivery_status: next,
+      await navigator.clipboard.writeText(url);
+      setCopiedId(cert.id);
+      toast.success('検証URLをコピーしました', { description: url });
+      window.setTimeout(() => setCopiedId((id) => (id === cert.id ? null : id)), 1600);
+    } catch {
+      toast.error('コピーに失敗しました');
+    }
+  }, []);
+
+  const handleEvidence = useCallback(async (cert: CertRow) => {
+    try {
+      toast.loading('Evidence Pack を生成しています...', { id: `evidence-${cert.id}` });
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/evidence-pack?certId=${cert.id}`, {
+        headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+        credentials: 'omit',
       });
-      toast.success(next
-        ? `ステータスを「${DELIVERY_STATUS_TOKENS[next].label}」に変更しました`
-        : 'ステータスをクリアしました');
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string; reqId?: string };
+        throw new Error(j.error ?? `HTTP ${res.status}`);
+      }
+      const cd = res.headers.get('content-disposition') || '';
+      const m5987 = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(cd);
+      const mPlain = /filename\s*=\s*"?([^";]+)"?/i.exec(cd);
+      const filename = m5987
+        ? decodeURIComponent(m5987[1])
+        : mPlain
+          ? mPlain[1]
+          : `proofmark-evidence-${cert.id.slice(0, 8)}.zip`;
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(href);
+      toast.success('Evidence Pack をダウンロードしました', { id: `evidence-${cert.id}` });
     } catch (e) {
-      setCerts((prev) => prev.map((c) => (c.id === cert.id ? { ...c, delivery_status: before } : c)));
-      toast.error('ステータス変更に失敗しました', { description: (e as Error).message });
+      toast.error('Evidence Pack 生成に失敗', {
+        id: `evidence-${cert.id}`,
+        description: e instanceof Error ? e.message : 'API をご確認ください。',
+      });
     }
-  }, [ops]);
+  }, []);
 
-  const handleAssignProject = useCallback(async (cert: CertRow, projectId: string | null) => {
-    const before = cert.project_id ?? null;
-    setCerts((prev) => prev.map((c) => (c.id === cert.id ? { ...c, project_id: projectId } : c)));
-    try {
-      await ops.assignCertificate({ certificate_id: cert.id, project_id: projectId });
-      toast.success(projectId ? '案件に紐づけました' : '案件の紐づけを解除しました');
-    } catch (e) {
-      setCerts((prev) => prev.map((c) => (c.id === cert.id ? { ...c, project_id: before } : c)));
-      toast.error('案件の更新に失敗しました', { description: (e as Error).message });
+  const handleAssignClientProject = useCallback(async (cert: CertRow) => {
+    const current = cert.client_project ?? '';
+    const next = window.prompt(
+      'この証明書を紐づける案件名 (例: ACME社 / 表紙イラスト)',
+      current,
+    );
+    if (next === null) return;
+    const trimmed = next.trim() || null;
+    setCerts((prev) =>
+      prev.map((c) => (c.id === cert.id ? { ...c, client_project: trimmed } : c)),
+    );
+    const { error } = await supabase
+      .from('certificates')
+      .update({ client_project: trimmed })
+      .eq('id', cert.id);
+    if (error) {
+      setCerts((prev) =>
+        prev.map((c) => (c.id === cert.id ? { ...c, client_project: current } : c)),
+      );
+      toast.error('案件の紐づけに失敗', { description: error.message });
+    } else {
+      toast.success(trimmed ? `「${trimmed}」に紐づけました` : '案件の紐づけを解除しました');
     }
-  }, [ops]);
+  }, []);
 
-  const handleCreateProject = useCallback(async (input: Parameters<typeof ops.createProject>[0]) => {
-    await ops.createProject(input);
-    toast.success(`案件「${input.name}」を作成しました`);
-  }, [ops]);
+  const handleStatusChange = useCallback(
+    async (cert: CertRow, next: DeliveryStatus | null) => {
+      if (!isStudio) return;
+      const before = cert.delivery_status ?? null;
+      setCerts((prev) =>
+        prev.map((c) => (c.id === cert.id ? { ...c, delivery_status: next ?? null } : c)),
+      );
+      try {
+        await ops.assignCertificate({
+          certificate_id: cert.id,
+          project_id: cert.project_id ?? null,
+          delivery_status: next,
+        });
+        toast.success(
+          next
+            ? `ステータスを「${DELIVERY_STATUS_TOKENS[next].label}」に変更しました`
+            : 'ステータスをクリアしました',
+        );
+      } catch (e) {
+        setCerts((prev) =>
+          prev.map((c) => (c.id === cert.id ? { ...c, delivery_status: before } : c)),
+        );
+        toast.error('ステータス変更に失敗', {
+          description: e instanceof Error ? e.message : '不明なエラー',
+        });
+      }
+    },
+    [ops, isStudio],
+  );
+
+  const handleCreateProject = useCallback(
+    async (input: Parameters<typeof ops.createProject>[0]) => {
+      await ops.createProject(input);
+      toast.success(`案件「${input.name}」を作成しました`);
+    },
+    [ops],
+  );
 
   const focusCertById = useCallback((id: string) => {
     const el = document.getElementById(`cert-row-${id}`);
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       el.classList.add('pm-focus-pulse');
-      setTimeout(() => el.classList.remove('pm-focus-pulse'), 1400);
+      window.setTimeout(() => el.classList.remove('pm-focus-pulse'), 1400);
     }
   }, []);
 
-  if (authLoading || !user) return <MinimalSpinner />;
+  /* ───────────────── Render ───────────────── */
 
   return (
-    <div className="min-h-screen text-white" style={{ background: 'linear-gradient(180deg, #0a0a0f 0%, #12121e 100%)' }}>
-      {/* ─── Hero ─── */}
-      <section className="max-w-[1200px] mx-auto px-6 pt-10 pb-2">
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: 'easeOut' }}
-        >
-          <div className="flex items-center gap-3 mb-2">
-            <span
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
-              style={{
-                background: 'rgba(108,62,244,0.12)',
-                border: '1px solid rgba(108,62,244,0.35)',
-                color: '#A8A0D8',
-              }}
-            >
-              <Layers3 className="w-3 h-3" aria-hidden="true" />
-              Studio Ops
-            </span>
-            <span className="text-[11px] text-white/40">{ops.planTier.toUpperCase()} プラン</span>
-          </div>
-          <h1 className="text-[28px] font-black tracking-tight">Evidence Operations</h1>
-          <p className="text-[13px] text-white/55 mt-1 leading-relaxed">
-            案件ごとに証拠を束ねる、納品・確認・監査の作業台。
-          </p>
-        </motion.div>
+    <div
+      className="min-h-screen text-white"
+      style={{
+        background:
+          'radial-gradient(1200px 600px at 50% -10%, rgba(108,62,244,0.06), transparent 60%), linear-gradient(180deg, #07061A 0%, #0a0a16 100%)',
+      }}
+    >
+      <Navbar user={user} signOut={signOut} />
 
-        <div
-          className="mt-6 grid gap-3"
-          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}
-        >
-          <KPI label="管理中の証明" value={String(kpi.total)} icon={<FolderKanban className="w-4 h-4" />} />
-          <KPI label="要確認" value={String(kpi.review)} accent="#F0BB38" icon={<History className="w-4 h-4" />} />
-          <KPI label="納品準備完了" value={String(kpi.ready)} accent="#00D4AA" icon={<ShieldCheck className="w-4 h-4" />} />
-          <KPI label="Trusted TSA" value={String(kpi.trusted)} accent="#00D4AA" icon={<ShieldCheck className="w-4 h-4" />} />
-        </div>
-      </section>
-
-      <main className="max-w-[1200px] mx-auto px-6 pb-20 pt-6">
-        {/* ── Project rail ── */}
-        <ProjectRail
-          chips={projectChips}
-          activeId={activeProjectId}
-          onChange={setActiveProjectId}
-          isStudio={true}
-          onCreate={() => { setComposerInitial(null); setComposerOpen(true); }}
-          projects={ops.projects}
-        />
-
-        {/* ── Attention tray ── */}
-        <div className="mt-6">
-          <AttentionTray items={attentionItems} onFocus={focusCertById} />
-        </div>
-
-        {/* ── Cert list (Studio table view) ── */}
-        <div className="flex justify-end mt-4 mb-2">
-           <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-white/40 hover:text-white/60 transition-colors">
-              <input
-                 type="checkbox"
-                 checked={showArchived}
-                 onChange={(e) => setShowArchived(e.target.checked)}
-                 className="accent-[#6C3EF4]"
-              />
-              アーカイブも表示
-           </label>
-        </div>
-        {loadingCerts ? (
-          <SkeletonGrid />
-        ) : visibleCerts.length === 0 ? (
-          <EmptyStudio onCreate={() => setComposerOpen(true)} />
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-md">
-            <div className="min-w-[820px]">
-              <div
-                role="row"
-                className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-3 px-4 py-3 text-[10px] uppercase tracking-widest text-white/40 border-b border-white/5"
+      <main className="max-w-[1240px] mx-auto px-4 sm:px-6 pb-24">
+        {/* ───────── Hero: Slim Upload Dock + Title ───────── */}
+        <section className="pt-8 pb-4">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            className="mb-5 flex items-baseline justify-between gap-3"
+          >
+            <div className="min-w-0">
+              <p
+                className="text-[10px] font-bold tracking-[0.3em] uppercase"
+                style={{ color: 'rgba(255,255,255,0.45)' }}
               >
-                <span role="columnheader">案件 / タイトル</span>
-                <span role="columnheader">ステータス</span>
-                <span role="columnheader">案件</span>
-                <span role="columnheader">発行</span>
-                <span role="columnheader" className="text-right">操作</span>
-              </div>
-              {visibleCerts.map((cert) => {
-                const project = cert.project_id ? ops.projects.find((p) => p.id === cert.project_id) : null;
-                return (
-                  <div
-                    key={cert.id}
-                    id={`cert-row-${cert.id}`}
-                    role="row"
-                    className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 hover:bg-white/[0.02] transition-colors"
-                  >
-                    <div role="cell" className="min-w-0">
-                      <p className="text-[13px] font-semibold text-white truncate">
-                        {cert.title || cert.file_name || 'Untitled'}
-                      </p>
-                      <p className="text-[10px] text-white/40 font-mono truncate mt-0.5">
-                        {(cert.sha256 || cert.file_hash || '').slice(0, 16)}…
-                      </p>
-                    </div>
-                    <div role="cell">
-                      <StatusMenu
-                        current={cert.delivery_status ?? null}
-                        onChange={(next) => handleStatusChange(cert, next)}
-                      />
-                    </div>
-                    <div role="cell">
-                      <ProjectAssignButton
-                        currentProjectId={cert.project_id ?? null}
-                        currentProjectColor={project?.color ?? null}
-                        currentProjectName={project?.name ?? cert.client_project ?? null}
-                        projects={ops.projects}
-                        onAssign={(pid) => handleAssignProject(cert, pid)}
-                      />
-                    </div>
-                    <div role="cell" className="text-[11px] text-white/55 tabular-nums">
-                      {cert.certified_at
-                        ? new Date(cert.certified_at).toLocaleDateString('ja-JP')
-                        : '—'}
-                    </div>
-                    <div role="cell" className="flex items-center justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuditCertId(cert.id);
-                          setAuditCertTitle(cert.title ?? cert.file_name ?? null);
-                        }}
-                        title="操作履歴を表示"
-                        className="p-1.5 rounded-lg text-white/55 hover:text-white hover:bg-white/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4AA]"
-                      >
-                        <History className="w-4 h-4" aria-hidden="true" />
-                      </button>
-                      <a
-                        href={`/cert/${cert.id}`}
-                        title="証明書を開く"
-                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white/80 border border-white/10 hover:bg-white/5 transition-colors"
-                      >
-                        開く
-                      </a>
-                    </div>
-                  </div>
-                );
-              })}
+                {isStudio ? 'Evidence Operations · Studio' : 'Evidence Console'}
+              </p>
+              <h1 className="text-[26px] sm:text-[28px] font-black tracking-tight mt-1">
+                {user?.user_metadata?.username ? `@${user.user_metadata.username}` : 'Dashboard'}
+              </h1>
             </div>
-          </div>
+            <span className="hidden md:inline text-[11px] text-white/40">
+              {ops.planTier ? `${ops.planTier.toUpperCase()} プラン` : ''}
+            </span>
+          </motion.div>
+
+          {/* Slim Upload Dock — 既存 CertificateUpload を温存しつつ薄い帯で配置 */}
+          <SlimUploadDock isPaidPlan={isStudio} />
+        </section>
+
+        {/* ───────── KPI ───────── */}
+        <section
+          className="mt-6 grid gap-3"
+          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}
+        >
+          <KPI
+            label="管理中の証明"
+            value={String(kpi.total)}
+            icon={<FolderKanban className="w-4 h-4" />}
+          />
+          <KPI
+            label="Trusted TSA"
+            value={String(kpi.trusted)}
+            accent="#00D4AA"
+            icon={<ShieldCheck className="w-4 h-4" />}
+          />
+          {isStudio ? (
+            <>
+              <KPI
+                label="要対応"
+                value={String(kpi.review)}
+                accent="#F0BB38"
+                icon={<History className="w-4 h-4" />}
+              />
+              <KPI
+                label="納品準備完了"
+                value={String(kpi.ready)}
+                accent="#00D4AA"
+                icon={<ShieldCheck className="w-4 h-4" />}
+              />
+            </>
+          ) : (
+            <>
+              <KPI
+                label="Beta TSA"
+                value={String(kpi.beta)}
+                accent="#9BA3D4"
+                icon={<ShieldAlert className="w-4 h-4" />}
+              />
+              <KPI
+                label="最終発行"
+                value={kpi.last ? formatDate(kpi.last) : '—'}
+                icon={<Clock3 className="w-4 h-4" />}
+              />
+            </>
+          )}
+        </section>
+
+        {/* ───────── Project Rail ───────── */}
+        <section className="mt-7">
+          <ProjectRail
+            chips={projectChips}
+            activeId={activeProjectId}
+            onChange={setActiveProjectId}
+            isStudio={isStudio}
+            onCreate={isStudio ? () => setComposerOpen(true) : undefined}
+            projects={ops.projects}
+          />
+        </section>
+
+        {/* ───────── Attention Tray (Studio only) ───────── */}
+        {isStudio && attentionItems.length > 0 && (
+          <section className="mt-5">
+            <AttentionTray items={attentionItems} onFocus={focusCertById} />
+          </section>
         )}
+
+        {/* ───────── Toolbar ───────── */}
+        <section className="mt-6 flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+          <div className="relative w-full lg:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/35" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="案件名・ファイル名・ハッシュで検索…"
+              className="w-full pl-9 pr-3 py-2 rounded-xl bg-white/[0.03] border border-white/10 text-[13px] text-white placeholder:text-white/35 focus:outline-none focus:border-[#6C3EF4]/60 transition-colors"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <TrustFilterTabs
+              value={trustFilter}
+              onChange={setTrustFilter}
+              counts={{
+                beta: kpi.beta,
+                trusted: visibleCerts.filter((c) => deriveTrustTier(c).tier === 'trusted').length,
+                cross: visibleCerts.filter((c) => deriveTrustTier(c).tier === 'cross').length,
+                pending: kpi.pending,
+              }}
+            />
+
+            <SegGroup ariaLabel="並び替え">
+              <SegBtn active={sortBy === 'newest'} onClick={() => setSortBy('newest')}>
+                <ArrowUpDown className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">最新</span>
+              </SegBtn>
+              <SegBtn active={sortBy === 'trust'} onClick={() => setSortBy('trust')}>
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">信頼順</span>
+              </SegBtn>
+              <SegBtn active={sortBy === 'starred'} onClick={() => setSortBy('starred')}>
+                <Star className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">保護優先</span>
+              </SegBtn>
+            </SegGroup>
+
+            <SegGroup ariaLabel="表示モード">
+              <SegBtn active={view === 'list'} onClick={() => setView('list')} title="テーブル表示">
+                <Rows3 className="w-3.5 h-3.5" />
+              </SegBtn>
+              <SegBtn active={view === 'grid'} onClick={() => setView('grid')} title="カード表示">
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </SegBtn>
+            </SegGroup>
+
+            <label className="inline-flex items-center gap-1.5 cursor-pointer text-[11px] text-white/45 hover:text-white/70 transition-colors px-2 py-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02]">
+              <input
+                type="checkbox"
+                checked={showArchived}
+                onChange={(e) => setShowArchived(e.target.checked)}
+                className="accent-[#6C3EF4]"
+              />
+              <Archive className="w-3 h-3" />
+              アーカイブ
+            </label>
+          </div>
+        </section>
+
+        {/* ───────── Cert Body ───────── */}
+        <section className="mt-5">
+          {loadingCerts ? (
+            <SkeletonGrid />
+          ) : certs.length === 0 ? (
+            <EmptyState />
+          ) : filteredSortedCerts.length === 0 ? (
+            <NoMatch
+              onReset={() => {
+                setSearchQuery('');
+                setTrustFilter('all');
+                setActiveProjectId(ALL_PROJECTS_ID);
+              }}
+            />
+          ) : view === 'list' ? (
+            <CertListTable
+              certs={filteredSortedCerts}
+              isStudio={isStudio}
+              ops={ops}
+              copiedId={copiedId}
+              onCopyLink={handleCopyLink}
+              onEvidence={handleEvidence}
+              onArchive={handleArchive}
+              onToggleStar={handleToggleStar}
+              onAssignClientProject={handleAssignClientProject}
+              onAssignProjectId={async (cert, pid) => {
+                await ops.assignCertificate({
+                  certificate_id: cert.id,
+                  project_id: pid,
+                });
+                setCerts((prev) =>
+                  prev.map((c) => (c.id === cert.id ? { ...c, project_id: pid } : c)),
+                );
+              }}
+              onStatusChange={handleStatusChange}
+              onOpenAudit={(cert) => {
+                setAuditCertId(cert.id);
+                setAuditCertTitle(cert.title ?? cert.file_name ?? null);
+              }}
+              onOpenChain={(cert) => setChainCert(toCertificateRecord(cert))}
+            />
+          ) : (
+            <CertGridView
+              certs={filteredSortedCerts}
+              copiedId={copiedId}
+              onCopyLink={handleCopyLink}
+              onEvidence={handleEvidence}
+              onArchive={handleArchive}
+              onToggleStar={handleToggleStar}
+              onAssignClientProject={handleAssignClientProject}
+              onOpenChain={(cert) => setChainCert(toCertificateRecord(cert))}
+            />
+          )}
+        </section>
       </main>
 
-      {/* ── Modals & drawers ── */}
-      <ProjectComposer
-        open={composerOpen}
-        initial={composerInitial}
-        teams={ops.teams}
-        onClose={() => setComposerOpen(false)}
-        onSubmit={async (input) => {
-          await handleCreateProject(input);
-        }}
-      />
+      {/* ── Studio modals & drawers ── */}
+      {isStudio && (
+        <>
+          <ProjectComposer
+            open={composerOpen}
+            initial={null}
+            teams={ops.teams}
+            onClose={() => setComposerOpen(false)}
+            onSubmit={async (input) => {
+              await handleCreateProject(input);
+            }}
+          />
+          <AuditDrawer
+            open={!!auditCertId}
+            certificateId={auditCertId}
+            certificateTitle={auditCertTitle}
+            onClose={() => {
+              setAuditCertId(null);
+              setAuditCertTitle(null);
+            }}
+          />
+        </>
+      )}
 
-      <AuditDrawer
-        open={!!auditCertId}
-        certificateId={auditCertId}
-        certificateTitle={auditCertTitle}
-        onClose={() => { setAuditCertId(null); setAuditCertTitle(null); }}
-      />
+      {/* ── Chain of Evidence modal ── */}
+      {chainCert && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8 px-4"
+          style={{ background: 'rgba(7,6,26,0.92)', backdropFilter: 'blur(8px)' }}
+        >
+          <div className="w-full max-w-4xl">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-xs uppercase tracking-widest text-[#A8A0D8] mb-1">
+                  Chain of Evidence Studio
+                </p>
+                <h2 className="text-lg font-bold text-white">
+                  {chainCert.title ?? chainCert.file_name ?? chainCert.id}
+                </h2>
+              </div>
+              <button
+                onClick={() => setChainCert(null)}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-[#A8A0D8] hover:text-white border border-[#1C1A38] hover:border-[#6C3EF4]/40 rounded-xl transition-colors"
+              >
+                ✕ 閉じる
+              </button>
+            </div>
+            <Suspense fallback={<MinimalSpinner />}>
+              <ProcessBundleComposer certificate={chainCert} />
+            </Suspense>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .pm-focus-pulse { animation: pm-focus-pulse 1.4s ease-out 1; }
@@ -475,12 +912,6 @@ function StudioDashboard({ ops, authLoading, onAuthRedirect }: StudioProps) {
           0%   { background: rgba(108,62,244,0.20); }
           100% { background: transparent; }
         }
-        .proofmark-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
-        .proofmark-scrollbar::-webkit-scrollbar-thumb {
-          background: linear-gradient(180deg, rgba(108,62,244,0.5), rgba(0,212,170,0.4));
-          border-radius: 999px;
-        }
-        .proofmark-scrollbar::-webkit-scrollbar-track { background: transparent; }
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after {
             animation-duration: 0.01ms !important;
@@ -492,38 +923,544 @@ function StudioDashboard({ ops, authLoading, onAuthRedirect }: StudioProps) {
   );
 }
 
-/* ───────────────────────────────────────────────────────────────────── */
+/* ──────────────────────────────────────────────────────────────────────────
+   Subcomponents
+────────────────────────────────────────────────────────────────────────── */
 
 function KPI({
-  label, value, icon, accent = '#A8A0D8',
-}: { label: string; value: string; icon: React.ReactNode; accent?: string }) {
+  label,
+  value,
+  icon,
+  accent = '#A8A0D8',
+}: {
+  label: string;
+  value: string;
+  icon: ReactNode;
+  accent?: string;
+}) {
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.025] backdrop-blur-md px-4 py-3.5">
       <span
         aria-hidden="true"
-        style={{ color: accent, borderColor: `${accent}55` }}
         className="w-9 h-9 rounded-lg flex items-center justify-center border bg-white/[0.02]"
+        style={{ color: accent, borderColor: `${accent}55` }}
       >
         {icon}
       </span>
-      <div>
-        <p className="text-[10px] uppercase tracking-widest text-white/40">{label}</p>
-        <p className="text-[20px] font-bold tabular-nums text-white mt-0.5">{value}</p>
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-widest text-white/45">{label}</p>
+        <p className="text-[20px] font-bold tabular-nums text-white mt-0.5 truncate">{value}</p>
       </div>
     </div>
   );
 }
 
+function SegGroup({ children, ariaLabel }: { children: ReactNode; ariaLabel: string }) {
+  return (
+    <div
+      role="tablist"
+      aria-label={ariaLabel}
+      className="inline-flex items-center gap-0.5 p-0.5 rounded-xl border border-white/[0.06] bg-white/[0.02]"
+    >
+      {children}
+    </div>
+  );
+}
+
+function SegBtn({
+  active,
+  onClick,
+  children,
+  title,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      role="tab"
+      aria-selected={active}
+      className={[
+        'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11.5px] font-semibold transition-colors',
+        active
+          ? 'bg-white/[0.07] text-white'
+          : 'text-white/55 hover:text-white hover:bg-white/[0.04]',
+      ].join(' ')}
+    >
+      {children}
+    </button>
+  );
+}
+
+function TrustFilterTabs({
+  value,
+  onChange,
+  counts,
+}: {
+  value: TrustTier | 'all';
+  onChange: (v: TrustTier | 'all') => void;
+  counts: Record<TrustTier, number>;
+}) {
+  const items: Array<{ key: TrustTier | 'all'; label: string; color: string }> = [
+    { key: 'all', label: 'すべて', color: '#A8A0D8' },
+    { key: 'cross', label: `Cross ${counts.cross}`, color: '#F0BB38' },
+    { key: 'trusted', label: `Trusted ${counts.trusted}`, color: '#00D4AA' },
+    { key: 'beta', label: `Beta ${counts.beta}`, color: '#9BA3D4' },
+    { key: 'pending', label: `Pending ${counts.pending}`, color: '#A8A0D8' },
+  ];
+  return (
+    <div role="tablist" aria-label="信頼レベル" className="flex flex-wrap items-center gap-1">
+      {items.map((it) => {
+        const active = value === it.key;
+        return (
+          <button
+            key={it.key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(it.key)}
+            className="inline-flex items-center px-2.5 py-1.5 rounded-lg text-[11px] font-bold tracking-wider uppercase transition-colors"
+            style={{
+              color: active ? it.color : 'rgba(255,255,255,0.55)',
+              borderColor: active ? `${it.color}66` : 'rgba(255,255,255,0.08)',
+              background: active ? `${it.color}14` : 'transparent',
+              border: '1px solid',
+            }}
+          >
+            {it.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TrustBadge({ cert, size = 'md' }: { cert: CertRow; size?: 'sm' | 'md' }) {
+  const t = deriveTrustTier(cert);
+  const Icon = t.icon;
+  const dims = size === 'sm' ? { pad: '2px 8px', fs: 10, ic: 11 } : { pad: '4px 10px', fs: 11, ic: 14 };
+  return (
+    <span
+      title={t.description}
+      className="inline-flex items-center gap-1.5 rounded-full font-bold uppercase tracking-wider whitespace-nowrap"
+      style={{
+        padding: dims.pad,
+        background: t.bg,
+        border: `1px solid ${t.border}`,
+        color: t.color,
+        fontSize: dims.fs,
+      }}
+    >
+      <Icon style={{ width: dims.ic, height: dims.ic }} />
+      {t.label}
+      <span className="opacity-70 font-normal normal-case">· {t.sublabel}</span>
+    </span>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/*   List view (table) — Studio で StatusMenu / Audit を露出                 */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+interface ListViewProps {
+  certs: CertRow[];
+  isStudio: boolean;
+  ops: ReturnType<typeof useStudioOps>;
+  copiedId: string | null;
+  onCopyLink: (cert: CertRow) => void;
+  onEvidence: (cert: CertRow) => void;
+  onArchive: (cert: CertRow, next: boolean) => void;
+  onToggleStar: (id: string, current: boolean) => void;
+  onAssignClientProject: (cert: CertRow) => void;
+  onAssignProjectId: (cert: CertRow, projectId: string | null) => void;
+  onStatusChange: (cert: CertRow, next: DeliveryStatus | null) => void;
+  onOpenAudit: (cert: CertRow) => void;
+  onOpenChain: (cert: CertRow) => void;
+}
+
+function CertListTable(props: ListViewProps) {
+  const {
+    certs,
+    isStudio,
+    ops,
+    copiedId,
+    onCopyLink,
+    onEvidence,
+    onArchive,
+    onToggleStar,
+    onAssignClientProject,
+    onAssignProjectId,
+    onStatusChange,
+    onOpenAudit,
+    onOpenChain,
+  } = props;
+
+  const cols = isStudio
+    ? '2fr 1fr 1fr 0.9fr auto'
+    : '2.2fr 1fr 1fr 0.9fr auto';
+
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-md">
+      <div className="min-w-[920px]">
+        <div
+          role="row"
+          className="grid gap-3 px-4 py-3 text-[10px] uppercase tracking-widest text-white/40 border-b border-white/5"
+          style={{ gridTemplateColumns: cols }}
+        >
+          <span role="columnheader">案件 / タイトル</span>
+          <span role="columnheader">{isStudio ? 'ステータス' : '信頼レベル'}</span>
+          <span role="columnheader">案件</span>
+          <span role="columnheader">発行</span>
+          <span role="columnheader" className="text-right">
+            操作
+          </span>
+        </div>
+        {certs.map((cert) => {
+          const project =
+            isStudio && cert.project_id
+              ? ops.projects.find((p) => p.id === cert.project_id)
+              : null;
+          return (
+            <div
+              key={cert.id}
+              id={`cert-row-${cert.id}`}
+              role="row"
+              className="grid gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 hover:bg-white/[0.02] transition-colors"
+              style={{ gridTemplateColumns: cols }}
+            >
+              {/* タイトル + ハッシュ */}
+              <div role="cell" className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onToggleStar(cert.id, !!cert.is_starred)}
+                    className="shrink-0 text-white/35 hover:text-[#F0BB38] transition-colors"
+                    title={cert.is_starred ? '保護を解除' : '保護'}
+                  >
+                    <Star
+                      className="w-3.5 h-3.5"
+                      fill={cert.is_starred ? '#F0BB38' : 'transparent'}
+                    />
+                  </button>
+                  <p className="text-[13px] font-semibold text-white truncate">
+                    {cert.title || cert.file_name || 'Untitled'}
+                  </p>
+                  {!isStudio && <TrustBadge cert={cert} size="sm" />}
+                </div>
+                <p className="text-[10.5px] text-white/40 font-mono truncate mt-0.5 ml-5">
+                  <Hash className="inline w-2.5 h-2.5 mr-1" />
+                  {(cert.sha256 || cert.file_hash || '').slice(0, 24)}…
+                </p>
+              </div>
+
+              {/* ステータス or 信頼バッジ */}
+              <div role="cell" className="self-center">
+                {isStudio ? (
+                  <StatusMenu
+                    current={cert.delivery_status ?? null}
+                    onChange={(next) => onStatusChange(cert, next)}
+                  />
+                ) : (
+                  <TrustBadge cert={cert} size="sm" />
+                )}
+              </div>
+
+              {/* 案件 (Studio: project_id, Creator: client_project) */}
+              <div role="cell" className="self-center">
+                {isStudio ? (
+                  <ProjectAssignButton
+                    currentProjectId={cert.project_id ?? null}
+                    currentProjectColor={project?.color ?? null}
+                    currentProjectName={project?.name ?? cert.client_project ?? null}
+                    projects={ops.projects}
+                    onAssign={(pid) => onAssignProjectId(cert, pid)}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onAssignClientProject(cert)}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] text-[11px] text-white/75 transition-colors max-w-[180px]"
+                    title="案件を編集"
+                  >
+                    <FolderKanban className="w-3 h-3 opacity-60" />
+                    <span className="truncate">{cert.client_project || '未分類'}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* 発行 */}
+              <div role="cell" className="self-center text-[11px] text-white/55 tabular-nums">
+                {cert.certified_at
+                  ? formatDate(cert.certified_at)
+                  : cert.created_at
+                    ? formatDate(cert.created_at)
+                    : '—'}
+              </div>
+
+              {/* 操作 */}
+              <div role="cell" className="flex items-center justify-end gap-1">
+                <IconBtn
+                  title={copiedId === cert.id ? 'コピー済' : '検証URLをコピー'}
+                  onClick={() => onCopyLink(cert)}
+                >
+                  {copiedId === cert.id ? (
+                    <Check className="w-3.5 h-3.5" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </IconBtn>
+                <IconBtn title="Evidence Pack" onClick={() => onEvidence(cert)}>
+                  <FileDown className="w-3.5 h-3.5" />
+                </IconBtn>
+                <IconBtn title="Chain of Evidence" onClick={() => onOpenChain(cert)}>
+                  <LinkIcon className="w-3.5 h-3.5" />
+                </IconBtn>
+                {isStudio && (
+                  <IconBtn title="操作履歴" onClick={() => onOpenAudit(cert)}>
+                    <History className="w-3.5 h-3.5" />
+                  </IconBtn>
+                )}
+                <IconBtn
+                  title={cert.is_archived ? 'アーカイブから戻す' : 'アーカイブ'}
+                  onClick={() => onArchive(cert, !cert.is_archived)}
+                >
+                  {cert.is_archived ? (
+                    <ArchiveRestore className="w-3.5 h-3.5" />
+                  ) : (
+                    <Archive className="w-3.5 h-3.5" />
+                  )}
+                </IconBtn>
+                <a
+                  href={`/cert/${cert.id}`}
+                  title="証明書を開く"
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white/80 border border-white/10 hover:bg-white/5 transition-colors inline-flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  開く
+                </a>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function IconBtn({
+  children,
+  onClick,
+  title,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  title: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className="p-1.5 rounded-lg text-white/55 hover:text-white hover:bg-white/[0.05] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4AA]"
+    >
+      {children}
+    </button>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/*   Grid view — 軽量なカード                                                */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+interface GridViewProps {
+  certs: CertRow[];
+  copiedId: string | null;
+  onCopyLink: (cert: CertRow) => void;
+  onEvidence: (cert: CertRow) => void;
+  onArchive: (cert: CertRow, next: boolean) => void;
+  onToggleStar: (id: string, current: boolean) => void;
+  onAssignClientProject: (cert: CertRow) => void;
+  onOpenChain: (cert: CertRow) => void;
+}
+
+function CertGridView(props: GridViewProps) {
+  const {
+    certs,
+    copiedId,
+    onCopyLink,
+    onEvidence,
+    onArchive,
+    onToggleStar,
+    onAssignClientProject,
+    onOpenChain,
+  } = props;
+  return (
+    <div
+      className="grid gap-4"
+      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
+    >
+      {certs.map((cert) => (
+        <article
+          key={cert.id}
+          id={`cert-row-${cert.id}`}
+          className="group rounded-2xl border border-white/[0.07] bg-white/[0.02] backdrop-blur-md overflow-hidden hover:border-[#6C3EF4]/40 transition-colors"
+        >
+          <div
+            className="relative aspect-[4/3]"
+            style={{ background: 'linear-gradient(135deg, rgba(108,62,244,0.08), rgba(0,212,170,0.05))' }}
+          >
+            {cert.proof_mode === 'shareable' && cert.public_image_url ? (
+              <img
+                src={cert.public_image_url}
+                alt={cert.original_filename || cert.file_name || 'Artwork'}
+                loading="lazy"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <ShieldCheck className="w-10 h-10 text-white/20" />
+              </div>
+            )}
+            <div className="absolute top-2 left-2">
+              <TrustBadge cert={cert} size="sm" />
+            </div>
+            <button
+              type="button"
+              onClick={() => onToggleStar(cert.id, !!cert.is_starred)}
+              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 backdrop-blur flex items-center justify-center text-white/70 hover:text-[#F0BB38] transition-colors"
+              title={cert.is_starred ? '保護解除' : '保護'}
+            >
+              <Star className="w-3.5 h-3.5" fill={cert.is_starred ? '#F0BB38' : 'transparent'} />
+            </button>
+            {cert.is_archived && (
+              <div className="absolute bottom-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 text-[9px] font-bold uppercase text-white/70">
+                <Archive className="w-2.5 h-2.5" />
+                Archived
+              </div>
+            )}
+          </div>
+
+          <div className="p-3.5 space-y-2.5">
+            <div className="flex items-baseline justify-between gap-2 min-w-0">
+              <p className="text-[13px] font-semibold text-white truncate">
+                {cert.title || cert.original_filename || cert.file_name || 'Untitled'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onAssignClientProject(cert)}
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] text-[10.5px] text-white/65 transition-colors max-w-full"
+              title="案件を編集"
+            >
+              <FolderKanban className="w-3 h-3 opacity-60" />
+              <span className="truncate">{cert.client_project || '未分類'}</span>
+            </button>
+
+            <div className="flex items-center justify-between text-[10.5px] text-white/50 font-mono">
+              <span className="inline-flex items-center gap-1">
+                <Hash className="w-2.5 h-2.5" />
+                {(cert.sha256 || cert.file_hash || '').slice(0, 12)}…
+              </span>
+              <span className="tabular-nums inline-flex items-center gap-1">
+                <Clock3 className="w-2.5 h-2.5" />
+                {cert.certified_at
+                  ? formatDate(cert.certified_at)
+                  : cert.created_at
+                    ? formatDate(cert.created_at)
+                    : '—'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5 pt-1.5">
+              <button
+                type="button"
+                onClick={() => onCopyLink(cert)}
+                className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-white/80 border border-white/10 hover:bg-white/[0.04] transition-colors"
+              >
+                {copiedId === cert.id ? (
+                  <>
+                    <Check className="w-3 h-3" /> コピー済
+                  </>
+                ) : (
+                  <>
+                    <LinkIcon className="w-3 h-3" /> URL
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => onEvidence(cert)}
+                className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-[#07061A] bg-gradient-to-r from-[#6C3EF4] to-[#00D4AA] hover:opacity-95 transition-opacity"
+              >
+                <FileDown className="w-3 h-3" />
+                Evidence
+              </button>
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={() => onOpenChain(cert)}
+                className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
+                title="Chain of Evidence"
+              >
+                <LinkIcon className="w-2.5 h-2.5" />
+                Chain
+              </button>
+              <button
+                type="button"
+                onClick={() => onArchive(cert, !cert.is_archived)}
+                className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
+                title={cert.is_archived ? '戻す' : 'アーカイブ'}
+              >
+                {cert.is_archived ? (
+                  <>
+                    <ArchiveRestore className="w-2.5 h-2.5" /> 戻す
+                  </>
+                ) : (
+                  <>
+                    <Archive className="w-2.5 h-2.5" /> アーカイブ
+                  </>
+                )}
+              </button>
+              <a
+                href={`/cert/${cert.id}`}
+                className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
+              >
+                <ExternalLink className="w-2.5 h-2.5" /> 開く
+              </a>
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/*   Project Assign popover (Studio)                                         */
+/* ──────────────────────────────────────────────────────────────────────── */
+
 interface ProjectAssignButtonProps {
   currentProjectId: string | null;
   currentProjectName: string | null;
   currentProjectColor: string | null;
-  projects: ProjectRecord[];
+  projects: ReturnType<typeof useStudioOps>['projects'];
   onAssign: (projectId: string | null) => void | Promise<void>;
 }
 
 function ProjectAssignButton({
-  currentProjectId, currentProjectName, currentProjectColor, projects, onAssign,
+  currentProjectId,
+  currentProjectName,
+  currentProjectColor,
+  projects,
+  onAssign,
 }: ProjectAssignButtonProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -551,12 +1488,7 @@ function ProjectAssignButton({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={[
-          'inline-flex items-center gap-1.5 px-2 py-1 rounded-lg',
-          'border border-white/10 bg-white/[0.02] hover:bg-white/[0.05]',
-          'text-[11px] text-white/75 transition-colors max-w-[180px]',
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6C3EF4]',
-        ].join(' ')}
+        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] text-[11px] text-white/75 transition-colors max-w-[180px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6C3EF4]"
       >
         {currentProjectColor && (
           <span
@@ -565,19 +1497,22 @@ function ProjectAssignButton({
             style={{ background: currentProjectColor }}
           />
         )}
-        <FolderKanban className="w-3 h-3 opacity-60" aria-hidden="true" />
+        <FolderKanban className="w-3 h-3 opacity-60" />
         <span className="truncate">{currentProjectName || '未分類'}</span>
       </button>
       {open && (
         <div
           role="listbox"
-          className="absolute z-30 mt-1 w-56 max-h-[280px] overflow-y-auto proofmark-scrollbar rounded-xl border border-white/10 bg-[#12121e]/95 backdrop-blur-xl p-1.5 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.8)]"
+          className="absolute z-30 mt-1 w-56 max-h-[280px] overflow-y-auto rounded-xl border border-white/10 bg-[#12121e]/95 backdrop-blur-xl p-1.5 shadow-[0_24px_60px_-30px_rgba(0,0,0,0.8)]"
         >
           <button
             type="button"
             role="option"
             aria-selected={currentProjectId === null}
-            onClick={() => { void onAssign(null); setOpen(false); }}
+            onClick={() => {
+              void onAssign(null);
+              setOpen(false);
+            }}
             className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] text-white/60 hover:bg-white/[0.05] hover:text-white transition-colors"
           >
             <span className="w-2 h-2 rounded-full bg-white/30" aria-hidden="true" />
@@ -590,10 +1525,17 @@ function ProjectAssignButton({
               type="button"
               role="option"
               aria-selected={currentProjectId === p.id}
-              onClick={() => { void onAssign(p.id); setOpen(false); }}
+              onClick={() => {
+                void onAssign(p.id);
+                setOpen(false);
+              }}
               className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] text-white/80 hover:bg-white/[0.05] hover:text-white transition-colors"
             >
-              <span aria-hidden="true" className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color }} />
+              <span
+                aria-hidden="true"
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ background: p.color }}
+              />
               <span className="truncate">{p.name}</span>
             </button>
           ))}
@@ -603,9 +1545,16 @@ function ProjectAssignButton({
   );
 }
 
+/* ──────────────────────────────────────────────────────────────────────── */
+/*   States                                                                  */
+/* ──────────────────────────────────────────────────────────────────────── */
+
 function MinimalSpinner() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f]">
+    <div
+      className="min-h-screen flex items-center justify-center"
+      style={{ background: '#07061A' }}
+    >
       <div className="w-6 h-6 rounded-full border-2 border-white/10 border-t-[#00D4AA] animate-spin" />
     </div>
   );
@@ -615,28 +1564,91 @@ function SkeletonGrid() {
   return (
     <div className="space-y-2 mt-2" role="status" aria-label="読み込み中">
       {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="rounded-xl border border-white/5 bg-white/[0.02] h-14 animate-pulse" />
+        <div
+          key={i}
+          className="rounded-xl border border-white/5 bg-white/[0.02] h-14 animate-pulse"
+        />
       ))}
     </div>
   );
 }
 
-function EmptyStudio({ onCreate }: { onCreate: () => void }) {
+function EmptyState() {
   return (
     <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.015] py-14 text-center">
-      <FolderKanban className="w-7 h-7 text-white/30 mx-auto mb-3" aria-hidden="true" />
-      <p className="text-[14px] text-white/65 font-semibold">この案件にはまだ証明書がありません</p>
+      <BadgeCheck className="w-7 h-7 text-white/30 mx-auto mb-3" aria-hidden="true" />
+      <p className="text-[14px] text-white/65 font-semibold">
+        まだ証明書がありません
+      </p>
       <p className="text-[11px] text-white/40 mt-1">
-        新規発行ページから証明書を発行するか、案件をひとつ作って整理を始めましょう。
+        上の「新しい証明を発行」からファイルをドロップするだけで、最初の証明が記録されます。
+      </p>
+    </div>
+  );
+}
+
+function NoMatch({ onReset }: { onReset: () => void }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] py-10 text-center">
+      <Info className="w-5 h-5 text-white/40 mx-auto mb-2" aria-hidden="true" />
+      <p className="text-[13px] text-white/65">
+        条件に一致する証明書が見つかりません。
       </p>
       <button
         type="button"
-        onClick={onCreate}
-        className="mt-5 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-[#6C3EF4] to-[#00D4AA] text-[#07061A] text-[12px] font-semibold hover:opacity-95"
+        onClick={onReset}
+        className="mt-4 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11.5px] font-semibold text-white border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
       >
-        <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-        新規案件
+        <Plus className="w-3 h-3 rotate-45" />
+        フィルタをリセット
       </button>
     </div>
   );
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/*   Helpers                                                                 */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * CertRow を CertificateRecord 互換のオブジェクトに射影する。
+ * ProcessBundleComposer が要求するフィールドのみを満たすようマップし、
+ * 必須でないものは null/既定値で埋める。`any` キャストは構造起因の境界 1 箇所に局所化。
+ */
+function toCertificateRecord(cert: CertRow): CertificateRecord {
+  return {
+    id: cert.id,
+    title: cert.title ?? null,
+    sha256: cert.sha256 ?? cert.file_hash ?? '',
+    proof_mode: (cert.proof_mode === 'shareable' ? 'shareable' : 'private'),
+    visibility:
+      cert.visibility === 'public' || cert.visibility === 'unlisted'
+        ? cert.visibility
+        : 'private',
+    public_verify_token: cert.id,
+    public_image_url: cert.public_image_url ?? null,
+    storage_path: null,
+    file_name: cert.file_name ?? null,
+    mime_type: null,
+    file_size: null,
+    width_px: null,
+    height_px: null,
+    badge_tier: 'basic',
+    process_bundle_id: null,
+    metadata_json: cert.metadata ?? null,
+    proven_at: cert.certified_at ?? cert.created_at,
+    created_at: cert.created_at,
+  };
 }
