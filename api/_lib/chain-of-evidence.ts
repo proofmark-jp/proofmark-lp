@@ -107,7 +107,7 @@ export async function buildChainOfEvidence(
         opts.log?.warn({ event: 'chain.select_failed', message: selErr.message });
     }
 
-    const logs = (rows ?? []) as AuditLogRow[];
+    const logs = (rows ?? []) as unknown as AuditLogRow[];
 
     // RPC で改ざん検知。失敗しても続行。
     let chainOk: boolean | null = null;
