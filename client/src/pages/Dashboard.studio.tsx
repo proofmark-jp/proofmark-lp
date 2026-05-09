@@ -114,6 +114,7 @@ function StudioDashboard({ ops, authLoading, onAuthRedirect }: StudioProps) {
   const { user } = useAuth();
   const [certs, setCerts] = useState<CertRow[]>([]);
   const [loadingCerts, setLoadingCerts] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
   const [activeProjectId, setActiveProjectId] = useState<string>(ALL_PROJECTS_ID);
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerInitial, setComposerInitial] = useState<Partial<ProjectRecord> | null>(null);
@@ -131,7 +132,7 @@ function StudioDashboard({ ops, authLoading, onAuthRedirect }: StudioProps) {
     let cancelled = false;
     (async () => {
       setLoadingCerts(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from('certificates')
         .select(
           'id, user_id, title, file_name, file_hash, sha256, thumbnail_url, public_image_url, ' +
@@ -140,6 +141,12 @@ function StudioDashboard({ ops, authLoading, onAuthRedirect }: StudioProps) {
         )
         .order('created_at', { ascending: false })
         .limit(500);
+
+      if (!showArchived) {
+        query = query.eq('is_archived', false);
+      }
+
+      const { data, error } = await query;
       if (cancelled) return;
       if (error) {
         toast.error('証明書の取得に失敗しました', { description: error.message });
@@ -150,11 +157,11 @@ function StudioDashboard({ ops, authLoading, onAuthRedirect }: StudioProps) {
       setLoadingCerts(false);
     })();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, showArchived]);
 
   // ── derived: project chips ────────────────────────────────────────────
   const projectChips: ProjectChipModel[] = useMemo(() => {
-    const visible = certs.filter((c) => !c.is_archived);
+    const visible = showArchived ? certs : certs.filter((c) => !c.is_archived);
     const projectMap = new Map(ops.projects.map((p) => [p.id, p]));
 
     const counters = new Map<string, ProjectChipModel>();
@@ -200,11 +207,11 @@ function StudioDashboard({ ops, authLoading, onAuthRedirect }: StudioProps) {
       counters.set(id, existing);
     }
     return Array.from(counters.values());
-  }, [certs, ops.projects]);
+  }, [certs, ops.projects, showArchived]);
 
   // ── derived: filtered certificates for the grid ───────────────────────
   const visibleCerts = useMemo(() => {
-    let r = certs.filter((c) => !c.is_archived);
+    let r = showArchived ? certs : certs.filter((c) => !c.is_archived);
     if (activeProjectId !== ALL_PROJECTS_ID) {
       r = r.filter((c) => (c.project_id || UNASSIGNED_ID) === activeProjectId);
     }
@@ -215,13 +222,12 @@ function StudioDashboard({ ops, authLoading, onAuthRedirect }: StudioProps) {
       return (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0);
     });
     return r;
-  }, [certs, activeProjectId]);
+  }, [certs, activeProjectId, showArchived]);
 
   // ── derived: AttentionTray feed ───────────────────────────────────────
   const attentionItems = useMemo(() => {
     const projectMap = new Map(ops.projects.map((p) => [p.id, p]));
-    return certs
-      .filter((c) => !c.is_archived)
+    return (showArchived ? certs : certs.filter((c) => !c.is_archived))
       .map((c) => ({
         id: c.id,
         title: c.title ?? c.file_name ?? 'Untitled',
@@ -233,19 +239,20 @@ function StudioDashboard({ ops, authLoading, onAuthRedirect }: StudioProps) {
         dueAt: c.project_id ? projectMap.get(c.project_id)?.due_at ?? null : null,
         certifiedAt: c.certified_at ?? c.created_at,
       }));
-  }, [certs, ops.projects]);
+  }, [certs, ops.projects, showArchived]);
 
   // ── KPI ───────────────────────────────────────────────────────────────
   const kpi = useMemo(() => {
-    const total = certs.filter((c) => !c.is_archived).length;
-    const trusted = certs.filter((c) => {
+    const targetCerts = showArchived ? certs : certs.filter((c) => !c.is_archived);
+    const total = targetCerts.length;
+    const trusted = targetCerts.filter((c) => {
       const p = (c.tsa_provider ?? '').toLowerCase();
       return ['digicert', 'globalsign', 'seiko', 'sectigo'].includes(p);
     }).length;
-    const review = certs.filter((c) => c.delivery_status === 'review').length;
-    const ready = certs.filter((c) => c.delivery_status === 'ready').length;
+    const review = targetCerts.filter((c) => c.delivery_status === 'review').length;
+    const ready = targetCerts.filter((c) => c.delivery_status === 'ready').length;
     return { total, trusted, review, ready };
-  }, [certs]);
+  }, [certs, showArchived]);
 
   // ── handlers ──────────────────────────────────────────────────────────
   const handleStatusChange = useCallback(async (cert: CertRow, next: DeliveryStatus | null) => {
@@ -351,6 +358,17 @@ function StudioDashboard({ ops, authLoading, onAuthRedirect }: StudioProps) {
         </div>
 
         {/* ── Cert list (Studio table view) ── */}
+        <div className="flex justify-end mt-4 mb-2">
+           <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-white/40 hover:text-white/60 transition-colors">
+              <input
+                 type="checkbox"
+                 checked={showArchived}
+                 onChange={(e) => setShowArchived(e.target.checked)}
+                 className="accent-[#6C3EF4]"
+              />
+              アーカイブも表示
+           </label>
+        </div>
         {loadingCerts ? (
           <SkeletonGrid />
         ) : visibleCerts.length === 0 ? (

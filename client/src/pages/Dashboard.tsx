@@ -307,7 +307,8 @@ export default function Dashboard() {
         .from("certificates")
         .select("*")
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(500); // 👈 これを追加
 
       if (!error && data) {
         setCerts(data as Certificate[]);
@@ -390,32 +391,20 @@ export default function Dashboard() {
   }, []);
 
   const handleArchive = async (cert: Certificate, next: boolean) => {
-    try {
-      // Authのセッショントークンを取得
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
+    // 楽観的UI更新
+    setCerts((prev) => prev.map((c) => (c.id === cert.id ? { ...c, is_archived: next } : c)));
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+    const { error } = await supabase
+      .from("certificates")
+      .update({ is_archived: next })
+      .eq("id", cert.id);
 
-      // バックエンドの完全消去APIを叩く
-      const res = await fetch('/api/certificates/delete', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ id: cert.id }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || '削除に失敗しました');
-      }
-
-      setCerts((prev) => prev.filter((c) => c.id !== cert.id));
-      toast.success("証明書を完全に削除しました");
-    } catch (error: any) {
-      toast.error("削除エラー", { description: error.message });
+    if (error) {
+      // エラー時はロールバック
+      setCerts((prev) => prev.map((c) => (c.id === cert.id ? { ...c, is_archived: cert.is_archived } : c)));
+      toast.error(next ? "アーカイブに失敗しました" : "アーカイブからの復元に失敗しました", { description: error.message });
+    } else {
+      toast.success(next ? "証明書をアーカイブしました" : "証明書をアーカイブから戻しました");
     }
   };
 
@@ -433,6 +422,8 @@ export default function Dashboard() {
       .update({ client_project: trimmed })
       .eq("id", cert.id);
     if (error) {
+      // ロールバック
+      setCerts((prev) => prev.map((c) => (c.id === cert.id ? { ...c, client_project: current } : c)));
       toast.error("案件の紐づけに失敗しました", { description: error.message });
     } else {
       toast.success(trimmed ? `「${trimmed}」に紐づけました` : "案件の紐づけを解除しました");

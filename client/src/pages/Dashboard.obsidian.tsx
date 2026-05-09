@@ -98,6 +98,7 @@ export default function DashboardObsidian() {
   // 履歴テーブル用の **読み取り専用** state。保護対象とは完全に別領域。
   const [rows, setRows] = useState<Certificate[]>([]);
   const [loadingRows, setLoadingRows] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
 
   // ドロップゾーンへのスムーススクロール用
   const dropZoneRef = useRef<HTMLDivElement | null>(null);
@@ -113,13 +114,18 @@ export default function DashboardObsidian() {
     let cancelled = false;
     (async () => {
       setLoadingRows(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from('certificates')
         .select('*')
         .eq('user_id', user.id)
-        .eq('is_archived', false)
         .order('created_at', { ascending: false })
         .limit(50);
+        
+      if (!showArchived) {
+        query = query.eq('is_archived', false);
+      }
+
+      const { data, error } = await query;
       if (cancelled) return;
       if (error) {
         // 静寂を保つ。テーブル側で空状態を表示する。
@@ -132,7 +138,7 @@ export default function DashboardObsidian() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, showArchived]);
 
   /* ── 履歴件数・KPI 表示は意図的に省略（マーケ装飾の排除） ───────── */
   const headline = useMemo(() => {
@@ -218,12 +224,23 @@ export default function DashboardObsidian() {
           className="pb-24 pt-4"
         >
           <header className="flex items-baseline justify-between mb-4 px-1">
-            <h2
-              className="text-[13px] font-semibold tracking-[0.18em] uppercase"
-              style={{ color: PM.textMuted }}
-            >
-              発行履歴
-            </h2>
+            <div className="flex items-center gap-4">
+              <h2
+                className="text-[13px] font-semibold tracking-[0.18em] uppercase"
+                style={{ color: PM.textMuted }}
+              >
+                発行履歴
+              </h2>
+              <label className="flex items-center gap-1.5 cursor-pointer text-[11px] hover:opacity-80 transition-opacity" style={{ color: PM.textSubtle }}>
+                <input
+                  type="checkbox"
+                  checked={showArchived}
+                  onChange={(e) => setShowArchived(e.target.checked)}
+                  style={{ accentColor: PM.primary }}
+                />
+                アーカイブも表示
+              </label>
+            </div>
             {!loadingRows && rows.length > 0 && (
               <span
                 className="text-[11px] tabular-nums"

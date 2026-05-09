@@ -347,7 +347,6 @@ export default function CertificateUpload() {
                     return;
                   }
                   setProofMode('shareable');
-                  setVisibility('public');
                 }}
                 className={`relative p-5 rounded-2xl border-2 transition-all ${!isPaidPlan ? 'opacity-60 cursor-not-allowed bg-[#07061A] border-[#1C1A38]'
                   : proofMode === 'shareable' ? 'cursor-pointer border-[#6C3EF4] bg-[#6C3EF4]/5'
@@ -366,6 +365,40 @@ export default function CertificateUpload() {
                 <p className="text-xs text-[#A8A0D8]">画像をセキュアストレージに保存し、公開検証ページに表示します。</p>
               </div>
             </div>
+
+            {/* 公開設定UI (Visibility) */}
+            {proofMode === 'shareable' && (
+              <div className="mt-4 p-4 rounded-xl border border-[#1C1A38] bg-[#07061A] animate-in slide-in-from-top-2">
+                  <h4 className="text-sm font-bold text-white mb-3">公開設定 (Visibility)</h4>
+                  <div className="flex gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                          <input 
+                              type="radio" 
+                              name="visibility" 
+                              value="private" 
+                              checked={visibility === 'private'}
+                              onChange={() => setVisibility('private')}
+                              className="accent-[#6C3EF4]"
+                          />
+                          <span className="text-sm text-[#F0EFF8]">非公開 (自分のみ閲覧可)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                          <input 
+                              type="radio" 
+                              name="visibility" 
+                              value="public" 
+                              checked={visibility === 'public'}
+                              onChange={() => setVisibility('public')}
+                              className="accent-[#6C3EF4]"
+                          />
+                          <span className="text-sm text-[#F0EFF8]">リンクを知っている全員</span>
+                      </label>
+                  </div>
+                  <p className="mt-3 text-xs text-[#A8A0D8]">
+                    「リンクを知っている全員」に設定すると、URLを知っている第三者も証明書と画像を閲覧できるようになります。
+                  </p>
+              </div>
+            )}
           </div>
 
         {isProcessing || c2paSignal === 'analysing' ? (
