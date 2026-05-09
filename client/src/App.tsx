@@ -30,7 +30,8 @@ import { AuthProvider, useAuth } from "./hooks/useAuth";
 import Home from "./pages/Home";
 import CertificatePage from './pages/CertificatePage';
 import Auth from './pages/Auth';
-import Dashboard from './pages/Dashboard';
+import DashboardObsidian from './pages/Dashboard.obsidian';
+// import Dashboard from './pages/Dashboard';
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import Tokushoho from "./pages/Tokushoho";
@@ -128,7 +129,7 @@ function Router() {
       <Route path="/business" component={Business} />
       <Route path="/cert/:id" component={CertificatePage} />
       <Route path="/auth" component={Auth} />
-      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/dashboard" component={DashboardObsidian} />
       <Route path="/settings" component={Settings} />
       <Route path="/terms" component={Terms} />
       <Route path="/privacy" component={Privacy} />
