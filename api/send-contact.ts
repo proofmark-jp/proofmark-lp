@@ -425,6 +425,7 @@ async function sendDiscordNotification(
   payload: ContactPayload,
   priority: Priority,
   ticketId: string,
+  ip: string,
 ): Promise<boolean> {
   const webhookUrl = process.env.DISCORD_CONTACT_WEBHOOK_URL;
   if (!webhookUrl) return false;
@@ -432,6 +433,20 @@ async function sendDiscordNotification(
   const categoryLabel = CATEGORY_LABELS[payload.category] ?? payload.category;
   const color = priority === 'high' ? 0xff4d4d : 0x6c3ef4;
   const planLabel = payload.plan ?? payload.metadata?.planTier ?? 'free';
+
+  const fields = [
+    { name: 'Email', value: `\`${payload.email}\``, inline: true },
+    { name: 'Ticket', value: `\`${ticketId}\``, inline: true },
+    { name: 'IP', value: `\`${ip}\``, inline: true },
+    { name: 'Auth', value: payload.metadata?.isAuthenticated ? '✅ Yes' : '❌ No', inline: true },
+  ];
+
+  if (payload.metadata?.currentUrl) {
+    fields.push({ name: 'URL', value: `\`${payload.metadata.currentUrl}\``, inline: false });
+  }
+  if (payload.metadata?.userAgent) {
+    fields.push({ name: 'UA', value: `\`${payload.metadata.userAgent}\``, inline: false });
+  }
 
   const embed = {
     title: `📩 ${categoryLabel}`,
@@ -445,10 +460,7 @@ async function sendDiscordNotification(
       .filter(Boolean)
       .join('\n'),
     color,
-    fields: [
-      { name: 'Email', value: `\`${payload.email}\``, inline: true },
-      { name: 'Ticket', value: `\`${ticketId}\``, inline: true },
-    ],
+    fields,
     footer: { text: `Priority: ${priority.toUpperCase()} · ProofMark CS` },
     timestamp: new Date().toISOString(),
   };
@@ -611,7 +623,7 @@ export default async function handler(request: Request): Promise<Response> {
     persistToSupabase(payload, priority, ticketId, ip),
     sendDeveloperEmail(payload, priority, ticketId, ip),
     sendAutoReply(payload, ticketId),
-    sendDiscordNotification(payload, priority, ticketId),
+    sendDiscordNotification(payload, priority, ticketId, ip),
   ]);
 
   /* ── Persist dedupe key (best effort) ── */
