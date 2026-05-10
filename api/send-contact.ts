@@ -395,13 +395,14 @@ async function sendAutoReply(payload: ContactPayload, ticketId: string): Promise
 <html><body style="margin:0;padding:24px;background:#f4f4f7;">
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a2e;max-width:560px;margin:0 auto;">
   <div style="background:linear-gradient(135deg,#0D0B24,#1C1A38);padding:32px;border-radius:16px 16px 0 0;text-align:center;">
-    <h1 style="margin:0;font-size:22px;color:#F0EFF8;font-weight:800;letter-spacing:-0.01em;">ProofMark</h1>
+    <img src="https://proofmark.jp/logo-white.png" alt="ProofMark" style="height: 32px; width: auto; margin: 0 auto; display: block;" />
     <p style="margin:8px 0 0;font-size:13px;color:#A8A0D8;">お問い合わせを受け付けました</p>
   </div>
   <div style="padding:28px;border:1px solid #e2e2e2;border-top:none;border-radius:0 0 16px 16px;background:#fff;">
     <p style="font-size:14px;color:#333;line-height:1.8;">
       この度は ProofMark へお問い合わせいただき、ありがとうございます。<br/>
-      以下の内容で受け付けいたしました。担当より <strong>1〜3 営業日以内</strong>にご返信いたします。
+      以下の内容で受け付けいたしました。いただいた内容はすべて開発チームが確認し、<strong>返信が必要な内容につきましては順次ご連絡</strong>いたします。<br/>
+      <span style="font-size:12px;color:#666;">※内容（機能要望やご意見など）によっては、個別のご返信を差し上げられない場合がございます。予めご了承ください。</span>
     </p>
     <div style="background:#f8f7fc;border-radius:12px;padding:16px;margin:20px 0;border:1px solid #e8e6f0;">
       <p style="margin:0 0 4px;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.1em;">チケット ID</p>

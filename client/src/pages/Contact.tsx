@@ -916,7 +916,11 @@ function SuccessCard({
       <p className="mt-4 text-sm" style={{ color: PM.muted }}>
         登録メールアドレス宛に確認メールをお送りしました。
         <br />
-        担当より 1〜3 営業日以内にご返信いたします。
+        いただいた内容はすべて開発チームが確認しております。
+        <br />
+        返信が必要な内容につきましては、順次ご連絡いたします。
+        <br />
+        <span className="text-xs opacity-80">※ご意見・機能要望などには個別のご返信を差し上げられない場合がございます。</span>
       </p>
       <div className="mt-6 flex justify-center gap-4 text-sm">
         <Link href="/" className="underline" style={{ color: PM.success }}>
