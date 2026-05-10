@@ -884,7 +884,11 @@ function SuccessCard({
         background: 'rgba(0,212,170,0.05)',
       }}
     >
-      <CheckCircle2 className="w-12 h-12 mx-auto" style={{ color: PM.success }} />
+      <img
+        src="/logo-white.png"
+        alt="ProofMark"
+        className="h-12 w-auto mx-auto drop-shadow-lg"
+      />
       <h2 className="mt-4 text-xl font-bold">お問い合わせを受け付けました</h2>
       {ticketId && (
         <div className="mt-3 inline-flex items-center gap-2">

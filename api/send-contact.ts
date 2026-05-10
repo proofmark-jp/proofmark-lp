@@ -318,43 +318,11 @@ async function sendDeveloperEmail(
       <tr><td style="padding:6px 0;color:#666;">Email</td><td style="padding:6px 0;"><a href="mailto:${escapeHtml(
       payload.email,
     )}" style="color:#6C3EF4;">${escapeHtml(payload.email)}</a></td></tr>
-      <tr><td style="padding:6px 0;color:#666;">プラン</td><td style="padding:6px 0;">${escapeHtml(
-      payload.plan ?? payload.metadata?.planTier ?? 'free',
-    )}</td></tr>
-      ${payload.errorCode
-      ? `<tr><td style="padding:6px 0;color:#666;">エラーコード</td><td style="padding:6px 0;font-family:monospace;color:#FF6B6B;">${escapeHtml(
-        payload.errorCode,
-      )}</td></tr>`
-      : ''
-    }
-      <tr><td style="padding:6px 0;color:#666;">IP</td><td style="padding:6px 0;font-family:monospace;font-size:12px;">${escapeHtml(
-      ip,
-    )}</td></tr>
-      <tr><td style="padding:6px 0;color:#666;">認証状態</td><td style="padding:6px 0;font-size:12px;">${payload.metadata?.isAuthenticated ? '✅ Authenticated' : '❌ Anonymous'
-    }</td></tr>
     </table>
     <hr style="border:none;border-top:1px solid #eee;margin:16px 0;" />
     <div style="white-space:pre-wrap;font-size:14px;line-height:1.7;color:#333;">${escapeHtml(
       payload.message,
     )}</div>
-    ${payload.metadata?.currentUrl
-      ? `<p style="margin-top:16px;font-size:11px;color:#999;">送信元URL: ${escapeHtml(
-        payload.metadata.currentUrl,
-      )}</p>`
-      : ''
-    }
-    ${payload.metadata?.referrer
-      ? `<p style="font-size:11px;color:#999;">Referrer: ${escapeHtml(
-        payload.metadata.referrer,
-      )}</p>`
-      : ''
-    }
-    ${payload.metadata?.userAgent
-      ? `<p style="font-size:11px;color:#999;">UA: ${escapeHtml(
-        payload.metadata.userAgent,
-      )}</p>`
-      : ''
-    }
   </div>
 </div></body></html>`;
 
