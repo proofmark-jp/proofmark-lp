@@ -318,6 +318,14 @@ async function sendDeveloperEmail(
       <tr><td style="padding:6px 0;color:#666;">Email</td><td style="padding:6px 0;"><a href="mailto:${escapeHtml(
       payload.email,
     )}" style="color:#6C3EF4;">${escapeHtml(payload.email)}</a></td></tr>
+
+    ${payload.errorCode
+      ? `<tr><td style="padding:6px 0;color:#666;">エラーコード</td><td style="padding:6px 0;font-family:monospace;color:#FF6B6B;">${escapeHtml(
+        payload.errorCode,
+      )}</td></tr>`
+      : ''
+    }
+    
     </table>
     <hr style="border:none;border-top:1px solid #eee;margin:16px 0;" />
     <div style="white-space:pre-wrap;font-size:14px;line-height:1.7;color:#333;">${escapeHtml(
