@@ -100,6 +100,7 @@ export default function Footer() {
               <li><FooterLink href="/pricing">料金プラン</FooterLink></li>
               <li><FooterLink href="/compare-c2pa">C2PAとの比較</FooterLink></li>
               <li><FooterLink href="/blog">公式ブログ</FooterLink></li>
+              <li><FooterLink href="/contact">よくある質問 / お問い合わせ</FooterLink></li>
               <li><FooterLink href="https://x.com/ProofMark_jp" external>公式 X (@ProofMark_jp)</FooterLink></li>
             </ul>
           </div>

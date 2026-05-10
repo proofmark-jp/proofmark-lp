@@ -107,7 +107,6 @@ export const PRICING_PLANS: PricingPlan[] = [
       { label: '監査ログ（改ざん検知付き）', state: 'include' },
       { label: 'Chain of Evidence（制作工程の連鎖証拠）', state: 'include' },
       { label: '案件単位のクライアント共有', state: 'include' },
-      { label: 'メールサポート', state: 'include' },
     ],
   },
   {

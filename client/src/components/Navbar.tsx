@@ -15,7 +15,8 @@ import {
   Scale,
   CreditCard,
   ShieldAlert,
-  ShieldCheck
+  ShieldCheck,
+  HelpCircle
 } from 'lucide-react';
 import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
 import { useAuth } from '../hooks/useAuth';
@@ -111,6 +112,7 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
               <NavLink href="/dashboard" icon={LayoutDashboard} active={location === '/dashboard'}>管理画面</NavLink>
               <NavLink href={`/u/${displayUsername}`} icon={ImageIcon} active={location.startsWith('/u/')}>公開ギャラリー</NavLink>
               <NavLink href="/settings" icon={Settings} active={location === '/settings'}>設定</NavLink>
+              <NavLink href="/contact" icon={HelpCircle} active={location === '/contact'}>サポート</NavLink>
               <button
                 onClick={signOut}
                 className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-[#A8A0D8] hover:text-[#FF4D4D] transition-all hover:bg-[#FF4D4D]/10 rounded-xl whitespace-nowrap"
@@ -168,6 +170,7 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
                 <NavLink href="/dashboard" icon={LayoutDashboard} active={location === '/dashboard'} onClick={closeMenu}>管理画面</NavLink>
                 <NavLink href={`/u/${displayUsername}`} icon={ImageIcon} active={location.startsWith('/u/')} onClick={closeMenu}>公開ギャラリー</NavLink>
                 <NavLink href="/settings" icon={Settings} active={location === '/settings'} onClick={closeMenu}>プロフィール設定</NavLink>
+                <NavLink href="/contact" icon={HelpCircle} active={location === '/contact'} onClick={closeMenu}>サポート</NavLink>
               </div>
             ) : (
               <div className="flex flex-col gap-3">

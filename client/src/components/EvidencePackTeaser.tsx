@@ -97,7 +97,7 @@ export default function EvidencePackTeaser() {
                     <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/50">
                       Pack item {String(index + 1).padStart(2, '0')}
                     </div>
-                    <div className="mt-1 line-clamp-2 text-sm font-semibold text-white">
+                    <div className="mt-1 whitespace-normal text-sm font-semibold leading-snug text-white">
                       {item}
                     </div>
                   </div>
