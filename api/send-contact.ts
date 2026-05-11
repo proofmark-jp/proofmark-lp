@@ -70,6 +70,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   api: 'API / 開発者向け',
   feature: '機能リクエスト',
   bug: 'バグ報告',
+  disclosure_request: '特商法に基づく運営者情報の開示請求',
   other: 'その他',
 };
 
@@ -367,6 +368,20 @@ async function sendAutoReply(payload: ContactPayload, ticketId: string): Promise
   const from = process.env.CONTACT_FROM_ADDRESS ?? 'ProofMark <noreply@proofmark.jp>';
   const categoryLabel = CATEGORY_LABELS[payload.category] ?? payload.category;
 
+  /* ── 特商法開示請求の場合のみ、運営者情報を自動返信に差し込む ── */
+  const disclosureBlock =
+    payload.category === 'disclosure_request'
+      ? `<div style="background:#f0eefc;border:1px solid #d4cff0;border-radius:12px;padding:20px;margin:20px 0;">
+      <p style="margin:0 0 12px;font-size:13px;font-weight:700;color:#6C3EF4;">特定商取引法に基づく運営者情報</p>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;">
+        <tr><td style="padding:4px 0;color:#666;width:100px;">販売業者</td><td style="padding:4px 0;font-weight:600;">ProofMark（運営者：小栗 慎也）</td></tr>
+        <tr><td style="padding:4px 0;color:#666;">所在地</td><td style="padding:4px 0;">〒XXX-XXXX 東京都[区市町村名][番地以降]</td></tr>
+        <tr><td style="padding:4px 0;color:#666;">電話番号</td><td style="padding:4px 0;">050-XXXX-XXXX</td></tr>
+      </table>
+      <p style="margin:12px 0 0;font-size:11px;color:#888;line-height:1.6;">※本情報は特定商取引法に基づく開示請求への対応として自動送付しております。<br/>※記録保持のため、お電話での対応は行っておりません。ご用件はこのメールへの返信にてお願いいたします。</p>
+    </div>`
+      : '';
+
   const html = `<!doctype html>
 <html><body style="margin:0;padding:24px;background:#f4f4f7;">
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a2e;max-width:560px;margin:0 auto;">
@@ -394,6 +409,7 @@ async function sendAutoReply(payload: ContactPayload, ticketId: string): Promise
     payload.subject,
   )}</td></tr>
     </table>
+    ${disclosureBlock}
     <hr style="border:none;border-top:1px solid #eee;margin:20px 0;" />
     <p style="font-size:12px;color:#999;line-height:1.6;">
       ※ このメールは自動送信されています。<br/>

@@ -1,3 +1,24 @@
+/**
+ * src/pages/Tokushoho.tsx — 特定商取引法に基づく表記
+ *
+ * Phase 11.A — B2B / B2C 動的レンダリング
+ * ─────────────────────────────────────────────────────────────────
+ *  B2C（通常アクセス）  : 氏名・住所・電話番号は「開示請求ベース」で秘匿
+ *  B2B（/business 経由 / ?context=business / ?plan=studio|business）:
+ *                       完全開示モード。法務・経理が即決できる情報を全表示
+ *
+ * 変更履歴:
+ *  - LAST_REVIEWED を静的定数に変更（動的 new Date() は法的リスクのため廃止）
+ *  - 所在地を B2C / B2B で正しく分離（プレースホルダーを除去）
+ *  - 電話番号プレースホルダーを除去（B2C: 開示請求ベース / B2B: 要記入）
+ *  - 受付時間の約束を削除（個人 SaaS が守れない SLA を約束しない）
+ *  - 消費税・インボイス開示を追加（免税事業者の明示）
+ *  - 問い合わせにフォーム URL を追加
+ *
+ * 本番運用前に必ず確認する箇所:
+ *  [FILL] とコメントされた箇所を実際の値に置き換えること
+ */
+
 import { motion } from 'framer-motion';
 import { useLocation, useSearch } from 'wouter';
 import Navbar from '@/components/Navbar';
@@ -6,7 +27,7 @@ import { fadeInVariants, staggerContainer } from '@/lib/animations';
 import {
   Briefcase, User, MapPin, Tag, CreditCard, Clock, Package,
   RefreshCcw, Mail, Phone, FileText, ShieldCheck, Info,
-  Building2, Lock,
+  Building2, Lock, Receipt,
 } from 'lucide-react';
 import SEO from '@/components/SEO';
 import {
@@ -16,21 +37,27 @@ import {
   type DisclosureMode,
 } from '@/lib/business-context';
 
-/**
- * /tokushoho — Tokutei Shotorihiki Hou (Specified Commercial Transactions Act).
- *
- * Phase 11.A — B2B/B2C 動的レンダリング
- * ─────────────────────────────────────────────
- *  - B2C（通常アクセス）: 運営者氏名・住所・電話番号は「開示請求ベース」
- *  - B2B（/business 経由 / ?context=business / ?plan=studio|business）:
- *    完全開示モードで、法務・経理が即決できる情報を全表示
- *
- * 切替ロジックは src/lib/business-context.ts に集約（SSOT）。
- *
- * NOTE:
- *  - 個人クリエイターの秘匿性を守りつつ、エンタープライズ調達要件を満たす
- *  - Stripe決済画面の最終拘束力は維持される（補足注記あり）
- */
+/* ────────────────────────────────────────────────────────────────
+ * 最終確認日 — コンテンツを変更したときに手動で更新する。
+ * new Date() による動的生成は禁止（実態と乖離した日付表示になるため）。
+ * ──────────────────────────────────────────────────────────────── */
+const LAST_REVIEWED = '2026年5月';
+
+/* ────────────────────────────────────────────────────────────────
+ * 運営者情報
+ * [FILL] とついた箇所は本番運用前に実際の値を入力すること。
+ * B2C モードでは shouldShowField() / getB2CFallback() で自動的に秘匿される。
+ * ──────────────────────────────────────────────────────────────── */
+
+/** B2C モードで表示する所在地（都道府県・市区町村まで） */
+const ADDRESS_B2C = '東京都[区市町村名]'; // [FILL] 例: 東京都渋谷区
+
+/** B2B モードで表示する所在地（番地まで） */
+const ADDRESS_B2B = '〒[郵便番号] 東京都[区市町村名][番地]'; // [FILL]
+
+/** B2B モードで表示する電話番号 */
+const PHONE_B2B = '050-XXXX-XXXX'; // [FILL] Zoho Voice 等で取得後に記入
+
 export default function Tokushoho() {
   const { user, signOut } = useAuth();
   const [location] = useLocation();
@@ -39,98 +66,153 @@ export default function Tokushoho() {
   const mode: DisclosureMode = detectDisclosureMode(location, searchString);
   const isB2B = mode === 'B2B_FULL_DISCLOSURE';
 
-  /* ────────────────────────────────────────────
-   * 運営者情報（B2B完全開示・B2C非開示の値）
-   *   実際の値の正は本ファイル。本番運用前に確実に正しい値であることを確認すること。
-   * ──────────────────────────────────────────── */
+  /* ──────────────────────────────────────────────────────────────
+   * 開示テーブルの定義
+   * value は B2B 完全開示値。B2C では shouldShowField / getB2CFallback
+   * によって一部フィールドが秘匿テキストに置き換えられる。
+   * ────────────────────────────────────────────────────────────── */
   const ALL_DETAILS = [
+    /* ── 運営者 ── */
     {
       label: '販売業者',
       icon: <Briefcase className="w-4 h-4" />,
-      value: 'ProofMark運営事務局（屋号）',
+      value: 'ProofMark（運営者：小栗 慎也）',
     },
     {
       label: '運営統括責任者',
       icon: <User className="w-4 h-4" />,
       value: '小栗 慎也（Shinya Oguri）',
     },
+
+    /* ── 所在地 ── */
     {
       label: '所在地',
       icon: <MapPin className="w-4 h-4" />,
-      value: '〒100-0005 東京都千代田区丸の内1-1-1',
+      value: isB2B ? ADDRESS_B2B : ADDRESS_B2C,
+      // B2C では番地以降を開示請求ベースにするため、
+      // value を直接 B2C 値にしたうえで isFallback は付けない。
+      // （住所の「存在」は示しつつ、番地は秘匿する設計）
+      _skipFallback: true,
+      _b2cSuffix: !isB2B
+        ? '（番地以降は請求があれば遅滞なく書面で開示します）'
+        : undefined,
     },
+
+    /* ── 連絡先 ── */
     {
       label: 'お問い合わせ',
       icon: <Mail className="w-4 h-4" />,
-      value: 'support@proofmark.jp（受付：平日 10:00–18:00 JST）',
+      value:
+        'お問い合わせフォーム: https://proofmark.jp/contact\n' +
+        'メール: support@proofmark.jp\n' +
+        '※ いただいたお問い合わせへの返信は、通常2営業日以内を目安としていますが、内容により前後する場合があります。',
     },
     {
       label: '電話番号',
       icon: <Phone className="w-4 h-4" />,
-      value: '050-XXXX-XXXX',
+      value: PHONE_B2B,
+      // B2C では getB2CFallback() が「請求ベース」テキストを返す
     },
+
+    /* ── 価格 ── */
     {
       label: '販売価格',
       icon: <Tag className="w-4 h-4" />,
       value:
-        'Free: ¥0 / Spot: ¥480（税込・1案件） / Creator: ¥1,480（税込・月額） / Studio: ¥4,980（税込・月額） / Business: 個別見積。最新価格は /pricing に常時掲載。',
+        'Free（無料）/ Spot: ¥480（税込・1件）/ Creator: ¥1,480（税込・月額）/ Studio: ¥4,980（税込・月額）/ Business: 個別見積。\n' +
+        '最新価格は /pricing に常時掲載しています。',
     },
     {
       label: '商品代金以外の必要料金',
       icon: <FileText className="w-4 h-4" />,
       value:
-        'インターネット接続料・通信料はお客様負担。商用TSAオプション（Business）を選択した場合、TSA署名回数に応じた従量費が発生する場合があります。',
+        'インターネット接続料・通信料はお客様のご負担となります。\n' +
+        'Business プランで商用 TSA オプションを選択した場合、TSA 署名回数に応じた従量費が発生することがあります（詳細は個別見積時に明示します）。',
     },
+
+    /* ── 税・インボイス ── */
+    {
+      label: '消費税・インボイスについて',
+      icon: <Receipt className="w-4 h-4" />,
+      value:
+        '当社は現在、消費税法上の免税事業者です。適格請求書発行事業者（インボイス）の登録は行っておりません。\n' +
+        '法人契約（Studio / Business）でインボイスが必要な場合は、お問い合わせフォームよりご相談ください。',
+    },
+
+    /* ── 決済 ── */
     {
       label: '支払方法',
       icon: <CreditCard className="w-4 h-4" />,
-      value: 'クレジットカード決済（Stripe）。Business プランは銀行振込にも対応。',
+      value:
+        'クレジットカード決済（Stripe）。\n' +
+        'Business プランは銀行振込にも対応しています（別途ご相談ください）。',
     },
     {
       label: '支払時期',
       icon: <Clock className="w-4 h-4" />,
       value:
-        'Spot: 申込時に都度決済 / Creator・Studio: 申込時に初回決済、以降は毎月の更新日に自動決済 / Business: 個別契約による。',
+        'Spot: 申込時に都度決済\n' +
+        'Creator・Studio: 申込時に初回決済、以降は毎月の更新日に自動決済\n' +
+        'Business: 個別契約による',
     },
+
+    /* ── 提供・解約・返金 ── */
     {
       label: '商品の引渡時期',
       icon: <Package className="w-4 h-4" />,
       value:
-        'デジタルサービスのため決済完了直後より利用可能。Evidence Pack（ZIP）はWeb上から即時ダウンロード可能。',
+        'デジタルサービスのため、決済完了直後より利用可能です。\n' +
+        'Evidence Pack（ZIP）は Web 上から即時ダウンロードできます。',
     },
     {
       label: '解約・キャンセル',
       icon: <RefreshCcw className="w-4 h-4" />,
       value:
-        'サブスクリプション（Creator / Studio）はマイページからいつでも解約可能。解約後は次回更新日まで利用可能。Spot（単発購入）は決済確定後の解約は受付不可（ただし Evidence Pack 未取得時はカスタマーサポート経由で個別対応）。',
+        'サブスクリプション（Creator / Studio）はダッシュボードのプラン管理からいつでも解約できます。解約後は次回更新日まで引き続き利用可能です。日割り返金は行いません。\n' +
+        'Spot（単発購入）は決済確定後の解約は承りかねます。ただし Evidence Pack 未取得の場合はお問い合わせフォームより個別にご相談ください。',
     },
     {
       label: '返品・返金',
       icon: <RefreshCcw className="w-4 h-4" />,
       value:
-        'デジタルコンテンツの性質上、原則として返品・返金は受付しません。ただし、当社責に帰すべきサービス障害により提供を受けられなかった場合、全額または日割り返金の対応を行います。',
+        'デジタルコンテンツの性質上、原則として返品・返金は承りかねます。\n' +
+        'デジタル署名およびタイムスタンプが発行された Evidence Pack については、その性質上、内容の如何に関わらず返金は致しかねます。これは、発行された証跡の客観的妥当性を担保するための措置です。\n' +
+        '当社の責に帰すべきサービス障害により提供を受けられなかった場合は、障害時間に応じた日割り返金または翌月分の料金減算で対応します。',
     },
+
+    /* ── 動作環境 ── */
     {
       label: '動作環境',
       icon: <Info className="w-4 h-4" />,
       value:
-        '最新版のChrome / Edge / Safari / Firefox を推奨。Web Crypto API（SHA-256）が利用可能なブラウザが必要です。',
+        '最新版の Chrome / Edge / Safari / Firefox を推奨します。\n' +
+        'Web Crypto API（SHA-256）が利用可能なブラウザが必要です。Internet Explorer は非対応です。',
     },
-  ];
+  ] as const;
 
-  /**
-   * モードに応じてフィールドの表示値を決定する。
-   * B2B: 全て完全開示。
-   * B2C: 一部フィールドは「開示請求ベース」のフォールバックテキストへ置換。
-   */
+  /* ──────────────────────────────────────────────────────────────
+   * B2C モード時に秘匿フィールドをフォールバックテキストへ置換
+   * ────────────────────────────────────────────────────────────── */
   const details = ALL_DETAILS.map((item) => {
-    if (shouldShowField(item.label, mode)) {
-      return item;
+    // _skipFallback フラグがある行は shouldShowField をスキップ
+    if ((item as any)._skipFallback) {
+      return {
+        ...item,
+        displayValue:
+          item.value +
+          ((item as any)._b2cSuffix ? '\n' + (item as any)._b2cSuffix : ''),
+        isFallback: false,
+      };
     }
+
+    if (shouldShowField(item.label, mode)) {
+      return { ...item, displayValue: item.value, isFallback: false };
+    }
+
     const fallback = getB2CFallback(item.label);
     return {
       ...item,
-      value: fallback ?? '請求があった場合、書面で開示します。',
+      displayValue: fallback ?? '請求があった場合、書面で遅滞なく開示します。',
       isFallback: true,
     };
   });
@@ -149,6 +231,7 @@ export default function Tokushoho() {
       <Navbar user={user} signOut={signOut} />
 
       <main className="relative pt-32 pb-24 px-6">
+        {/* 背景グラデーション */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[500px] bg-gradient-to-b from-[#F0BB38]/10 to-transparent pointer-events-none" />
 
         <motion.div
@@ -157,7 +240,7 @@ export default function Tokushoho() {
           initial="hidden"
           animate="visible"
         >
-          {/* ── Header ───────────────────── */}
+          {/* ── ヘッダー ── */}
           <motion.div variants={fadeInVariants} className="mb-12 text-center">
             <div
               className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-bold mb-4 uppercase tracking-widest ${isB2B
@@ -174,6 +257,7 @@ export default function Tokushoho() {
                 <>Commercial Disclosure</>
               )}
             </div>
+
             <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">
               特定商取引法に基づく表記
               {isB2B && (
@@ -182,13 +266,13 @@ export default function Tokushoho() {
                 </span>
               )}
             </h1>
+
             <p className="text-[#A8A0D8] text-sm">
-              Legal Information for Paid Services — last reviewed:{' '}
-              {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
+              Legal Information for Paid Services — last reviewed: {LAST_REVIEWED}
             </p>
           </motion.div>
 
-          {/* ── Mode banner ──────────────── */}
+          {/* ── モードバナー ── */}
           <motion.div
             variants={fadeInVariants}
             className={`mb-8 rounded-2xl border p-5 backdrop-blur-md ${isB2B
@@ -204,11 +288,12 @@ export default function Tokushoho() {
                     法人決済向けに、運営者情報を完全開示しています。
                   </p>
                   <p className="text-xs text-[#A8A0D8] leading-relaxed">
-                    法務・経理部門の調達承認に必要な氏名・住所・電話番号を全て表示しています。Studio / Business プラン、または{' '}
+                    法務・経理部門の調達承認に必要な氏名・住所・電話番号を全て表示しています。Studio /
+                    Business プラン、または{' '}
                     <code className="px-1.5 py-0.5 rounded bg-white/5 text-[#BC78FF]">
                       /business
                     </code>{' '}
-                    経由でのアクセスでは、本表示モードが適用されます。
+                    経由でのアクセスでは本表示モードが適用されます。
                   </p>
                 </div>
               </div>
@@ -220,7 +305,8 @@ export default function Tokushoho() {
                     個人事業主・個人クリエイターの秘匿性を守る表示モードです。
                   </p>
                   <p className="text-xs text-[#A8A0D8] leading-relaxed">
-                    運営者の氏名・住所・電話番号は「開示請求ベース」で運用しています。法令に基づく開示請求があった場合、遅滞なく書面で提供します。法人決済（Studio / Business）をご利用の方は{' '}
+                    運営者の氏名・住所（番地以降）・電話番号は「開示請求ベース」で運用しています。法令に基づく開示請求があった場合、遅滞なく書面で提供します。法人決済（Studio /
+                    Business）をご利用の方は{' '}
                     <a href="/business" className="text-[#00D4AA] underline">
                       /business
                     </a>{' '}
@@ -231,7 +317,7 @@ export default function Tokushoho() {
             )}
           </motion.div>
 
-          {/* ── Disclosure table ─────────── */}
+          {/* ── 開示テーブル ── */}
           <motion.div
             variants={fadeInVariants}
             className="overflow-hidden rounded-3xl border border-[#2a2a4e] bg-[#15132D]/50 backdrop-blur-xl"
@@ -253,14 +339,14 @@ export default function Tokushoho() {
                     key={item.label}
                     className="hover:bg-white/[0.02] transition-colors"
                   >
-                    <td className="px-6 py-5 text-sm font-bold text-[#F0EFF8]">
+                    <td className="px-6 py-5 text-sm font-bold text-[#F0EFF8] align-top">
                       <span className="inline-flex items-center gap-2">
                         <span className="text-[#F0BB38]">{item.icon}</span>
                         {item.label}
                       </span>
                     </td>
                     <td className="px-6 py-5 text-sm text-[#A8A0D8] leading-relaxed whitespace-pre-line">
-                      {item.value}
+                      {(item as any).displayValue}
                       {(item as any).isFallback && (
                         <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#A8A0D8]/60">
                           <Lock className="w-3 h-3" />
@@ -274,11 +360,12 @@ export default function Tokushoho() {
             </table>
           </motion.div>
 
-          {/* ── Supplementary cards ──────── */}
+          {/* ── 補足カード ── */}
           <motion.div
             variants={fadeInVariants}
             className="mt-10 grid sm:grid-cols-2 gap-4"
           >
+            {/* サービス障害補償 */}
             <div className="p-6 rounded-2xl bg-[#0D0B24] border border-[#1C1A38]">
               <div className="flex items-center gap-2 mb-2">
                 <ShieldCheck className="w-4 h-4 text-[#00D4AA]" />
@@ -287,13 +374,15 @@ export default function Tokushoho() {
                 </h3>
               </div>
               <p className="text-sm text-[#A8A0D8] leading-relaxed">
-                当社の責に帰すべきサービス停止が継続した場合、停止時間に応じて日割り返金または翌月分の利用料減算で補償します。詳細は{' '}
+                当社の責に帰すべきサービス停止が継続した場合、停止時間に応じた日割り返金または翌月分の利用料減算で補償します。詳細は{' '}
                 <a href="/trust-center#s9" className="text-[#00D4AA] underline">
-                  Trust Center §9 更新履歴
+                  Trust Center §9
                 </a>{' '}
                 に記録します。
               </p>
             </div>
+
+            {/* 個別開示請求 */}
             <div className="p-6 rounded-2xl bg-[#0D0B24] border border-[#1C1A38]">
               <div className="flex items-center gap-2 mb-2">
                 <Mail className="w-4 h-4 text-[#BC78FF]" />
@@ -302,20 +391,37 @@ export default function Tokushoho() {
                 </h3>
               </div>
               <p className="text-sm text-[#A8A0D8] leading-relaxed">
-                取引相手方からの法令に基づく開示請求があった場合、運営者氏名・住所・電話番号を遅滞なく書面で開示します。請求は{' '}
+                法令に基づく開示請求（運営者氏名・住所・電話番号）があった場合、遅滞なく書面で開示します。請求は{' '}
                 <a href="/contact" className="text-[#00D4AA] underline">
                   お問い合わせフォーム
                 </a>{' '}
                 よりお願いします。
               </p>
             </div>
+
+            {/* 消費税・インボイス */}
+            <div className="p-6 rounded-2xl bg-[#0D0B24] border border-[#1C1A38] sm:col-span-2">
+              <div className="flex items-center gap-2 mb-2">
+                <Receipt className="w-4 h-4 text-[#F0BB38]" />
+                <h3 className="text-sm font-bold text-white tracking-widest uppercase">
+                  消費税・インボイス登録について
+                </h3>
+              </div>
+              <p className="text-sm text-[#A8A0D8] leading-relaxed">
+                当サービスは現在、消費税法上の<strong className="text-white">免税事業者</strong>
+                として運営しています。適格請求書発行事業者（インボイス）の登録は行っておらず、
+                適格請求書の発行はできません。法人・個人事業主としてご利用の方で仕入税額控除が必要な場合は、
+                事前に{' '}
+                <a href="/contact" className="text-[#00D4AA] underline">
+                  お問い合わせフォーム
+                </a>{' '}
+                よりご相談ください。
+              </p>
+            </div>
           </motion.div>
 
-          {/* ── B2B/B2C のもう一方への切替リンク ── */}
-          <motion.div
-            variants={fadeInVariants}
-            className="mt-6 text-center"
-          >
+          {/* ── B2B / B2C 切替リンク ── */}
+          <motion.div variants={fadeInVariants} className="mt-6 text-center">
             {isB2B ? (
               <a
                 href="/tokushoho"
@@ -335,11 +441,13 @@ export default function Tokushoho() {
             )}
           </motion.div>
 
+          {/* ── フッター注記 ── */}
           <motion.p
             variants={fadeInVariants}
             className="mt-10 text-xs text-[#48456A] text-center leading-relaxed"
           >
-            本ページの内容は最新の法令・社内運用に応じて随時改定します。最終的な拘束力を持つのは Stripe 決済時点で表示される
+            本ページの内容は法令・社内運用の変更に応じて随時改定します。
+            最終的な拘束力を持つのは Stripe 決済時点で表示される
             利用規約・特定商取引法表記・プライバシーポリシーです。
           </motion.p>
         </motion.div>

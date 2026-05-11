@@ -1,63 +1,61 @@
 /**
- * App.tsx — Phase Studio Repair (Routing rollback)
+ * App.tsx — Mobile CRO Upgrade
  *
- * 変更ポイント (Task 2):
- *   1. /dashboard を Dashboard.obsidian → Dashboard.studio へロールバック。
- *      Obsidian は美学優先で「検索 / プロジェクト管理 / ステータスバッジ」が
- *      消失しており SaaS としてポンコツ化したため、強力な管理機能を持つ
- *      Studio 版に戻す。
- *   2. RouteGuard / ScrollToTop / 認証ロジック (useAuth) は**1ミリも触らない**。
- *   3. 既存の <Route> 行・import 行は全て温存。差分は 2 行のみ:
- *        a) `import DashboardObsidian` → `import DashboardStudio`
- *        b) `<Route path="/dashboard" component={DashboardObsidian} />`
- *           → `<Route path="/dashboard" component={DashboardStudio} />`
+ * 変更点:
+ *   1. <MobileActionBar /> をマウント（モバイル下部固定 CTA）。
+ *   2. <ScrollToTopFab />  をマウント（FAB / 全デバイス）。
+ *   3. ScrollToTop / RouteGuard / Routing 定義は **完全に据え置き**。
+ *
+ * ルート別表示制御は usePMRoute フックに集約しているため、
+ * App.tsx 自身に分岐ロジックを足さない（責務の単純さを維持）。
  */
 
 import { HelmetProvider } from 'react-helmet-async';
-import { Toaster } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
-import { Route, Switch, useLocation } from "wouter";
-import { useEffect } from "react";
-import ErrorBoundary from "./components/ErrorBoundary";
-import { ThemeProvider } from "./contexts/ThemeContext";
-import { AuthProvider, useAuth } from "./hooks/useAuth";
-import Home from "./pages/Home";
+import { Toaster } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import NotFound from '@/pages/NotFound';
+import { Route, Switch, useLocation } from 'wouter';
+import { useEffect } from 'react';
+import ErrorBoundary from './components/ErrorBoundary';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { AuthProvider, useAuth } from './hooks/useAuth';
+import Home from './pages/Home';
 import CertificatePage from './pages/CertificatePage';
 import Auth from './pages/Auth';
-// 🔧 Phase Studio Repair: Obsidian は管理機能を失ったため Studio 版へロールバック
 import DashboardStudio from './pages/Dashboard.studio';
-// import Dashboard from './pages/Dashboard';
-// import DashboardObsidian from './pages/Dashboard.obsidian'; // ← 廃止 (UI 美学のみで失敗)
-import Terms from "./pages/Terms";
-import Privacy from "./pages/Privacy";
-import Tokushoho from "./pages/Tokushoho";
-import Security from "./pages/Security";
-import BlogIndex from "./pages/BlogIndex";
-import Settings from "./pages/Settings";
-import ArticleCopyright from "./pages/ArticleCopyright";
-import ArticleMonetization from "./pages/ArticleMonetization";
-import PublicProfile from "./pages/PublicProfile";
-import EmbedPortfolioPage from "./pages/EmbedPortfolioPage";
-import Faq from "./pages/Faq";
-import WhatItProves from "./pages/WhatItProves";
-import HowItWorks from "./pages/HowItWorks";
-import CompareC2PA from "./pages/CompareC2PA";
-import Footer from "./components/Footer";
-import Pricing from "./pages/Pricing";
-import Business from "./pages/Business";
-import LegalResources from "./pages/LegalResources";
-import TrustCenter from "./pages/TrustCenter";
-import SpotIssue from "./pages/SpotIssue";
-import SpotIssueResult from "./pages/SpotIssueResult";
-import Contact from "./pages/Contact";
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
-import AdminCertificates from "./pages/admin/AdminCertificates";
-import AdminUsers from "./pages/admin/AdminUsers";
-import AdminMonitor from "./pages/admin/AdminMonitor";
-import AdminSettings from "./pages/admin/AdminSettings";
-import AcceptInvite from "./pages/AcceptInvite";
+import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
+import Tokushoho from './pages/Tokushoho';
+import Security from './pages/Security';
+import BlogIndex from './pages/BlogIndex';
+import Settings from './pages/Settings';
+import ArticleCopyright from './pages/ArticleCopyright';
+import ArticleMonetization from './pages/ArticleMonetization';
+import PublicProfile from './pages/PublicProfile';
+import EmbedPortfolioPage from './pages/EmbedPortfolioPage';
+import Faq from './pages/Faq';
+import WhatItProves from './pages/WhatItProves';
+import HowItWorks from './pages/HowItWorks';
+import CompareC2PA from './pages/CompareC2PA';
+import Footer from './components/Footer';
+import Pricing from './pages/Pricing';
+import Business from './pages/Business';
+import LegalResources from './pages/LegalResources';
+import TrustCenter from './pages/TrustCenter';
+import SpotIssue from './pages/SpotIssue';
+import SpotIssueResult from './pages/SpotIssueResult';
+import Contact from './pages/Contact';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminPlaceholder from './pages/admin/AdminPlaceholder';
+import AdminCertificates from './pages/admin/AdminCertificates';
+import AdminUsers from './pages/admin/AdminUsers';
+import AdminMonitor from './pages/admin/AdminMonitor';
+import AdminSettings from './pages/admin/AdminSettings';
+import AcceptInvite from './pages/AcceptInvite';
+
+// 🆕 Mobile CRO upgrade
+import MobileActionBar from './components/MobileActionBar';
+import ScrollToTopFab from './components/ScrollToTopFab';
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -84,9 +82,6 @@ function ScrollToTop() {
   return null;
 }
 
-/**
- * RouteGuard — Task A の核 (LP / App 完全分離)。挙動は据え置き。
- */
 function RouteGuard() {
   const [location, navigate] = useLocation();
   const { user, loading } = useAuth();
@@ -114,7 +109,6 @@ function Router() {
       <Route path="/business" component={Business} />
       <Route path="/cert/:id" component={CertificatePage} />
       <Route path="/auth" component={Auth} />
-      {/* 🔧 Phase Studio Repair: Obsidian → Studio へロールバック */}
       <Route path="/dashboard" component={DashboardStudio} />
       <Route path="/settings" component={Settings} />
       <Route path="/terms" component={Terms} />
@@ -151,7 +145,6 @@ function Router() {
 function AppShell() {
   const [location] = useLocation();
   const isEmbedRoute = location.startsWith('/embed/');
-  // /dashboard は Studio 化したため Footer は引き続き非表示 (作業領域の集中度を保つ)
   const hideFooter = isEmbedRoute || location === '/dashboard';
 
   return (
@@ -161,6 +154,10 @@ function AppShell() {
       <Toaster />
       <Router />
       {!hideFooter ? <Footer /> : null}
+
+      {/* 🆕 Mobile CRO: 表示制御は usePMRoute 内で完結 */}
+      <ScrollToTopFab />
+      <MobileActionBar />
     </div>
   );
 }
