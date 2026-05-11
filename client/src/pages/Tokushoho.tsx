@@ -50,13 +50,13 @@ const LAST_REVIEWED = '2026年5月';
  * ──────────────────────────────────────────────────────────────── */
 
 /** B2C モードで表示する所在地（都道府県・市区町村まで） */
-const ADDRESS_B2C = '東京都[区市町村名]'; // [FILL] 例: 東京都渋谷区
+const ADDRESS_B2C = '神奈川県川崎市';
 
 /** B2B モードで表示する所在地（番地まで） */
-const ADDRESS_B2B = '〒[郵便番号] 東京都[区市町村名][番地]'; // [FILL]
+const ADDRESS_B2B = '〒[郵便番号] 神奈川県川崎市[区名][番地][マンション名・部屋番号]'; // [FILL]
 
 /** B2B モードで表示する電話番号 */
-const PHONE_B2B = 'ご請求に基づき遅滞なく開示いたします。'; // [FILL] Zoho Voice 等で取得後に記入
+const PHONE_B2B = 'ご請求に基づき遅滞なく開示いたします。日常のお問い合わせはお問い合わせフォームのご利用を推奨します。';
 
 export default function Tokushoho() {
   const { user, signOut } = useAuth();
@@ -94,7 +94,7 @@ export default function Tokushoho() {
       // （住所の「存在」は示しつつ、番地は秘匿する設計）
       _skipFallback: true,
       _b2cSuffix: !isB2B
-        ? '（番地以降は請求があれば遅滞なく書面で開示します）'
+        ? '（番地以降はご請求に基づき遅滞なく開示いたします）'
         : undefined,
     },
 
@@ -151,9 +151,7 @@ export default function Tokushoho() {
     {
       label: '支払方法',
       icon: <CreditCard className="w-4 h-4" />,
-      value:
-        'クレジットカード決済（Stripe）。\n' +
-        'Business プランは銀行振込にも対応しています（別途ご相談ください）。',
+      value: 'クレジットカード決済（Stripe）',
     },
     {
       label: '支払時期',
@@ -202,6 +200,7 @@ export default function Tokushoho() {
     value: React.ReactNode;
     _skipFallback?: boolean;
     _b2cSuffix?: string;
+    _b2cFallback?: React.ReactNode;
   }>;
 
   /* ──────────────────────────────────────────────────────────────
@@ -302,7 +301,7 @@ export default function Tokushoho() {
                     法人決済向けに、運営者情報を完全開示しています。
                   </p>
                   <p className="text-xs text-[#A8A0D8] leading-relaxed">
-                    法務・経理部門の調達承認に必要な氏名・住所・電話番号を全て表示しています。Studio /
+                    法務・経理部門の調達承認に必要な氏名・住所を全て表示しています。Studio /
                     Business プラン、または{' '}
                     <code className="px-1.5 py-0.5 rounded bg-white/5 text-[#BC78FF]">
                       /business
@@ -405,7 +404,7 @@ export default function Tokushoho() {
                 </h3>
               </div>
               <p className="text-sm text-[#A8A0D8] leading-relaxed">
-                法令に基づく開示請求（運営者氏名・住所・電話番号）があった場合、遅滞なく書面で開示します。請求は{' '}
+                法令に基づく開示請求（運営者氏名・住所・電話番号）があった場合、遅滞なく開示いたします。請求は{' '}
                 <a href="/contact" className="text-[#00D4AA] underline">
                   お問い合わせフォーム
                 </a>{' '}
