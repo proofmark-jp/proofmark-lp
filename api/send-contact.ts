@@ -369,6 +369,7 @@ async function sendAutoReply(payload: ContactPayload, ticketId: string): Promise
   const categoryLabel = CATEGORY_LABELS[payload.category] ?? payload.category;
 
   /* ── 特商法開示請求の場合のみ、運営者情報を自動返信に差し込む ── */
+  /*
   const disclosureBlock =
     payload.category === 'disclosure_request'
       ? `<div style="background:#f0eefc;border:1px solid #d4cff0;border-radius:12px;padding:20px;margin:20px 0;">
@@ -381,6 +382,7 @@ async function sendAutoReply(payload: ContactPayload, ticketId: string): Promise
       <p style="margin:12px 0 0;font-size:11px;color:#888;line-height:1.6;">※本情報は特定商取引法に基づく開示請求への対応として自動送付しております。<br/>※記録保持のため、お電話での対応は行っておりません。ご用件はこのメールへの返信にてお願いいたします。</p>
     </div>`
       : '';
+  */
 
   const html = `<!doctype html>
 <html><body style="margin:0;padding:24px;background:#f4f4f7;">
@@ -409,7 +411,7 @@ async function sendAutoReply(payload: ContactPayload, ticketId: string): Promise
     payload.subject,
   )}</td></tr>
     </table>
-    ${disclosureBlock}
+    <!-- disclosureBlock removed for security -->
     <hr style="border:none;border-top:1px solid #eee;margin:20px 0;" />
     <p style="font-size:12px;color:#999;line-height:1.6;">
       ※ このメールは自動送信されています。<br/>

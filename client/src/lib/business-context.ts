@@ -83,6 +83,19 @@ export function shouldShowField(
   fieldLabel: string,
   mode: DisclosureMode,
 ): boolean {
+  const ALWAYS_SHOW = [
+    '販売業者',
+    '運営統括責任者',
+    'お問い合わせ',
+    '販売価格',
+    '支払方法',
+    '支払時期',
+    '商品の引渡時期',
+    '解約・キャンセル',
+    '返品・返金',
+  ];
+  if (ALWAYS_SHOW.includes(fieldLabel)) return true;
+
   const policy = DISCLOSURE_POLICY[fieldLabel];
   if (!policy) return true; // 未定義は安全側で表示
   return policy.visibleIn.includes(mode);

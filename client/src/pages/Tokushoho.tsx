@@ -56,7 +56,7 @@ const ADDRESS_B2C = '東京都[区市町村名]'; // [FILL] 例: 東京都渋谷
 const ADDRESS_B2B = '〒[郵便番号] 東京都[区市町村名][番地]'; // [FILL]
 
 /** B2B モードで表示する電話番号 */
-const PHONE_B2B = '050-XXXX-XXXX'; // [FILL] Zoho Voice 等で取得後に記入
+const PHONE_B2B = 'ご請求に基づき遅滞なく開示いたします。'; // [FILL] Zoho Voice 等で取得後に記入
 
 export default function Tokushoho() {
   const { user, signOut } = useAuth();
@@ -102,10 +102,18 @@ export default function Tokushoho() {
     {
       label: 'お問い合わせ',
       icon: <Mail className="w-4 h-4" />,
-      value:
-        'お問い合わせフォーム: https://proofmark.jp/contact\n' +
-        'メール: support@proofmark.jp\n' +
-        '※ いただいたお問い合わせへの返信は、通常2営業日以内を目安としていますが、内容により前後する場合があります。',
+      value: (
+        <>
+          お問い合わせフォーム:{' '}
+          <a href="https://proofmark.jp/contact" className="text-[#00D4AA] hover:underline">
+            https://proofmark.jp/contact
+          </a>
+          <br />
+          メール: support@proofmark.jp
+          <br />
+          ※順次ご返信いたしますが、内容によってはお時間をいただく場合がございます。
+        </>
+      ),
     },
     {
       label: '電話番号',
@@ -188,7 +196,13 @@ export default function Tokushoho() {
         '最新版の Chrome / Edge / Safari / Firefox を推奨します。\n' +
         'Web Crypto API（SHA-256）が利用可能なブラウザが必要です。Internet Explorer は非対応です。',
     },
-  ] as const;
+  ] satisfies Array<{
+    label: string;
+    icon: React.ReactNode;
+    value: React.ReactNode;
+    _skipFallback?: boolean;
+    _b2cSuffix?: string;
+  }>;
 
   /* ──────────────────────────────────────────────────────────────
    * B2C モード時に秘匿フィールドをフォールバックテキストへ置換
@@ -432,7 +446,7 @@ export default function Tokushoho() {
               </a>
             ) : (
               <a
-                href="/business#tokushoho"
+                href="/tokushoho?context=business"
                 className="inline-flex items-center gap-2 text-xs font-bold text-[#00D4AA] hover:text-white transition-colors"
               >
                 <Building2 className="w-3 h-3" />
