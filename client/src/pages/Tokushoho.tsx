@@ -45,18 +45,8 @@ const LAST_REVIEWED = '2026年5月';
 
 /* ────────────────────────────────────────────────────────────────
  * 運営者情報
- * [FILL] とついた箇所は本番運用前に実際の値を入力すること。
- * B2C モードでは shouldShowField() / getB2CFallback() で自動的に秘匿される。
+ * B2C モードでは shouldShowField() / getB2CFallback() で自動的に秘匿される項目があります。
  * ──────────────────────────────────────────────────────────────── */
-
-/** B2C モードで表示する所在地（都道府県・市区町村まで） */
-const ADDRESS_B2C = '神奈川県川崎市';
-
-/** B2B モードで表示する所在地（番地まで） */
-const ADDRESS_B2B = '〒[郵便番号] 神奈川県川崎市[区名][番地][マンション名・部屋番号]'; // [FILL]
-
-/** B2B モードで表示する電話番号 */
-const PHONE_B2B = 'ご請求に基づき遅滞なく開示いたします。日常のお問い合わせはお問い合わせフォームのご利用を推奨します。';
 
 export default function Tokushoho() {
   const { user, signOut } = useAuth();
@@ -88,14 +78,8 @@ export default function Tokushoho() {
     {
       label: '所在地',
       icon: <MapPin className="w-4 h-4" />,
-      value: isB2B ? ADDRESS_B2B : ADDRESS_B2C,
-      // B2C では番地以降を開示請求ベースにするため、
-      // value を直接 B2C 値にしたうえで isFallback は付けない。
-      // （住所の「存在」は示しつつ、番地は秘匿する設計）
+      value: '神奈川県川崎市\n（番地以降はご請求に基づき遅滞なく開示いたします）',
       _skipFallback: true,
-      _b2cSuffix: !isB2B
-        ? '（番地以降はご請求に基づき遅滞なく開示いたします）'
-        : undefined,
     },
 
     /* ── 連絡先 ── */
@@ -118,8 +102,8 @@ export default function Tokushoho() {
     {
       label: '電話番号',
       icon: <Phone className="w-4 h-4" />,
-      value: PHONE_B2B,
-      // B2C では getB2CFallback() が「請求ベース」テキストを返す
+      value: 'ご請求に基づき遅滞なく開示いたします。日常のお問い合わせはフォームのご利用を推奨します。',
+      _skipFallback: true,
     },
 
     /* ── 価格 ── */
@@ -225,17 +209,20 @@ export default function Tokushoho() {
     const fallback = getB2CFallback(item.label);
     return {
       ...item,
-      displayValue: fallback ?? '請求があった場合、書面で遅滞なく開示します。',
+      displayValue: fallback ?? '請求があった場合、遅滞なく開示いたします。',
       isFallback: true,
     };
   });
+
+  const staggerContainer = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.1 } } };
+  const fadeInVariants = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } };
 
   return (
     <div className="min-h-screen bg-[#07061A] text-[#F0EFF8] font-sans selection:bg-[#F0BB38]/30">
       <SEO
         title={
           isB2B
-            ? '特定商取引法に基づく表記（法人向け完全開示版） | ProofMark'
+            ? '特定商取引法に基づく表記（法人向け表示） | ProofMark'
             : '特定商取引法に基づく表記 | ProofMark'
         }
         description="ProofMarkの特定商取引法に基づく表記。販売者情報、価格、支払、引渡時期、解約・返金ポリシーを明記しています。"
@@ -244,7 +231,6 @@ export default function Tokushoho() {
       <Navbar user={user} signOut={signOut} />
 
       <main className="relative pt-32 pb-24 px-6">
-        {/* 背景グラデーション */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[500px] bg-gradient-to-b from-[#F0BB38]/10 to-transparent pointer-events-none" />
 
         <motion.div
@@ -253,39 +239,20 @@ export default function Tokushoho() {
           initial="hidden"
           animate="visible"
         >
-          {/* ── ヘッダー ── */}
           <motion.div variants={fadeInVariants} className="mb-12 text-center">
-            <div
-              className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-bold mb-4 uppercase tracking-widest ${isB2B
-                  ? 'bg-[#00D4AA]/10 border-[#00D4AA]/25 text-[#00D4AA]'
-                  : 'bg-[#F0BB38]/10 border-[#F0BB38]/20 text-[#F0BB38]'
-                }`}
-            >
-              {isB2B ? (
-                <>
-                  <Building2 className="w-3.5 h-3.5" />
-                  Enterprise / Full Disclosure
-                </>
-              ) : (
-                <>Commercial Disclosure</>
-              )}
-            </div>
-
             <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">
               特定商取引法に基づく表記
               {isB2B && (
                 <span className="block mt-2 text-base md:text-lg font-bold text-[#00D4AA]">
-                  ── 法人向け完全開示版
+                  ── 法人向け表示
                 </span>
               )}
             </h1>
-
             <p className="text-[#A8A0D8] text-sm">
               Legal Information for Paid Services — last reviewed: {LAST_REVIEWED}
             </p>
           </motion.div>
 
-          {/* ── モードバナー ── */}
           <motion.div
             variants={fadeInVariants}
             className={`mb-8 rounded-2xl border p-5 backdrop-blur-md ${isB2B
@@ -293,44 +260,19 @@ export default function Tokushoho() {
                 : 'border-[#1C1A38] bg-[#0D0B24]/70'
               }`}
           >
-            {isB2B ? (
-              <div className="flex items-start gap-3">
-                <Building2 className="w-5 h-5 text-[#00D4AA] mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-bold text-white mb-1">
-                    法人決済向けに、運営者情報を完全開示しています。
-                  </p>
-                  <p className="text-xs text-[#A8A0D8] leading-relaxed">
-                    法務・経理部門の調達承認に必要な氏名・住所を全て表示しています。Studio /
-                    Business プラン、または{' '}
-                    <code className="px-1.5 py-0.5 rounded bg-white/5 text-[#BC78FF]">
-                      /business
-                    </code>{' '}
-                    経由でのアクセスでは本表示モードが適用されます。
-                  </p>
-                </div>
+            <div className="flex items-start gap-3">
+              <Lock className="w-5 h-5 text-[#A8A0D8] mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-white mb-1">
+                  運営者情報の取扱いについて
+                </p>
+                <p className="text-xs text-[#A8A0D8] leading-relaxed">
+                  当サービスは個人による運営のため、プライバシー保護の観点から住所および電話番号の一部を非公開としています。法令に基づき開示請求があった場合、遅延なく情報を開示いたします。ご請求の際は、お問い合わせフォームよりご連絡ください。
+                </p>
               </div>
-            ) : (
-              <div className="flex items-start gap-3">
-                <Lock className="w-5 h-5 text-[#A8A0D8] mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-bold text-white mb-1">
-                    個人事業主・個人クリエイターの秘匿性を守る表示モードです。
-                  </p>
-                  <p className="text-xs text-[#A8A0D8] leading-relaxed">
-                    運営者の氏名・住所（番地以降）・電話番号は「開示請求ベース」で運用しています。法令に基づく開示請求があった場合、遅滞なく書面で提供します。法人決済（Studio /
-                    Business）をご利用の方は{' '}
-                    <a href="/business" className="text-[#00D4AA] underline">
-                      /business
-                    </a>{' '}
-                    から完全開示版をご確認ください。
-                  </p>
-                </div>
-              </div>
-            )}
+            </div>
           </motion.div>
 
-          {/* ── 開示テーブル ── */}
           <motion.div
             variants={fadeInVariants}
             className="overflow-hidden rounded-3xl border border-[#2a2a4e] bg-[#15132D]/50 backdrop-blur-xl"
@@ -359,13 +301,7 @@ export default function Tokushoho() {
                       </span>
                     </td>
                     <td className="px-6 py-5 text-sm text-[#A8A0D8] leading-relaxed whitespace-pre-line">
-                      {(item as any).displayValue}
-                      {(item as any).isFallback && (
-                        <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-[#A8A0D8]/60">
-                          <Lock className="w-3 h-3" />
-                          B2C 秘匿モード
-                        </span>
-                      )}
+                      {item.displayValue}
                     </td>
                   </tr>
                 ))}
@@ -441,20 +377,24 @@ export default function Tokushoho() {
                 className="inline-flex items-center gap-2 text-xs font-bold text-[#A8A0D8] hover:text-white transition-colors"
               >
                 <Lock className="w-3 h-3" />
-                個人向け（B2C 秘匿モード）に切替
+                標準表示に戻す
               </a>
             ) : (
-              <a
-                href="/tokushoho?context=business"
-                className="inline-flex items-center gap-2 text-xs font-bold text-[#00D4AA] hover:text-white transition-colors"
-              >
-                <Building2 className="w-3 h-3" />
-                法人決済をご検討の方は完全開示版へ
-              </a>
+              <div className="flex flex-col items-center sm:items-end">
+                <span className="text-xs text-[#A8A0D8] mb-1.5 font-medium tracking-wide">
+                  法人決済をご検討の方はこちら
+                </span>
+                <a
+                  href="/tokushoho?context=business"
+                  className="inline-flex items-center gap-2 text-xs font-bold text-[#00D4AA] hover:text-white transition-colors"
+                >
+                  <Building2 className="w-3 h-3" />
+                  法人向け表示を見る
+                </a>
+              </div>
             )}
           </motion.div>
 
-          {/* ── フッター注記 ── */}
           <motion.p
             variants={fadeInVariants}
             className="mt-10 text-xs text-[#48456A] text-center leading-relaxed"
