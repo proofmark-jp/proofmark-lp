@@ -29,7 +29,7 @@ const ASSURANCES: AssuranceItem[] = [
     summary:
       "Web Crypto API（SubtleCrypto）でSHA-256を完全にブラウザ内計算。Private Proofモードでは原本ファイルはProofMarkのサーバーに到達しません。フォールバックJSポリフィルは使用しません。",
     evidence: { label: "実装とNo-Fallback Policy (Trust Center §2)", href: "/trust-center#s2" },
-    lastReviewed: "2026-04-15",
+    lastReviewed: "2026-05-12",
   },
   {
     title: "RFC3161準拠のタイムスタンプ発行",
@@ -37,7 +37,7 @@ const ASSURANCES: AssuranceItem[] = [
     summary:
       "時刻認証局（TSA）が署名したタイムスタンプトークン（TST）を、ハッシュ値に対して発行。TSTはProofMarkに依存せず、OpenSSL等の標準ツールで独立検証できます。現在のTSAは FreeTSA.org（ベータ版）で、正式なSLAおよび主要トラストストア収録はありません。商用TSA（DigiCert / GlobalSign / セイコーソリューションズ）への移行計画を公開しています。",
     evidence: { label: "TSA選定・移行計画 (Trust Center §4)", href: "/trust-center#s4" },
-    lastReviewed: "2026-04-15",
+    lastReviewed: "2026-05-12",
   },
   {
     title: "データ永続化とアクセス制御（Supabase RLS）",
@@ -45,7 +45,7 @@ const ASSURANCES: AssuranceItem[] = [
     summary:
       "証明レコードはPostgreSQL（Supabase）上でRow-Level Securityにより、所有ユーザーのみ読込可能。UPDATE/DELETEポリシーは存在せず、レコードは実質追記専用として扱います。通信は全てTLS 1.2以上で暗号化されます。",
     evidence: { label: "スキーマ & RLSポリシー (Trust Center §5)", href: "/trust-center#s5" },
-    lastReviewed: "2026-04-15",
+    lastReviewed: "2026-05-12",
   },
   {
     title: "独立検証スクリプトと脅威モデルの公開",
@@ -53,7 +53,7 @@ const ASSURANCES: AssuranceItem[] = [
     summary:
       "Python / OpenSSLベースの検証スクリプトと、攻撃者モデル・防御設計を全文公開しています。第三者監査に頼らず、コードとプロトコルで検証できる状態を維持することが、現状の一次的な信頼根拠です。",
     evidence: { label: "検証ガイド (Trust Center §7) / GitHub", href: "https://github.com/proofmark-jp/verify" },
-    lastReviewed: "2026-04-15",
+    lastReviewed: "2026-05-12",
   },
   {
     title: "第三者によるセキュリティ監査（外部ペネトレーション）",
@@ -75,7 +75,7 @@ const ASSURANCES: AssuranceItem[] = [
     summary:
       "重大インシデント（可用性・機密性・完全性に影響する事象）は、原則として検知後72時間以内に本ページおよびTrust Centerで開示します。過去のインシデント履歴は下記から確認できます。",
     evidence: { label: "インシデント履歴 & ステータス", href: "/trust-center/incidents" },
-    lastReviewed: "2026-04-15",
+    lastReviewed: "2026-05-12",
   },
 ];
 
@@ -104,7 +104,7 @@ export default function Security() {
           <p className="text-[#A8A0D8] text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
             このページに記載する各項目は、<strong>実際に運用されている構成・設定・公開証跡に1対1で対応</strong>します。未実施の対策を「実施済」と記載することはしません。実装根拠は Trust Center（技術ホワイトペーパー）、または公開リポジトリで確認できます。
           </p>
-          <p className="text-xs text-[#A8A0D8]/70 mt-4">最終更新: 2026-04-15 / 本ページの更新履歴は <Link href="/trust-center#s9" className="underline hover:text-[#00D4AA]">Trust Center §9</Link> を参照してください。</p>
+          <p className="text-xs text-[#A8A0D8]/70 mt-4">最終更新: 2026-05-12 / 本ページの更新履歴は <Link href="/trust-center#s9" className="underline hover:text-[#00D4AA]">Trust Center §9</Link> を参照してください。</p>
         </header>
 
         {/* --- Honest assurance table: every row is verifiable, or explicitly labelled as planned. --- */}

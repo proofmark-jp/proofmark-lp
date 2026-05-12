@@ -83,13 +83,12 @@ export const PRICING_PLANS: PricingPlan[] = [
     ctaLabel: { authed: 'Creatorに切り替える', guest: '先行特典を予約する' },
     ctaHref: { authed: '/settings#plan', guest: '/auth?mode=signup&plan=creator' },
     features: [
-      { label: 'PDF証明書 無制限', state: 'include', highlight: 'primary' },
-      { label: 'Evidence Pack（フル版）ダウンロード', state: 'include', highlight: 'accent' },
+      { label: 'PDF・Evidence Pack（月30件まで）', state: 'include', highlight: 'primary' },
       { label: '案件・クライアント単位の整理', state: 'include' },
       { label: 'クライアント提出用テンプレ（日/英）', state: 'include' },
       { label: '公開ポートフォリオ + 埋め込みウィジェット', state: 'include' },
       { label: 'NDA案件の“黒い石板”表示モード', state: 'include' },
-      { label: 'C2PAメタデータ読取連携', state: 'planned' },
+      { label: 'C2PAメタデータ読取連携', state: 'include' },
     ],
   },
   {
@@ -102,6 +101,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     ctaLabel: { authed: 'Studioに切り替える', guest: 'Studioを予約する' },
     ctaHref: { authed: '/settings#plan', guest: '/auth?mode=signup&plan=studio' },
     features: [
+      { label: 'PDF・Evidence Pack（月150件まで）', state: 'include' },
       { label: 'Creator のすべての機能', state: 'include' },
       { label: '複数席・権限管理', state: 'include' },
       { label: '監査ログ（改ざん検知付き）', state: 'include' },

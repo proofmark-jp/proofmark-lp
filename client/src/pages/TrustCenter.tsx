@@ -419,7 +419,7 @@ export default function TrustCenter() {
             <div className="mb-8 grid gap-4 md:grid-cols-3">
               <div className="rounded-xl border border-white/10 bg-[#0D0B24] p-4">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#A8A0D8] mb-1">Section last updated</p>
-                <p className="text-base font-black text-white">2026-04-26 (JST)</p>
+                <p className="text-base font-black text-white">2026-05-12 (JST)</p>
                 <p className="text-[11px] text-[#A8A0D8] mt-1">§9 更新履歴と 1～1 で一致させています。</p>
               </div>
               <div className="rounded-xl border border-[#00D4AA]/30 bg-[#00D4AA]/5 p-4">
@@ -545,6 +545,9 @@ export default function TrustCenter() {
             <h3 className="flex items-center gap-2 text-[#00D4AA] font-bold text-lg mb-4 mt-10">
               <div className="w-1 h-5 bg-[#00D4AA] rounded-full" /> 4.3 移行のトリガ条件（Go / No-Go）
             </h3>
+            <p className="text-[#A8A0D8] leading-relaxed mb-4 text-sm">
+              なお、商用TSA（DigiCert等）との本契約プロセスは、<strong>Creatorプラン以上の有償顧客が『10名』に達した時点</strong>を公式なトリガーとして開始します。それまでの期間は FreeTSA を運用し、本ページでステータスを開示し続けます。
+            </p>
             <p className="text-[#A8A0D8] leading-relaxed mb-4 text-sm">
               「いつ商用TSAに切り替えるか」を曖昧にしないために、以下の <strong>5つの条件をすべて満たしたタイミング</strong> を、公式な切替日とします。一つでも満たさない場合は、Beta のまま据え置きます。
             </p>
@@ -815,7 +818,13 @@ export default function TrustCenter() {
                 </span>
               </li>
               <li className="py-4 flex gap-6">
-                <span className="font-mono text-[#6C3EF4] font-bold w-16 shrink-0">v1.1（予定）</span>
+                <span className="font-mono text-[#6C3EF4] font-bold w-16 shrink-0">v1.1</span>
+                <span className="text-[#A8A0D8] text-sm leading-relaxed">
+                  <strong className="text-white">May 2026</strong> — §4.3に商用TSAへの移行条件（有償顧客10名トリガー）を明記。FreeTSAの稼働ステータスを2026-05-12付けで確認。
+                </span>
+              </li>
+              <li className="py-4 flex gap-6">
+                <span className="font-mono text-[#6C3EF4] font-bold w-16 shrink-0">v1.2（予定）</span>
                 <span className="text-[#A8A0D8] text-sm leading-relaxed">
                   <strong className="text-white">Q3 2026</strong> — 商用TSAへの移行完了後に発行。TSA移行証明書・旧TSTの継続有効性の確認手順を追記。
                 </span>

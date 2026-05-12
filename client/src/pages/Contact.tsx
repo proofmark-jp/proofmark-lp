@@ -82,7 +82,7 @@ const CATEGORIES = [
   { id: 'evidence-pack', label: 'Evidence Pack' },
   { id: 'bug', label: 'バグ報告' },
   { id: 'feature', label: '機能リクエスト' },
-  // { id: 'disclosure_request', label: '特商法に基づく運営者情報の開示請求' },
+  /* { id: 'disclosure_request', label: '特商法に基づく運営者情報の開示請求' }, */
   { id: 'other', label: 'その他' },
 ] as const;
 

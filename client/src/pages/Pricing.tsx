@@ -252,7 +252,7 @@ const ROI_NAV: RoiNavItem[] = [
     label: '月3件以上発行する',
     plan: 'Creator',
     planId: 'creator',
-    micro: 'Spot 4件で元が取れる',
+    micro: 'Spot3件分の価格で月30件＋管理機能',
     accent: '#BC78FF',
     recommended: true,
   },
@@ -489,7 +489,7 @@ export default function Pricing() {
                 Q. Free と Spot と Creator の違いを30秒で
               </p>
               <p className="text-sm text-[#A8A0D8] leading-relaxed">
-                Free は「証跡が残ることを体感する」ためのお試し（PDFと Evidence Pack は除外）。Spot は「登録不要で1案件だけ Evidence Pack を出したい」場合の単発購入（¥480/件）。Creator は「月3件以上の納品で説明コストを下げたい」場合の本番運用プラン（¥1,480/月、Spot 4件相当で元が取れます）。
+                Free は「証跡が残ることを体感する」ためのお試し（PDFと Evidence Pack は除外）。Spot は「登録不要で1案件だけ Evidence Pack を出したい」場合の単発購入（¥480/件）。Creator は「月3件以上の納品で説明コストを下げたい」場合の本番運用プラン（¥1,480/月、Spot3件分の価格で月30件まで発行可能＋案件管理機能が付きます）。
               </p>
             </div>
             <div className="rounded-xl border border-[#1C1A38] bg-[#0D0B24]/70 p-5">

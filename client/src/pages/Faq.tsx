@@ -30,7 +30,7 @@ const faqData: FAQItem[] = [
   {
     id: 'pricing',
     question: '料金プランについて教えてください',
-    schemaText: `ProofMarkはFree(${getPrice('free')}、月30件)、Spot(${getPrice('spot')}、登録不要の単発発行)、Creator(${getPrice('creator')}、無制限PDFとEvidence Pack)、Studio(${getPrice('studio')}、WORM監査ログとチーム管理)、Business/API(要問い合わせ、SLAと商用TSA)の5階層です。証明回数ではなく納品信頼の運用機能に応じた価格体系です。`,
+    schemaText: `ProofMarkはFree(${getPrice('free')}、月30件)、Spot(${getPrice('spot')}、登録不要の単発発行)、Creator(${getPrice('creator')}、月30件までのPDFとEvidence Pack)、Studio(${getPrice('studio')}、WORM監査ログとチーム管理)、Business/API(要問い合わせ、SLAと商用TSA)の5階層です。証明回数ではなく納品信頼の運用機能に応じた価格体系です。`,
     answer: (
       <>
         <p>ProofMarkは「証明回数」ではなく「納品信頼の運用」に基づいた料金体系です。</p>
@@ -42,7 +42,7 @@ const faqData: FAQItem[] = [
             <strong>Spot（{getPrice('spot')}）</strong>: 単発でのEvidence Pack発行（登録不要）
           </li>
           <li>
-            <strong>Creator（{getPrice('creator')}）</strong>: 無制限PDF・Evidence Pack・案件単位整理・NDA表示
+            <strong>Creator（{getPrice('creator')}）</strong>: PDF・Evidence Pack（月30件まで）・案件単位整理・NDA表示
           </li>
           <li>
             <strong>Studio（{getPrice('studio')}）</strong>: チーム管理・WORM監査ログ・Chain of Evidence

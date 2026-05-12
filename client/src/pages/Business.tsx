@@ -81,7 +81,7 @@ export default function Business() {
             className="mx-auto mt-6 max-w-2xl text-base sm:text-lg leading-relaxed text-[#A8A0D8]"
           >
             ProofMark Business / API は、商用TSA・SLA・DPA・監査ログ・API・WORM設計を備えた
-            法人向けプランです。運営者情報は完全開示モードで提示し、調達フローを一切ブロックしません。
+            法人向けプランです。法人調達に必要な運営者情報は、ご請求に基づき専用窓口より遅滞なく開示し、調達フローを一切ブロックしません。
           </motion.p>
 
           <motion.div
@@ -90,16 +90,15 @@ export default function Business() {
             transition={{ delay: 0.3 }}
             className="mt-10 flex flex-wrap items-center justify-center gap-3"
           >
-            <a
-              href="mailto:support@proofmark.jp?subject=Business%20%E3%83%97%E3%83%A9%E3%83%B3%E3%81%AE%E3%81%94%E7%9B%B8%E8%AB%87"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] px-7 py-3.5 text-sm font-bold text-white shadow-[0_0_24px_rgba(108,62,244,0.45)] transition-transform hover:scale-[1.02]"
-            >
-              <Mail className="h-4 w-4" />
-              法人向けに相談する
-            </a>
+            <Link href="/contact">
+              <a className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] px-7 py-3.5 text-sm font-bold text-white shadow-[0_0_24px_rgba(108,62,244,0.45)] transition-transform hover:scale-[1.02]">
+                <Mail className="h-4 w-4" />
+                お問い合わせフォームへ
+              </a>
+            </Link>
             <Link href="/tokushoho?context=business">
               <button className="inline-flex items-center gap-2 rounded-full border border-[#00D4AA]/30 bg-[#00D4AA]/5 px-7 py-3.5 text-sm font-bold text-[#00D4AA] transition-all hover:border-[#00D4AA] hover:bg-[#00D4AA]/15 hover:text-white">
-                完全開示版の特商法を見る
+                特商法に基づく表記
                 <ArrowRight className="h-4 w-4" />
               </button>
             </Link>
@@ -111,7 +110,7 @@ export default function Business() {
             transition={{ delay: 0.45 }}
             className="mt-6 text-xs text-[#A8A0D8]/70"
           >
-            ※ 本ページからの遷移は、特商法表記が法人決済向けの完全開示モードで表示されます。
+            ※ 運営者情報（住所・電話番号）の詳細な開示が必要な場合は、お問い合わせフォームよりご請求ください。
           </motion.p>
         </div>
       </section>
@@ -200,7 +199,7 @@ export default function Business() {
               承認に必要な情報は、すべて公開しています。
             </h2>
             <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-[#A8A0D8]">
-              個人事業主の秘匿性を守る B2C 表示と、法人決済を通すための完全開示表示を、ルートで明確に分けています。本ページから遷移すれば、調達担当者は完全開示版を受け取れます。
+              個人開発のセキュリティを担保するため、運営者情報は「開示請求ベース」で運用しています。法務・経理部門の審査に必要な情報は、お問い合わせよりご請求いただければ遅滞なく正式開示いたします。
             </p>
           </div>
 
@@ -214,10 +213,10 @@ export default function Business() {
                   </span>
                 </div>
                 <h3 className="text-base font-bold text-white">
-                  特定商取引法に基づく表記（完全開示版）
+                  特定商取引法に基づく表記
                 </h3>
                 <p className="mt-2 text-sm leading-relaxed text-[#A8A0D8]">
-                  運営者氏名・住所・電話番号を全て表示。法人決済の調達承認に直接使えます。
+                  法人決済の調達承認において、運営者の詳細情報（住所・電話番号）が必要な場合は、フォームよりご請求ください。
                 </p>
                 <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-[#00D4AA] transition-colors group-hover:text-white">
                   開く
@@ -252,7 +251,7 @@ export default function Business() {
             <div className="flex items-start gap-3">
               <Lock className="mt-0.5 h-4 w-4 shrink-0 text-[#A8A0D8]" />
               <p className="text-xs leading-relaxed text-[#A8A0D8]">
-                ProofMark は、個人クリエイター向けの B2C 表示では運営者情報を「開示請求ベース」で運用しています（個人事業主の秘匿性を守るため）。法人決済の調達承認では、本ページ経由で完全開示モードへ確実に切り替わります。
+                ProofMark は、セキュリティの観点から運営者情報を原則として一部非公開としております。法人決済の調達承認フローにおいて詳細情報が必要な場合は、誠実かつ迅速に開示対応を行います。
               </p>
             </div>
           </div>
@@ -269,13 +268,12 @@ export default function Business() {
             導入規模・想定発行数・既存ワークフロー・法務要件をお知らせください。SLA / DPA を含む個別見積を48時間以内にお送りします。
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <a
-              href="mailto:support@proofmark.jp?subject=Business%20%E3%83%97%E3%83%A9%E3%83%B3%E3%81%AE%E3%81%94%E7%9B%B8%E8%AB%87"
-              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] px-7 py-3.5 text-sm font-bold text-white shadow-[0_0_24px_rgba(108,62,244,0.45)] transition-transform hover:scale-[1.02]"
-            >
-              <Mail className="h-4 w-4" />
-              support@proofmark.jp に送る
-            </a>
+            <Link href="/contact">
+              <a className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] px-7 py-3.5 text-sm font-bold text-white shadow-[0_0_24px_rgba(108,62,244,0.45)] transition-transform hover:scale-[1.02]">
+                <Mail className="h-4 w-4" />
+                お問い合わせフォームへ
+              </a>
+            </Link>
             <a
               href="https://github.com/proofmark-jp/verify"
               target="_blank"
