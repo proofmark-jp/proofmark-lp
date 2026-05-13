@@ -48,9 +48,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       { label: 'Webタイムスタンプ証明（月30件）', state: 'include' },
       { label: '公開ポートフォリオ機能', state: 'include' },
-      { label: '検証URLの発行・共有', state: 'include' },
-      { label: 'PDF証明書の発行', state: 'exclude' },
-      { label: 'Evidence Pack（納品形式ダウンロード）', state: 'exclude' },
+      { label: 'PDF証明書・Evidence Pack発行', state: 'exclude' },
     ],
   },
   {
@@ -84,11 +82,12 @@ export const PRICING_PLANS: PricingPlan[] = [
     ctaHref: { authed: '/settings#plan', guest: '/auth?mode=signup&plan=creator' },
     features: [
       { label: 'PDF・Evidence Pack（月30件まで）', state: 'include', highlight: 'primary' },
+      { label: 'AIプロンプト・シード値の証跡封入', state: 'planned' },
+      { label: 'C2PAメタデータ読取連携', state: 'include' },
       { label: '案件・クライアント単位の整理', state: 'include' },
       { label: 'クライアント提出用テンプレ（日/英）', state: 'include' },
       { label: '公開ポートフォリオ + 埋め込みウィジェット', state: 'include' },
       { label: 'NDA案件の“黒い石板”表示モード', state: 'include' },
-      { label: 'C2PAメタデータ読取連携', state: 'include' },
     ],
   },
   {
@@ -102,10 +101,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     ctaHref: { authed: '/settings#plan', guest: '/auth?mode=signup&plan=studio' },
     features: [
       { label: 'PDF・Evidence Pack（月150件まで）', state: 'include' },
-      { label: 'Creator のすべての機能', state: 'include' },
-      { label: '複数席・権限管理', state: 'include' },
-      { label: '監査ログ（改ざん検知付き）', state: 'include' },
-      { label: 'Chain of Evidence（制作工程の連鎖証拠）', state: 'include' },
+      { label: '検証ページのホワイトラベル化（自社ロゴ）', state: 'planned' },
+      { label: '複数席・監査ログ・Chain of Evidence', state: 'include' },
       { label: '案件単位のクライアント共有', state: 'include' },
     ],
   },

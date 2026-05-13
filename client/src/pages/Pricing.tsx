@@ -236,7 +236,7 @@ const ROI_NAV: RoiNavItem[] = [
     label: 'とりあえず試したい',
     plan: 'Free',
     planId: 'free',
-    micro: '月30件まで無料で発行',
+    micro: '月30件まで無料でWeb証明',
     accent: '#A8A0D8',
   },
   {
@@ -252,7 +252,7 @@ const ROI_NAV: RoiNavItem[] = [
     label: '月3件以上発行する',
     plan: 'Creator',
     planId: 'creator',
-    micro: 'Spot3件分の価格で月30件＋管理機能',
+    micro: 'Spot約3件分の価格で月30件の完全証明',
     accent: '#BC78FF',
     recommended: true,
   },
@@ -429,6 +429,13 @@ export default function Pricing() {
           ))}
         </div>
 
+        {/* ── Fair Use Cap Note ── */}
+        <div className="mt-8 max-w-4xl mx-auto px-4 text-center">
+          <p className="text-xs leading-relaxed text-[#A8A0D8]/80 bg-white/5 border border-white/10 rounded-xl py-3 px-6 inline-block">
+            ※発行枠（Fair Use Cap）について：ProofMarkは高価な商用TSAインフラを全てのユーザーに持続的に提供するため、各プランに月間の適正利用枠を設けています。Creatorプラン以上では、この枠内で正式な証拠ファイル（PDF/ZIP）を発行可能です。
+          </p>
+        </div>
+
         {/* ── Footer Cards: Business / Trust ─ */}
         <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
           <Link href="/business">
@@ -489,7 +496,7 @@ export default function Pricing() {
                 Q. Free と Spot と Creator の違いを30秒で
               </p>
               <p className="text-sm text-[#A8A0D8] leading-relaxed">
-                Free は「証跡が残ることを体感する」ためのお試し（PDFと Evidence Pack は除外）。Spot は「登録不要で1案件だけ Evidence Pack を出したい」場合の単発購入（¥480/件）。Creator は「月3件以上の納品で説明コストを下げたい」場合の本番運用プラン（¥1,480/月、Spot3件分の価格で月30件まで発行可能＋案件管理機能が付きます）。
+                Free は「Webリンク形式」での存在証明。月30件まで無料で利用でき、検証ページを口コミやSNSでシェアできます（PDF/ZIP発行は非対応）。Spot はアカウント不要で「1案件だけファイル形式の証拠（Evidence Pack）」が必要な場合の使い切り購入。Creator は、毎月の納品で「PDF証明書やEvidence Pack」を正式な納品物として添えたいプロ向けの完全版プランです。
               </p>
             </div>
             <div className="rounded-xl border border-[#1C1A38] bg-[#0D0B24]/70 p-5">
