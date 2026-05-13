@@ -48,6 +48,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       { label: 'Webタイムスタンプ証明（月30件）', state: 'include' },
       { label: '公開ポートフォリオ機能', state: 'include' },
+      { label: '検証URLの発行・共有', state: 'include' },
       { label: 'PDF証明書・Evidence Pack発行', state: 'exclude' },
     ],
   },
@@ -100,6 +101,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     ctaLabel: { authed: 'Studioに切り替える', guest: 'Studioを予約する' },
     ctaHref: { authed: '/settings#plan', guest: '/auth?mode=signup&plan=studio' },
     features: [
+      { label: 'Creator のすべての機能', state: 'include' },
       { label: 'PDF・Evidence Pack（月150件まで）', state: 'include' },
       { label: '検証ページのホワイトラベル化（自社ロゴ）', state: 'planned' },
       { label: '複数席・監査ログ・Chain of Evidence', state: 'include' },
