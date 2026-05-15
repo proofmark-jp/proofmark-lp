@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ShieldAlert, Trash2, UserCog, AlertTriangle, CheckCircle, Loader2, Search } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 
 const MODERATION_REASONS = [
   { value: '', label: '— 削除理由を選択 —' },
