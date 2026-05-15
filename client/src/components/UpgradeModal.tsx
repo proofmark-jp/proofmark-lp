@@ -145,8 +145,8 @@ export default function UpgradeModal({ open, onClose, resetAt, used, quota = 30 
               </p>
 
               <div className="mt-6 grid gap-2.5">
-                <Bullet>無制限のデジタル存在証明発行 (RFC3161)</Bullet>
-                <Bullet>Evidence Pack ZIP のダウンロード</Bullet>
+                <Bullet>納品用PDF証明書 ＆ Evidence Pack (証拠一式)</Bullet>
+                <Bullet>実務に耐えうる月30件の本格的なビジネス利用</Bullet>
                 <Bullet>NDA マスク・案件ごとの整理 (Studio に拡張可)</Bullet>
                 <Bullet>C2PA Content Credentials の同梱</Bullet>
               </div>

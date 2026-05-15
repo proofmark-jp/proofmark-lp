@@ -162,7 +162,7 @@ export default function Home() {
                 </Link>
                 <Link href="/auth?mode=signup">
                   <span className="pm-cta-ghost">
-                    アカウントを作って無制限に使う
+                    無料でアカウントを作成する
                   </span>
                 </Link>
               </motion.div>

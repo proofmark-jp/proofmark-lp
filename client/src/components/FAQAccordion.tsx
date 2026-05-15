@@ -88,7 +88,7 @@ const faqItems: FAQItem[] = [
             <strong>Spot（{getPrice('spot')}）</strong>: 単発でのEvidence Pack発行（登録不要）
           </li>
           <li>
-            <strong>Creator（{getPrice('creator')}）</strong>: 無制限PDF・Evidence Pack・案件単位整理・NDA表示
+            <strong>Creator（{getPrice('creator')}）</strong>: 納品用PDF証明書 ＆ Evidence Pack（月30件）、案件単位整理・NDA表示モード
             <span className="text-[11px] text-[#A8A0D8]/70"> ※ Spot 4件で元が取れます</span>
           </li>
           <li>

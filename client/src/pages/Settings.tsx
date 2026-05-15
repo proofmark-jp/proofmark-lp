@@ -535,7 +535,7 @@ export default function Settings() {
               <div className="relative z-10">
                 <div className="flex items-center gap-3 mb-2">
                   <h5 className="text-xl font-black text-white tracking-wider uppercase">
-                    {currentPlan === 'studio' ? 'STUDIO PLAN' : currentPlan === 'creator' ? 'CREATOR PLAN' : 'FREE PLAN'}
+                    {currentPlan === 'studio' ? 'STUDIO PLAN (月150件)' : currentPlan === 'creator' ? 'CREATOR PLAN (実務利用 月30件)' : 'FREE PLAN'}
                   </h5>
                   {profileData?.is_founder && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#FFD700]/10 border border-[#FFD700]/30 text-[#FFD700] text-[9px] font-bold tracking-widest uppercase shadow-[0_0_10px_rgba(255,215,0,0.2)]">
@@ -545,9 +545,9 @@ export default function Settings() {
                 </div>
                 <p className="text-sm text-[#A8A0D8] leading-relaxed max-w-md">
                   {currentPlan === 'studio'
-                    ? 'チーム管理、監査ログ(WORM)、Chain of Evidenceを利用可能なエンタープライズ運用プランです。'
+                    ? 'チーム管理、監査ログ(WORM)、Chain of Evidenceを利用可能な月150件のエンタープライズ運用プランです。'
                     : currentPlan === 'creator'
-                      ? '無制限のPDF証明書・Evidence Pack発行、案件単位整理、NDA表示モードが利用可能な本番運用プランです。'
+                      ? '月30件のPDF証明書・Evidence Pack発行、案件単位整理、NDA表示モードが利用可能な本番運用プランです。'
                       : '無料で月30件までのWebタイムスタンプ証明が利用可能です。Evidence Packの出力など全機能の解放にはアップグレードが必要です。'}
                 </p>
               </div>

@@ -98,7 +98,7 @@ export const PROOFMARK_COPY = {
       "SHA-256ハッシュ & RFC3161タイムスタンプ",
       "Chain of Evidence（制作工程の連鎖）",
       "クライアント提出用カバーレター（日/英）",
-      "独立検証スクリプト同梱（OpenSSL/Python）",
+      "独立検証スクリプト同梱",
     ],
     cta: "Evidence Pack の詳細",
   },

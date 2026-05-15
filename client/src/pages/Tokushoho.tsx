@@ -93,7 +93,7 @@ export default function Tokushoho() {
             https://proofmark.jp/contact
           </a>
           <br />
-          メール: support@proofmark.jp
+          メール: <span className="break-all">support@proofmark.jp</span>
           <br />
           ※順次ご返信いたしますが、内容によってはお時間をいただく場合がございます。
         </>
@@ -167,7 +167,7 @@ export default function Tokushoho() {
       value:
         'デジタルコンテンツの性質上、原則として返品・返金は承りかねます。\n' +
         'デジタル署名およびタイムスタンプが発行された Evidence Pack については、その性質上、内容の如何に関わらず返金は致しかねます。これは、発行された証跡の客観的妥当性を担保するための措置です。\n' +
-        '当社の責に帰すべきサービス障害により提供を受けられなかった場合は、障害時間に応じた日割り返金または翌月分の料金減算で対応します。',
+        '当社の責に帰すべき重大なサービス障害が発生した場合、利用規約およびTrust Centerの定めに従い、利用期間の延長または利用料の減算等の補償を個別に対応いたします。',
     },
 
     /* ── 動作環境 ── */
@@ -323,11 +323,7 @@ export default function Tokushoho() {
                 </h3>
               </div>
               <p className="text-sm text-[#A8A0D8] leading-relaxed">
-                当社の責に帰すべきサービス停止が継続した場合、停止時間に応じた日割り返金または翌月分の利用料減算で補償します。詳細は{' '}
-                <a href="/trust-center#s9" className="text-[#00D4AA] underline">
-                  Trust Center §9
-                </a>{' '}
-                に記録します。
+                当社の責に帰すべき重大なサービス障害が発生した場合、利用規約およびTrust Centerの定めに従い、利用期間の延長または利用料の減算等の補償を個別に対応いたします。
               </p>
             </div>
 
