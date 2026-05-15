@@ -31,6 +31,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import archiver from 'archiver';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
 import {
     HttpError,
     getAdminClient,
@@ -44,10 +46,27 @@ import { getLegalCopyrightPdf } from './_lib/legal-pdf-cache.js';
 
 export const config = { maxDuration: 300 };
 
+// --- Upstash Rate Limit Init (Fail-open) ---
+let ratelimit: Ratelimit | null = null;
+try {
+    const redis = new Redis({
+        url: process.env.KV_REST_API_URL || '',
+        token: process.env.KV_REST_API_TOKEN || '',
+    });
+    ratelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(5, '10 s'),
+        analytics: true,
+        prefix: 'ratelimit_gep',
+    });
+} catch (error) {
+    console.error('[RateLimit] Initialization failed:', error);
+}
+
 const FIXED_ZIP_TIME = new Date('2026-01-01T00:00:00.000Z');
 
 const C2PA_HARD_CAP_BYTES = 10 * 1024;
-const STREAM_FETCH_TIMEOUT_MS = 15_000;
+const STREAM_FETCH_TIMEOUT_MS = 290_000;
 const TSA_CA_FETCH_TIMEOUT_MS = 3_000;
 const TSA_CA_TTL_MS = 6 * 60 * 60 * 1000;
 
@@ -335,6 +354,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!methodGuard(req, res, ['GET'])) return;
 
+    // --- Rate Limit Check ---
+    if (ratelimit) {
+        const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || '127.0.0.1';
+        try {
+            const { success } = await ratelimit.limit(ip);
+            if (!success) {
+                log.warn({ event: 'ratelimit_exceeded', ip });
+                fail(res, 429, 'Too many requests');
+                return;
+            }
+        } catch (limitError) {
+            // Fail-open: Redis障害時はクラッシュさせず通過させる
+            log.error({ event: 'ratelimit_error', message: String(limitError) });
+        }
+    }
+
     const upstreamStreams: ManagedStream[] = [];
 
     try {
@@ -376,6 +411,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 if (member) isAuthorized = true;
             }
             if (!isAuthorized) throw new HttpError(403, 'Not authorized');
+
+            // --- Plan Tier Check (Monetization Guard) ---
+            if (data.user_id) {
+                const { data: profile } = await admin
+                    .from('profiles')
+                    .select('plan_tier')
+                    .eq('id', data.user_id)
+                    .maybeSingle();
+
+                if (!profile || profile.plan_tier === 'free') {
+                    log.warn({ event: 'plan_block', userId: data.user_id, certId: data.id });
+                    throw new HttpError(403, 'Evidence Pack generation requires Creator plan or higher');
+                }
+            }
+            // --------------------------------------------
 
             cert = data as CertRecord;
             evidencePackName = `evidence-pack-${(cert.id || 'cert').slice(0, 8)}.zip`;

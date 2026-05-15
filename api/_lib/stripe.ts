@@ -72,7 +72,9 @@ export function resolvePlan(plan: string): { id: SupportedPlan; mode: 'subscript
 export const SUPPORTED_PLAN_IDS: SupportedPlan[] = ['creator', 'studio', 'spot'];
 
 export function appUrl(): string {
-    // Vercelが自動付与するURL（VERCEL_URL）を検知し、なければlocalhostを使う無敵のフォールバック
-    const url = process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+    // Vercel特有の「デプロイURLへのリダイレクト（別ドメインによるセッション喪失）」を防ぐ最強のフォールバック
+    const url = process.env.APP_URL 
+        || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null)
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
     return url.replace(/\/$/, '');
 }

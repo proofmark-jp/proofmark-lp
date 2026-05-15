@@ -520,7 +520,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     try {
       toast.loading('Evidence Pack を生成しています...', { id: `evidence-${cert.id}` });
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`/api/evidence-pack?certId=${cert.id}`, {
+      const res = await fetch(`/api/generate-evidence-pack?cert=${cert.id}`, {
         headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
         credentials: 'omit',
       });

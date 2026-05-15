@@ -297,7 +297,7 @@ export default function CertificatePage() {
                                 </div>
                                 {c2pa.present && (
                                     <div className="flex items-center gap-1.5 bg-[#6C3EF4]/10 border border-[#6C3EF4]/50 shadow-[0_0_12px_rgba(108,62,244,0.4)] text-[#BC78FF] px-4 py-2 rounded-full text-xs font-black tracking-widest uppercase print:bg-purple-50 print:border-purple-500 print:text-purple-700">
-                                        <ShieldCheck className="w-4 h-4"/> C2PA VERIFIED
+                                        <ShieldCheck className="w-4 h-4" /> C2PA VERIFIED
                                     </div>
                                 )}
                                 <div className="flex items-center gap-1.5 bg-[#6C3EF4]/10 border border-[#6C3EF4]/50 shadow-[0_0_12px_rgba(108,62,244,0.4)] text-[#BC78FF] px-4 py-2 rounded-full text-xs font-black tracking-widest uppercase print:bg-purple-50 print:border-purple-500 print:text-purple-700">
@@ -408,7 +408,7 @@ export default function CertificatePage() {
                 </div>
 
                 <div className="w-full max-w-5xl mt-8">
-                    <ContentCredentialsSection manifest={cert?.c2pa_manifest}/>
+                    <ContentCredentialsSection manifest={cert?.c2pa_manifest} />
                 </div>
 
                 {/* --- 🚫 ここから下は印刷時すべて非表示 (print:hidden) --- */}
@@ -420,8 +420,8 @@ export default function CertificatePage() {
                             onClick={handleApplyTimestamp}
                             disabled={isStamping}
                             className={`flex items-center px-6 py-3 rounded-full font-bold transition-all ${isStamping
-                                    ? 'bg-gray-600 cursor-not-allowed text-gray-300'
-                                    : 'bg-[#6C3EF4] hover:bg-[#5A33CC] text-white shadow-[0_0_15px_rgba(108,62,244,0.5)]'
+                                ? 'bg-gray-600 cursor-not-allowed text-gray-300'
+                                : 'bg-[#6C3EF4] hover:bg-[#5A33CC] text-white shadow-[0_0_15px_rgba(108,62,244,0.5)]'
                                 }`}
                         >
                             {isStamping ? (
@@ -564,88 +564,88 @@ export default function CertificatePage() {
 /* ─── Vault components (CertificatePage local) ─────────────── */
 
 function TheVaultFull() {
-  return (
-    <Tooltip.Provider delayDuration={200}>
-      <Tooltip.Root>
-        <Tooltip.Trigger asChild>
-          <div
-            className="flex flex-col items-center justify-center w-full h-full cursor-default overflow-hidden"
-            style={{
-              backgroundColor: '#0a0e27',
-              backgroundImage: 'radial-gradient(circle at center, rgba(108,62,244,0.08) 0%, transparent 60%)',
-            }}
-          >
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px)',
-                mixBlendMode: 'overlay' as const,
-              }}
-            />
-            <Lock className="w-10 h-10 text-[#6c3ef4]/50 mb-4" />
-            <h4 className="font-bold tracking-wide text-[#f0f0fa] text-base mb-1.5 opacity-90">NDA Protected</h4>
-            <p className="font-mono text-[10px] tracking-widest text-[#00d4aa] opacity-70">ZERO-KNOWLEDGE ENCRYPTION</p>
-          </div>
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content
-            sideOffset={8}
-            className="z-50 max-w-[280px] px-4 py-3 rounded-xl shadow-2xl text-xs leading-relaxed"
-            style={{ backgroundColor: '#151d2f', border: '1px solid #2a2a4e', color: '#a0a0c0' }}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-            >
-              この作品は機密保持契約（NDA）に基づき、高度な暗号化技術で保護されています。元の画像はクリエイターのローカル環境から一切送信されていません。
-            </motion.div>
-            <Tooltip.Arrow className="fill-[#2a2a4e] w-3 h-1.5" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
-    </Tooltip.Provider>
-  );
+    return (
+        <Tooltip.Provider delayDuration={200}>
+            <Tooltip.Root>
+                <Tooltip.Trigger asChild>
+                    <div
+                        className="flex flex-col items-center justify-center w-full h-full cursor-default overflow-hidden"
+                        style={{
+                            backgroundColor: '#0a0e27',
+                            backgroundImage: 'radial-gradient(circle at center, rgba(108,62,244,0.08) 0%, transparent 60%)',
+                        }}
+                    >
+                        <div
+                            className="absolute inset-0 pointer-events-none"
+                            style={{
+                                backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px)',
+                                mixBlendMode: 'overlay' as const,
+                            }}
+                        />
+                        <Lock className="w-10 h-10 text-[#6c3ef4]/50 mb-4" />
+                        <h4 className="font-bold tracking-wide text-[#f0f0fa] text-base mb-1.5 opacity-90">NDA Protected</h4>
+                        <p className="font-mono text-[10px] tracking-widest text-[#00d4aa] opacity-70">ZERO-KNOWLEDGE ENCRYPTION</p>
+                    </div>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                    <Tooltip.Content
+                        sideOffset={8}
+                        className="z-50 max-w-[280px] px-4 py-3 rounded-xl shadow-2xl text-xs leading-relaxed"
+                        style={{ backgroundColor: '#151d2f', border: '1px solid #2a2a4e', color: '#a0a0c0' }}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.2, ease: 'easeOut' }}
+                        >
+                            この作品は機密保持契約（NDA）に基づき、高度な暗号化技術で保護されています。元の画像はクリエイターのローカル環境から一切送信されていません。
+                        </motion.div>
+                        <Tooltip.Arrow className="fill-[#2a2a4e] w-3 h-1.5" />
+                    </Tooltip.Content>
+                </Tooltip.Portal>
+            </Tooltip.Root>
+        </Tooltip.Provider>
+    );
 }
 
 function TranslucentVaultFull({ imageUrl }: { imageUrl: string }) {
-  return (
-    <div className="relative w-full h-full">
-      <img
-        src={imageUrl}
-        alt=""
-        aria-hidden="true"
-        className="w-full h-full object-cover"
-        style={{ filter: 'blur(16px) grayscale(100%) opacity(0.6)' }}
-      />
-      <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0e27]/40">
-        <Lock className="w-8 h-8 text-[#f0f0fa]/50 mb-3" />
-        <span className="font-bold text-xs tracking-wider text-[#f0f0fa]/70 uppercase">Owner Preview</span>
-        <span className="font-mono text-[10px] tracking-widest text-[#00d4aa]/50 uppercase mt-1">NDA Protected</span>
-      </div>
-    </div>
-  );
+    return (
+        <div className="relative w-full h-full">
+            <img
+                src={imageUrl}
+                alt=""
+                aria-hidden="true"
+                className="w-full h-full object-cover"
+                style={{ filter: 'blur(16px) grayscale(100%) opacity(0.6)' }}
+            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0e27]/40">
+                <Lock className="w-8 h-8 text-[#f0f0fa]/50 mb-3" />
+                <span className="font-bold text-xs tracking-wider text-[#f0f0fa]/70 uppercase">Owner Preview</span>
+                <span className="font-mono text-[10px] tracking-widest text-[#00d4aa]/50 uppercase mt-1">NDA Protected</span>
+            </div>
+        </div>
+    );
 }
 
 function OwnerVaultFull() {
-  return (
-    <div
-      className="flex flex-col items-center justify-center w-full h-full cursor-default overflow-hidden"
-      style={{
-        backgroundColor: '#0a0e27',
-        backgroundImage: 'radial-gradient(circle at center, rgba(108,62,244,0.12) 0%, transparent 60%)',
-      }}
-    >
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px)',
-          mixBlendMode: 'overlay' as const,
-        }}
-      />
-      <Lock className="w-10 h-10 text-[#6c3ef4] mb-4" />
-      <h4 className="font-bold tracking-wide text-[#f0f0fa] text-base mb-1 opacity-90">NDA Protected</h4>
-      <span className="font-mono text-[10px] tracking-widest text-[#6c3ef4] opacity-70 uppercase">Owner View</span>
-    </div>
-  );
+    return (
+        <div
+            className="flex flex-col items-center justify-center w-full h-full cursor-default overflow-hidden"
+            style={{
+                backgroundColor: '#0a0e27',
+                backgroundImage: 'radial-gradient(circle at center, rgba(108,62,244,0.12) 0%, transparent 60%)',
+            }}
+        >
+            <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                    backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px)',
+                    mixBlendMode: 'overlay' as const,
+                }}
+            />
+            <Lock className="w-10 h-10 text-[#6c3ef4] mb-4" />
+            <h4 className="font-bold tracking-wide text-[#f0f0fa] text-base mb-1 opacity-90">NDA Protected</h4>
+            <span className="font-mono text-[10px] tracking-widest text-[#6c3ef4] opacity-70 uppercase">Owner View</span>
+        </div>
+    );
 }

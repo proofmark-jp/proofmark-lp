@@ -34,16 +34,18 @@ export function getOrigin(request: Request) {
 
 export async function getAuthenticatedUserId(request: Request) {
   const authorization = request.headers.get('authorization');
-  if (authorization?.startsWith('Bearer ')) {
-    const token = authorization.slice('Bearer '.length);
-    const { data, error } = await supabaseAdmin.auth.getUser(token);
-    if (error) throw new Error(error.message);
-    if (data.user?.id) return data.user.id;
+  if (!authorization?.startsWith('Bearer ')) {
+    throw new Error('missing or invalid authorization header');
   }
 
-  const fallback = request.headers.get('x-user-id');
-  if (fallback) return fallback;
-  throw new Error('missing authenticated user context');
+  const token = authorization.slice('Bearer '.length);
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+  
+  if (error || !data?.user?.id) {
+    throw new Error(error?.message || 'invalid token');
+  }
+  
+  return data.user.id;
 }
 
 type EvidenceStepInput = {

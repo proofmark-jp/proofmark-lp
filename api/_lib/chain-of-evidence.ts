@@ -101,7 +101,8 @@ export async function buildChainOfEvidence(
         )
         .eq('certificate_id', certificateId)
         .order('created_at', { ascending: true })
-        .order('id', { ascending: true });
+        .order('id', { ascending: true })
+        .limit(1000); // 👈 インフラ防衛のためのハードリミット
 
     if (selErr) {
         opts.log?.warn({ event: 'chain.select_failed', message: selErr.message });

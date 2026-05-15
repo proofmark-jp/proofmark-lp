@@ -15,10 +15,10 @@ function escapeHtml(str: string): string {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const log = makeLogger('storefront-html-bff');
 
-  // 1. 環境変数のフォールバックとVercel環境での動的オリジン解決
-  const protocol = req.headers['x-forwarded-proto'] || 'https';
-  const host = req.headers['x-forwarded-host'] || req.headers.host;
-  const appUrl = process.env.APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : `${protocol}://${host}`);
+  // 1. 環境変数のフォールバック (Hostヘッダーへの依存を完全排除)
+  const appUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL 
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` 
+    : (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://proofmark.jp');
 
   let rawHtml = '';
   try {

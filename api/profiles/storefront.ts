@@ -11,7 +11,25 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
 import { getAdminClient, isAllowedOrigin, json, makeLogger, methodGuard } from '../_lib/server.js';
+
+let ratelimit: Ratelimit | null = null;
+try {
+    const redis = new Redis({
+        url: process.env.KV_REST_API_URL || '',
+        token: process.env.KV_REST_API_TOKEN || '',
+    });
+    ratelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(15, '10 s'), // 10秒に15回まで
+        analytics: true,
+        prefix: 'ratelimit_storefront',
+    });
+} catch (error) {
+    console.error('[RateLimit] Init failed:', error);
+}
 
 const USERNAME_RE = /^[a-zA-Z0-9_-]{1,32}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -25,6 +43,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (origin && !isAllowedOrigin(origin)) {
     json(res, 403, { error: 'origin_not_allowed', reqId: log.ctx.reqId });
     return;
+  }
+
+  if (ratelimit) {
+    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || '127.0.0.1';
+    try {
+        const { success } = await ratelimit.limit(ip);
+        if (!success) return json(res, 429, { error: 'too_many_requests', reqId: log.ctx.reqId });
+    } catch (e) {
+        // Fail-open
+    }
   }
 
   const usernameRaw = (req.query.username as string | undefined) ?? '';

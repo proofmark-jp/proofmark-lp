@@ -4,6 +4,8 @@ import { Resvg } from '@resvg/resvg-js';
 import { html } from 'satori-html';
 import sharp from 'sharp';
 
+let cachedFontData: ArrayBuffer | null = null;
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const protocol = req.headers['x-forwarded-proto'] || 'http';
@@ -16,30 +18,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const timestamp = (req.query.timestamp as string) || url.searchParams.get('timestamp') || 'N/A';
     const creator = (req.query.creator as string) || url.searchParams.get('creator') || 'Anonymous';
 
-    let fontData: ArrayBuffer;
-    try {
-      const fontRes = await fetch(
-        'https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansCJKjp-Bold.otf'
-      );
-      if (!fontRes.ok) throw new Error('Failed to fetch font');
-      fontData = await fontRes.arrayBuffer();
-    } catch (fontErr) {
-      console.error('Font fetch error:', fontErr);
-      throw new Error('Font rendering engine failed to initialize.');
+    if (!cachedFontData) {
+      try {
+        const fontRes = await fetch(
+          'https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansCJKjp-Bold.otf'
+        );
+        if (!fontRes.ok) throw new Error('Failed to fetch font');
+        cachedFontData = await fontRes.arrayBuffer();
+      } catch (fontErr) {
+        console.error('Font fetch error:', fontErr);
+        throw new Error('Font rendering engine failed to initialize.');
+      }
     }
+    const fontData = cachedFontData;
 
     let base64Thumb = '';
     if (thumbUrl) {
       try {
-        const imageRes = await fetch(thumbUrl);
-        const imageBuffer = await imageRes.arrayBuffer();
-        const pngBuffer = await sharp(Buffer.from(imageBuffer))
-          .resize(1200, 630, { fit: 'cover' })
-          .png()
-          .toBuffer();
-        base64Thumb = `data:image/png;base64,${pngBuffer.toString('base64')}`;
+        // SSRF 防衛: 許可されたドメイン（Supabaseストレージ等）のみ許可する
+        const allowedDomains = ['layesvzeeaiqqbhwdlgb.supabase.co', 'proofmark.jp'];
+        const thumbDomain = new URL(thumbUrl).hostname;
+        if (!allowedDomains.includes(thumbDomain)) {
+          throw new Error('Unauthorized thumbnail domain');
+        }
+
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 3000); // 3秒でタイムアウト
+
+        const imageRes = await fetch(thumbUrl, { signal: ctl.signal });
+        clearTimeout(timer);
+
+        if (imageRes.ok) {
+          const imageBuffer = await imageRes.arrayBuffer();
+          // OOM防衛: 10MB以上の画像は処理しない
+          if (imageBuffer.byteLength < 10 * 1024 * 1024) {
+            const pngBuffer = await sharp(Buffer.from(imageBuffer))
+              .resize(1200, 630, { fit: 'cover' })
+              .png()
+              .toBuffer();
+            base64Thumb = `data:image/png;base64,${pngBuffer.toString('base64')}`;
+          }
+        }
       } catch (err) {
-        console.error('Failed to process thumbnail with sharp:', err);
+        console.error('Failed to process thumbnail:', err);
+        // サムネイル処理が失敗しても、OGP画像自体は生成してフォールバックさせる
       }
     }
 

@@ -195,6 +195,10 @@ function groupByProject(certs: Certificate[]): ProjectGroup[] {
 
 export default function Dashboard() {
   const { user, loading: authLoading, signOut } = useAuth();
+  const plan_tier = (user?.user_metadata?.plan_tier as string) || "free";
+  const isAtLeastCreator = ["creator", "studio", "business"].includes(plan_tier);
+  const isAtLeastStudio = ["studio", "business"].includes(plan_tier);
+
   const [, navigate] = useLocation();
   const [certs, setCerts] = useState<Certificate[]>([]);
   const [loadingCerts, setLoadingCerts] = useState(true);
@@ -345,7 +349,7 @@ export default function Dashboard() {
       toast.loading("Evidence Packを生成しています...", { id: `evidence-${cert.id}` });
       const { data: { session } } = await supabase.auth.getSession();
 
-      const res = await fetch(`/api/evidence-pack?certId=${cert.id}`, {
+      const res = await fetch(`/api/generate-evidence-pack?cert=${cert.id}`, {
         headers: {
           Authorization: `Bearer ${session?.access_token ?? ""}`,
         },
@@ -863,9 +867,19 @@ function CertCard(
         <button
           onClick={(e) => {
             e.preventDefault();
+            if (!isAtLeastCreator) {
+              toast.info("NDA案件の保護表示（黒い石板モード）は Creator プラン限定の機能です。", {
+                action: { label: "アップグレード", onClick: () => navigate("/pricing") }
+              });
+              return;
+            }
             props.onToggleStar(cert.id, !!cert.is_starred);
           }}
-          style={{ ...styles.starBtn, ...(cert.is_starred ? styles.starBtnActive : {}) }}
+          style={{ 
+            ...styles.starBtn, 
+            ...(cert.is_starred ? styles.starBtnActive : {}),
+            opacity: isAtLeastCreator ? 1 : 0.7
+          }}
           title={cert.is_starred ? "保護を解除" : "保護（誤操作からロック）"}
         >
           <Star
@@ -873,6 +887,7 @@ function CertCard(
             fill={cert.is_starred ? "#F59E0B" : "transparent"}
             color={cert.is_starred ? "#F59E0B" : "rgba(255,255,255,0.5)"}
           />
+          {!isAtLeastCreator && <span style={{ fontSize: 8, position: 'absolute', bottom: -2, right: -2 }}>🔒</span>}
         </button>
 
         <div style={styles.trustBadgeSlot}>
@@ -892,11 +907,20 @@ function CertCard(
             {cert.title || cert.original_filename || cert.file_name || "Untitled"}
           </p>
           <button
-            onClick={() => props.onAssignProject(cert)}
-            style={styles.projectPill}
+            onClick={() => {
+              if (!isAtLeastCreator) {
+                toast.info("案件・クライアント単位の整理機能は Creator プランからご利用いただけます。", {
+                  action: { label: "プランを見る", onClick: () => navigate("/pricing") }
+                });
+                return;
+              }
+              props.onAssignProject(cert);
+            }}
+            style={{ ...styles.projectPill, opacity: isAtLeastCreator ? 1 : 0.7 }}
             title="案件名を設定"
           >
             <FolderKanban className="w-3 h-3" />
+            {!isAtLeastCreator && "🔒 "}
             {cert.client_project || "未分類"}
           </button>
         </div>
@@ -934,8 +958,20 @@ function CertCard(
             {copied ? <Check className="w-4 h-4" /> : <LinkIcon className="w-4 h-4" />}
             {copied ? "コピー済" : "検証URLをコピー"}
           </button>
-          <button onClick={() => props.onEvidence(cert)} style={styles.evidenceAction}>
+          <button 
+            onClick={() => {
+              if (plan_tier === "free") {
+                toast.info("Evidence Pack（ZIP/PDF）の発行は Creator プラン以上の機能です。プランをアップグレードして、法的な証拠能力を手に入れましょう。", {
+                  action: { label: "プランを見る", onClick: () => navigate("/pricing") }
+                });
+                return;
+              }
+              props.onEvidence(cert);
+            }} 
+            style={{ ...styles.evidenceAction, opacity: plan_tier === "free" ? 0.7 : 1 }}
+          >
             <FileDown className="w-4 h-4" /> Evidence Pack
+            {plan_tier === "free" && " 🔒"}
           </button>
         </div>
 
@@ -943,8 +979,20 @@ function CertCard(
           <a href={`/cert/${cert.id}`} style={styles.secondaryBtn}>
             証明書
           </a>
-          <button onClick={() => props.onOpenChain(cert)} style={styles.secondaryBtn} title="証拠の連鎖を作成">
-            🔗 Chain
+          <button 
+            onClick={() => {
+              if (!isAtLeastStudio) {
+                toast.info("制作工程の連鎖証明（Chain of Evidence）は Studio プラン以上の機能です。アップグレードで完全な証拠チェーンを構築しましょう。", {
+                  action: { label: "詳細", onClick: () => navigate("/pricing") }
+                });
+                return;
+              }
+              props.onOpenChain(cert);
+            }} 
+            style={{ ...styles.secondaryBtn, opacity: isAtLeastStudio ? 1 : 0.7 }} 
+            title="証拠の連鎖を作成"
+          >
+            {isAtLeastStudio ? "🔗 Chain" : "🔒 Chain"}
           </button>
           <button onClick={() => props.onShare(cert)} style={styles.secondaryBtn} title="𝕏でシェア">
             𝕏
@@ -982,11 +1030,21 @@ function CertList(
               {cert.title || cert.original_filename || cert.file_name || "Untitled"}
             </div>
             <button
-              onClick={() => props.onAssignProject(cert)}
-              style={styles.projectPillSmall}
+              onClick={() => {
+                if (!isAtLeastCreator) {
+                  toast.info("案件・クライアント単位の整理機能は Creator プランからご利用いただけます。", {
+                    action: { label: "詳細", onClick: () => navigate("/pricing") }
+                  });
+                  return;
+                }
+                props.onAssignProject(cert);
+              }}
+              style={{ ...styles.projectPillSmall, opacity: isAtLeastCreator ? 1 : 0.7 }}
               title="案件を編集"
             >
-              <FolderKanban className="w-3 h-3" /> {cert.client_project || "未分類"}
+              <FolderKanban className="w-3 h-3" /> 
+              {!isAtLeastCreator && "🔒 "}
+              {cert.client_project || "未分類"}
             </button>
           </div>
           <div role="cell">
@@ -1002,8 +1060,21 @@ function CertList(
             <button onClick={() => props.onCopyLink(cert)} style={styles.iconBtn} title="検証URLをコピー">
               {copiedId === cert.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             </button>
-            <button onClick={() => props.onEvidence(cert)} style={styles.iconBtn} title="Evidence Pack">
+            <button 
+              onClick={() => {
+                if (plan_tier === "free") {
+                  toast.info("Evidence Pack（ZIP/PDF）の発行は Creator プラン以上の機能です。", {
+                    action: { label: "プランを見る", onClick: () => navigate("/pricing") }
+                  });
+                  return;
+                }
+                props.onEvidence(cert);
+              }} 
+              style={{ ...styles.iconBtn, opacity: plan_tier === "free" ? 0.7 : 1 }} 
+              title="Evidence Pack"
+            >
               <FileDown className="w-4 h-4" />
+              {plan_tier === "free" && <span style={{ fontSize: 8, position: 'absolute', top: 0, right: 0 }}>🔒</span>}
             </button>
             <a href={`/cert/${cert.id}`} style={styles.iconBtn} title="証明書を開く">
               <ExternalLink className="w-4 h-4" />

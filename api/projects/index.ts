@@ -106,8 +106,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (body.team_id) {
       // チームのオーナーのプランをチェックする（ゲストもチームの恩恵を受けられるようにする）
-      const admin = getAdminClient();
-      const { data: teamData } = await admin
+      // IDOR修正: admin ではなく user-scoped な sb クライアントを使用することで、所属していないチームへの作成を RLS で阻止する
+      const { data: teamData } = await sb
         .from('teams')
         .select('owner_id')
         .eq('id', body.team_id)

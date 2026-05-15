@@ -29,6 +29,7 @@ import { motion } from 'framer-motion';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 import type { Certificate, CertificateStatus } from '@/lib/types';
 
 // 保護対象（1文字も触れない）。c2pa パッチ版を直接マウントする。
@@ -85,8 +86,9 @@ function mapToCertificate(row: Record<string, unknown>): Certificate {
       undefined,
     has_c2pa_data: Boolean(row.c2pa_manifest ?? row.has_c2pa_data),
     verification_url: id ? `/cert/${id}` : undefined,
-    evidence_pack_url: id ? `/api/evidence-pack?certId=${id}` : undefined,
-  };
+    evidence_pack_url: id ? `/api/generate-evidence-pack?cert=${id}` : undefined,
+    client_project: (row.client_project as string) || undefined,
+  } as any;
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
@@ -99,6 +101,8 @@ export default function DashboardObsidian() {
   const [rows, setRows] = useState<Certificate[]>([]);
   const [loadingRows, setLoadingRows] = useState(true);
   const [showArchived, setShowArchived] = useState(false);
+
+  const plan_tier = (user?.user_metadata?.plan_tier as string) || 'free';
 
   // ドロップゾーンへのスムーススクロール用
   const dropZoneRef = useRef<HTMLDivElement | null>(null);
@@ -139,6 +143,80 @@ export default function DashboardObsidian() {
       cancelled = true;
     };
   }, [user, showArchived]);
+
+  /* ── アクションハンドラ（Dashboard.tsx から移植） ────────────────── */
+  const handleDownloadEvidencePack = async (cert: Certificate) => {
+    try {
+      toast.loading("Evidence Packを生成しています...", { id: `evidence-${cert.id}` });
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const res = await fetch(`/api/generate-evidence-pack?cert=${cert.id}`, {
+        headers: {
+          Authorization: `Bearer ${session?.access_token ?? ""}`,
+        },
+        credentials: "omit",
+      });
+
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const j = await res.json();
+          if (j?.error) msg = `${j.error}${j.reqId ? ` (req: ${j.reqId})` : ""}`;
+        } catch { }
+        throw new Error(msg);
+      }
+
+      const cd = res.headers.get("content-disposition") || "";
+      const m5987 = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(cd);
+      const mPlain = /filename\s*=\s*"?([^";]+)"?/i.exec(cd);
+      const filename = m5987
+        ? decodeURIComponent(m5987[1])
+        : mPlain
+        ? mPlain[1]
+        : `proofmark-evidence-${cert.id.slice(0, 8)}.zip`;
+
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(href);
+
+      toast.success("Evidence Pack をダウンロードしました", { id: `evidence-${cert.id}` });
+    } catch (e: any) {
+      toast.error("Evidence Pack 生成に失敗しました", {
+        id: `evidence-${cert.id}`,
+        description: e?.message ?? "API をご確認ください。",
+      });
+    }
+  };
+
+  const handleAssignProject = async (cert: Certificate) => {
+    const current = (cert as any).client_project ?? "";
+    const next = window.prompt(
+      "この証明書を紐づける案件名（例: ACME社 / 表紙イラスト 2026-04）",
+      current
+    );
+    if (next === null) return;
+    const trimmed = next.trim() || null;
+
+    setRows((prev) => prev.map((r) => (r.id === cert.id ? { ...r, client_project: trimmed } : r)));
+
+    const { error } = await supabase
+      .from("certificates")
+      .update({ client_project: trimmed })
+      .eq("id", cert.id);
+
+    if (error) {
+      setRows((prev) => prev.map((r) => (r.id === cert.id ? { ...r, client_project: current } : r)));
+      toast.error("案件の紐づけに失敗しました", { description: error.message });
+    } else {
+      toast.success(trimmed ? `「${trimmed}」に紐づけました` : "案件の紐づけを解除しました");
+    }
+  };
 
   /* ── 履歴件数・KPI 表示は意図的に省略（マーケ装飾の排除） ───────── */
   const headline = useMemo(() => {
@@ -253,6 +331,9 @@ export default function DashboardObsidian() {
           <HistoryTable
             certificates={rows}
             loading={loadingRows}
+            planTier={plan_tier}
+            onEvidence={handleDownloadEvidencePack}
+            onAssignProject={handleAssignProject}
           />
         </section>
       </main>

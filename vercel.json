@@ -5,11 +5,8 @@
     "api/og.ts": {
       "maxDuration": 10
     },
-    "api/evidence-pack.ts": {
-      "maxDuration": 30
-    },
     "api/generate-evidence-pack.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/timestamp.ts": {
       "maxDuration": 30
@@ -83,7 +80,7 @@
       ]
     },
     {
-      "source": "/api/evidence-pack",
+      "source": "/api/generate-evidence-pack",
       "headers": [
         {
           "key": "Cache-Control",

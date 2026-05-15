@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
+import { requireUser, methodGuard, json, HttpError } from './_lib/server.js';
 
 const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "").trim().replace(/\/$/, "");
 const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
@@ -28,47 +29,53 @@ const ALLOWED_CONTENT_TYPES = new Set([
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "POSTのみ対応" });
+  if (!methodGuard(req, res, ['POST'])) return;
 
   try {
-    const { filename, contentType, userId = "anon" } = req.body;
+    const user = await requireUser(req);
+    const { filename, contentType } = req.body;
+    const userId = user.id;
 
-    if (!filename) return res.status(400).json({ error: "filename は必須です" });
+    if (!filename) return json(res, 400, { error: "filename は必須です" });
     if (!contentType || !ALLOWED_CONTENT_TYPES.has(contentType)) {
-      return res.status(400).json({ error: `許可されていない形式です: ${contentType}` });
+      return json(res, 400, { error: `許可されていない形式です: ${contentType}` });
     }
 
     if (!supabaseUrl || !serviceRoleKey) {
-      return res.status(500).json({ error: "サーバーの設定エラー（環境変数）" });
+      return json(res, 500, { error: "サーバーの設定エラー（環境変数）" });
     }
 
     const ext = filename.split(".").pop()?.toLowerCase() || "bin";
     const uuid = randomUUID();
     const storagePath = `${userId}/${uuid}.${ext}`;
 
+    // 認証バイパスの排除: originals -> proofmark-originals への修正
     const { data, error } = await supabaseAdmin.storage
-      .from("originals")
+      .from("proofmark-originals")
       .createSignedUploadUrl(storagePath);
 
     if (error || !data) {
       // 鍵の間違いがないかデバッグでヒントを出します
       const isLikelyWrongKey = !serviceRoleKey.includes("c2VydmljZV9yb2xl");
 
-      return res.status(500).json({
+      return json(res, 500, {
         error: "アップロードURLの発行に失敗しました",
         supabase_error: error,
         hint: isLikelyWrongKey ? "⚠️ 鍵が間違っている可能性があります。'service_role' の鍵か再確認してください。" : "通信エラーの可能性があります"
       });
     }
 
-    return res.status(200).json({
+    return json(res, 200, {
       success: true,
       signedUrl: data.signedUrl,
-      storagePath: `originals/${storagePath}`,
+      storagePath: `proofmark-originals/${storagePath}`,
     });
 
   } catch (err: any) {
-    return res.status(500).json({
+    if (err instanceof HttpError) {
+        return json(res, err.status, { error: err.message });
+    }
+    return json(res, 500, {
       error: "Internal Server Error",
       details: err?.message || String(err)
     });

@@ -18,6 +18,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 import * as Sentry from '@sentry/node';
 import { requestTimestampWithFallback } from './_lib/tsa.js';
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
 
 // ──────────────────────────────────────────────────────────────────────────
 // 0. Config
@@ -51,25 +53,24 @@ function requireEnv(name: string): string {
   return v;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// 1. Rate Limit (per-second style — quota is enforced separately below)
-// ──────────────────────────────────────────────────────────────────────────
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX = 20;
-const hits = new Map<string, { count: number; resetAt: number }>();
 
-function rateLimit(key: string): { ok: boolean; retryAfter: number } {
-  const now = Date.now();
-  const entry = hits.get(key);
-  if (!entry || entry.resetAt < now) {
-    hits.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return { ok: true, retryAfter: 0 };
-  }
-  entry.count += 1;
-  if (entry.count > RATE_LIMIT_MAX) {
-    return { ok: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
-  }
-  return { ok: true, retryAfter: 0 };
+// ──────────────────────────────────────────────────────────────────────────
+// 1. Rate Limit (Upstash Redis — Fail-open)
+// ──────────────────────────────────────────────────────────────────────────
+let ratelimit: Ratelimit | null = null;
+try {
+    const redis = new Redis({
+        url: process.env.KV_REST_API_URL || '',
+        token: process.env.KV_REST_API_TOKEN || '',
+    });
+    ratelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(20, '1 m'), // 1分間に20回まで
+        analytics: true,
+        prefix: 'ratelimit_ts',
+    });
+} catch (error) {
+    console.error('[RateLimit] Initialization failed:', error);
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -157,10 +158,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userId = userData.user.id;
 
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || 'unknown';
-    const rl = rateLimit(`${userId}:${ip}`);
-    if (!rl.ok) {
-      res.setHeader('Retry-After', String(rl.retryAfter));
-      return res.status(429).json({ error: 'Too many requests', reqId });
+
+    // --- Rate Limit Check (Upstash Redis) ---
+    if (ratelimit) {
+        try {
+            const { success, reset } = await ratelimit.limit(`${userId}:${ip}`);
+            if (!success) {
+                const retryAfter = Math.ceil((reset - Date.now()) / 1000);
+                res.setHeader('Retry-After', String(retryAfter));
+                return res.status(429).json({ error: 'Too many requests', reqId });
+            }
+        } catch (limitError) {
+            // Fail-open: Redis障害時はクラッシュさせず通過させる
+            console.error('[RateLimit] Error:', limitError);
+        }
     }
 
     const { data: cert, error: certErr } = await userClient

@@ -13,6 +13,8 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
 import {
     HttpError,
     getAdminClient,
@@ -28,19 +30,21 @@ const APP_URL = optionalEnv('APP_URL', 'https://proofmark.jp').replace(/\/$/, ''
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const RATE_LIMIT_MAX = 5;
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const userHits = new Map<string, { count: number; resetAt: number }>();
 
-function rateLimit(userId: string): boolean {
-  const now = Date.now();
-  const entry = userHits.get(userId);
-  if (!entry || entry.resetAt < now) {
-    userHits.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  entry.count += 1;
-  return entry.count <= RATE_LIMIT_MAX;
+let ratelimit: Ratelimit | null = null;
+try {
+    const redis = new Redis({
+        url: process.env.KV_REST_API_URL || '',
+        token: process.env.KV_REST_API_TOKEN || '',
+    });
+    ratelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(5, '1 m'), // 1分間に5回まで
+        analytics: true,
+        prefix: 'ratelimit_invite',
+    });
+} catch (error) {
+    console.error('[RateLimit] Initialization failed:', error);
 }
 
 interface InviteBody {
@@ -106,9 +110,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const body = parseBody(req.body);
         const inviter = await requireUser(req);
 
-        if (!rateLimit(inviter.id)) {
-            json(res, 429, { error: 'Too many requests. Please wait a minute.', reqId: log.ctx.reqId });
-            return;
+        // --- Rate Limit Check (Upstash) ---
+        if (ratelimit) {
+            try {
+                const { success } = await ratelimit.limit(inviter.id);
+                if (!success) {
+                    log.warn({ event: 'ratelimit_exceeded', userId: inviter.id });
+                    return json(res, 429, { error: 'Too many requests. Please wait a minute.', reqId: log.ctx.reqId });
+                }
+            } catch (limitError) {
+                // Fail-open: Redis障害時はクラッシュさせず通過させる
+                log.error({ event: 'ratelimit_error', message: String(limitError) });
+            }
         }
 
         const admin = getAdminClient();

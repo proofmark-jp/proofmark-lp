@@ -20,7 +20,10 @@ import {
   ArrowUpRight,
   FileImage,
   Sparkles,
+  FileDown,
+  FolderKanban,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { Certificate, CertificateStatus } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { PM, EASE, D } from './obsidian-tokens';
@@ -36,6 +39,12 @@ interface HistoryTableProps {
   onRowClick?: (cert: Certificate) => void;
   /** 1ページあたり最大表示件数（既定 10） */
   pageSize?: number;
+  /** ユーザーの課金プラン (free, spot, creator, studio, business) */
+  planTier: string;
+  /** Evidence Pack 発行ハンドラ */
+  onEvidence: (cert: Certificate) => void;
+  /** プロジェクト割当ハンドラ */
+  onAssignProject: (cert: Certificate) => void;
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
@@ -45,6 +54,9 @@ export function HistoryTable({
   loading = false,
   onRowClick,
   pageSize = 10,
+  planTier,
+  onEvidence,
+  onAssignProject,
 }: HistoryTableProps) {
   if (loading) return <HistorySkeleton rows={Math.min(5, pageSize)} />;
   if (certificates.length === 0) return <HistoryEmpty />;
@@ -71,11 +83,11 @@ export function HistoryTable({
             key={cert.id}
             cert={cert}
             isLast={i === rows.length - 1}
+            planTier={planTier}
+            onEvidence={onEvidence}
+            onAssignProject={onAssignProject}
             onClick={() => {
               if (onRowClick) onRowClick(cert);
-              else if (cert.verification_url) {
-                window.open(cert.verification_url, '_blank', 'noopener,noreferrer');
-              }
             }}
           />
         ))}
@@ -115,10 +127,16 @@ function Header() {
 function HistoryRow({
   cert,
   isLast,
+  planTier,
+  onEvidence,
+  onAssignProject,
   onClick,
 }: {
   cert: Certificate;
   isLast: boolean;
+  planTier: string;
+  onEvidence: (cert: Certificate) => void;
+  onAssignProject: (cert: Certificate) => void;
   onClick: () => void;
 }) {
   const statusBadge = badgeFor(cert.status);
@@ -130,9 +148,7 @@ function HistoryRow({
         borderBottom: isLast ? 'none' : `1px solid ${PM.border}`,
       }}
     >
-      <motion.button
-        type="button"
-        onClick={onClick}
+      <motion.div
         initial={{ opacity: 0, y: 4 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: D.base / 1000, ease: EASE }}
@@ -163,15 +179,21 @@ function HistoryRow({
 
         {/* File name + status */}
         <div className="min-w-0">
-          <p
-            className="truncate font-semibold text-[14px] sm:text-[14.5px] leading-tight"
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (cert.verification_url) {
+                window.open(cert.verification_url, '_blank', 'noopener,noreferrer');
+              }
+            }}
+            className="truncate font-semibold text-[14px] sm:text-[14.5px] leading-tight hover:underline text-left block w-full"
             style={{ color: PM.textMain }}
             title={cert.file_name}
           >
             {cert.file_name}
-          </p>
+          </button>
           <div className="flex items-center gap-2 mt-1">
-            <StatusBadge {...statusBadge} />
             <span
               className="text-[11px] tabular-nums"
               style={{ color: PM.textSubtle }}
@@ -221,17 +243,43 @@ function HistoryRow({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-end shrink-0">
-          <span
-            aria-hidden="true"
-            className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wider opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-            style={{ color: PM.textMuted }}
-          >
-            開く
-            <ArrowUpRight className="w-3.5 h-3.5" />
-          </span>
+        {/* Actions & Status Badge (右端) */}
+        <div className="flex items-center justify-end gap-3 shrink-0">
+          <div className="hidden sm:flex items-center gap-2 opacity-0 group-hover:opacity-80 transition-opacity">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (planTier === 'free') {
+                  toast.info("Evidence Packの発行はCreatorプラン以上です。");
+                } else {
+                  onEvidence(cert);
+                }
+              }}
+              className="p-1 hover:text-white transition-colors flex items-center gap-0.5"
+              title="Evidence Pack (ZIP/PDF)"
+            >
+              <FileDown className="w-4 h-4" />
+              {planTier === 'free' ? <span className="text-[9px]">🔒</span> : null}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (planTier === 'free' || planTier === 'spot') {
+                  toast.info("案件整理はCreatorプラン以上です。");
+                } else {
+                  onAssignProject(cert);
+                }
+              }}
+              className="p-1 hover:text-white transition-colors flex items-center gap-0.5"
+              title="プロジェクト割当"
+            >
+              <FolderKanban className="w-4 h-4" />
+              {planTier === 'free' || planTier === 'spot' ? <span className="text-[9px]">🔒</span> : null}
+            </button>
+          </div>
+          <StatusBadge {...statusBadge} />
         </div>
-      </motion.button>
+      </motion.div>
     </li>
   );
 }

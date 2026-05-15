@@ -62,11 +62,7 @@ function parseBody(body: unknown): RequestBody {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    console.log("=== 🕵️‍♂️ ENV X-RAY ===");
-    console.log("実行ディレクトリ:", process.cwd());
-    console.log("認識しているSTRIPEキー:", Object.keys(process.env).filter(k => k.includes('STRIPE')));
-    console.log("SPOTの生の値:", process.env.STRIPE_PRICE_SPOT);
-    console.log("=======================");
+
     const log = makeLogger('create-checkout-session');
     res.setHeader('x-request-id', log.ctx.reqId);
 
