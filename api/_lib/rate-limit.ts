@@ -1,7 +1,7 @@
 /**
- * api/_lib/rate-limit.ts — Phase 12.3
+ * api/_lib/rate-limit.ts — Phase 12.4
  *
- * Free プランの月次上限を Upstash Redis で物理ロックする。
+ * 全プランの月次上限を Upstash Redis で物理ロック（Hard Limit）する。
  *
  * 設計の核:
  *   1. **DB を一切叩かない**: count(*) アンチパターンを根絶。Redis の
@@ -9,10 +9,9 @@
  *   2. **JST 月次キー**: サーバ (UTC) と日本ユーザー (JST) の月初ズレを
  *      回避するため、キーは必ず Asia/Tokyo の YYYY_MM で生成。
  *   3. **Fail-open**: Upstash がダウンしてもサービスを止めない。Redis
- *      接続エラーは catch して `{ allowed: true, fallback: true }` を返す。
- *      この場合のみ呼び出し側が Supabase の count フォールバックに切替可。
- *   4. **Bypass for paid**: plan_tier ∈ {creator, studio, business, light, admin}
- *      は Redis にすら触れない (latency 0)。
+ *      接続エラーは catch して quota=上限値 のまま通過させる。
+ *   4. **プラン別クォータ**: QUOTA_MAP により各プランの枠を厳密に管理。
+ *      admin も含め、全プラン Redis でカウントし上限（Hard Limit）を適用する。
  *   5. **TTL は 40 日**: 翌月の月初リセットで自然消滅。Cron 不要。
  *
  * このモジュールは:
@@ -23,11 +22,22 @@
 
 import { optionalEnv } from './server.js';
 
-export const FREE_MONTHLY_QUOTA = 30;
+/**
+ * プラン別の月次クォータ（TSA発行件数上限）。
+ * PAID_TIERS の一律バイパスを廃止し、原価（COGS）の青天井を防ぐ。
+ * admin も含め、万が一の暴走を防ぐため全プランに上限を設定する。
+ */
+const QUOTA_MAP: Record<string, number> = {
+    free:     30,
+    creator:  30,
+    light:    30,  // legacy alias for creator
+    studio:   150,
+    business: 150,
+    admin:    300, // 🚨 Infinity(無制限)を廃止。万が一の暴走・乗っ取りを防ぐためのハードリミット
+};
 
-const PAID_TIERS: ReadonlySet<string> = new Set([
-    'creator', 'studio', 'business', 'light', 'admin',
-]);
+/** @deprecated 後方互換のために残す。新規コードは QUOTA_MAP を使うこと。 */
+export const FREE_MONTHLY_QUOTA = 30;
 
 const KEY_TTL_SECONDS = 40 * 24 * 60 * 60; // 40 days
 const REDIS_FETCH_TIMEOUT_MS = 1500;       // hot path budget
@@ -142,13 +152,17 @@ async function upstashGet(cfg: UpstashConfig, key: string): Promise<number | nul
 
 /**
  * 発行直前に呼び出す。INCR を伴うので副作用あり。
- * 31 件目以降は ok:false, reason:'quota_exceeded' を返す。
+ * quota+1 件目以降は ok:false, reason:'quota_exceeded' を返す。
+ * admin 以外はすべて Redis でカウントする（有料プランのバイパスを廃止）。
  */
 export async function incrementAndCheckCertIssue(
     input: RateLimitInput,
 ): Promise<RateLimitResult> {
     const tier = String(input.planTier ?? 'free').toLowerCase();
-    if (PAID_TIERS.has(tier)) {
+    const quota = QUOTA_MAP[tier] ?? 30;
+
+    // かつては admin のみバイパス(Infinity)していたが、現在は全プランをカウント対象とする
+    if (quota === Infinity) {
         return { ok: true, bypassed: true, plan: 'paid' };
     }
 
@@ -163,7 +177,7 @@ export async function incrementAndCheckCertIssue(
             bypassed: false,
             used: -1,
             remaining: -1,
-            quota: FREE_MONTHLY_QUOTA,
+            quota,
             resetAt: resetAtIso,
             fallback: 'redis_unavailable',
         };
@@ -179,18 +193,20 @@ export async function incrementAndCheckCertIssue(
             bypassed: false,
             used: -1,
             remaining: -1,
-            quota: FREE_MONTHLY_QUOTA,
+            quota,
             resetAt: resetAtIso,
             fallback: 'redis_unavailable',
         };
     }
 
-    if (count > FREE_MONTHLY_QUOTA) {
+    if (count > quota) {
+        // 🚨 超過分をロールバックし、アップグレード時のカウント不整合を防ぐ
+        await rollbackIncrement(input).catch(() => undefined);
         return {
             ok: false,
             reason: 'quota_exceeded',
-            used: count,
-            quota: FREE_MONTHLY_QUOTA,
+            used: count - 1, // UIには「到達済み」の数として伝える
+            quota,
             resetAt: resetAtIso,
         };
     }
@@ -199,8 +215,8 @@ export async function incrementAndCheckCertIssue(
         ok: true,
         bypassed: false,
         used: count,
-        remaining: FREE_MONTHLY_QUOTA - count,
-        quota: FREE_MONTHLY_QUOTA,
+        remaining: quota - count,
+        quota,
         resetAt: resetAtIso,
     };
 }
@@ -214,19 +230,22 @@ export async function peekCertIssueUsage(
 ): Promise<{ used: number; quota: number; remaining: number; resetAt: string; bypassed: boolean }> {
     const { ym, resetAtIso } = jstMonthRange();
     const tier = String(input.planTier ?? 'free').toLowerCase();
-    if (PAID_TIERS.has(tier)) {
-        return { used: 0, quota: 0, remaining: Infinity as unknown as number, resetAt: resetAtIso, bypassed: true };
+    const quota = QUOTA_MAP[tier] ?? 30;
+
+    // admin のみバイパス表示
+    if (quota === Infinity) {
+        return { used: 0, quota: Infinity as unknown as number, remaining: Infinity as unknown as number, resetAt: resetAtIso, bypassed: true };
     }
     const cfg = getUpstashConfig();
     if (!cfg) {
-        return { used: 0, quota: FREE_MONTHLY_QUOTA, remaining: FREE_MONTHLY_QUOTA, resetAt: resetAtIso, bypassed: false };
+        return { used: 0, quota, remaining: quota, resetAt: resetAtIso, bypassed: false };
     }
     const key = buildRateLimitKey(input.userId, ym);
     const used = (await upstashGet(cfg, key)) ?? 0;
     return {
         used,
-        quota: FREE_MONTHLY_QUOTA,
-        remaining: Math.max(0, FREE_MONTHLY_QUOTA - used),
+        quota,
+        remaining: Math.max(0, quota - used),
         resetAt: resetAtIso,
         bypassed: false,
     };
@@ -239,7 +258,9 @@ export async function peekCertIssueUsage(
  */
 export async function rollbackIncrement(input: RateLimitInput): Promise<void> {
     const tier = String(input.planTier ?? 'free').toLowerCase();
-    if (PAID_TIERS.has(tier)) return;
+    const quota = QUOTA_MAP[tier] ?? 30;
+    // admin はカウントしていないのでロールバック不要
+    if (quota === Infinity) return;
     const cfg = getUpstashConfig();
     if (!cfg) return;
     const { ym } = jstMonthRange();

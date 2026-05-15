@@ -416,26 +416,35 @@ export default function CertificatePage() {
                 {/* ---- RFC3161 FreeTSA Timestamp Action ---- */}
                 <div className="flex flex-col items-center mt-8 print:hidden">
                     {!verifiedTime && (
-                        <button
-                            onClick={handleApplyTimestamp}
-                            disabled={isStamping}
-                            className={`flex items-center px-6 py-3 rounded-full font-bold transition-all ${isStamping
-                                ? 'bg-gray-600 cursor-not-allowed text-gray-300'
-                                : 'bg-[#6C3EF4] hover:bg-[#5A33CC] text-white shadow-[0_0_15px_rgba(108,62,244,0.5)]'
-                                }`}
-                        >
-                            {isStamping ? (
-                                <>
-                                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Contacting TSA...
-                                </>
-                            ) : (
-                                '公的タイムスタンプを付与する (FreeTSA)'
-                            )}
-                        </button>
+                        <div className="flex flex-col items-center gap-2 mt-4">
+                            <button
+                                onClick={() => {
+                                    if (window.confirm("今月のTSA発行枠を 1件 消費します。本当によろしいですか？")) {
+                                        handleApplyTimestamp();
+                                    }
+                                }}
+                                disabled={isStamping}
+                                className={`flex items-center px-6 py-3 rounded-full font-bold transition-all ${isStamping
+                                    ? 'bg-gray-600 cursor-not-allowed text-gray-300'
+                                    : 'bg-[#6C3EF4] hover:bg-[#5A33CC] text-white shadow-[0_0_15px_rgba(108,62,244,0.5)]'
+                                    }`}
+                            >
+                                {isStamping ? (
+                                    <>
+                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Contacting TSA...
+                                    </>
+                                ) : (
+                                    '公的タイムスタンプを付与する'
+                                )}
+                            </button>
+                            <p className="text-xs text-[#A8A0D8]/80 text-center">
+                                ※実行すると月間発行枠を1件消費します。
+                            </p>
+                        </div>
                     )}
                 </div>
 

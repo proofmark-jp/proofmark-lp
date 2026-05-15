@@ -546,7 +546,7 @@ export default function TrustCenter() {
               <div className="w-1 h-5 bg-[#00D4AA] rounded-full" /> 4.3 移行のトリガ条件（Go / No-Go）
             </h3>
             <p className="text-[#A8A0D8] leading-relaxed mb-4 text-sm">
-              なお、商用TSA（DigiCert等）との本契約プロセスは、<strong>Creatorプラン以上の有償顧客が『10名』に達した時点</strong>を公式なトリガーとして開始します。それまでの期間は FreeTSA を運用し、本ページでステータスを開示し続けます。
+              商用TSA（DigiCert等）との本契約プロセスおよびインフラ移行は、Creatorプラン以上の有償顧客が「30名」に達した時点を公式なトリガーとして開始します。Beta期間中はFreeTSA.orgを運用しますが、トリガー達成後はProofMarkのシステム全体（API環境変数）が商用TSAへと一斉にアップグレードされます。移行後に新たに「TSA付与」を実行した場合、Evidence Packには自動的に商用TSAのトークンが同梱されるようになります。
             </p>
             <p className="text-[#A8A0D8] leading-relaxed mb-4 text-sm">
               「いつ商用TSAに切り替えるか」を曖昧にしないために、以下の <strong>5つの条件をすべて満たしたタイミング</strong> を、公式な切替日とします。一つでも満たさない場合は、Beta のまま据え置きます。
@@ -820,7 +820,7 @@ export default function TrustCenter() {
               <li className="py-4 flex gap-6">
                 <span className="font-mono text-[#6C3EF4] font-bold w-16 shrink-0">v1.1</span>
                 <span className="text-[#A8A0D8] text-sm leading-relaxed">
-                  <strong className="text-white">May 2026</strong> — §4.3に商用TSAへの移行条件（有償顧客10名トリガー）を明記。FreeTSAの稼働ステータスを2026-05-12付けで確認。
+                  <strong className="text-white">May 2026</strong> — §4.3に商用TSAへの移行条件（有償顧客30名トリガー）を明記。FreeTSAの稼働ステータスを2026-05-12付けで確認。
                 </span>
               </li>
               <li className="py-4 flex gap-6">

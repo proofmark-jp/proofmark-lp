@@ -1,16 +1,12 @@
 /**
  * api/timestamp.ts — RFC3161 Timestamp Issuer (Server Authority)
  *
- * v2.2 — adds Free-plan monthly quota enforcement (Sprint 1 死角#4).
+ * v2.3 — per-plan hard quota via QUOTA_MAP (Creator 30/mo, Studio 150/mo).
  *
  * Quota strategy:
- *  - Free plan: 30 issuances per calendar month per user.
- *  - Creator/Studio/Admin: unlimited.
- *  - Light: temporary alias for Creator (legacy).
- *  - Quota counter is a server-authoritative SUM of `certificates` rows in the
- *    current calendar month for that user (no client trust). We don't allow
- *    "first" creation through this endpoint; we enforce quota only at the
- *    moment we actually contact the TSA.
+ *  - All plans are subject to monthly hard limits enforced by Redis (QUOTA_MAP).
+ *  - admin tier is the only bypass (原価防衛のため PAID_TIERS バイパスを廃止).
+ *  - On Redis failure the endpoint is fail-open to avoid service disruption.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -20,6 +16,7 @@ import * as Sentry from '@sentry/node';
 import { requestTimestampWithFallback } from './_lib/tsa.js';
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
+import { incrementAndCheckCertIssue, rollbackIncrement } from './_lib/rate-limit.js';
 
 // ──────────────────────────────────────────────────────────────────────────
 // 0. Config
@@ -32,8 +29,6 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://proofmark.jp,ht
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
-
-const FREE_MONTHLY_QUOTA = Number(process.env.FREE_MONTHLY_QUOTA || 30);
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN || '',
@@ -101,30 +96,11 @@ function parseBody(body: unknown): TimestampRequestBody | null {
 // ──────────────────────────────────────────────────────────────────────────
 type PlanTier = 'free' | 'light' | 'creator' | 'studio' | 'admin';
 
-function isPaidPlan(tier: PlanTier | string | null | undefined): boolean {
-  return tier === 'light' || tier === 'creator' || tier === 'studio' || tier === 'admin';
-}
-
 async function fetchUserPlanTier(admin: SupabaseClient, userId: string): Promise<PlanTier> {
   const { data } = await admin.from('profiles').select('plan_tier').eq('id', userId).maybeSingle();
   const t = (data as { plan_tier?: string } | null)?.plan_tier;
   if (t === 'creator' || t === 'studio' || t === 'admin' || t === 'light' || t === 'free') return t;
   return 'free';
-}
-
-function monthRangeUTC(d = new Date()): { startISO: string; endISO: string } {
-  const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1, 0, 0, 0, 0));
-  const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1, 0, 0, 0, 0));
-  return { startISO: start.toISOString(), endISO: end.toISOString() };
-}
-
-async function countMonthlyIssuance(admin: SupabaseClient, userId: string): Promise<number> {
-  const { data, error } = await admin.rpc('fn_monthly_issuance_count', { uid: userId });
-  if (error) {
-    console.error('[countMonthlyIssuance] RPC failed:', error);
-    return 0;
-  }
-  return data ?? 0;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -137,6 +113,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed', reqId });
   const origin = (req.headers.origin as string) || '';
   if (origin && !ALLOWED_ORIGINS.includes(origin)) return res.status(403).json({ error: 'Origin not allowed', reqId });
+
+  let userId = '';
+  let planTier: PlanTier = 'free';
+  let quotaConsumed = false; // 👈 枠消費トラッキング用
 
   try {
     const authHeader = (req.headers.authorization as string) || '';
@@ -155,7 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data: userData, error: userErr } = await userClient.auth.getUser(jwt);
     if (userErr || !userData?.user) return res.status(401).json({ error: 'Invalid session', reqId });
-    const userId = userData.user.id;
+    userId = userData.user.id;
 
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || 'unknown';
 
@@ -194,24 +174,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // 死角 #4 — Free monthly quota enforcement.
     const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const planTier = await fetchUserPlanTier(adminClient, userId);
-    if (!isPaidPlan(planTier)) {
-      const used = await countMonthlyIssuance(adminClient, userId);
-      if (used >= FREE_MONTHLY_QUOTA) {
-        res.setHeader('Retry-After', '0');
-        return res.status(402).json({
-          error: 'free_quota_exceeded',
-          message: `Free plan allows up to ${FREE_MONTHLY_QUOTA} timestamps per month. Current usage: ${used}.`,
-          quota: FREE_MONTHLY_QUOTA,
-          used,
+    planTier = await fetchUserPlanTier(adminClient, userId);
+
+    // 全プラン共通のハードロック（原価防衛）— QUOTA_MAP に従い admin 以外はすべて Redis で枠管理
+    const rlResult = await incrementAndCheckCertIssue({ userId, planTier });
+    if (!rlResult.bypassed) {
+      if (!rlResult.ok) {
+        return res.status(429).json({
+          error: `You have reached the limit of ${rlResult.quota} timestamps per month for your plan.`,
+          quota: rlResult.quota,
+          used: rlResult.used, // ここには正確な値が入る
           plan: planTier,
           reqId,
         });
       }
+      quotaConsumed = true; // 👈 枠の消費を確定
     }
 
     const tsaResult = await requestTimestampWithFallback(body.hash);
@@ -238,6 +218,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ success: true, certified_at: certifiedAt.toISOString(), tsa_provider: TSA_PROVIDER, plan: planTier, reqId });
   } catch (error: any) {
+    // 🚨 処理中にエラーが起きた場合、消費した枠を確実に返却する
+    if (quotaConsumed) {
+      await rollbackIncrement({ userId, planTier }).catch(e => console.error('[RateLimit] Rollback failed:', e));
+    }
+    
     Sentry.captureException(error, { tags: { reqId } });
     await Sentry.flush(1500).catch(() => void 0);
     console.error(JSON.stringify({ reqId, event: 'rfc3161.error', message: String(error?.message || error) }));

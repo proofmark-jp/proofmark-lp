@@ -3,8 +3,8 @@ import { useLocation, Link } from 'wouter';
 import { Camera, Save, User, Loader2, ShieldCheck, ArrowLeft, LayoutGrid, Globe, Info, Edit3, Twitter, Instagram, Youtube, Video, Heart, DollarSign, PenTool, CreditCard, Zap, Sparkles, Mail, Key, AlertTriangle, Trash2, Search, Code } from 'lucide-react';
 import { toast } from 'sonner';
 import WidgetBuilder from '../components/embed/WidgetBuilder';
-import AdminStorageSimulator from '../components/AdminStorageSimulator';
-import AdminSafetyPanel from '../components/AdminSafetyPanel';
+import AdminStorageSimulator from '../components/admin/AdminStorageSimulator';
+import AdminSafetyPanel from '../components/admin/AdminSafetyPanel';
 import { supabase } from '../lib/supabase';
 
 export default function Settings() {
@@ -16,6 +16,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [profileData, setProfileData] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Form State
   const [username, setUsername] = useState('');
@@ -115,6 +116,10 @@ export default function Settings() {
         setUsername(meta?.username || session.user.email?.split('@')[0] || '');
         setAvatarUrl(meta?.avatar_url || '');
       }
+
+      // 👑 DBのRPC関数を使って、安全に管理者判定を行う（メアドはフロントに置かない）
+      const { data: adminFlag } = await supabase.rpc('is_admin');
+      setIsAdmin(!!adminFlag);
 
       setLoading(false);
     }
@@ -228,22 +233,6 @@ export default function Settings() {
     }
   };
 
-  // ── 開発者/管理者用：プラン切り替え関数 ──
-  const handlePlanChange = async (newPlan: string) => {
-    try {
-      setSaving(true);
-      const { error } = await supabase.auth.updateUser({
-        data: { plan_type: newPlan }
-      });
-      if (error) throw error;
-      toast.success(`検証モード: ${newPlan.toUpperCase()} に変更しました`);
-      setTimeout(() => window.location.reload(), 1000);
-    } catch (error) {
-      toast.error('プラン変更失敗');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   // 👑 セキュリティ更新ハンドラー
   const handleUpdateEmail = async () => {
@@ -321,8 +310,7 @@ export default function Settings() {
     }
   };
 
-  const currentPlan = user?.user_metadata?.plan_type || 'free';
-  const isAdmin = user?.email === 'fiftyfifty.ok@gmail.com';
+  const currentPlan = profileData?.plan_tier || user?.user_metadata?.plan_type || 'free';
 
   if (loading) return <div className="min-h-screen bg-[#07061A] flex justify-center items-center text-[#00D4AA] tracking-widest font-bold">LOADING...</div>;
 
@@ -669,8 +657,8 @@ export default function Settings() {
             </button>
           </div>
 
-          {/* 👑 神の領域：Admin System (メールアドレスによる絶対ロック) */}
-          {user?.email === 'fiftyfifty.ok@gmail.com' ? (
+          {/* 👑 神の領域：Admin System (is_admin RPCによる安全な判定) */}
+          {isAdmin ? (
             <div className="mt-16 pt-10 border-t-2 border-[#F0BB38]/30 border-dashed">
               <div className="bg-[#1A1200] border border-[#F0BB38]/30 rounded-2xl p-6 md:p-8 relative overflow-hidden shadow-[0_0_30px_rgba(240,187,56,0.1)]">
                 <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-[#F0BB38] to-[#FF8C00]" />
@@ -711,27 +699,6 @@ export default function Settings() {
                     </div>
                   </div>
 
-                  {/* モード切替 (デバッグ用) */}
-                  <div className="bg-black/40 border border-[#F0BB38]/20 rounded-xl p-5">
-                    <h4 className="text-white text-xs font-bold mb-2 flex items-center gap-2">
-                      <LayoutGrid className="w-4 h-4 text-[#F0BB38]" /> 開発者デバッグモード
-                    </h4>
-                    <p className="text-[#A8A0D8] text-[10px] leading-relaxed mb-4">
-                      UIの表示テスト用に、自身のアカウントの擬似プランを変更します。
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {['free', 'creator', 'studio'].map((p) => (
-                        <button
-                          key={p}
-                          onClick={() => handlePlanChange(p)}
-                          disabled={saving || currentPlan === p}
-                          className="px-3 py-1.5 text-[10px] font-bold rounded-lg border border-[#F0BB38]/30 text-[#F0BB38] hover:bg-[#F0BB38]/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed uppercase tracking-wider"
-                        >
-                          {p}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
 
                 <div className="mt-8 space-y-6">
