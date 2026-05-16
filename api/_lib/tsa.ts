@@ -219,9 +219,13 @@ function readEnvUrls(): string[] | null {
  */
 export async function requestTimestampWithFallback(
     hashHex: string,
-    options: TsaRequestOptions = {},
+    forceFreeTsaOrOptions: boolean | TsaRequestOptions = false,
+    optionsObj: TsaRequestOptions = {},
 ): Promise<TsaResult> {
-    const urls = options.urls ?? readEnvUrls() ?? DEFAULT_FALLBACK_URLS;
+    const isForceFree = typeof forceFreeTsaOrOptions === 'boolean' ? forceFreeTsaOrOptions : false;
+    const options = typeof forceFreeTsaOrOptions === 'object' ? forceFreeTsaOrOptions : optionsObj;
+
+    const urls = isForceFree ? ['https://freetsa.org/tsr'] : (options.urls ?? readEnvUrls() ?? DEFAULT_FALLBACK_URLS);
     const timeoutMs = options.perAttemptTimeoutMs ?? 8000;
     const log = options.log ?? (() => undefined);
 

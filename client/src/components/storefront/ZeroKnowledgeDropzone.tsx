@@ -24,6 +24,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   CheckCircle2, FileSearch, Loader2, ShieldCheck, ShieldQuestion, UploadCloud, X,
 } from 'lucide-react';
+import { useHashFile } from '../../hooks/useHashFile';
 
 interface MatchPrimary {
   certificate_id: string;
@@ -47,9 +48,10 @@ interface Props {
   username: string;
 }
 
-const MAX_BYTES = 100 * 1024 * 1024; // 100 MB
+const MAX_BYTES = 2000 * 1024 * 1024; // 2GB
 
 export function ZeroKnowledgeDropzone({ username }: Props) {
+  const { hashFile } = useHashFile();
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -60,18 +62,24 @@ export function ZeroKnowledgeDropzone({ username }: Props) {
       return;
     }
     if (file.size > MAX_BYTES) {
-      setPhase({ kind: 'error', message: 'ファイルが大きすぎます (100MB 以下)。' });
+      setPhase({ kind: 'error', message: 'ファイルが大きすぎます (2GB 以下)。' });
       return;
     }
 
     setPhase({ kind: 'hashing', progress: 0.05, fileName: file.name });
 
     try {
-      // ── Web Crypto による真の Zero-Knowledge ハッシュ計算 ──────────
-      // Stream で読み込みつつ進捗を演出する（巨大ファイル対応）
-      const sha256Hex = await streamSha256(file, (p) => {
-        setPhase({ kind: 'hashing', progress: Math.max(0.1, p), fileName: file.name });
+      // Web Worker によるストリーミングハッシュ計算 (OOM回避)
+      const { sha256 } = await hashFile(file, {
+        onProgress: ({ progress }) => {
+          setPhase({
+            kind: 'hashing',
+            progress: Math.max(0.02, progress),
+            fileName: file.name,
+          });
+        },
       });
+      const sha256Hex = sha256;
 
       // ── 照合: ハッシュ"だけ"を送る ────────────────────────────────
       const url = new URL('/api/certificates/lookup-by-hash', window.location.origin);
@@ -103,7 +111,7 @@ export function ZeroKnowledgeDropzone({ username }: Props) {
     } catch (e) {
       setPhase({ kind: 'error', message: (e as Error)?.message ?? '検証に失敗しました' });
     }
-  }, [username]);
+  }, [username, hashFile]);
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -183,7 +191,7 @@ export function ZeroKnowledgeDropzone({ username }: Props) {
                 ファイルをここにドロップ
               </p>
               <p className="text-[11px] text-[#a0a0c0]">
-                クリックしても選択できます · 最大 100MB
+                クリックしても選択できます · 最大 2GB
               </p>
             </motion.div>
           )}
@@ -299,63 +307,9 @@ export function ZeroKnowledgeDropzone({ username }: Props) {
 
       <p className="mt-3 text-[10px] text-[#a0a0c0] flex items-center gap-1.5">
         <ShieldCheck className="w-3 h-3" aria-hidden="true" />
-        ハッシュ計算は <code className="font-mono">window.crypto.subtle.digest('SHA-256')</code> によりブラウザ内で完結します。
+        ハッシュ計算は <code className="font-mono">hash-wasm (WebAssembly) ストリーミング処理</code> によりブラウザ内で完結します。
       </p>
     </section>
   );
 }
 
-/* ───────────────────────────────────────────────────────────────────── */
-
-/**
- * Stream で SHA-256 を計算する。FileReader を使わないことで、
- * 大きなファイルをメモリに展開せずに処理できる。
- *
- * Note: window.crypto.subtle.digest は現状ストリーミング非対応のため、
- * チャンク単位でアキュムレートし、最後に一括ダイジェストする
- * フォールバック実装になっている (ブラウザ互換重視)。
- */
-async function streamSha256(file: File, onProgress: (p: number) => void): Promise<string> {
-  const subtle = (globalThis.crypto as Crypto | undefined)?.subtle;
-  if (!subtle?.digest) throw new Error('Web Crypto API が利用できません');
-
-  // 小ファイルは一発で
-  if (file.size <= 8 * 1024 * 1024) {
-    const buf = await file.arrayBuffer();
-    onProgress(0.85);
-    const hash = await subtle.digest('SHA-256', buf);
-    onProgress(1);
-    return bufToHex(hash);
-  }
-
-  // 大きいファイルはストリームで読みつつ、最後にダイジェスト
-  const reader = file.stream().getReader();
-  const chunks: Uint8Array[] = [];
-  let received = 0;
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    if (value) {
-      chunks.push(value);
-      received += value.byteLength;
-      onProgress(Math.min(0.85, received / file.size));
-    }
-  }
-  // 結合
-  const total = new Uint8Array(received);
-  let offset = 0;
-  for (const c of chunks) { total.set(c, offset); offset += c.byteLength; }
-  onProgress(0.92);
-  const hash = await subtle.digest('SHA-256', total);
-  onProgress(1);
-  return bufToHex(hash);
-}
-
-function bufToHex(buf: ArrayBuffer): string {
-  const arr = new Uint8Array(buf);
-  let s = '';
-  for (let i = 0; i < arr.length; i++) {
-    s += arr[i].toString(16).padStart(2, '0');
-  }
-  return s;
-}

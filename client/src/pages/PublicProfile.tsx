@@ -1,4 +1,11 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
+import LoadingFallback from '../components/LoadingFallback';
+
+const ZeroKnowledgeDropzone = lazy(() =>
+  import('../components/storefront/ZeroKnowledgeDropzone').then((m) => ({
+    default: m.ZeroKnowledgeDropzone,
+  }))
+);
 import { useRoute, Link } from 'wouter';
 import {
   ShieldCheck, ExternalLink, Lock, ArrowLeft, ArrowRight,
@@ -439,6 +446,12 @@ export default function PublicProfile() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        <div className="mt-16">
+          <Suspense fallback={<LoadingFallback variant="inline" />}>
+            <ZeroKnowledgeDropzone username={profileData?.username || ''} />
+          </Suspense>
+        </div>
       </main>
     </div>
   );

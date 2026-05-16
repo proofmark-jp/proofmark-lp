@@ -1,63 +1,104 @@
 /**
- * App.tsx — Mobile CRO Upgrade
+ * App.tsx — Route-level Code Splitting
  *
- * 変更点:
- *   1. <MobileActionBar /> をマウント（モバイル下部固定 CTA）。
- *   2. <ScrollToTopFab />  をマウント（FAB / 全デバイス）。
- *   3. ScrollToTop / RouteGuard / Routing 定義は **完全に据え置き**。
+ * 設計:
+ *   1. ルーティングのページコンポーネントは全て React.lazy() で動的 import
+ *   2. /  と /auth はファーストビュー必須なので "preloadable" な lazy にする
+ *   3. /dashboard は認証直後に必ず来るので、useAuth で login=true になった
+ *      タイミングで prefetch する (ホバーや遷移待ちをゼロにする)
+ *   4. Suspense は Router の外側に置き、ヘッダー/フッターは即時表示で CLS=0
+ *   5. ErrorBoundary を Suspense の更に外側に置き、chunk fetch 失敗もキャッチ
  *
- * ルート別表示制御は usePMRoute フックに集約しているため、
- * App.tsx 自身に分岐ロジックを足さない（責務の単純さを維持）。
+ * 維持:
+ *   - ScrollToTop / RouteGuard / 既存ロジックは完全に温存
+ *   - MobileActionBar / ScrollToTopFab は重要度高なので static import のまま
+ *     (どちらも数 KB で route gate のため遅延させると逆効果)
  */
 
+import { Suspense, lazy, useEffect } from 'react';
+import type { ComponentType } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
+import { Route, Switch, useLocation } from 'wouter';
+
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import NotFound from '@/pages/NotFound';
-import { Route, Switch, useLocation } from 'wouter';
-import { useEffect } from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import Home from './pages/Home';
-import CertificatePage from './pages/CertificatePage';
-import Auth from './pages/Auth';
-import DashboardStudio from './pages/Dashboard.studio';
-import Terms from './pages/Terms';
-import Privacy from './pages/Privacy';
-import Tokushoho from './pages/Tokushoho';
-import Security from './pages/Security';
-import BlogIndex from './pages/BlogIndex';
-import Settings from './pages/Settings';
-import ArticleCopyright from './pages/ArticleCopyright';
-import ArticleMonetization from './pages/ArticleMonetization';
-import PublicProfile from './pages/PublicProfile';
-import EmbedPortfolioPage from './pages/EmbedPortfolioPage';
-import Faq from './pages/Faq';
-import WhatItProves from './pages/WhatItProves';
-import HowItWorks from './pages/HowItWorks';
-import CompareC2PA from './pages/CompareC2PA';
-import Footer from './components/Footer';
-import Pricing from './pages/Pricing';
-import Business from './pages/Business';
-import LegalResources from './pages/LegalResources';
-import TrustCenter from './pages/TrustCenter';
-import SpotIssue from './pages/SpotIssue';
-import SpotIssueResult from './pages/SpotIssueResult';
-import Contact from './pages/Contact';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminPlaceholder from './pages/admin/AdminPlaceholder';
-import AdminCertificates from './pages/admin/AdminCertificates';
-import AdminUsers from './pages/admin/AdminUsers';
-import AdminMonitor from './pages/admin/AdminMonitor';
-import AdminSettings from './pages/admin/AdminSettings';
-import AcceptInvite from './pages/AcceptInvite';
+import LoadingFallback from './components/LoadingFallback';
 
-// 🆕 Mobile CRO upgrade
+// 🔒 重要度高: モバイル CRO 部品はファーストペイントで必要
 import MobileActionBar from './components/MobileActionBar';
 import ScrollToTopFab from './components/ScrollToTopFab';
 
-function ScrollToTop() {
+// =============================================================================
+//  Lazy Route Components
+//  - import 文に webpackChunkName 代わりの何かは不要 (Vite が name を推論)
+//  - 一部はモジュール参照を変数化して prefetch() に再利用する
+// =============================================================================
+
+// ── critical (LP / auth) ─────────────────────────────────────────────────
+const Home = lazy(() => import('./pages/Home'));
+const Auth = lazy(() => import('./pages/Auth'));
+const NotFound = lazy(() => import('@/pages/NotFound'));
+
+// ── post-login (auth 後に必ず必要) ───────────────────────────────────────
+const importDashboard = () => import('./pages/Dashboard.studio');
+const DashboardStudio = lazy(importDashboard);
+
+// ── public marketing pages ──────────────────────────────────────────────
+const Pricing = lazy(() => import('./pages/Pricing'));
+const Business = lazy(() => import('./pages/Business'));
+const HowItWorks = lazy(() => import('./pages/HowItWorks'));
+const Faq = lazy(() => import('./pages/Faq'));
+const WhatItProves = lazy(() => import('./pages/WhatItProves'));
+const CompareC2PA = lazy(() => import('./pages/CompareC2PA'));
+const LegalResources = lazy(() => import('./pages/LegalResources'));
+const TrustCenter = lazy(() => import('./pages/TrustCenter'));
+const Contact = lazy(() => import('./pages/Contact'));
+
+// ── articles / blog ─────────────────────────────────────────────────────
+const BlogIndex = lazy(() => import('./pages/BlogIndex'));
+const ArticleCopyright = lazy(() => import('./pages/ArticleCopyright'));
+const ArticleMonetization = lazy(() => import('./pages/ArticleMonetization'));
+
+// ── certificate / profile ───────────────────────────────────────────────
+const CertificatePage = lazy(() => import('./pages/CertificatePage'));
+const PublicProfile = lazy(() => import('./pages/PublicProfile'));
+const EmbedPortfolioPage = lazy(() => import('./pages/EmbedPortfolioPage'));
+
+// ── settings ────────────────────────────────────────────────────────────
+const Settings = lazy(() => import('./pages/Settings'));
+
+// ── legal ───────────────────────────────────────────────────────────────
+const Terms = lazy(() => import('./pages/Terms'));
+const Privacy = lazy(() => import('./pages/Privacy'));
+const Tokushoho = lazy(() => import('./pages/Tokushoho'));
+const Security = lazy(() => import('./pages/Security'));
+
+// ── ops ─────────────────────────────────────────────────────────────────
+const SpotIssue = lazy(() => import('./pages/SpotIssue'));
+const SpotIssueResult = lazy(() => import('./pages/SpotIssueResult'));
+const AcceptInvite = lazy(() => import('./pages/AcceptInvite'));
+
+// ── admin (運営のみ。LP ユーザは絶対に読まないので最遅) ──────────────────
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminCertificates = lazy(() => import('./pages/admin/AdminCertificates'));
+const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
+const AdminMonitor = lazy(() => import('./pages/admin/AdminMonitor'));
+const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
+const AdminPlaceholder = lazy(() => import('./pages/admin/AdminPlaceholder'));
+
+/* ─────────────────────────────────────────────
+ *  Footer も lazy 化 (LP 以外では使わない場面も多い)
+ * ───────────────────────────────────────────── */
+const Footer = lazy(() => import('./components/Footer'));
+
+// =============================================================================
+//  Routing primitives — 既存ロジックは据え置き
+// =============================================================================
+
+function ScrollToTop(): null {
   const [location] = useLocation();
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -65,15 +106,15 @@ function ScrollToTop() {
     const hash = window.location.hash;
     if (hash) {
       let attempts = 0;
-      const checkExist = setInterval(() => {
+      const checkExist = window.setInterval(() => {
         const id = hash.substring(1);
         const element = document.getElementById(id);
         if (element) {
           const y = element.getBoundingClientRect().top + window.scrollY - 80;
           window.scrollTo({ top: y, behavior: 'smooth' });
-          clearInterval(checkExist);
+          window.clearInterval(checkExist);
         }
-        if (++attempts >= 10) clearInterval(checkExist);
+        if (++attempts >= 10) window.clearInterval(checkExist);
       }, 100);
     } else {
       window.scrollTo({ top: 0, behavior: 'auto' });
@@ -82,7 +123,7 @@ function ScrollToTop() {
   return null;
 }
 
-function RouteGuard() {
+function RouteGuard(): null {
   const [location, navigate] = useLocation();
   const { user, loading } = useAuth();
 
@@ -101,48 +142,82 @@ function RouteGuard() {
   return null;
 }
 
-function Router() {
+/**
+ * Prefetcher — login 済みなら Dashboard chunk を先読みする。
+ * これにより「ログイン直後の白画面」を実質ゼロにできる。
+ */
+function Prefetcher(): null {
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (loading) return;
+    if (!user) return;
+    // requestIdleCallback フォールバック付きで、メインスレッド空き時に prefetch
+    const schedule =
+      typeof window.requestIdleCallback === 'function'
+        ? window.requestIdleCallback
+        : (cb: () => void) => window.setTimeout(cb, 200);
+
+    schedule(() => {
+      void importDashboard().catch(() => {
+        /* network失敗時は実遷移時に再 fetch される */
+      });
+    });
+  }, [user, loading]);
+
+  return null;
+}
+
+// =============================================================================
+//  Router
+// =============================================================================
+
+function Router(): JSX.Element {
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/pricing" component={Pricing} />
-      <Route path="/business" component={Business} />
-      <Route path="/cert/:id" component={CertificatePage} />
-      <Route path="/auth" component={Auth} />
-      <Route path="/dashboard" component={DashboardStudio} />
-      <Route path="/settings" component={Settings} />
-      <Route path="/terms" component={Terms} />
-      <Route path="/privacy" component={Privacy} />
-      <Route path="/tokushoho" component={Tokushoho} />
-      <Route path="/security" component={Security} />
-      <Route path="/faq" component={Faq} />
-      <Route path="/what-it-proves" component={WhatItProves} />
-      <Route path="/how-it-works" component={HowItWorks} />
-      <Route path="/compare-c2pa" component={CompareC2PA} />
-      <Route path="/legal-resources" component={LegalResources} />
-      <Route path="/trust-center" component={TrustCenter} />
-      <Route path="/u/:username" component={PublicProfile} />
-      <Route path="/embed/:username" component={EmbedPortfolioPage} />
-      <Route path="/blog" component={BlogIndex} />
-      <Route path="/blog/copyright" component={ArticleCopyright} />
-      <Route path="/blog/monetization" component={ArticleMonetization} />
-      <Route path="/spot-issue" component={SpotIssue} />
-      <Route path="/spot-issue/result" component={SpotIssueResult} />
-      <Route path="/contact" component={Contact} />
-      <Route path="/invite" component={AcceptInvite} />
-      <Route path="/admin" component={AdminDashboard} />
-      <Route path="/admin/certificates" component={AdminCertificates} />
-      <Route path="/admin/users" component={AdminUsers} />
-      <Route path="/admin/monitor" component={AdminMonitor} />
-      <Route path="/admin/settings" component={AdminSettings} />
-      <Route path="/admin/placeholder" component={AdminPlaceholder} />
-      <Route path="/404" component={NotFound} />
-      <Route component={NotFound} />
+      <Route path="/" component={Home as ComponentType} />
+      <Route path="/pricing" component={Pricing as ComponentType} />
+      <Route path="/business" component={Business as ComponentType} />
+      <Route path="/cert/:id" component={CertificatePage as ComponentType} />
+      <Route path="/auth" component={Auth as ComponentType} />
+      <Route path="/dashboard" component={DashboardStudio as ComponentType} />
+      <Route path="/settings" component={Settings as ComponentType} />
+      <Route path="/terms" component={Terms as ComponentType} />
+      <Route path="/privacy" component={Privacy as ComponentType} />
+      <Route path="/tokushoho" component={Tokushoho as ComponentType} />
+      <Route path="/security" component={Security as ComponentType} />
+      <Route path="/faq" component={Faq as ComponentType} />
+      <Route path="/what-it-proves" component={WhatItProves as ComponentType} />
+      <Route path="/how-it-works" component={HowItWorks as ComponentType} />
+      <Route path="/compare-c2pa" component={CompareC2PA as ComponentType} />
+      <Route path="/legal-resources" component={LegalResources as ComponentType} />
+      <Route path="/trust-center" component={TrustCenter as ComponentType} />
+      <Route path="/u/:username" component={PublicProfile as ComponentType} />
+      <Route path="/embed/:username" component={EmbedPortfolioPage as ComponentType} />
+      <Route path="/blog" component={BlogIndex as ComponentType} />
+      <Route path="/blog/copyright" component={ArticleCopyright as ComponentType} />
+      <Route path="/blog/monetization" component={ArticleMonetization as ComponentType} />
+      <Route path="/spot-issue" component={SpotIssue as ComponentType} />
+      <Route path="/spot-issue/result" component={SpotIssueResult as ComponentType} />
+      <Route path="/contact" component={Contact as ComponentType} />
+      <Route path="/invite" component={AcceptInvite as ComponentType} />
+      <Route path="/admin" component={AdminDashboard as ComponentType} />
+      <Route path="/admin/certificates" component={AdminCertificates as ComponentType} />
+      <Route path="/admin/users" component={AdminUsers as ComponentType} />
+      <Route path="/admin/monitor" component={AdminMonitor as ComponentType} />
+      <Route path="/admin/settings" component={AdminSettings as ComponentType} />
+      <Route path="/admin/placeholder" component={AdminPlaceholder as ComponentType} />
+      <Route path="/404" component={NotFound as ComponentType} />
+      <Route component={NotFound as ComponentType} />
     </Switch>
   );
 }
 
-function AppShell() {
+// =============================================================================
+//  Shell
+// =============================================================================
+
+function AppShell(): JSX.Element {
   const [location] = useLocation();
   const isEmbedRoute = location.startsWith('/embed/');
   const hideFooter = isEmbedRoute || location === '/dashboard';
@@ -151,18 +226,34 @@ function AppShell() {
     <div className="flex min-h-screen flex-col bg-background">
       <ScrollToTop />
       <RouteGuard />
+      <Prefetcher />
       <Toaster />
-      <Router />
-      {!hideFooter ? <Footer /> : null}
 
-      {/* 🆕 Mobile CRO: 表示制御は usePMRoute 内で完結 */}
+      {/*
+        Suspense は Router を丸ごとラップする。
+        各ページ chunk のロード中は LoadingFallback がページ部分のみを覆い、
+        Toaster / MobileActionBar はそのまま表示される。
+      */}
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingFallback variant="page" label="route" />}>
+          <Router />
+        </Suspense>
+      </ErrorBoundary>
+
+      {!hideFooter ? (
+        <Suspense fallback={<LoadingFallback variant="minimal" label="footer" />}>
+          <Footer />
+        </Suspense>
+      ) : null}
+
+      {/* Mobile CRO: 数 KB の小型 chunk のためここは static import のまま */}
       <ScrollToTopFab />
       <MobileActionBar />
     </div>
   );
 }
 
-function App() {
+function App(): JSX.Element {
   return (
     <HelmetProvider>
       <ErrorBoundary>

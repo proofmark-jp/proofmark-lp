@@ -194,7 +194,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       quotaConsumed = true; // 👈 枠の消費を確定
     }
 
-    const tsaResult = await requestTimestampWithFallback(body.hash);
+    // Freeプランの場合は商用TSAの原価流出を防ぐため、強制的にFreeTSAへルーティング
+    const forceFree = planTier === 'free';
+    const tsaResult = await requestTimestampWithFallback(body.hash, forceFree);
     const timestampTokenBase64 = tsaResult.tsr.toString('base64');
     const certifiedAt = tsaResult.certifiedAt;
     const TSA_PROVIDER = tsaResult.providerLabel;

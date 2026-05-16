@@ -40,7 +40,10 @@ import {
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/hooks/useAuth';
 import HeroDemo from '../components/HeroDemo';
-import InlineHashDemo from '../components/InlineHashDemo';
+import { lazy, Suspense } from 'react';
+import LoadingFallback from '../components/LoadingFallback';
+
+const InlineHashDemo = lazy(() => import('../components/InlineHashDemo'));
 
 // Added for integration
 import TrustSignalRow from '@/components/TrustSignalRow';
@@ -306,7 +309,9 @@ export default function Home() {
       {/* [S3.5] インラインハッシュデモ */}
       <section id="try" aria-label="ハッシュデモ" className="pm-section bg-[#07061A]">
         <div className="pm-container">
-          <InlineHashDemo />
+          <Suspense fallback={<LoadingFallback variant="inline" />}>
+            <InlineHashDemo />
+          </Suspense>
         </div>
       </section>
 
