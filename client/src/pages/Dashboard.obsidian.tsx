@@ -88,6 +88,7 @@ function mapToCertificate(row: Record<string, unknown>): Certificate {
     verification_url: id ? `/cert/${id}` : undefined,
     evidence_pack_url: id ? `/api/generate-evidence-pack?cert=${id}` : undefined,
     client_project: (row.client_project as string) || undefined,
+    visibility: (row.visibility as 'public' | 'private') || 'public',
   } as any;
 }
 

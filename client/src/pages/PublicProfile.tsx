@@ -171,6 +171,7 @@ export default function PublicProfile() {
           .from('certificates')
           .select('*')
           .eq('user_id', profile.id)
+          .eq('visibility', 'public')
           .order('created_at', { ascending: false });
 
         if (userCerts) {

@@ -26,6 +26,7 @@ import {
 import { toast } from 'sonner';
 import type { Certificate, CertificateStatus } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import VisibilityToggle from '../VisibilityToggle';
 import { PM, EASE, D } from './obsidian-tokens';
 
 /* ──────────────────────────────────────────────────────────────────────── */
@@ -246,6 +247,9 @@ function HistoryRow({
         {/* Actions & Status Badge (右端) */}
         <div className="flex items-center justify-end gap-3 shrink-0">
           <div className="hidden sm:flex items-center gap-2 opacity-0 group-hover:opacity-80 transition-opacity">
+            <div onClick={(e) => e.stopPropagation()} className="mr-2">
+              <VisibilityToggle assetId={cert.id} initialVisibility={(cert.visibility as 'public' | 'private') || 'public'} />
+            </div>
             <button
               onClick={(e) => {
                 e.stopPropagation();

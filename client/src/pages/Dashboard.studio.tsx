@@ -80,6 +80,7 @@ import { AttentionTray } from '../components/ops/AttentionTray';
 import { StatusMenu } from '../components/ops/StatusMenu';
 import { AuditDrawer } from '../components/ops/AuditDrawer';
 import { SlimUploadDock } from '../components/dashboard/SlimUploadDock';
+import VisibilityToggle from '../components/VisibilityToggle';
 
 // Process Bundle Composer (Chain of Evidence) は Studio で開く可能性あり。Lazy load。
 const ProcessBundleComposer = lazy(() =>
@@ -1202,8 +1203,11 @@ function CertListTable(props: ListViewProps) {
                     : '—'}
               </div>
 
-              {/* 操作 */}
+              {/* 操作 (アクション) */}
               <div role="cell" className="flex items-center justify-end gap-1">
+                <div className="mr-2">
+                  <VisibilityToggle assetId={cert.id} initialVisibility={(cert.visibility as 'public' | 'private') || 'public'} />
+                </div>
                 <IconBtn
                   title={copiedId === cert.id ? 'コピー済' : '検証URLをコピー'}
                   onClick={() => onCopyLink(cert)}
@@ -1404,15 +1408,19 @@ function CertGridView(props: GridViewProps) {
               </button>
             </div>
             <div className="flex items-center justify-between pt-1">
-              <button
-                type="button"
-                onClick={() => onOpenChain(cert)}
-                className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
-                title="Chain of Evidence"
-              >
-                <LinkIcon className="w-2.5 h-2.5" />
-                Chain
-              </button>
+              <div className="scale-90 origin-left">
+                <VisibilityToggle assetId={cert.id} initialVisibility={(cert.visibility as 'public' | 'private') || 'public'} />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onOpenChain(cert)}
+                  className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
+                  title="Chain of Evidence"
+                >
+                  <LinkIcon className="w-2.5 h-2.5" />
+                  Chain
+                </button>
               <button
                 type="button"
                 onClick={() => onArchive(cert, !cert.is_archived)}
@@ -1435,6 +1443,7 @@ function CertGridView(props: GridViewProps) {
               >
                 <ExternalLink className="w-2.5 h-2.5" /> 開く
               </a>
+              </div>
             </div>
           </div>
         </article>

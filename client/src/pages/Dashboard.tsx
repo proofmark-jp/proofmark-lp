@@ -20,6 +20,8 @@ import Navbar from "../components/Navbar";
 import FounderBadge from "../components/FounderBadge";
 import { ProcessBundleComposer } from "../components/proof/ProcessBundleComposer";
 import type { CertificateRecord } from "../lib/proofmark-types";
+import VisibilityToggle from "../components/VisibilityToggle";
+import type { Certificate } from "../lib/types";
 import {
   Search,
   Star,
@@ -49,34 +51,7 @@ import { toast } from "sonner";
    Types
 ────────────────────────────────────────────────────────────────────────── */
 
-interface Certificate {
-  id: string;
-  title?: string;
-  is_starred?: boolean;
-  file_name: string;
-  file_hash: string;
-  file_url?: string;
-  thumbnail_url?: string;
-  created_at: string;
-  original_filename?: string;
-  public_image_url?: string;
-  proof_mode?: string;
-  visibility?: string;
-  sha256?: string;
-  /** RFC3161 Timestamp Token (base64). 書き込み責任はサーバー。 */
-  timestamp_token?: string | null;
-  /** TSA が署名した genTime (ISO8601)。 */
-  certified_at?: string | null;
-  /** TSA プロバイダ識別子 (freetsa | digicert | globalsign | seiko | ...)。 */
-  tsa_provider?: string | null;
-  /** Cross-anchor（複数TSAに多重発行した場合）の参考情報。 */
-  cross_anchors?: Array<{ provider: string; certified_at: string }> | null;
-  /** 案件単位での束ね。null の場合は "未分類" バケツへ。 */
-  client_project?: string | null;
-  /** ユーザーが明示的にアーカイブしたか。 */
-  is_archived?: boolean;
-  metadata?: Record<string, unknown>;
-}
+
 
 type TrustTier = "beta" | "trusted" | "cross" | "pending";
 
@@ -906,23 +881,26 @@ function CertCard(
           <p style={styles.fileName}>
             {cert.title || cert.original_filename || cert.file_name || "Untitled"}
           </p>
-          <button
-            onClick={() => {
-              if (!isAtLeastCreator) {
-                toast.info("案件・クライアント単位の整理機能は Creator プランからご利用いただけます。", {
-                  action: { label: "プランを見る", onClick: () => navigate("/pricing") }
-                });
-                return;
-              }
-              props.onAssignProject(cert);
-            }}
-            style={{ ...styles.projectPill, opacity: isAtLeastCreator ? 1 : 0.7 }}
-            title="案件名を設定"
-          >
-            <FolderKanban className="w-3 h-3" />
-            {!isAtLeastCreator && "🔒 "}
-            {cert.client_project || "未分類"}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <VisibilityToggle assetId={cert.id} initialVisibility={(cert.visibility as 'public' | 'private') || 'public'} />
+            <button
+              onClick={() => {
+                if (!isAtLeastCreator) {
+                  toast.info("案件・クライアント単位の整理機能は Creator プランからご利用いただけます。", {
+                    action: { label: "プランを見る", onClick: () => navigate("/pricing") }
+                  });
+                  return;
+                }
+                props.onAssignProject(cert);
+              }}
+              style={{ ...styles.projectPill, opacity: isAtLeastCreator ? 1 : 0.7 }}
+              title="案件名を設定"
+            >
+              <FolderKanban className="w-3 h-3" />
+              {!isAtLeastCreator && "🔒 "}
+              {cert.client_project || "未分類"}
+            </button>
+          </div>
         </div>
 
         <div style={styles.metaRow}>
@@ -1057,6 +1035,9 @@ function CertList(
             {cert.certified_at ? formatDate(cert.certified_at) : "—"}
           </span>
           <div role="cell" style={styles.tdActions}>
+            <div style={{ marginRight: '8px' }}>
+              <VisibilityToggle assetId={cert.id} initialVisibility={(cert.visibility as 'public' | 'private') || 'public'} />
+            </div>
             <button onClick={() => props.onCopyLink(cert)} style={styles.iconBtn} title="検証URLをコピー">
               {copiedId === cert.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             </button>
