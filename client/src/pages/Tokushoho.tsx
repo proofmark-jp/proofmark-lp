@@ -66,12 +66,12 @@ export default function Tokushoho() {
     {
       label: '販売業者',
       icon: <Briefcase className="w-4 h-4" />,
-      value: 'ProofMark（運営者：小黒　新也）',
+      value: 'ProofMark（運営者：小黒新也）',
     },
     {
       label: '運営統括責任者',
       icon: <User className="w-4 h-4" />,
-      value: '小黒　新也（Shinya Oguro）',
+      value: '小黒新也（Shinya Oguro）',
     },
 
     /* ── 所在地 ── */
