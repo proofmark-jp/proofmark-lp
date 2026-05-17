@@ -375,7 +375,7 @@ async function sendAutoReply(payload: ContactPayload, ticketId: string): Promise
       ? `<div style="background:#f0eefc;border:1px solid #d4cff0;border-radius:12px;padding:20px;margin:20px 0;">
       <p style="margin:0 0 12px;font-size:13px;font-weight:700;color:#6C3EF4;">特定商取引法に基づく運営者情報</p>
       <table style="width:100%;font-size:13px;border-collapse:collapse;">
-        <tr><td style="padding:4px 0;color:#666;width:100px;">販売業者</td><td style="padding:4px 0;font-weight:600;">ProofMark（運営者：小栗 慎也）</td></tr>
+        <tr><td style="padding:4px 0;color:#666;width:100px;">販売業者</td><td style="padding:4px 0;font-weight:600;">ProofMark（運営者：小黒新也）</td></tr>
         <tr><td style="padding:4px 0;color:#666;">所在地</td><td style="padding:4px 0;">〒XXX-XXXX 東京都[区市町村名][番地以降]</td></tr>
         <tr><td style="padding:4px 0;color:#666;">電話番号</td><td style="padding:4px 0;">050-XXXX-XXXX</td></tr>
       </table>
