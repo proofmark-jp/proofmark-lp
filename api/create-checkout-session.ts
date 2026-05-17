@@ -28,7 +28,7 @@ import {
     tryUser,
     requireUser,
 } from './_lib/server.js';
-import { appUrl, getStripe, resolvePlan, type SupportedPlan } from './_lib/stripe.js';
+import { getStripe } from './_lib/stripe.js';
 
 interface RequestBody {
     plan: string;
@@ -66,6 +66,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const log = makeLogger('create-checkout-session');
     res.setHeader('x-request-id', log.ctx.reqId);
 
+    if (req.method === 'OPTIONS') {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.status(200).end();
+        return;
+    }
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
     if (!methodGuard(req, res, ['POST'])) return;
 
     const origin = (req.headers.origin as string | undefined) ?? '';
@@ -76,13 +85,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
         const body = parseBody(req.body);
-        const plan = resolvePlan(body.plan) as { id: SupportedPlan; mode: 'subscription' | 'payment'; priceId: string };
+        const planId = body.plan;
+
+        let mode: 'payment' | 'subscription';
+        let priceId: string;
+        if (planId === 'spot') {
+            mode = 'payment';
+            priceId = process.env.STRIPE_PRICE_SPOT ?? '';
+        } else if (planId === 'creator') {
+            mode = 'subscription';
+            priceId = process.env.STRIPE_PRICE_CREATOR ?? '';
+        } else if (planId === 'studio') {
+            mode = 'subscription';
+            priceId = process.env.STRIPE_PRICE_STUDIO ?? '';
+        } else {
+            throw new HttpError(400, 'Invalid plan');
+        }
+        if (!priceId) throw new HttpError(500, `Missing price ID for ${planId}`);
+
         const stripe = getStripe();
         const admin = getAdminClient();
-        const base = appUrl();
+        const base = process.env.APP_URL
+            || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : '')
+            || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
         // Subscription: enforce auth & reuse customer.
-        if (plan.mode === 'subscription') {
+        if (mode === 'subscription') {
             const user = await requireUser(req);
 
             const { data: profile } = await admin
@@ -101,24 +129,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 await admin.from('profiles').update({ stripe_customer_id: customerId }).eq('id', user.id);
             }
 
-            const idempotencyKey = `sub:${user.id}:${plan.id}`;
-
             const session = await stripe.checkout.sessions.create(
                 {
                     mode: 'subscription',
                     customer: customerId,
-                    line_items: [{ price: plan.priceId, quantity: 1 }],
-                    success_url: `${base}/dashboard?upgrade=success&plan=${plan.id}`,
+                    client_reference_id: user.id,
+                    line_items: [{ price: priceId, quantity: 1 }],
+                    success_url: `${base}/dashboard?upgrade=success&plan=${planId}`,
                     cancel_url: `${base}/pricing?upgrade=canceled`,
                     allow_promotion_codes: true,
                     billing_address_collection: 'auto',
-                    metadata: { user_id: user.id, plan: plan.id, kind: 'subscription' },
-                    subscription_data: { metadata: { user_id: user.id, plan: plan.id } },
-                },
-                { idempotencyKey },
+                    metadata: { user_id: user.id, plan: planId, kind: 'subscription' },
+                    subscription_data: { metadata: { user_id: user.id, plan: planId } },
+                }
             );
 
-            log.info({ event: 'checkout.subscription.created', userId: user.id, plan: plan.id, sessionId: session.id });
+            log.info({ event: 'checkout.subscription.created', userId: user.id, plan: planId, sessionId: session.id });
             json(res, 200, { url: session.url, sessionId: session.id, reqId: log.ctx.reqId });
             return;
         }
@@ -127,19 +153,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const user = await tryUser(req);
         const stagingId = randomUUID();
         const sha256 = body.sha256 ?? '';
-        const idempotencyKey = `spot:${stagingId}`;
 
         const session = await stripe.checkout.sessions.create(
             {
                 mode: 'payment',
-                line_items: [{ price: plan.priceId, quantity: 1 }],
+                ...(user?.id ? { client_reference_id: user.id } : {}),
+                line_items: [{ price: priceId, quantity: 1 }],
                 success_url: `${base}/spot-issue/result?sid={CHECKOUT_SESSION_ID}`,
                 cancel_url: `${base}/spot-issue?canceled=1`,
                 customer_email: body.spotEmail,
                 allow_promotion_codes: true,
                 metadata: {
                     kind: 'spot',
-                    plan: plan.id,
+                    plan: planId,
                     staging_id: stagingId,
                     sha256,
                     filename: body.filename ?? '',
@@ -152,8 +178,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         sha256,
                     },
                 },
-            },
-            { idempotencyKey },
+            }
         );
 
         log.info({ event: 'checkout.spot.created', sessionId: session.id, stagingId, sha256: sha256 ? sha256.slice(0, 12) : '' });
@@ -169,4 +194,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 // Vercel Node runtime needs default body parser for JSON.
-export const config = { api: { bodyParser: { sizeLimit: '32kb' } } };
+export const config = {
+    runtime: 'nodejs',
+    maxDuration: 15,
+    api: { bodyParser: { sizeLimit: '32kb' } }
+};
