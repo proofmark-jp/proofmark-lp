@@ -66,12 +66,12 @@ export default function Tokushoho() {
     {
       label: '販売業者',
       icon: <Briefcase className="w-4 h-4" />,
-      value: 'ProofMark（運営者：小栗 慎也）',
+      value: 'ProofMark（運営者：小黒　新也）',
     },
     {
       label: '運営統括責任者',
       icon: <User className="w-4 h-4" />,
-      value: '小栗 慎也（Shinya Oguri）',
+      value: '小黒　新也（Shinya Oguro）',
     },
 
     /* ── 所在地 ── */
@@ -256,8 +256,8 @@ export default function Tokushoho() {
           <motion.div
             variants={fadeInVariants}
             className={`mb-8 rounded-2xl border p-5 backdrop-blur-md ${isB2B
-                ? 'border-[#00D4AA]/25 bg-[#00D4AA]/5'
-                : 'border-[#1C1A38] bg-[#0D0B24]/70'
+              ? 'border-[#00D4AA]/25 bg-[#00D4AA]/5'
+              : 'border-[#1C1A38] bg-[#0D0B24]/70'
               }`}
           >
             <div className="flex items-start gap-3">

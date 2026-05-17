@@ -112,6 +112,22 @@ async function issueSpotTimestamp(opts: { stagingId: string; sha256: string; req
         throw new Error(`spot order ${stagingId}: invalid sha256 in metadata`);
     }
 
+    // --- ここから追加 (冪等性の担保: Webhook再送時の二重課金を防ぐ) ---
+    const { data: existingOrder, error: checkErr } = await admin
+        .from('spot_orders')
+        .select('tsa_status')
+        .eq('staging_id', stagingId)
+        .maybeSingle();
+
+    if (checkErr) {
+        throw new Error(`spot ${stagingId}: failed to check existing status: ${checkErr.message}`);
+    }
+    if (existingOrder?.tsa_status === 'issued') {
+        log({ event: 'spot.tsa_already_issued', message: 'TSA token already exists. Skipping fetch to prevent double billing.' });
+        return;
+    }
+    // --- ここまで追加 ---
+
     let tsa;
     try {
         tsa = await requestTimestampWithFallback(sha256, { log });
@@ -264,7 +280,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 const sub = event.data.object as Stripe.Subscription;
                 const meta = (sub.metadata ?? {}) as Record<string, string>;
                 if (meta.user_id) {
-                    await applyPlanGrant({ user_id: meta.user_id, plan: 'free', stripe_subscription_id: sub.id });
+                    // サブスクリプションIDと契約期間を明示的に null で初期化し、DBに亡霊データを残さない
+                    await applyPlanGrant({ 
+                        user_id: meta.user_id, 
+                        plan: 'free', 
+                        stripe_subscription_id: null,
+                        current_period_end: null 
+                    });
                 }
                 break;
             }
