@@ -351,10 +351,8 @@ export default function CertificateUpload() {
           >
             <input {...getInputProps()} />
             <IdleHero
-              maxSizeMB={15}
-              title={proofMode === 'shareable'
-                ? '画像ファイル（JPEG, PNG等）をドロップ'
-                : 'ファイル（画像・PDF・ZIP等）をドロップ'}
+              title="ファイルをドロップして証明を発行"
+              subtitle="Private: 全ファイル (15MBまで) / Shareable: 画像のみ (4MBまで)"
             />
           </div>
         ) : (
@@ -628,13 +626,8 @@ export function IdleHero({
           className="text-[12px] tracking-wider"
           style={{ color: PM.textSubtle, fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}
         >
-          SHA-256 / {maxSizeMB}MB まで
+          {subtitle || `SHA-256 / ${maxSizeMB}MB まで`}
         </p>
-        {subtitle && (
-          <p className="text-[12px]" style={{ color: PM.textMuted }}>
-            {subtitle}
-          </p>
-        )}
       </motion.div>
     </div>
   );
