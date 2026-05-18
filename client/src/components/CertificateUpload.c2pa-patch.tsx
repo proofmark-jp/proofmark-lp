@@ -222,6 +222,8 @@ export default function CertificateUpload() {
         }));
       } else {
         // ── Private: ゼロ知識。ファイル実体は絶対に送信しない ──
+        formData.append('file_name', file.name);
+        formData.append('file_size', String(file.size));
         formData.append('metadataJson', JSON.stringify({
           original_filename: file.name,
           original_size: file.size,

@@ -90,6 +90,11 @@ export default function CertificateUpload() {
       formData.append('visibility', proofMode === 'shareable' ? visibility : 'private');
       formData.append('metadataJson', metadataJson);
 
+      if (proofMode === 'private') {
+        formData.append('file_name', file.name);
+        formData.append('file_size', String(file.size));
+      }
+
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       
