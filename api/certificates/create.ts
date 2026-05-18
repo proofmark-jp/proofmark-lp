@@ -161,7 +161,7 @@ export default async function handler(request: Request) {
       return json(400, { error: 'file_size must be a non-negative integer ≤ 500MB' });
     }
     resolvedFileName = declaredFileName;
-    resolvedMime = null; // private では mime を信頼しない
+    resolvedMime = String(formData.get('mime_type') || 'application/octet-stream');
     resolvedSize = declaredSize;
   }
 
