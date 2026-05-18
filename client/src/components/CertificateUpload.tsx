@@ -202,8 +202,8 @@ export default function CertificateUpload() {
         >
           <input {...getInputProps()} />
           <UploadCloud className="w-12 h-12 mx-auto mb-4 text-slate-400" />
-          <p className="text-white font-bold text-xl mb-2">ファイルをドロップして証明を発行</p>
-          <p className="text-[#A8A0D8] text-sm">Private: 全ファイル (15MBまで) / Shareable: 画像のみ (4MBまで)</p>
+          <p className="text-white font-bold text-xl mb-2">証明するファイルをドロップ</p>
+          <p className="text-[#A8A0D8] text-sm">最大 15MB（Private: 全ファイル形式 / Shareable: 画像のみ）</p>
         </div>
       ) : (
         <div className="space-y-8 animate-in fade-in duration-500">
