@@ -225,7 +225,7 @@ export default async function handler(
             theme: themeSpec,
         });
 
-        const svg = await satori(tree, {
+        const svg = await satori(tree as any, {
             width: sizeSpec.width,
             height: sizeSpec.height,
             fonts: [

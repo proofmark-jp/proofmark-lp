@@ -52,7 +52,7 @@ export async function fetchCertificateForOG(
   const timer = setTimeout(() => controller.abort(), 1200);
 
   try {
-    const { data, error } = await supabase
+    const query = supabase
       .from('certificates')
       .select(`
         id, title, sha256, proof_mode, visibility, badge_tier, proven_at, certified_at, tsa_provider, timestamp_token, cross_anchors,
@@ -61,8 +61,9 @@ export async function fetchCertificateForOG(
         )
       `)
       .eq('id', id)
-      .maybeSingle()
-      .abortSignal(controller.signal);
+      .maybeSingle();
+
+    const { data, error } = await (query as any).abortSignal(controller.signal);
 
     if (error || !data) return null;
 

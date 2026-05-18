@@ -181,7 +181,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 全プラン共通のハードロック（原価防衛）— QUOTA_MAP に従い admin 以外はすべて Redis で枠管理
     const rlResult = await incrementAndCheckCertIssue({ userId, planTier });
-    if (!rlResult.bypassed) {
+    if (!(rlResult as any).bypassed) {
       if (!rlResult.ok) {
         return res.status(429).json({
           error: `You have reached the limit of ${rlResult.quota} timestamps per month for your plan.`,

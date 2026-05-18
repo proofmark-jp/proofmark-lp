@@ -388,7 +388,7 @@ async function renderPng(
     tree: ReturnType<typeof html>,
     fonts: { regular: ArrayBuffer; bold: ArrayBuffer },
 ): Promise<Buffer> {
-    const svg = await satori(tree, {
+    const svg = await satori(tree as any, {
         width: WIDTH,
         height: HEIGHT,
         fonts: [
