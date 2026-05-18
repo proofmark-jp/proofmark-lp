@@ -10,16 +10,16 @@ import UpgradeModal from './UpgradeModal';
 import { useCertIssueQuota } from '../hooks/useCertIssueQuota';
 
 interface QuotaError {
-    status: number;
-    body?: { error?: string; quota?: number; used?: number; resetAt?: string };
+  status: number;
+  body?: { error?: string; quota?: number; used?: number; resetAt?: string };
 }
 
 function isQuotaError(err: unknown): err is QuotaError {
-    if (!err || typeof err !== 'object') return false;
-    const e = err as { status?: number; body?: { error?: string } };
-    if (e.status === 429) return true;
-    if (e.body?.error === 'quota_exceeded') return true;
-    return false;
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { status?: number; body?: { error?: string } };
+  if (e.status === 429) return true;
+  if (e.body?.error === 'quota_exceeded') return true;
+  return false;
 }
 
 type ProofMode = 'private' | 'shareable';
@@ -93,11 +93,12 @@ export default function CertificateUpload() {
       if (proofMode === 'private') {
         formData.append('file_name', file.name);
         formData.append('file_size', String(file.size));
+        formData.append('mime_type', file.type || 'application/octet-stream');
       }
 
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      
+
       if (!token) {
         setIsProcessing(false);
         setProcessStatus('');
@@ -116,16 +117,16 @@ export default function CertificateUpload() {
       });
 
       if (!res.ok) {
-         const errData = await res.json().catch(() => ({}));
-         
-         if (res.status === 429 || errData.error === 'quota_exceeded') {
-            throw { status: res.status, body: errData };
-         }
+        const errData = await res.json().catch(() => ({}));
 
-         if (res.status === 409) {
-            throw new Error(`すでに同一の証明書が存在します。(Token: ${errData.certificate?.public_verify_token})`);
-         }
-         throw new Error(errData.error || 'Failed to create certificate');
+        if (res.status === 429 || errData.error === 'quota_exceeded') {
+          throw { status: res.status, body: errData };
+        }
+
+        if (res.status === 409) {
+          throw new Error(`すでに同一の証明書が存在します。(Token: ${errData.certificate?.public_verify_token})`);
+        }
+        throw new Error(errData.error || 'Failed to create certificate');
       }
 
       const result = await res.json();
@@ -136,18 +137,18 @@ export default function CertificateUpload() {
       const targetUrl = `/cert/${certId}`;
       setLocation(targetUrl);
       setTimeout(() => {
-         if (!window.location.pathname.includes(certId)) {
-            window.location.href = targetUrl;
-         }
+        if (!window.location.pathname.includes(certId)) {
+          window.location.href = targetUrl;
+        }
       }, 500);
 
     } catch (error: any) {
       if (isQuotaError(error)) {
         const body = error.body ?? {};
         setQuotaContext({
-            used: body.used,
-            quota: body.quota ?? 30,
-            resetAt: body.resetAt,
+          used: body.used,
+          quota: body.quota ?? 30,
+          resetAt: body.resetAt,
         });
         forceLock(body.resetAt);
         setUpgradeOpen(true);
@@ -195,8 +196,8 @@ export default function CertificateUpload() {
         <div
           {...getRootProps()}
           className={`border-2 border-dashed rounded-2xl p-16 text-center cursor-pointer transition-all duration-300 ${isDragActive
-              ? 'border-[#00D4AA] bg-[#00D4AA]/10'
-              : 'border-slate-700 hover:border-[#6C3EF4] hover:bg-[#15132D]'
+            ? 'border-[#00D4AA] bg-[#00D4AA]/10'
+            : 'border-slate-700 hover:border-[#6C3EF4] hover:bg-[#15132D]'
             }`}
         >
           <input {...getInputProps()} />
@@ -244,77 +245,76 @@ export default function CertificateUpload() {
                 <p className="text-xs text-[#A8A0D8] mb-3">原画を一切送信せず、ハッシュ情報のみで存在を証明します。</p>
               </div>
 
-      {/* Shareable Mode */}
-      <div
-        onClick={() => {
-          console.log("Current Plan Check:", actualPlanVariable, "=> Evaluated as:", currentPlan);
-          if (isProcessing) return;
-          if (!user) {
-            alert('ログイン（無料登録）が必要です。');
-            return;
-          }
-          if (!isPaidPlan) {
-              alert('Shareable ProofはLIGHTプラン専用の機能です。');
-              return;
-          }
-          setProofMode('shareable');
-          setVisibility('public'); // Default is public for shareable
-        }}
-        className={`relative p-5 rounded-2xl border-2 transition-all ${
-            !isPaidPlan ? 'opacity-60 cursor-not-allowed bg-[#07061A] border-[#1C1A38]' :
-            proofMode === 'shareable' ? 'cursor-pointer border-[#6C3EF4] bg-[#6C3EF4]/5' : 'cursor-pointer border-[#1C1A38] bg-[#07061A] hover:border-slate-600'
-          }`}
-      >
-        {!isPaidPlan && (
-          <div className="absolute top-3 right-3 bg-gradient-to-r from-[#F0BB38] to-[#E5A822] text-[#1A1200] text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1">
-            <Star className="w-3 h-3" /> LIGHT限定
-          </div>
-        )}
-        <div className="flex justify-between items-start mb-2">
-          <div className="flex items-center gap-2">
-            <Eye className={`w-5 h-5 ${proofMode === 'shareable' ? 'text-[#6C3EF4]' : 'text-slate-500'}`} />
-            <h4 className={`font-bold ${proofMode === 'shareable' ? 'text-[#6C3EF4]' : 'text-slate-300'}`}>Shareable Proof</h4>
-          </div>
-          {proofMode === 'shareable' && <div className="w-3 h-3 rounded-full bg-[#6C3EF4] shadow-[0_0_10px_#6C3EF4]" />}
-        </div>
-        <p className="text-xs text-[#A8A0D8] mb-3">画像をセキュアストレージに保存し、公開検証ページに表示します。</p>
-      </div>
-    </div>
+              {/* Shareable Mode */}
+              <div
+                onClick={() => {
+                  console.log("Current Plan Check:", actualPlanVariable, "=> Evaluated as:", currentPlan);
+                  if (isProcessing) return;
+                  if (!user) {
+                    alert('ログイン（無料登録）が必要です。');
+                    return;
+                  }
+                  if (!isPaidPlan) {
+                    alert('Shareable ProofはLIGHTプラン専用の機能です。');
+                    return;
+                  }
+                  setProofMode('shareable');
+                  setVisibility('public'); // Default is public for shareable
+                }}
+                className={`relative p-5 rounded-2xl border-2 transition-all ${!isPaidPlan ? 'opacity-60 cursor-not-allowed bg-[#07061A] border-[#1C1A38]' :
+                    proofMode === 'shareable' ? 'cursor-pointer border-[#6C3EF4] bg-[#6C3EF4]/5' : 'cursor-pointer border-[#1C1A38] bg-[#07061A] hover:border-slate-600'
+                  }`}
+              >
+                {!isPaidPlan && (
+                  <div className="absolute top-3 right-3 bg-gradient-to-r from-[#F0BB38] to-[#E5A822] text-[#1A1200] text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1">
+                    <Star className="w-3 h-3" /> LIGHT限定
+                  </div>
+                )}
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-2">
+                    <Eye className={`w-5 h-5 ${proofMode === 'shareable' ? 'text-[#6C3EF4]' : 'text-slate-500'}`} />
+                    <h4 className={`font-bold ${proofMode === 'shareable' ? 'text-[#6C3EF4]' : 'text-slate-300'}`}>Shareable Proof</h4>
+                  </div>
+                  {proofMode === 'shareable' && <div className="w-3 h-3 rounded-full bg-[#6C3EF4] shadow-[0_0_10px_#6C3EF4]" />}
+                </div>
+                <p className="text-xs text-[#A8A0D8] mb-3">画像をセキュアストレージに保存し、公開検証ページに表示します。</p>
+              </div>
+            </div>
 
-    {/* 公開設定UIを追加 */}
-    {proofMode === 'shareable' && (
-      <div className="mt-4 p-4 rounded-xl border border-[#1C1A38] bg-[#07061A] animate-in slide-in-from-top-2">
-          <h4 className="text-sm font-bold text-white mb-3">公開設定 (Visibility)</h4>
-          <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                  <input 
-                      type="radio" 
-                      name="visibility" 
-                      value="private" 
+            {/* 公開設定UIを追加 */}
+            {proofMode === 'shareable' && (
+              <div className="mt-4 p-4 rounded-xl border border-[#1C1A38] bg-[#07061A] animate-in slide-in-from-top-2">
+                <h4 className="text-sm font-bold text-white mb-3">公開設定 (Visibility)</h4>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="visibility"
+                      value="private"
                       checked={visibility === 'private'}
                       onChange={() => setVisibility('private')}
                       className="accent-[#6C3EF4]"
-                  />
-                  <span className="text-sm text-slate-300">非公開 (自分のみ閲覧可)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                  <input 
-                      type="radio" 
-                      name="visibility" 
-                      value="public" 
+                    />
+                    <span className="text-sm text-slate-300">非公開 (自分のみ閲覧可)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="visibility"
+                      value="public"
                       checked={visibility === 'public'}
                       onChange={() => {
-                          if (window.confirm("「リンクを知っている全員」に設定すると、URLを知っている第三者も証明書と画像を閲覧できるようになります。よろしいですか？")) {
-                              setVisibility('public');
-                          }
+                        if (window.confirm("「リンクを知っている全員」に設定すると、URLを知っている第三者も証明書と画像を閲覧できるようになります。よろしいですか？")) {
+                          setVisibility('public');
+                        }
                       }}
                       className="accent-[#6C3EF4]"
-                  />
-                  <span className="text-sm text-slate-300">リンクを知っている全員</span>
-              </label>
-          </div>
-      </div>
-    )}
+                    />
+                    <span className="text-sm text-slate-300">リンクを知っている全員</span>
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
 
           <button
@@ -335,11 +335,11 @@ export default function CertificateUpload() {
       )}
 
       <UpgradeModal
-          open={upgradeOpen}
-          onClose={() => setUpgradeOpen(false)}
-          used={quotaContext.used}
-          quota={quotaContext.quota ?? 30}
-          resetAt={quotaContext.resetAt ?? null}
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        used={quotaContext.used}
+        quota={quotaContext.quota ?? 30}
+        resetAt={quotaContext.resetAt ?? null}
       />
     </div>
   );

@@ -85,7 +85,7 @@ export default function CertificateUpload() {
       }
     };
     const onDrop = () => setWindowDragActive(false);
-    
+
     window.addEventListener('dragenter', onEnter);
     window.addEventListener('dragleave', onLeave);
     window.addEventListener('drop', onDrop);
@@ -224,6 +224,7 @@ export default function CertificateUpload() {
         // ── Private: ゼロ知識。ファイル実体は絶対に送信しない ──
         formData.append('file_name', file.name);
         formData.append('file_size', String(file.size));
+        formData.append('mime_type', file.type || 'application/octet-stream');
         formData.append('metadataJson', JSON.stringify({
           original_filename: file.name,
           original_size: file.size,
@@ -323,198 +324,198 @@ export default function CertificateUpload() {
       {/* ここから内側のコンテンツ (z-[1]) */}
       <div className="relative z-[1] p-6 sm:p-10">
         {shellError && (
-           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute top-6 left-0 right-0 flex justify-center z-50 pointer-events-none">
-             <div className="flex items-center gap-2 rounded-full px-4 py-2 shadow-2xl backdrop-blur-md" style={{ background: 'rgba(255,69,58,0.15)', border: `1px solid ${PM.errorRing}` }}>
-               <AlertTriangle className="w-4 h-4" style={{ color: PM.error }} />
-               <span className="text-[13px] font-bold tracking-wide text-white">{shellError}</span>
-             </div>
-           </motion.div>
-        )}
-      {/* Free 検出時のアップセル (Worker は起動しない) */}
-      <AnimatePresence>
-        {c2paUpsellOpen && !c2paUpsellDismissed && !isPaidPlan && (
-          <C2paUpsell
-            onUpgrade={() => setLocation('/pricing')}
-            onDismiss={() => { setC2paUpsellDismissed(true); setC2paUpsellOpen(false); }}
-          />
-        )}
-      </AnimatePresence>
-
-      {!file ? (
-        <div
-          {...getRootProps()}
-          className={`border-2 border-dashed rounded-2xl p-16 text-center cursor-pointer transition-all duration-300 ${isDragActive
-            ? 'border-[#00D4AA] bg-[#00D4AA]/10'
-            : 'border-slate-700 hover:border-[#6C3EF4] hover:bg-[#15132D]'
-            }`}
-        >
-          <input {...getInputProps()} />
-          <IdleHero
-            maxSizeMB={15}
-            title={proofMode === 'shareable'
-              ? '画像ファイル（JPEG, PNG等）をドロップ'
-              : 'ファイル（画像・PDF・ZIP等）をドロップ'}
-          />
-        </div>
-      ) : (
-        <div className="space-y-8 animate-in fade-in duration-500">
-          <div className="flex flex-col sm:flex-row gap-6 items-center bg-[#07061A] p-6 rounded-2xl border border-[#1C1A38]">
-            {preview ? (
-              <img src={preview} alt="Preview" className="w-32 h-32 object-cover rounded-xl border border-slate-700" />
-            ) : (() => {
-              const IconComponent = getFileIcon(file.name);
-              const ext = file.name.split('.').pop()?.toUpperCase() ?? '';
-              return (
-                <div
-                  className="w-32 h-32 rounded-xl border border-[#1C1A38] flex flex-col items-center justify-center gap-2 relative overflow-hidden"
-                  style={{
-                    background: 'rgba(13,11,36,0.85)',
-                    backdropFilter: 'blur(12px)',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
-                  }}
-                >
-                  <IconComponent className="w-9 h-9" style={{ color: PM.primary, opacity: 0.7 }} />
-                  <span
-                    className="text-[10px] font-bold tracking-[0.15em] uppercase px-2 py-0.5 rounded"
-                    style={{ color: PM.textSubtle, background: 'rgba(108,62,244,0.1)' }}
-                  >
-                    .{ext}
-                  </span>
-                  {/* Private Mode バッジ */}
-                  <span
-                    className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex items-center gap-1 text-[7px] font-semibold tracking-wider uppercase whitespace-nowrap"
-                    style={{ color: PM.success, opacity: 0.55 }}
-                  >
-                    <Lock className="w-2 h-2" />
-                    Zero-Knowledge
-                  </span>
-                </div>
-              );
-            })()}
-            <div className="flex-1 w-full text-left">
-              <p className="text-xs text-[#00D4AA] font-bold uppercase tracking-widest mb-1">Target Asset</p>
-              <p className="text-lg font-bold truncate">{file.name}</p>
-              <p className="text-sm text-[#A8A0D8]">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-              {/* Private Mode: ゼロ知識バッジ (非画像ファイル時) */}
-              {!preview && proofMode === 'private' && (
-                <p className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase" style={{ color: PM.success, opacity: 0.7 }}>
-                  <Lock className="w-3 h-3" />
-                  Private Mode — No data sent to server
-                </p>
-              )}
-              {/* Phase 10: Content Credentials Found シグナル (有料時のみ) */}
-              <C2paInlineSignal signal={c2paSignal} manifest={c2paManifest} />
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute top-6 left-0 right-0 flex justify-center z-50 pointer-events-none">
+            <div className="flex items-center gap-2 rounded-full px-4 py-2 shadow-2xl backdrop-blur-md" style={{ background: 'rgba(255,69,58,0.15)', border: `1px solid ${PM.errorRing}` }}>
+              <AlertTriangle className="w-4 h-4" style={{ color: PM.error }} />
+              <span className="text-[13px] font-bold tracking-wide text-white">{shellError}</span>
             </div>
-            <button
-              onClick={() => { setFile(null); setPreview(null); setC2paManifest(null); setC2paSignal('idle'); }}
-              className="text-sm text-slate-400 hover:text-white underline transition-colors"
-              disabled={isProcessing}
-            >
-              選び直す
-            </button>
+          </motion.div>
+        )}
+        {/* Free 検出時のアップセル (Worker は起動しない) */}
+        <AnimatePresence>
+          {c2paUpsellOpen && !c2paUpsellDismissed && !isPaidPlan && (
+            <C2paUpsell
+              onUpgrade={() => setLocation('/pricing')}
+              onDismiss={() => { setC2paUpsellDismissed(true); setC2paUpsellOpen(false); }}
+            />
+          )}
+        </AnimatePresence>
+
+        {!file ? (
+          <div
+            {...getRootProps()}
+            className={`border-2 border-dashed rounded-2xl p-16 text-center cursor-pointer transition-all duration-300 ${isDragActive
+              ? 'border-[#00D4AA] bg-[#00D4AA]/10'
+              : 'border-slate-700 hover:border-[#6C3EF4] hover:bg-[#15132D]'
+              }`}
+          >
+            <input {...getInputProps()} />
+            <IdleHero
+              maxSizeMB={15}
+              title={proofMode === 'shareable'
+                ? '画像ファイル（JPEG, PNG等）をドロップ'
+                : 'ファイル（画像・PDF・ZIP等）をドロップ'}
+            />
           </div>
-
-          {/* 既存の Proof Mode 選択 (元コードから論理を維持) */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-[#00D4AA]" /> 証明モードの選択
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div
-                onClick={() => !isProcessing && setProofMode('private')}
-                className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all ${proofMode === 'private' ? 'border-[#00D4AA] bg-[#00D4AA]/5' : 'border-[#1C1A38] bg-[#07061A] hover:border-slate-600'
-                  } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <Shield className={`w-5 h-5 ${proofMode === 'private' ? 'text-[#00D4AA]' : 'text-slate-500'}`} />
-                  <h4 className={`font-bold ${proofMode === 'private' ? 'text-[#00D4AA]' : 'text-slate-300'}`}>Private Proof</h4>
-                </div>
-                <p className="text-xs text-[#A8A0D8]">原画を一切送信せず、ハッシュ情報のみで存在を証明します。</p>
-              </div>
-
-              <div
-                onClick={() => {
-                  if (isProcessing) return;
-                  if (!user) {
-                    setShellError('ログインが必要です');
-                    setTimeout(() => setShellError(null), 4200);
-                    return;
-                  }
-                  if (!isPaidPlan) {
-                    setShellError('Shareable Proof は有料プラン専用です');
-                    setTimeout(() => setShellError(null), 4200);
-                    return;
-                  }
-                  setProofMode('shareable');
-                }}
-                className={`relative p-5 rounded-2xl border-2 transition-all ${!isPaidPlan ? 'opacity-60 cursor-not-allowed bg-[#07061A] border-[#1C1A38]'
-                  : proofMode === 'shareable' ? 'cursor-pointer border-[#6C3EF4] bg-[#6C3EF4]/5'
-                    : 'cursor-pointer border-[#1C1A38] bg-[#07061A] hover:border-slate-600'
-                  }`}
-              >
-                {!isPaidPlan && (
-                  <div className="absolute top-3 right-3 bg-gradient-to-r from-[#F0BB38] to-[#E5A822] text-[#1A1200] text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1">
-                    <Star className="w-3 h-3" /> 有料限定
+        ) : (
+          <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="flex flex-col sm:flex-row gap-6 items-center bg-[#07061A] p-6 rounded-2xl border border-[#1C1A38]">
+              {preview ? (
+                <img src={preview} alt="Preview" className="w-32 h-32 object-cover rounded-xl border border-slate-700" />
+              ) : (() => {
+                const IconComponent = getFileIcon(file.name);
+                const ext = file.name.split('.').pop()?.toUpperCase() ?? '';
+                return (
+                  <div
+                    className="w-32 h-32 rounded-xl border border-[#1C1A38] flex flex-col items-center justify-center gap-2 relative overflow-hidden"
+                    style={{
+                      background: 'rgba(13,11,36,0.85)',
+                      backdropFilter: 'blur(12px)',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                    }}
+                  >
+                    <IconComponent className="w-9 h-9" style={{ color: PM.primary, opacity: 0.7 }} />
+                    <span
+                      className="text-[10px] font-bold tracking-[0.15em] uppercase px-2 py-0.5 rounded"
+                      style={{ color: PM.textSubtle, background: 'rgba(108,62,244,0.1)' }}
+                    >
+                      .{ext}
+                    </span>
+                    {/* Private Mode バッジ */}
+                    <span
+                      className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex items-center gap-1 text-[7px] font-semibold tracking-wider uppercase whitespace-nowrap"
+                      style={{ color: PM.success, opacity: 0.55 }}
+                    >
+                      <Lock className="w-2 h-2" />
+                      Zero-Knowledge
+                    </span>
                   </div>
+                );
+              })()}
+              <div className="flex-1 w-full text-left">
+                <p className="text-xs text-[#00D4AA] font-bold uppercase tracking-widest mb-1">Target Asset</p>
+                <p className="text-lg font-bold truncate">{file.name}</p>
+                <p className="text-sm text-[#A8A0D8]">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                {/* Private Mode: ゼロ知識バッジ (非画像ファイル時) */}
+                {!preview && proofMode === 'private' && (
+                  <p className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold tracking-wider uppercase" style={{ color: PM.success, opacity: 0.7 }}>
+                    <Lock className="w-3 h-3" />
+                    Private Mode — No data sent to server
+                  </p>
                 )}
-                <div className="flex items-center gap-2 mb-2">
-                  <Eye className={`w-5 h-5 ${proofMode === 'shareable' ? 'text-[#6C3EF4]' : 'text-slate-500'}`} />
-                  <h4 className={`font-bold ${proofMode === 'shareable' ? 'text-[#6C3EF4]' : 'text-slate-300'}`}>Shareable Proof</h4>
-                </div>
-                <p className="text-xs text-[#A8A0D8]">画像をセキュアストレージに保存し、公開検証ページに表示します。</p>
+                {/* Phase 10: Content Credentials Found シグナル (有料時のみ) */}
+                <C2paInlineSignal signal={c2paSignal} manifest={c2paManifest} />
               </div>
+              <button
+                onClick={() => { setFile(null); setPreview(null); setC2paManifest(null); setC2paSignal('idle'); }}
+                className="text-sm text-slate-400 hover:text-white underline transition-colors"
+                disabled={isProcessing}
+              >
+                選び直す
+              </button>
             </div>
 
-            {/* 公開設定UI (Visibility) */}
-            {proofMode === 'shareable' && (
-              <div className="mt-4 p-4 rounded-xl border border-[#1C1A38] bg-[#07061A] animate-in slide-in-from-top-2">
+            {/* 既存の Proof Mode 選択 (元コードから論理を維持) */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-[#00D4AA]" /> 証明モードの選択
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div
+                  onClick={() => !isProcessing && setProofMode('private')}
+                  className={`relative p-5 rounded-2xl border-2 cursor-pointer transition-all ${proofMode === 'private' ? 'border-[#00D4AA] bg-[#00D4AA]/5' : 'border-[#1C1A38] bg-[#07061A] hover:border-slate-600'
+                    } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield className={`w-5 h-5 ${proofMode === 'private' ? 'text-[#00D4AA]' : 'text-slate-500'}`} />
+                    <h4 className={`font-bold ${proofMode === 'private' ? 'text-[#00D4AA]' : 'text-slate-300'}`}>Private Proof</h4>
+                  </div>
+                  <p className="text-xs text-[#A8A0D8]">原画を一切送信せず、ハッシュ情報のみで存在を証明します。</p>
+                </div>
+
+                <div
+                  onClick={() => {
+                    if (isProcessing) return;
+                    if (!user) {
+                      setShellError('ログインが必要です');
+                      setTimeout(() => setShellError(null), 4200);
+                      return;
+                    }
+                    if (!isPaidPlan) {
+                      setShellError('Shareable Proof は有料プラン専用です');
+                      setTimeout(() => setShellError(null), 4200);
+                      return;
+                    }
+                    setProofMode('shareable');
+                  }}
+                  className={`relative p-5 rounded-2xl border-2 transition-all ${!isPaidPlan ? 'opacity-60 cursor-not-allowed bg-[#07061A] border-[#1C1A38]'
+                    : proofMode === 'shareable' ? 'cursor-pointer border-[#6C3EF4] bg-[#6C3EF4]/5'
+                      : 'cursor-pointer border-[#1C1A38] bg-[#07061A] hover:border-slate-600'
+                    }`}
+                >
+                  {!isPaidPlan && (
+                    <div className="absolute top-3 right-3 bg-gradient-to-r from-[#F0BB38] to-[#E5A822] text-[#1A1200] text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1">
+                      <Star className="w-3 h-3" /> 有料限定
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mb-2">
+                    <Eye className={`w-5 h-5 ${proofMode === 'shareable' ? 'text-[#6C3EF4]' : 'text-slate-500'}`} />
+                    <h4 className={`font-bold ${proofMode === 'shareable' ? 'text-[#6C3EF4]' : 'text-slate-300'}`}>Shareable Proof</h4>
+                  </div>
+                  <p className="text-xs text-[#A8A0D8]">画像をセキュアストレージに保存し、公開検証ページに表示します。</p>
+                </div>
+              </div>
+
+              {/* 公開設定UI (Visibility) */}
+              {proofMode === 'shareable' && (
+                <div className="mt-4 p-4 rounded-xl border border-[#1C1A38] bg-[#07061A] animate-in slide-in-from-top-2">
                   <h4 className="text-sm font-bold text-white mb-3">公開設定 (Visibility)</h4>
                   <div className="flex gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                          <input 
-                              type="radio" 
-                              name="visibility" 
-                              value="private" 
-                              checked={visibility === 'private'}
-                              onChange={() => setVisibility('private')}
-                              className="accent-[#6C3EF4]"
-                          />
-                          <span className="text-sm text-[#F0EFF8]">非公開 (自分のみ閲覧可)</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                          <input 
-                              type="radio" 
-                              name="visibility" 
-                              value="public" 
-                              checked={visibility === 'public'}
-                              onChange={() => setVisibility('public')}
-                              className="accent-[#6C3EF4]"
-                          />
-                          <span className="text-sm text-[#F0EFF8]">リンクを知っている全員</span>
-                      </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="visibility"
+                        value="private"
+                        checked={visibility === 'private'}
+                        onChange={() => setVisibility('private')}
+                        className="accent-[#6C3EF4]"
+                      />
+                      <span className="text-sm text-[#F0EFF8]">非公開 (自分のみ閲覧可)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="visibility"
+                        value="public"
+                        checked={visibility === 'public'}
+                        onChange={() => setVisibility('public')}
+                        className="accent-[#6C3EF4]"
+                      />
+                      <span className="text-sm text-[#F0EFF8]">リンクを知っている全員</span>
+                    </label>
                   </div>
                   <p className="mt-3 text-xs text-[#A8A0D8]">
                     「リンクを知っている全員」に設定すると、URLを知っている第三者も証明書と画像を閲覧できるようになります。
                   </p>
+                </div>
+              )}
+            </div>
+
+            {isProcessing || c2paSignal === 'analysing' ? (
+              <div className="w-full">
+                <SilentProgress caption={processStatus || '処理中...'} />
               </div>
+            ) : (
+              <button
+                onClick={handleIssueCertificate}
+                disabled={isProcessing || c2paSignal === 'analysing'}
+                className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-[#00D4AA] to-[#6C3EF4] hover:opacity-90 transition-opacity text-white disabled:opacity-50 flex items-center justify-center"
+              >
+                デジタル存在証明を発行する
+              </button>
             )}
           </div>
-
-        {isProcessing || c2paSignal === 'analysing' ? (
-          <div className="w-full">
-            <SilentProgress caption={processStatus || '処理中...'} />
-          </div>
-        ) : (
-          <button
-            onClick={handleIssueCertificate}
-            disabled={isProcessing || c2paSignal === 'analysing'}
-            className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-[#00D4AA] to-[#6C3EF4] hover:opacity-90 transition-opacity text-white disabled:opacity-50 flex items-center justify-center"
-          >
-            デジタル存在証明を発行する
-          </button>
         )}
-        </div>
-      )}
       </div>
     </div>
   );
