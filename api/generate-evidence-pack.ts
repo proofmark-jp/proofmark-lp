@@ -445,6 +445,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             evidencePackName = `evidence-pack-spot-${stagingId.slice(0, 8)}.zip`;
         }
 
+        // --- Dynamic Zip Date Setup (Bug 2 Fix) ---
+        const zipDate = downloadKind === 'auth' && cert
+            ? (cert.certified_at ? new Date(cert.certified_at) : (cert.proven_at ? new Date(cert.proven_at) : new Date()))
+            : (spotOrder?.paid_at ? new Date(spotOrder.paid_at) : new Date());
+
         // Stream ZIP — backpressure aware
         res.status(200);
         res.setHeader('Content-Type', 'application/zip');
@@ -485,7 +490,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (downloadKind === 'auth' && cert) {
             const sha256 = cert.sha256 ?? '';
             const verifyUrl = `https://proofmark.jp/cert/${cert.id}`;
-            const baseFile = safeFilename(cert.original_filename ?? cert.file_name, 'asset.bin');
+
+            // --- Original Filename Selection Logic (Bug 1 Fix) ---
+            const rawName = (cert.original_filename && cert.original_filename !== 'unknown_file')
+                ? cert.original_filename
+                : (cert.file_name || 'asset.bin');
+            const baseFile = safeFilename(rawName, 'asset.bin');
 
             const c2paBlob = safeC2paJson(cert.c2pa_manifest);
             const c2paIncluded = c2paBlob !== null;
@@ -508,49 +518,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const legalPdf = await getLegalCopyrightPdf(log);
             const legalGuideIncluded = legalPdf !== null;
 
-            archive.append(`SHA256= ${sha256}\n`, { name: 'hash.txt', date: FIXED_ZIP_TIME });
+            archive.append(`SHA256= ${sha256}\n`, { name: 'hash.txt', date: zipDate });
 
             if (cert.timestamp_token) {
                 const tsr = Buffer.from(cert.timestamp_token, 'base64');
-                archive.append(tsr, { name: 'timestamp.tsr', date: FIXED_ZIP_TIME });
+                archive.append(tsr, { name: 'timestamp.tsr', date: zipDate });
             } else {
                 archive.append('Timestamp token is not yet issued for this certificate.\n', {
                     name: 'timestamp.MISSING.txt',
-                    date: FIXED_ZIP_TIME,
+                    date: zipDate,
                 });
             }
 
             archive.append(
                 buildClientLetter(cert, verifyUrl, { c2paIncluded, chainIncluded, legalGuideIncluded }),
-                { name: 'CLIENT_LETTER.txt', date: FIXED_ZIP_TIME },
+                { name: 'CLIENT_LETTER.txt', date: zipDate },
             );
 
             if (c2paBlob) {
-                archive.append(c2paBlob.json, { name: 'c2pa.json', date: FIXED_ZIP_TIME });
+                archive.append(c2paBlob.json, { name: 'c2pa.json', date: zipDate });
                 log.info({ event: 'evidence-pack.c2pa_attached', bytes: c2paBlob.bytes });
             }
 
             if (chainBuffer) {
-                archive.append(chainBuffer, { name: 'chain_of_evidence.json', date: FIXED_ZIP_TIME });
+                archive.append(chainBuffer, { name: 'chain_of_evidence.json', date: zipDate });
                 log.info({ event: 'evidence-pack.chain_attached', bytes: chainBuffer.byteLength });
             }
 
             if (legalPdf) {
                 archive.append(legalPdf.buffer, {
                     name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf',
-                    date: FIXED_ZIP_TIME,
+                    date: zipDate,
                 });
                 log.info({ event: 'evidence-pack.legal_guide_attached', bytes: legalPdf.bytes });
             } else {
                 archive.append(
                     'ProofMark_Legal_and_Compliance_Guide.pdf could not be embedded in this archive.\n' +
                     'Please refer to https://proofmark.jp/legal-guide for the latest legal context.\n',
-                    { name: 'legal_guide/README.txt', date: FIXED_ZIP_TIME },
+                    { name: 'legal_guide/README.txt', date: zipDate },
                 );
             }
 
-            archive.append(buildVerifyShellScript(), { name: 'verify.sh', date: FIXED_ZIP_TIME, mode: 0o755 });
-            archive.append(buildVerifyPython(), { name: 'verify.py', date: FIXED_ZIP_TIME, mode: 0o755 });
+            archive.append(buildVerifyShellScript(), { name: 'verify.sh', date: zipDate, mode: 0o755 });
+            archive.append(buildVerifyPython(), { name: 'verify.py', date: zipDate, mode: 0o755 });
 
             const meta = {
                 certificate_id: cert.id,
@@ -569,14 +579,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 chain_present: chainIncluded,
                 legal_guide_present: legalGuideIncluded,
             };
-            archive.append(JSON.stringify(meta, null, 2), { name: 'metadata.json', date: FIXED_ZIP_TIME });
+            archive.append(JSON.stringify(meta, null, 2), { name: 'metadata.json', date: zipDate });
 
             // 原画 (shareable のみ) — ストリーム結合
             if (cert.proof_mode === 'shareable' && cert.storage_path) {
                 try {
                     const managed = await streamSupabaseFile(admin, 'proofmark-originals', cert.storage_path);
                     upstreamStreams.push(managed);
-                    archive.append(managed.stream, { name: `original/${baseFile}`, date: FIXED_ZIP_TIME });
+                    archive.append(managed.stream, { name: `original/${baseFile}`, date: zipDate });
                 } catch (err) {
                     log.warn({
                         event: 'auth.original_stream_failed',
@@ -585,7 +595,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     });
                     archive.append(
                         'Original file could not be streamed at archive time.\n',
-                        { name: `original/${baseFile}.MISSING.txt`, date: FIXED_ZIP_TIME },
+                        { name: `original/${baseFile}.MISSING.txt`, date: zipDate },
                     );
                 }
             }
@@ -593,12 +603,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // FreeTSA CA (キャッシュ済み)
             const caBundle = await fetchTsaCa();
             if (caBundle) {
-                archive.append(caBundle.ca, { name: 'freetsa-ca.crt', date: FIXED_ZIP_TIME });
-                archive.append(caBundle.tsa, { name: 'freetsa-tsa.crt', date: FIXED_ZIP_TIME });
+                archive.append(caBundle.ca, { name: 'freetsa-ca.crt', date: zipDate });
+                archive.append(caBundle.tsa, { name: 'freetsa-tsa.crt', date: zipDate });
             } else {
                 archive.append(
                     'CA/TSA certificates could not be embedded automatically.\nPlease download from https://freetsa.org/files/ before running verify.sh.\n',
-                    { name: 'freetsa.README.txt', date: FIXED_ZIP_TIME },
+                    { name: 'freetsa.README.txt', date: zipDate },
                 );
             }
         } else if (downloadKind === 'spot' && spotOrder) {
@@ -610,15 +620,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const legalGuideIncluded = legalPdf !== null;
 
             archive.append(buildSpotClientLetter(legalGuideIncluded), {
-                name: 'CLIENT_LETTER.txt', date: FIXED_ZIP_TIME,
+                name: 'CLIENT_LETTER.txt', date: zipDate,
             });
-            archive.append(buildVerifyShellScript(), { name: 'verify.sh', date: FIXED_ZIP_TIME, mode: 0o755 });
-            archive.append(buildVerifyPython(), { name: 'verify.py', date: FIXED_ZIP_TIME, mode: 0o755 });
-            archive.append(`SHA256= ${sha256}\n`, { name: 'hash.txt', date: FIXED_ZIP_TIME });
+            archive.append(buildVerifyShellScript(), { name: 'verify.sh', date: zipDate, mode: 0o755 });
+            archive.append(buildVerifyPython(), { name: 'verify.py', date: zipDate, mode: 0o755 });
+            archive.append(`SHA256= ${sha256}\n`, { name: 'hash.txt', date: zipDate });
 
             archive.append(
                 JSON.stringify(
-                    {
+                     {
                         kind: 'spot',
                         staging_id: spotOrder.staging_id,
                         stripe_session_id: spotOrder.stripe_session_id,
@@ -632,13 +642,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     null,
                     2,
                 ),
-                { name: 'metadata.json', date: FIXED_ZIP_TIME },
+                { name: 'metadata.json', date: zipDate },
             );
 
             if (legalPdf) {
                 archive.append(legalPdf.buffer, {
                     name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf',
-                    date: FIXED_ZIP_TIME,
+                    date: zipDate,
                 });
                 log.info({ event: 'evidence-pack.legal_guide_attached', kind: 'spot', bytes: legalPdf.bytes });
             }
@@ -648,7 +658,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     admin, 'spot-evidence', `${spotOrder.staging_id}/timestamp.tsr`,
                 );
                 upstreamStreams.push(managed);
-                archive.append(managed.stream, { name: 'timestamp.tsr', date: FIXED_ZIP_TIME });
+                archive.append(managed.stream, { name: 'timestamp.tsr', date: zipDate });
             } catch (err) {
                 log.warn({
                     event: 'spot.tsr_missing',
@@ -657,14 +667,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 });
                 archive.append(
                     'Timestamp token (timestamp.tsr) could not be retrieved.\nPlease re-run the Spot verification step or contact support.\n',
-                    { name: 'timestamp.MISSING.txt', date: FIXED_ZIP_TIME },
+                    { name: 'timestamp.MISSING.txt', date: zipDate },
                 );
             }
 
             const caBundle = await fetchTsaCa();
             if (caBundle) {
-                archive.append(caBundle.ca, { name: 'freetsa-ca.crt', date: FIXED_ZIP_TIME });
-                archive.append(caBundle.tsa, { name: 'freetsa-tsa.crt', date: FIXED_ZIP_TIME });
+                archive.append(caBundle.ca, { name: 'freetsa-ca.crt', date: zipDate });
+                archive.append(caBundle.tsa, { name: 'freetsa-tsa.crt', date: zipDate });
             }
         }
 
