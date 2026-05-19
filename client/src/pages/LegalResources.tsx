@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
 import { useAuth } from '../hooks/useAuth';
 import SEO from '../components/SEO';
 
@@ -460,8 +459,6 @@ Date: [Date]`;
           </div>
         </motion.section>
       </main>
-
-      <Footer />
     </div>
   );
 }
