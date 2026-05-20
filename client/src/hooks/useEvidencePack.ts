@@ -103,9 +103,9 @@ const PHASE_RANGES: Record<EvidencePackPhase, [number, number]> = {
 
 /* Noto Sans JP TTF — pdf-lib に embed 可能な形 */
 const NOTO_SANS_JP_TTF_URL =
-    'https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-jp@5.0.16/files/noto-sans-jp-japanese-400-normal.ttf';
+'https://cdn.jsdelivr.net/npm/@expo-google-fonts/noto-sans-jp@0.4.3/NotoSansJP_400Regular.ttf';
 const NOTO_SANS_JP_BOLD_TTF_URL =
-    'https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-jp@5.0.16/files/noto-sans-jp-japanese-700-normal.ttf';
+'https://cdn.jsdelivr.net/npm/@expo-google-fonts/noto-sans-jp@0.4.3/NotoSansJP_700Bold.ttf';
 
 let fontCache: { regular: ArrayBuffer; bold: ArrayBuffer } | null = null;
 
