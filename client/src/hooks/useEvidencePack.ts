@@ -101,11 +101,9 @@ const PHASE_RANGES: Record<EvidencePackPhase, [number, number]> = {
     error: [0, 0],
 };
 
-/* Noto Sans JP TTF — pdf-lib に embed 可能な形 */
-const NOTO_SANS_JP_TTF_URL =
-'https://cdn.jsdelivr.net/npm/@expo-google-fonts/noto-sans-jp@0.4.3/NotoSansJP_400Regular.ttf';
-const NOTO_SANS_JP_BOLD_TTF_URL =
-'https://cdn.jsdelivr.net/npm/@expo-google-fonts/noto-sans-jp@0.4.3/NotoSansJP_700Bold.ttf';
+/* Noto Sans JP TTF — Vercelの自社ドメインから最速配信 (404完全回避) */
+const NOTO_SANS_JP_TTF_URL = '/NotoSansJP-Regular.ttf';
+const NOTO_SANS_JP_BOLD_TTF_URL = '/NotoSansJP-Bold.ttf';
 
 let fontCache: { regular: ArrayBuffer; bold: ArrayBuffer } | null = null;
 
