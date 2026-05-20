@@ -35,6 +35,7 @@ interface EvidenceAsset {
 interface EvidenceText {
     pathInZip: string;
     content: string;
+    encoding?: 'utf8' | 'base64';
 }
 
 interface EvidencePayload {
@@ -183,7 +184,10 @@ export function useEvidencePack() {
 
                 // 4-a. テキスト (常に先頭で確定させる)
                 for (const t of payload.texts) {
-                    zip.file(t.pathInZip, t.content, { date: safeMtime });
+                    zip.file(t.pathInZip, t.content, {
+                        date: safeMtime,
+                        base64: t.encoding === 'base64' // ← Base64バイナリを正しく復元
+                    });
                 }
                 // 4-b. PDF
                 zip.file('Certificate_of_Authenticity.pdf', certPdf, { date: safeMtime });

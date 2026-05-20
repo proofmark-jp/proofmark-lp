@@ -49,8 +49,10 @@ interface EvidenceAsset {
 interface EvidenceText {
     /** ZIP 内のパス。例: "hash.txt" */
     pathInZip: string;
-    /** UTF-8 文字列。ブラウザで直接 zip.file() に渡す */
+    /** UTF-8 または Base64 文字列 */
     content: string;
+    /** バイナリデータの場合は base64 を指定 */
+    encoding?: 'utf8' | 'base64';
 }
 
 export interface EvidencePayload {
@@ -179,36 +181,25 @@ async function buildPayload(
     certId: string,
     auth: AuthContext,
 ): Promise<EvidencePayload> {
-    // ── 1. 証明書取得 (ownership 込みのビューを使う) ─────────
+    // ── 1. 証明書取得 (本物の certificates テーブルを使用) ─────────
     const { data: cert, error } = await supabase
-        .from('certificate_full_view')
-        .select(
-            'id, owner_id, title, file_name, mime_type, file_size, sha256, ' +
-            'proof_mode, badge_tier, certified_at, proven_at, ' +
-            'tsa_provider, timestamp_token_path, c2pa_manifest_path, ' +
-            'chain_evidence_path, originals_path, public_verify_token, ' +
-            'tsa_cert_path, ca_cert_path, copyright_pdf_path, ' +
-            'username, display_name',
-        )
+        .from('certificates')
+        .select('*')
         .eq('id', certId)
         .maybeSingle();
 
     if (error || !cert) throw new HttpError(404, 'not_found');
-    if (cert.owner_id !== auth.userId) throw new HttpError(403, 'forbidden');
-    if (!cert.timestamp_token_path) {
-        throw new HttpError(409, 'tsr_not_ready');
-    }
 
-    // ── 2. 大型バイナリは Signed URL で外出し ────────────────
+    // 認可チェック
+    const visibility = cert.visibility ?? 'private';
+    const isPublic = visibility === 'public' || visibility === 'unlisted';
+    if (!isPublic && cert.user_id !== auth.userId) throw new HttpError(403, 'forbidden');
+    if (!cert.timestamp_token) throw new HttpError(409, 'tsr_not_ready');
+
+    // ── 2. 大型バイナリは Signed URL で外出し (原本画像のみ) ────────────────
     const assets: EvidenceAsset[] = [];
-
-    // 2-a. 原本 (Shareable Proof のみ。Private Proof は同梱しない仕様)
-    if (cert.proof_mode === 'shareable' && cert.originals_path) {
-        const signed = await signOne(
-            supabase,
-            STORAGE_BUCKET_ORIGINALS,
-            cert.originals_path,
-        );
+    if (cert.proof_mode === 'shareable' && cert.storage_path) {
+        const signed = await signOne(supabase, 'proofmark-originals', cert.storage_path);
         if (signed) {
             assets.push({
                 pathInZip: `original/${safeFileName(cert.file_name ?? 'original.bin')}`,
@@ -219,97 +210,55 @@ async function buildPayload(
         }
     }
 
-    // 2-b. RFC3161 TSR
-    const tsrSigned = await signOne(
-        supabase,
-        STORAGE_BUCKET_ARTIFACTS,
-        cert.timestamp_token_path,
-    );
-    if (!tsrSigned) throw new HttpError(500, 'tsr_signed_url_failed');
-    assets.push({
-        pathInZip: 'timestamp.tsr',
-        signedUrl: tsrSigned.url,
-        size: tsrSigned.size,
-        isOriginal: false,
-    });
-
-    // 2-c. TSA / CA cert (公開鍵)
-    if (cert.tsa_cert_path) {
-        const s = await signOne(supabase, STORAGE_BUCKET_ARTIFACTS, cert.tsa_cert_path);
-        if (s) assets.push({ pathInZip: 'freetsa-tsa.crt', signedUrl: s.url, size: s.size, isOriginal: false });
-    }
-    if (cert.ca_cert_path) {
-        const s = await signOne(supabase, STORAGE_BUCKET_ARTIFACTS, cert.ca_cert_path);
-        if (s) assets.push({ pathInZip: 'freetsa-ca.crt', signedUrl: s.url, size: s.size, isOriginal: false });
-    }
-
-    // 2-d. C2PA / chain (optional)
-    if (cert.c2pa_manifest_path) {
-        const s = await signOne(supabase, STORAGE_BUCKET_ARTIFACTS, cert.c2pa_manifest_path);
-        if (s) assets.push({ pathInZip: 'c2pa.json', signedUrl: s.url, size: s.size, isOriginal: false });
-    }
-    if (cert.chain_evidence_path) {
-        const s = await signOne(supabase, STORAGE_BUCKET_ARTIFACTS, cert.chain_evidence_path);
-        if (s) assets.push({ pathInZip: 'chain.json', signedUrl: s.url, size: s.size, isOriginal: false });
-    }
-
-    // 2-e. Copyright Notice PDF (optional)
-    if (cert.copyright_pdf_path) {
-        const s = await signOne(supabase, STORAGE_BUCKET_ARTIFACTS, cert.copyright_pdf_path);
-        if (s) assets.push({ pathInZip: 'copyright_notice.pdf', signedUrl: s.url, size: s.size, isOriginal: false });
-    }
-
-    // ── 3. テキスト系は payload に直接同梱 ──────────────────
-    const verifyUrl = buildVerifyUrl(cert.public_verify_token, cert.id);
-    const authorLabel = cert.display_name || cert.username || 'Anonymous';
+    // ── 3. テキスト＆Base64系は payload に直接同梱 ──────────────────
+    const verifyUrl = buildVerifyUrl('verify', cert.id);
+    const authorLabel = 'Creator';
 
     const texts: EvidenceText[] = [
         { pathInZip: 'hash.txt', content: `${cert.sha256}  ${cert.file_name ?? 'original.bin'}\n` },
+        { pathInZip: 'timestamp.tsr', content: cert.timestamp_token, encoding: 'base64' },
         {
             pathInZip: 'metadata.json',
-            content:
-                JSON.stringify(
-                    {
-                        id: cert.id,
-                        title: cert.title,
-                        file_name: cert.file_name,
-                        mime_type: cert.mime_type,
-                        file_size: cert.file_size,
-                        sha256: cert.sha256,
-                        proof_mode: cert.proof_mode,
-                        badge_tier: cert.badge_tier,
-                        certified_at: cert.certified_at,
-                        proven_at: cert.proven_at,
-                        tsa_provider: cert.tsa_provider,
-                        verify_url: verifyUrl,
-                        author: authorLabel,
-                        evidence_pack_spec_version: '1.0',
-                    },
-                    null,
-                    2,
-                ) + '\n',
+            content: JSON.stringify({
+                id: cert.id, title: cert.title, file_name: cert.file_name,
+                sha256: cert.sha256, proof_mode: cert.proof_mode,
+                certified_at: cert.certified_at, tsa_provider: cert.tsa_provider,
+                verify_url: verifyUrl, author: authorLabel, evidence_pack_spec_version: '1.0',
+            }, null, 2) + '\n',
         },
         {
             pathInZip: 'CLIENT_LETTER.txt',
             content: renderCoverLetter({
                 title: cert.title ?? cert.file_name ?? '無題の作品',
                 fileName: cert.file_name ?? 'original.bin',
-                sha256: cert.sha256,
-                certifiedAt: cert.certified_at,
-                verifyUrl,
-                author: authorLabel,
+                sha256: cert.sha256, certifiedAt: cert.certified_at,
+                verifyUrl, author: authorLabel,
             }),
         },
         { pathInZip: 'verify.py', content: VERIFY_PY },
         { pathInZip: 'verify.sh', content: VERIFY_SH },
     ];
 
-    // ── 4. 整合性チェック (改ざん防止) ───────────────────────
-    // hash.txt の SHA256 とは別に、payload 自体の指紋を返す。
-    // フロント側で対照ログに残す用途。
-    const fingerprint = createHash('sha256')
-        .update(JSON.stringify(texts))
-        .digest('hex');
+    if (cert.c2pa_manifest) {
+        texts.push({ pathInZip: 'c2pa.json', content: JSON.stringify(cert.c2pa_manifest, null, 2) });
+    }
+
+    // FreeTSA 証明書の動的取得
+    try {
+        const [caRes, tsaRes] = await Promise.all([
+            fetch('https://freetsa.org/files/cacert.pem'),
+            fetch('https://freetsa.org/files/tsa.crt')
+        ]);
+        if (caRes.ok && tsaRes.ok) {
+            texts.push({ pathInZip: 'freetsa-ca.crt', content: await caRes.text() });
+            texts.push({ pathInZip: 'freetsa-tsa.crt', content: await tsaRes.text() });
+        }
+    } catch (e) {
+        // 無視して続行
+    }
+
+    // ── 4. 整合性チェック ───────────────────────
+    const fingerprint = createHash('sha256').update(JSON.stringify(texts)).digest('hex');
 
     // ── 5. レスポンス ────────────────────────────────────────
     const payload: EvidencePayload = {
@@ -319,26 +268,17 @@ async function buildPayload(
         assets,
         texts,
         certificate: {
-            id: cert.id,
-            title: cert.title ?? cert.file_name ?? '無題の作品',
-            fileName: cert.file_name ?? 'original.bin',
-            sha256: cert.sha256,
-            certifiedAt: cert.certified_at,
-            issuedAtJst: formatJst(cert.certified_at),
-            tsaProvider: cert.tsa_provider ?? 'FreeTSA',
-            proofMode: cert.proof_mode,
-            badgeTier: cert.badge_tier ?? null,
-            verifyUrl,
-            authorLabel,
+            id: cert.id, title: cert.title ?? cert.file_name ?? '無題の作品',
+            fileName: cert.file_name ?? 'original.bin', sha256: cert.sha256,
+            certifiedAt: cert.certified_at, issuedAtJst: formatJst(cert.certified_at),
+            tsaProvider: cert.tsa_provider ?? 'FreeTSA', proofMode: cert.proof_mode,
+            badgeTier: cert.badge_tier ?? null, verifyUrl, authorLabel,
         },
     };
 
-    // 監査ログに残す (best-effort)
+    // 監査ログ
     void supabase.from('evidence_pack_audit').insert({
-        cert_id: cert.id,
-        user_id: auth.userId,
-        payload_fingerprint: fingerprint,
-        issued_at: new Date().toISOString(),
+        cert_id: cert.id, user_id: auth.userId, payload_fingerprint: fingerprint, issued_at: new Date().toISOString(),
     });
 
     return payload;
