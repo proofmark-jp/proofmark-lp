@@ -435,7 +435,7 @@ export default function CertificatePage() {
                             </button>
                             <div className="no-print w-full sm:w-auto sm:min-w-[280px]">
                                 <EvidencePackDownloadButton certId={cert.id} />
-                            </div>>
+                            </div>
                         </>
                     ) : (
                         <button
