@@ -4,8 +4,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import { CheckCircle, Clock, ShieldCheck, Image as ImageIcon, Copy, Check, FileText, Lock, ShieldAlert, Flag, Package } from 'lucide-react';
 import { motion } from 'framer-motion';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { evidencePackDownloadUrl } from '../lib/checkout';
 import { useAuth } from '../hooks/useAuth';
+import EvidencePackDownloadButton from '@/components/EvidencePackDownloadButton';
 import Navbar from '../components/Navbar';
 import SEO from '../components/SEO';
 import { ProofBundleTimelineCard } from '../components/proof/ProofBundleTimelineCard';
@@ -63,38 +63,7 @@ export default function CertificatePage() {
 
     // ---- RFC3161 Timestamp State ----
     const [isStamping, setIsStamping] = useState(false);
-    const [isDownloading, setIsDownloading] = useState(false);
     const [verifiedTime, setVerifiedTime] = useState<string | null>(cert?.certified_at || null);
-
-    const handleDownloadEvidencePack = async () => {
-        setIsDownloading(true);
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const url = evidencePackDownloadUrl({ certId: cert.id });
-            const res = await fetch(url, {
-                headers: session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : undefined
-            });
-
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.error || 'ダウンロードに失敗しました');
-            }
-
-            const blob = await res.blob();
-            const objectUrl = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = objectUrl;
-            a.download = `evidence-pack-${cert.id.slice(0, 8)}.zip`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(objectUrl);
-        } catch (error: any) {
-            alert(error.message);
-        } finally {
-            setIsDownloading(false);
-        }
-    };
 
     useEffect(() => {
         async function fetchCertificate() {
@@ -464,13 +433,9 @@ export default function CertificatePage() {
                             >
                                 <FileText className="w-4 h-4" /> PDFとして保存
                             </button>
-                            <button
-                                onClick={handleDownloadEvidencePack}
-                                disabled={isDownloading}
-                                className="no-print bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 shadow-[0_0_18px_rgba(108,62,244,0.35)] hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <Package className="w-4 h-4" /> {isDownloading ? 'ダウンロード中...' : 'Evidence Pack をダウンロード'}
-                            </button>
+                            <div className="no-print w-full sm:w-auto sm:min-w-[280px]">
+                                <EvidencePackDownloadButton certId={cert.id} />
+                            </div>>
                         </>
                     ) : (
                         <button

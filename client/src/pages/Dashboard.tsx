@@ -46,6 +46,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
+import EvidencePackDownloadButton from '@/components/EvidencePackDownloadButton';
 
 /* ──────────────────────────────────────────────────────────────────────────
    Types
@@ -319,56 +320,6 @@ export default function Dashboard() {
     }
   }, []);
 
-  const handleDownloadEvidencePack = useCallback(async (cert: Certificate) => {
-    try {
-      toast.loading("Evidence Packを生成しています...", { id: `evidence-${cert.id}` });
-      const { data: { session } } = await supabase.auth.getSession();
-
-      const res = await fetch(`/api/generate-evidence-pack?cert=${cert.id}`, {
-        headers: {
-          Authorization: `Bearer ${session?.access_token ?? ""}`,
-        },
-        credentials: "omit",
-      });
-
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try {
-          const j = await res.json();
-          if (j?.error) msg = `${j.error}${j.reqId ? ` (req: ${j.reqId})` : ""}`;
-        } catch { /* non-JSON body */ }
-        throw new Error(msg);
-      }
-
-      // Content-Disposition からファイル名を取り出す（RFC 5987 日本語対応）
-      const cd = res.headers.get("content-disposition") || "";
-      const m5987 = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(cd);
-      const mPlain = /filename\s*=\s*"?([^";]+)"?/i.exec(cd);
-      const filename = m5987
-        ? decodeURIComponent(m5987[1])
-        : mPlain
-        ? mPlain[1]
-        : `proofmark-evidence-${cert.id.slice(0, 8)}.zip`;
-
-      const blob = await res.blob();
-      const href = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = href;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(href); // メモリ解放
-
-      toast.success("Evidence Pack をダウンロードしました", { id: `evidence-${cert.id}` });
-    } catch (e: any) {
-      toast.error("Evidence Pack 生成に失敗しました", {
-        id: `evidence-${cert.id}`,
-        description: e?.message ?? "API をご確認ください。",
-      });
-    }
-  }, []);
-
   const handleArchive = async (cert: Certificate, next: boolean) => {
     // 楽観的UI更新
     setCerts((prev) => prev.map((c) => (c.id === cert.id ? { ...c, is_archived: next } : c)));
@@ -577,7 +528,6 @@ export default function Dashboard() {
             onArchive={handleArchive}
             onAssignProject={handleAssignProject}
             onCopyLink={handleCopyVerifyLink}
-            onEvidence={handleDownloadEvidencePack}
             onToggleStar={handleToggleStar}
             onOpenChain={(c) => setComposerCert(c as unknown as CertificateRecord)}
             copiedId={copiedId}
@@ -596,7 +546,6 @@ export default function Dashboard() {
                 onArchive={handleArchive}
                 onAssignProject={handleAssignProject}
                 onCopyLink={handleCopyVerifyLink}
-                onEvidence={handleDownloadEvidencePack}
                 onToggleStar={handleToggleStar}
                 onOpenChain={(c) => setComposerCert(c as unknown as CertificateRecord)}
                 formatDate={formatDate}
@@ -805,7 +754,6 @@ interface RowActions {
   onArchive: (c: Certificate, next: boolean) => void;
   onAssignProject: (c: Certificate) => void;
   onCopyLink: (c: Certificate) => void;
-  onEvidence: (c: Certificate) => void;
   onToggleStar: (id: string, current: boolean) => void;
   onOpenChain: (c: Certificate) => void;
   formatDate: (iso: string) => string;
@@ -936,21 +884,9 @@ function CertCard(
             {copied ? <Check className="w-4 h-4" /> : <LinkIcon className="w-4 h-4" />}
             {copied ? "コピー済" : "検証URLをコピー"}
           </button>
-          <button 
-            onClick={() => {
-              if (plan_tier === "free") {
-                toast.info("Evidence Pack（ZIP/PDF）の発行は Creator プラン以上の機能です。プランをアップグレードして、法的な証拠能力を手に入れましょう。", {
-                  action: { label: "プランを見る", onClick: () => navigate("/pricing") }
-                });
-                return;
-              }
-              props.onEvidence(cert);
-            }} 
-            style={{ ...styles.evidenceAction, opacity: plan_tier === "free" ? 0.7 : 1 }}
-          >
-            <FileDown className="w-4 h-4" /> Evidence Pack
-            {plan_tier === "free" && " 🔒"}
-          </button>
+          <div style={{ width: '100%' }}>
+            <EvidencePackDownloadButton certId={cert.id} variant="ghost" />
+          </div>
         </div>
 
         <div style={styles.secondaryActions}>
@@ -1041,22 +977,9 @@ function CertList(
             <button onClick={() => props.onCopyLink(cert)} style={styles.iconBtn} title="検証URLをコピー">
               {copiedId === cert.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             </button>
-            <button 
-              onClick={() => {
-                if (plan_tier === "free") {
-                  toast.info("Evidence Pack（ZIP/PDF）の発行は Creator プラン以上の機能です。", {
-                    action: { label: "プランを見る", onClick: () => navigate("/pricing") }
-                  });
-                  return;
-                }
-                props.onEvidence(cert);
-              }} 
-              style={{ ...styles.iconBtn, opacity: plan_tier === "free" ? 0.7 : 1 }} 
-              title="Evidence Pack"
-            >
-              <FileDown className="w-4 h-4" />
-              {plan_tier === "free" && <span style={{ fontSize: 8, position: 'absolute', top: 0, right: 0 }}>🔒</span>}
-            </button>
+            <div className="w-[200px]">
+              <EvidencePackDownloadButton certId={cert.id} variant="ghost" label="ZIP" />
+            </div>
             <a href={`/cert/${cert.id}`} style={styles.iconBtn} title="証明書を開く">
               <ExternalLink className="w-4 h-4" />
             </a>

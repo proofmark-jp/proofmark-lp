@@ -37,6 +37,7 @@ import CertificateUpload from '@/components/CertificateUpload.c2pa-patch';
 
 import { UploadShell } from '@/components/dashboard/UploadShell';
 import { HistoryTable } from '@/components/dashboard/HistoryTable';
+import EvidencePackDownloadButton from '@/components/EvidencePackDownloadButton';
 import { PM, EASE, D } from '@/components/dashboard/obsidian-tokens';
 
 /* ──────────────────────────────────────────────────────────────────────── */
@@ -146,55 +147,6 @@ export default function DashboardObsidian() {
   }, [user, showArchived]);
 
   /* ── アクションハンドラ（Dashboard.tsx から移植） ────────────────── */
-  const handleDownloadEvidencePack = async (cert: Certificate) => {
-    try {
-      toast.loading("Evidence Packを生成しています...", { id: `evidence-${cert.id}` });
-      const { data: { session } } = await supabase.auth.getSession();
-
-      const res = await fetch(`/api/generate-evidence-pack?cert=${cert.id}`, {
-        headers: {
-          Authorization: `Bearer ${session?.access_token ?? ""}`,
-        },
-        credentials: "omit",
-      });
-
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try {
-          const j = await res.json();
-          if (j?.error) msg = `${j.error}${j.reqId ? ` (req: ${j.reqId})` : ""}`;
-        } catch { }
-        throw new Error(msg);
-      }
-
-      const cd = res.headers.get("content-disposition") || "";
-      const m5987 = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(cd);
-      const mPlain = /filename\s*=\s*"?([^";]+)"?/i.exec(cd);
-      const filename = m5987
-        ? decodeURIComponent(m5987[1])
-        : mPlain
-        ? mPlain[1]
-        : `proofmark-evidence-${cert.id.slice(0, 8)}.zip`;
-
-      const blob = await res.blob();
-      const href = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = href;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(href);
-
-      toast.success("Evidence Pack をダウンロードしました", { id: `evidence-${cert.id}` });
-    } catch (e: any) {
-      toast.error("Evidence Pack 生成に失敗しました", {
-        id: `evidence-${cert.id}`,
-        description: e?.message ?? "API をご確認ください。",
-      });
-    }
-  };
-
   const handleAssignProject = async (cert: Certificate) => {
     const current = (cert as any).client_project ?? "";
     const next = window.prompt(
@@ -333,7 +285,6 @@ export default function DashboardObsidian() {
             certificates={rows}
             loading={loadingRows}
             planTier={plan_tier}
-            onEvidence={handleDownloadEvidencePack}
             onAssignProject={handleAssignProject}
           />
         </section>

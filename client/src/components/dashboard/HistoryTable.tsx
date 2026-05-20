@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import type { Certificate, CertificateStatus } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import VisibilityToggle from '../VisibilityToggle';
+import EvidencePackDownloadButton from '@/components/EvidencePackDownloadButton';
 import { PM, EASE, D } from './obsidian-tokens';
 
 /* ──────────────────────────────────────────────────────────────────────── */
@@ -42,8 +43,6 @@ interface HistoryTableProps {
   pageSize?: number;
   /** ユーザーの課金プラン (free, spot, creator, studio, business) */
   planTier: string;
-  /** Evidence Pack 発行ハンドラ */
-  onEvidence: (cert: Certificate) => void;
   /** プロジェクト割当ハンドラ */
   onAssignProject: (cert: Certificate) => void;
 }
@@ -56,7 +55,6 @@ export function HistoryTable({
   onRowClick,
   pageSize = 10,
   planTier,
-  onEvidence,
   onAssignProject,
 }: HistoryTableProps) {
   if (loading) return <HistorySkeleton rows={Math.min(5, pageSize)} />;
@@ -85,7 +83,6 @@ export function HistoryTable({
             cert={cert}
             isLast={i === rows.length - 1}
             planTier={planTier}
-            onEvidence={onEvidence}
             onAssignProject={onAssignProject}
             onClick={() => {
               if (onRowClick) onRowClick(cert);
@@ -129,14 +126,12 @@ function HistoryRow({
   cert,
   isLast,
   planTier,
-  onEvidence,
   onAssignProject,
   onClick,
 }: {
   cert: Certificate;
   isLast: boolean;
   planTier: string;
-  onEvidence: (cert: Certificate) => void;
   onAssignProject: (cert: Certificate) => void;
   onClick: () => void;
 }) {
@@ -250,21 +245,9 @@ function HistoryRow({
             <div onClick={(e) => e.stopPropagation()} className="mr-2">
               <VisibilityToggle assetId={cert.id} initialVisibility={(cert.visibility as 'public' | 'private') || 'public'} />
             </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (planTier === 'free') {
-                  toast.info("Evidence Packの発行はCreatorプラン以上です。");
-                } else {
-                  onEvidence(cert);
-                }
-              }}
-              className="p-1 hover:text-white transition-colors flex items-center gap-0.5"
-              title="Evidence Pack (ZIP/PDF)"
-            >
-              <FileDown className="w-4 h-4" />
-              {planTier === 'free' ? <span className="text-[9px]">🔒</span> : null}
-            </button>
+            <div onClick={(e) => e.stopPropagation()} className="w-48 mx-2">
+              <EvidencePackDownloadButton certId={cert.id} variant="ghost" label="ZIP" />
+            </div>
             <button
               onClick={(e) => {
                 e.stopPropagation();
