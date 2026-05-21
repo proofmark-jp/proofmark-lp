@@ -465,14 +465,14 @@ async function buildCertificatePdf(
 
       // ── Page 2: Body & Footer 注入 ─────────────────────────
       // 01・オンライン検証 URL（ボックスの垂直・水平に完全合致。ここは変更なし）
-      page2.drawText(meta.verifyUrl, { x: 75.5, y: 641.0, size: 9.5, font: fontMono, color: purple });
+      page2.drawText(meta.verifyUrl, { x: 75.5, y: 635.0, size: 9.5, font: fontMono, color: purple });
       
       // 2ページ目のテンプレートの自動余白歪みを完全に相殺する、1.5ptの引き下げ補正値
-      const P2_Y_ROW1 = 53.0; // 1ページ目の発行日[54.5]と視覚的に完全に同じ高さに静止する値
-      const P2_Y_ROW3 = 30.0; // 1ページ目の証明書ID[30.5]と視覚的に完全に同じ高さに静止する値
+      const P2_Y_ROW1 = 54.5; // 1ページ目の発行日[54.5]と完全に水平同期
+      const P2_Y_ROW3 = 42.5; // ご指定に基づき42.5へ引き上げ。2ページ目「証明書ID」ラベルのベースラインへ1pxの狂いもなく完全直列
 
       page2.drawText(meta.issuedAtJst, { x: FOOTER_X, y: P2_Y_ROW1, size: 10, font: fontRegular, color: ink });
-      page2.drawText(meta.id, { x: FOOTER_X, y: P2_Y_ROW3, size: 8.5, font: fontMono, color: inkSubtle });
+      page2.drawText(meta.id, { x: FOOTER_X, y: P2_Y_ROW3, size: 9.5, font: fontMono, color: inkSubtle });
 
       onProgress(0.95);
       const bytes = await pdf.save();
