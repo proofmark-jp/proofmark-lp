@@ -439,37 +439,42 @@ async function buildCertificatePdf(
     const inkSubtle = rgb(0x3a / 255, 0x3a / 255, 0x42 / 255);
     const purple = rgb(0x6c / 255, 0x3e / 255, 0xf4 / 255);
 
-    // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
-      // 【完全無欠】ベースライン独立・完全ピクセル同期システム
-      // テンプレート自体の数ピクセルの歪みを、ページ個別の補正値で完全に相殺します
+   // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
+      // 【最終最適化版】ベースライン独立型・動的追従フッターシステム
+      // ご提示の神グリッド座標をベースに、長文ファイル名のみ自動でIDを押し下げます
       // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
       
       const FOOTER_X = 140.0; // ラベルの直後に100%美しく揃うX軸基準線
-
-      // 長すぎるファイル名によるフッター崩れを未然に防ぐプロのUX処理（最大32文字で切り詰め）
-      const truncateFileName = (name: string): string => {
-        return name.length > 32 ? name.slice(0, 30) + '...' : name;
-      };
-      const cleanFileName = truncateFileName(meta.fileName);
+      const MAX_TEXT_WIDTH = 240.0; // 署名欄（sinn）の手前まで使える安全な最大描画幅
 
       // ── Page 1: Footer 注入 ────────────────────────────────
-      // 1ページ目のテンプレート底面基準に最適化したY座標
-      const P1_Y_ROW1 = 68.5; // 発行日
-      const P1_Y_ROW2 = 56.5; // 納品物
-      const P1_Y_ROW3 = 44.5; // 証明書ID
+      const P1_Y_ROW1 = 68.5; // 1行目: 発行日の絶対高さ
+      const P1_Y_ROW2 = 56.5; // 2行目: 納品物の開始高さ
 
+      // 1行目: 発行日（ご提示のサイズ 9.0 を維持）
       page1.drawText(meta.issuedAtJst, { x: FOOTER_X, y: P1_Y_ROW1, size: 9.0, font: fontRegular, color: ink });
-      page1.drawText(cleanFileName, { x: FOOTER_X, y: P1_Y_ROW2, size: 9.0, font: fontRegular, color: ink });
-      page1.drawText(meta.id, { x: FOOTER_X, y: P1_Y_ROW3, size: 9.5, font: fontMono, color: inkSubtle });
+      
+      // 2行目: 納品物 (切り詰めを完全撤廃。どれだけ長くても自動で折り返して全文字描画)
+      // 改行が入るたびに、この関数が自動で下方向へテキストを展開します
+      drawWrappedText(page1, meta.fileName, FOOTER_X, P1_Y_ROW2, MAX_TEXT_WIDTH, fontRegular, 9.0, ink, 12.0);
+      
+      // ファイル名が現在のフォントサイズ(9.0)で枠幅(240pt)を超えた場合の行数を数学的に算出
+      const textWidth = fontRegular.widthOfTextAtSize(meta.fileName, 9.0);
+      const lineCount = Math.ceil(textWidth / MAX_TEXT_WIDTH);
+
+      // 3行目: 証明書ID (ご提示の高さ 44.5 を基準とし、ファイル名が2行以上になった時だけ自動で押し下げ)
+      // これにより、通常の長さなら「44.5」にジャストフィットし、長文でも文字が重なりません
+      const p1_idY = lineCount > 1 ? P1_Y_ROW2 - (lineCount * 12.0) : 44.5;
+      page1.drawText(meta.id, { x: FOOTER_X, y: p1_idY, size: 9.5, font: fontMono, color: inkSubtle });
 
 
       // ── Page 2: Body & Footer 注入 ─────────────────────────
-      // 01・オンライン検証 URL（ボックスの垂直・水平に完全合致。ここは変更なし）
+      // 01・オンライン検証 URL（ご提示の完璧な位置 [638.0] を100%固定）
       page2.drawText(meta.verifyUrl, { x: 75.5, y: 638.0, size: 9.5, font: fontMono, color: purple });
       
-      // 2ページ目のテンプレートの自動余白歪みを完全に相殺する、1.5ptの引き下げ補正値
-      const P2_Y_ROW1 = 55.0; // 1ページ目の発行日[54.5]と完全に水平同期
-      const P2_Y_ROW3 = 44.0; // ご指定に基づき42.5へ引き上げ。2ページ目「証明書ID」ラベルのベースラインへ1pxの狂いもなく完全直列
+      // 2ページ目フッター (ご提示いただいた位置で完全に直列同期)
+      const P2_Y_ROW1 = 55.0; // 1行目: 発行日
+      const P2_Y_ROW3 = 44.0; // 2行目: 証明書ID（ラベルのベースラインへ完全直列）
 
       page2.drawText(meta.issuedAtJst, { x: FOOTER_X, y: P2_Y_ROW1, size: 9.0, font: fontRegular, color: ink });
       page2.drawText(meta.id, { x: FOOTER_X, y: P2_Y_ROW3, size: 9.5, font: fontMono, color: inkSubtle });
