@@ -440,31 +440,31 @@ async function buildCertificatePdf(
     const purple = rgb(0x6c / 255, 0x3e / 255, 0xf4 / 255);
 
     // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
-    // 座標設定 (※A4サイズ: 幅約595pt x 高さ約842pt 左下が原点[0,0])
-    // ベースPDFのデザインに合わせて、ここの数値を後から微調整してください。
-    // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
-    
-    const FOOTER_X = 145; // 「発行日」などのラベルの右側のX座標
+      // 座標設定 (A4: 595.28 x 841.89 pt)
+      // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
+      
+      const FOOTER_X = 110; // X座標を左に寄せて「発行日」ラベルのすぐ右に配置
 
-    // ── Page 1: Footer 注入 ──
-    // 発行日
-    page1.drawText(meta.issuedAtJst, { x: FOOTER_X, y: 135, size: 10.5, font: fontRegular, color: ink });
-    // 納品物 (ファイル名) - 自動改行対応 (最大幅300pt)
-    drawWrappedText(page1, meta.fileName, FOOTER_X, 115, 300, fontRegular, 10.5, ink, 14);
-    // 証明書ID
-    page1.drawText(meta.id, { x: FOOTER_X, y: 88, size: 9, font: fontMono, color: inkSubtle });
+      // ── Page 1: Footer 注入 ──
+      // 発行日 (Yを大幅に下げてフッター位置へ)
+      page1.drawText(meta.issuedAtJst, { x: FOOTER_X, y: 92, size: 10.5, font: fontRegular, color: ink });
+      // 納品物 (ファイル名) 
+      drawWrappedText(page1, meta.fileName, FOOTER_X, 76, 300, fontRegular, 10.5, ink, 14);
+      // 証明書ID
+      page1.drawText(meta.id, { x: FOOTER_X, y: 58, size: 9, font: fontMono, color: inkSubtle });
 
-    // ── Page 2: Body & Footer 注入 ──
-    // 01・オンライン検証 URL
-    page2.drawText(meta.verifyUrl, { x: 75, y: 550, size: 10, font: fontMono, color: purple });
-    
-    // 発行日 (フッター)
-    page2.drawText(meta.issuedAtJst, { x: FOOTER_X, y: 135, size: 10.5, font: fontRegular, color: ink });
-    // 証明書ID (フッター)
-    page2.drawText(meta.id, { x: FOOTER_X, y: 115, size: 9, font: fontMono, color: inkSubtle });
 
-    onProgress(0.95);
-    const bytes = await pdf.save();
-    onProgress(1);
-    return bytes;
-}
+      // ── Page 2: Body & Footer 注入 ──
+      // 01・オンライン検証 URL (Yを上げてグレーのボックス内へ)
+      page2.drawText(meta.verifyUrl, { x: 74, y: 642, size: 10, font: fontMono, color: purple });
+      
+      // 発行日 (フッター)
+      page2.drawText(meta.issuedAtJst, { x: FOOTER_X, y: 92, size: 10.5, font: fontRegular, color: ink });
+      // 証明書ID (フッター)
+      page2.drawText(meta.id, { x: FOOTER_X, y: 76, size: 9, font: fontMono, color: inkSubtle });
+
+      onProgress(0.95);
+      const bytes = await pdf.save();
+      onProgress(1);
+      return bytes;
+    }
