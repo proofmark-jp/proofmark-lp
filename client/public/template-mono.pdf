@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Certificate of Authenticity | ProofMark — Monochrome Edition</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:ital,wght@0,400;0,500&family=Playfair+Display:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --ink-100:  #0A0A0C;
+      --ink-80:   #222228;
+      --ink-60:   #48484F;
+      --ink-40:   #8A8A94;
+      --ink-20:   #C4C4CC;
+      --ink-08:   #EDEDF0;
+      --ink-04:   #F6F6F8;
+      --white:    #FFFFFF;
+      --mono:     'DM Mono', 'SF Mono', 'Courier New', monospace;
+      --serif:    'Playfair Display', 'Georgia', serif;
+      --sans:     'Noto Sans JP', -apple-system, 'Helvetica Neue', sans-serif;
+    }
+
+    @page { size: A4 portrait; margin: 0; }
+
+    body {
+      background: #E8E8EC;
+      font-family: var(--sans);
+      color: var(--ink-100);
+      -webkit-font-smoothing: antialiased;
+      font-feature-settings: 'palt' 1, 'kern' 1;
+    }
+
+    /* ── Page ─────────────────────────────────── */
+    .page {
+      width: 210mm;
+      height: 297mm;
+      margin: 0 auto;
+      background: var(--white);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      page-break-after: always;
+    }
+
+    @media screen {
+      .page {
+        box-shadow:
+          0 1px 2px rgba(0,0,0,0.04),
+          0 8px 24px rgba(0,0,0,0.08),
+          0 32px 64px rgba(0,0,0,0.06);
+        margin-bottom: 32px;
+      }
+    }
+
+    /* ── Hairline top rule ─────────────────────── */
+    .top-rule {
+      width: 100%;
+      height: 1px;
+      background: var(--ink-100);
+      flex-shrink: 0;
+    }
+
+    /* ── Inner canvas ─────────────────────────── */
+    .canvas {
+      padding: 19mm 21mm 15mm;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    /* ── Document header ──────────────────────── */
+    .doc-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 20px;
+      align-items: start;
+      margin-bottom: 9mm;
+    }
+
+    .kicker {
+      font-size: 7.5px;
+      font-weight: 700;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--ink-40);
+      margin-bottom: 8px;
+    }
+
+    .doc-title {
+      font-family: var(--serif);
+      font-size: 32px;
+      font-weight: 400;
+      line-height: 1.12;
+      letter-spacing: -0.01em;
+      color: var(--ink-100);
+    }
+
+    .doc-subtitle {
+      margin-top: 7px;
+      font-size: 9px;
+      font-weight: 400;
+      letter-spacing: 0.12em;
+      color: var(--ink-40);
+      text-transform: uppercase;
+    }
+
+    /* Monochrome seal — pure geometry */
+    .seal-wrap {
+      padding-top: 4px;
+    }
+
+    .seal {
+      width: 48px;
+      height: 48px;
+    }
+
+    /* ── Divider ───────────────────────────────── */
+    .divider {
+      width: 100%;
+      height: 1px;
+      background: var(--ink-08);
+      margin-bottom: 7mm;
+    }
+
+    .divider-heavy {
+      height: 1px;
+      background: var(--ink-20);
+      margin-bottom: 7mm;
+    }
+
+    /* ── Body ─────────────────────────────────── */
+    .body { flex: 1; }
+
+    /* Section */
+    .section { margin-bottom: 6.5mm; }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 5px;
+    }
+
+    .section-num {
+      font-family: var(--mono);
+      font-size: 8px;
+      font-weight: 500;
+      color: var(--ink-40);
+      letter-spacing: 0.08em;
+    }
+
+    .section-title {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--ink-60);
+    }
+
+    .section-rule {
+      flex: 1;
+      height: 1px;
+      background: var(--ink-08);
+    }
+
+    .sub-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink-100);
+      margin: 7px 0 4px;
+      letter-spacing: -0.01em;
+    }
+
+    p {
+      font-size: 11px;
+      line-height: 1.85;
+      color: var(--ink-60);
+      margin-bottom: 5px;
+      text-align: justify;
+      letter-spacing: 0.01em;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      background: var(--ink-04);
+      border: 1px solid var(--ink-08);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--ink-80);
+      font-weight: 500;
+    }
+
+    ul { list-style: none; }
+
+    ul li {
+      font-size: 11px;
+      line-height: 1.8;
+      color: var(--ink-60);
+      padding-left: 14px;
+      margin-bottom: 3px;
+      position: relative;
+      text-align: justify;
+    }
+
+    ul li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 9px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--ink-20);
+    }
+
+    ul li strong {
+      color: var(--ink-80);
+      font-weight: 700;
+    }
+
+    /* Verify block — monochrome inset */
+    .verify-inset {
+      background: var(--ink-04);
+      border: 1px solid var(--ink-08);
+      border-radius: 4px;
+      padding: 9px 13px;
+      margin: 5px 0 7px;
+    }
+
+    .verify-kicker {
+      font-size: 7px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--ink-40);
+      margin-bottom: 5px;
+    }
+
+    .verify-url {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-80);
+      font-weight: 500;
+      word-break: break-all;
+      letter-spacing: 0.01em;
+    }
+
+    /* Command */
+    .cmd {
+      display: inline-block;
+      background: var(--ink-100);
+      border-radius: 4px;
+      padding: 6px 12px;
+      margin: 4px 0;
+    }
+
+    .cmd code {
+      background: transparent;
+      border: none;
+      color: var(--white);
+      font-size: 10px;
+      padding: 0;
+    }
+
+    /* ── Footer ───────────────────────────────── */
+    .footer {
+      margin-top: auto;
+      padding-top: 6mm;
+    }
+
+    .footer-rule {
+      width: 100%;
+      height: 1px;
+      background: var(--ink-100);
+      margin-bottom: 5mm;
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: end;
+    }
+
+    .footer-meta {}
+
+    .footer-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .footer-key {
+      font-size: 7.5px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--ink-40);
+      width: 56px;
+      flex-shrink: 0;
+    }
+
+    .footer-val {
+      font-size: 10.5px;
+      color: var(--ink-80);
+      font-weight: 500;
+    }
+
+    .footer-val-mono {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--ink-60);
+      letter-spacing: 0.03em;
+    }
+
+    .footer-issuer {
+      text-align: right;
+    }
+
+    .issuer-name {
+      font-family: var(--serif);
+      font-size: 17px;
+      font-weight: 400;
+      color: var(--ink-100);
+      line-height: 1.2;
+      margin-bottom: 2px;
+    }
+
+    .issuer-org {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-100);
+      margin-bottom: 3px;
+    }
+
+    .issuer-email {
+      font-size: 9.5px;
+      color: var(--ink-60);
+    }
+
+    /* Page number */
+    .page-num {
+      position: absolute;
+      bottom: 10mm;
+      right: 21mm;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--ink-20);
+    }
+
+    @media print {
+      body { background: white; }
+      .page { box-shadow: none; margin: 0; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    }
+
+    /* ──────────────────────────────────────────────
+     * テンプレート生成用：おもてなし（署名・説明文）を残し、
+     * 動的データのみをレイアウト維持のまま透明化（超厳密仕様）
+     * ────────────────────────────────────────────── */
+     
+    /* 1. 本文・フッター内の動的テキスト（ファイル名、日付、ID、URL） */
+    .verify-url, 
+    .body .section:first-child code, /* 冒頭のファイル名のみ */
+    .footer-val, 
+    .footer-val-mono {
+      opacity: 0 !important;
+    }
+
+    /* 2. 【重要】署名欄、ファイル一覧、コマンドブロックは透明化しない */
+    .footer-issuer .issuer-name,
+    .footer-issuer .issuer-org,
+    .footer-issuer .issuer-email,
+    .body ul li code, /* 同封ファイル一覧 */
+    .cmd code {        /* オフライン検証コマンド */
+      opacity: 1 !important;
+      visibility: visible !important;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════ PAGE 1 ════════════════════ -->
+<div class="page">
+  <div class="top-rule"></div>
+  <div class="canvas">
+
+    <div class="doc-head">
+      <div>
+        <div class="kicker">ProofMark · Authenticity</div>
+        <h1 class="doc-title">納品物<br>真正性証明書</h1>
+        <div class="doc-subtitle">Certificate of Authenticity · Delivery</div>
+      </div>
+      <div class="seal-wrap">
+        <!-- Monochrome geometric seal -->
+        <svg class="seal" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="48" height="48" rx="9" fill="#0A0A0C"/>
+          <path d="M24 4 L6 14 L6 34 L24 44 L42 34 L42 14 Z"
+            fill="none" stroke="white" stroke-width="1.5"
+            stroke-linejoin="round" opacity="0.25"/>
+          <path d="M24 8 L9 17 L9 31 L24 40 L39 31 L39 17 Z"
+            fill="none" stroke="white" stroke-width="1"
+            stroke-linejoin="round" opacity="0.12"/>
+          <path d="M13 24 L20 31 L35 15"
+            stroke="white" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="divider-heavy"></div>
+
+    <div class="body">
+
+      <div class="section">
+        <div class="section-head">
+          <span class="section-num">01</span>
+          <span class="section-title">納品物の概要とご挨拶</span>
+          <span class="section-rule"></span>
+        </div>
+        <p>
+          このたびはお取引いただき、誠にありがとうございます。本書は、お納めしたクリエイティブ作品が、
+          記載の時刻において確実に当方の手元に存在し、この内容で納品されたという「制作事実」を、第三者が
+          独立して検証可能な形で証明するための添え状です。
+        </p>
+        <p>
+          クライアント様が本納品物を安心して受領・公開・運用していただけるよう、当方はこの作品に対し、
+          国際標準規格に準拠した暗号学的タイムスタンプを取得いたしました。本パッケージは単なる成果物の
+          納品ではなく、「いつ・どのような内容で・誰の手から納品されたか」という客観的事実を、
+          未来にわたって検証可能な状態でお渡しするためのものです。
+        </p>
+        <p>
+          なお、本証明書は著作権の帰属や作品の独創性そのものを保証するものではなく、あくまで
+          「特定の時点における当該データの存在と非改ざん」を立証する技術的根拠を提供するものである点,
+          念のため申し添えます。
+        </p>
+      </div>
+
+      <div class="section">
+        <div class="section-head">
+          <span class="section-num">02</span>
+          <span class="section-title">証明の法的・技術的根拠</span>
+          <span class="section-rule"></span>
+        </div>
+        <p>本納品物の真正性は、以下の国際標準技術によって担保されています。</p>
+        <ul>
+          <li>
+            <strong>RFC 3161 準拠タイムスタンプトークン</strong> —
+            信頼された時刻認証局（TSA）が発行する、改ざん不可能な時刻署名です。
+            電子帳簿保存法や eIDAS など各国の電子証拠制度において長年通用してきた国際規格に基づきます。
+          </li>
+          <li>
+            <strong>SHA-256 ハッシュアルゴリズム</strong> —
+            納品ファイルから生成された唯一無二の「デジタル指紋」です。
+            1 ビットでも内容が変化すれば、まったく異なる値となります。
+          </li>
+          <li>
+            <strong>独立検証可能性</strong> —
+            本証明は ProofMark のサーバーや当方の管理下にあるシステムに依存しません。
+            同梱の公開鍵証明書と OpenSSL を用いれば、閉域環境でも永続的に検証可能です。
+          </li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-rule"></div>
+      <div class="footer-grid">
+        <div class="footer-meta">
+          <div class="footer-row">
+            <span class="footer-key">発行日</span>
+            <span class="footer-val">2026年5月18日</span>
+          </div>
+          <div class="footer-row">
+            <span class="footer-key">証明書 ID</span>
+            <span class="footer-val footer-val-mono">b60507eb-9fc2-48f8-84cf-112b6fed0eba</span>
+          </div>
+        </div>
+        <div class="footer-issuer">
+          <div class="issuer-name">sinn</div>
+          <div class="issuer-org">ProofMark</div>
+          <div class="issuer-email">support@proofmark.jp</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div class="page-num">1 / 2</div>
+</div>
+
+<!-- ════════════════════ PAGE 2 ════════════════════ -->
+<div class="page">
+  <div class="top-rule"></div>
+  <div class="canvas">
+
+    <div class="doc-head" style="margin-bottom:6mm;">
+      <div>
+        <div class="kicker">ProofMark · Evidence Pack</div>
+        <h1 class="doc-title" style="font-size:24px;">検証手順</h1>
+        <div class="doc-subtitle">Verification Procedures</div>
+      </div>
+      <div class="seal-wrap">
+        <svg class="seal" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="48" height="48" rx="9" fill="#0A0A0C"/>
+          <path d="M24 4 L6 14 L6 34 L24 44 L42 34 L42 14 Z"
+            fill="none" stroke="white" stroke-width="1.5"
+            stroke-linejoin="round" opacity="0.25"/>
+          <path d="M13 24 L20 31 L35 15"
+            stroke="white" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="divider-heavy"></div>
+
+    <div class="body">
+
+      <div class="section">
+        <div class="section-head">
+          <span class="section-num">01</span>
+          <span class="section-title">オンライン検証（推奨）</span>
+          <span class="section-rule"></span>
+        </div>
+        <p>下記 URL にブラウザでアクセスいただくだけで、本納品物の真正性が自動で照合されます。</p>
+        <div class="verify-inset">
+          <div class="verify-kicker">Verification URL</div>
+          <div class="verify-url">https://proofmark.jp/cert/b60507eb-9fc2-48f8-84cf-112b6fed0eba</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">
+          <span class="section-num">02</span>
+          <span class="section-title">同封ファイル一覧</span>
+          <span class="section-rule"></span>
+        </div>
+        <ul>
+          <li><code>original/office_drone_expression_sheet.png</code> — 納品物本体</li>
+          <li><code>timestamp.tsr</code> — RFC 3161 準拠の暗号学的証拠</li>
+          <li><code>hash.txt</code> — 納品ファイルの SHA-256 ハッシュ値</li>
+          <li><code>metadata.json</code> — 制作・納品に関する補足情報</li>
+          <li><code>freetsa-tsa.crt</code> / <code>freetsa-ca.crt</code> — 検証用公開鍵証明書</li>
+          <li><code>verify.py</code> / <code>verify.sh</code> — オフライン検証スクリプト</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <div class="section-head">
+          <span class="section-num">03</span>
+          <span class="section-title">オフライン検証</span>
+          <span class="section-rule"></span>
+        </div>
+        <p>外部ネットワークから完全に切り離された環境でも、以下のコマンドで検証が完結します。</p>
+        <div class="cmd">
+          <code>python3 verify.py .</code>
+        </div>
+      </div>
+
+      <div class="section" style="margin-top:8mm;">
+        <div class="section-head">
+          <span class="section-num">04</span>
+          <span class="section-title">結びの言葉</span>
+          <span class="section-rule"></span>
+        </div>
+        <p>
+          クリエイティブの価値は、その表現そのものに宿ります。同時に、その表現が「誰の手から、
+          いつ生まれたか」を確かな形で記録に残すことは、当方がクライアント様にお約束できる、
+          プロフェッショナルとしての誠実さの証です。本パッケージが、貴社における本納品物の取り扱いや、
+          将来にわたる活用において、確かな安心材料となれば幸いです。
+        </p>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-rule"></div>
+      <div class="footer-grid">
+        <div class="footer-meta">
+          <div class="footer-row">
+            <span class="footer-key">発行日</span>
+            <span class="footer-val">2026年5月18日</span>
+          </div>
+          <div class="footer-row">
+            <span class="footer-key">証明書 ID</span>
+            <span class="footer-val footer-val-mono">b60507eb-9fc2-48f8-84cf-112b6fed0eba</span>
+          </div>
+        </div>
+        <div class="footer-issuer">
+          <div class="issuer-name">sinn</div>
+          <div class="issuer-org">ProofMark</div>
+          <div class="issuer-email">support@proofmark.jp</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div class="page-num">2 / 2</div>
+</div>
+
+</body>
+</html>
