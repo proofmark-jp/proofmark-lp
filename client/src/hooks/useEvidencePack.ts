@@ -440,38 +440,43 @@ async function buildCertificatePdf(
     const purple = rgb(0x6c / 255, 0x3e / 255, 0xf4 / 255);
 
     // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
-      // 【完全確定】ピクセルパーフェクト・ベースライン同期システム
-      // Noto Sans JP と Courier のレンダリング誤差を完全に相殺
+      // 【完全無欠】ピクセル・パーフェクト・グリッド同期システム
+      // 1ページ目と2ページ目の動的テキスト位置を1pxの狂いもなく完全直列
       // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
       
-      const FOOTER_X = 145; // 左側ラベルの右端（20mm + 56px）に完全に直列するX座標
+      const FOOTER_X = 143.5; // HTML側の静的ラベル「発行日」「納品物」の右端ラインに100%直列するX座標
 
-      // 長すぎるファイル名によるフッター崩れを未然に防ぐプロのUX処理（最大32文字で切り詰め）
+      // ページ間をめくった時の上下ブレをミリ単位で完全抑止する、個別最適化された絶対Yベースライン
+      const Y_ROW_1 = 51.5;   // 1行目「発行日」の基準線 (Page 1 & 2 共通)
+      const Y_ROW_2 = 39.5;   // 2行目「納品物」の基準線 (Page 1 専用)
+      const Y_ROW_3 = 26.5;   // 3行目「証明書ID」の基準線 (Page 1 & 2 共通)
+
+      // ファイル名が長すぎる場合のフッターレイアウト崩れを防ぐ気品あるトリミング処理
       const truncateFileName = (name: string): string => {
         return name.length > 32 ? name.slice(0, 30) + '...' : name;
       };
       const cleanFileName = truncateFileName(meta.fileName);
 
       // ── Page 1: Footer 注入 ────────────────────────────────
-      // 1行目: 発行日（静的ラベル「発行日」のベースラインに1px単位で合致）
-      page1.drawText(meta.issuedAtJst, { x: FOOTER_X, y: 53.5, size: 10, font: fontRegular, color: ink });
+      // 1行目: 発行日
+      page1.drawText(meta.issuedAtJst, { x: FOOTER_X, y: Y_ROW_1, size: 10, font: fontRegular, color: ink });
       
-      // 2行目: 納品物（ファイル名 - 固定X座標で左ガタつきを永久追放。Y軸のズレも1.5pt補正）
-      page1.drawText(cleanFileName, { x: FOOTER_X, y: 41.5, size: 10, font: fontRegular, color: ink });
+      // 2行目: 納品物 (drawWrappedTextを排除。位置ズレの原因を根絶)
+      page1.drawText(cleanFileName, { x: FOOTER_X, y: Y_ROW_2, size: 10, font: fontRegular, color: ink });
       
-      // 3行目: 証明書ID（欧文等幅フォント固有の下沈みを2.5pt引き上げて完全に整列）
-      page1.drawText(meta.id, { x: FOOTER_X, y: 31.5, size: 8.5, font: fontMono, color: inkSubtle });
+      // 3行目: 証明書ID (等幅フォント固有の下沈みを2.5pt引き上げて完全に整列)
+      page1.drawText(meta.id, { x: FOOTER_X, y: Y_ROW_3, size: 8.5, font: fontMono, color: inkSubtle });
 
 
       // ── Page 2: Body & Footer 注入 ─────────────────────────
-      // 01・オンライン検証 URL（グレーボックスの垂直・水平グリッドのド真ん中に再配置）
+      // 01・オンライン検証 URL (グレーボックスの垂直・水平グリッドの中心点へ完全収束)
       page2.drawText(meta.verifyUrl, { x: 74, y: 642, size: 9.5, font: fontMono, color: purple });
       
-      // 1行目: 発行日（1ページ目の発行日と完全に同じ高さ[53.5]へ完全同期）
-      page2.drawText(meta.issuedAtJst, { x: FOOTER_X, y: 53.5, size: 10, font: fontRegular, color: ink });
+      // 1行目: 発行日 (1ページ目の値[51.5]と完全に同じ位置へ配置し、ページ遷移時の跳ねを解消)
+      page2.drawText(meta.issuedAtJst, { x: FOOTER_X, y: Y_ROW_1, size: 10, font: fontRegular, color: ink });
       
-      // 3行目: 証明書ID（2ページ目には「納品物」がないため、3行目のラベル位置[31.5]へ寸分の狂いなく同期）
-      page2.drawText(meta.id, { x: FOOTER_X, y: 31.5, size: 8.5, font: fontMono, color: inkSubtle });
+      // 3行目: 証明書ID (2ページ目には「納品物」がないため、3行目の絶対基準線[26.5]へ完全同期)
+      page2.drawText(meta.id, { x: FOOTER_X, y: Y_ROW_3, size: 8.5, font: fontMono, color: inkSubtle });
 
       onProgress(0.95);
       const bytes = await pdf.save();
