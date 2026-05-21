@@ -454,9 +454,9 @@ async function buildCertificatePdf(
 
       // ── Page 1: Footer 注入 ────────────────────────────────
       // 1ページ目のテンプレート底面基準に最適化したY座標
-      const P1_Y_ROW1 = 54.5; // 発行日
-      const P1_Y_ROW2 = 42.5; // 納品物
-      const P1_Y_ROW3 = 30.5; // 証明書ID
+      const P1_Y_ROW1 = 64.5; // 発行日
+      const P1_Y_ROW2 = 52.5; // 納品物
+      const P1_Y_ROW3 = 40.5; // 証明書ID
 
       page1.drawText(meta.issuedAtJst, { x: FOOTER_X, y: P1_Y_ROW1, size: 10, font: fontRegular, color: ink });
       page1.drawText(cleanFileName, { x: FOOTER_X, y: P1_Y_ROW2, size: 10, font: fontRegular, color: ink });
