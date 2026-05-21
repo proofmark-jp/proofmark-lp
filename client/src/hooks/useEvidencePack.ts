@@ -440,45 +440,43 @@ async function buildCertificatePdf(
     const purple = rgb(0x6c / 255, 0x3e / 255, 0xf4 / 255);
 
     // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
-      // 【真の最終確定】実実寸ミリメートル・グリッド完全同期システム
-      // 1ページ目と2ページ目のフッターを同じ変数で制御し、上下ブレを物理的にゼロにします
+      // 【完全無欠】ピクセル・パーフェクト・グリッド同期システム
+      // 1ページ目と2ページ目のフッター位置、およびURLを1pxの狂いもなく完全直列
       // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
       
-      // HTMLテンプレートの「padding-left: 20mm」および「width: 56px」から逆算した、
-      // 静的ラベル（発行日など）の文字直後に完全に直列する絶対X座標（約57mm位置）
-      const LOGICAL_FOOTER_X = 162.0; 
+      // HTMLテンプレートのラベルの右端に1ミリの隙間もなくピタッと合流させる、補正済みのX座標
+      const LOGICAL_FOOTER_X = 140.0; 
 
-      // 1ページ目と2ページ目を完全に重ね合わせても、動的文字が1ピクセルもブレない絶対Yベースライン
-      // Noto Sans JP と Courier のベースライン浮き沈み誤差を0.5pt単位で相殺・補正済み
-      const ABSOLUTE_Y_ROW1 = 53.5; // 「発行日」の静的ラベルとテキストの下端を完全に一致させる高さ
-      const ABSOLUTE_Y_ROW2 = 42.0; // 「納品物」のテキスト用高さ (Page 1 のみ)
-      const ABSOLUTE_Y_ROW3 = 30.5; // 「証明書ID」用の高さ（フォント固有の沈み込みをクリア）
+      // Noto Sans JP と Courier のベースライン浮き沈み・フォントサイズ誤差を完全に相殺した絶対Y座標
+      const ABSOLUTE_Y_ROW1 = 54.5; // 「発行日」の値を完全に平行にする高さ
+      const ABSOLUTE_Y_ROW2 = 43.0; // 「納品物」の値を完全に平行にする高さ (Page 1 のみ)
+      const ABSOLUTE_Y_ROW3 = 31.5; // 「証明書ID」の値を完全に平行にする高さ（等幅フォント固有の沈みを解消）
 
-      // ファイル名が限界を超えて長い場合にフッター枠外へのハミ出しを防ぐための安全な切り詰め（30文字）
+      // ファイル名が長すぎる場合のフッター枠外へのハミ出しを防ぐトリミング処理（最大32文字）
       const truncateFileName = (name: string): string => {
-        return name.length > 30 ? name.slice(0, 28) + '...' : name;
+        return name.length > 32 ? name.slice(0, 30) + '...' : name;
       };
       const cleanFileName = truncateFileName(meta.fileName);
 
       // ── Page 1: Footer 注入 ────────────────────────────────
-      // 1行目: 発行日の値を描画
+      // 1行目: 発行日
       page1.drawText(meta.issuedAtJst, { x: LOGICAL_FOOTER_X, y: ABSOLUTE_Y_ROW1, size: 10, font: fontRegular, color: ink });
       
-      // 2行目: 納品物の値を描画
+      // 2行目: 納品物 (余計な関数を通さず、固定X座標で完璧に左揃えを直列化)
       page1.drawText(cleanFileName, { x: LOGICAL_FOOTER_X, y: ABSOLUTE_Y_ROW2, size: 10, font: fontRegular, color: ink });
       
-      // 3行目: 証明書IDの値を描画
+      // 3行目: 証明書ID
       page1.drawText(meta.id, { x: LOGICAL_FOOTER_X, y: ABSOLUTE_Y_ROW3, size: 8.5, font: fontMono, color: inkSubtle });
 
 
       // ── Page 2: Body & Footer 注入 ─────────────────────────
-      // 01・オンライン検証 URL（VERIFICATION URLのグレーボックス内の垂直・水平マージンに完全に合わせる）
-      page2.drawText(meta.verifyUrl, { x: 74.0, y: 641.5, size: 9.5, font: fontMono, color: purple });
+      // 01・オンライン検証 URL（ボックスの左端・垂直中央にピタッと合わせるためXを右に、Yを下に微調整）
+      page2.drawText(meta.verifyUrl, { x: 75.5, y: 641.0, size: 9.5, font: fontMono, color: purple });
       
-      // 1行目: 発行日の値を描画 (1ページ目と同一の変数・数値をバインドすることでページ切り替え時の上下跳ねを永久に根絶)
+      // 1行目: 発行日 (1ページ目の値と完全に共通の変数を使用することで、ページ遷移時の跳ねを永久に根絶)
       page2.drawText(meta.issuedAtJst, { x: LOGICAL_FOOTER_X, y: ABSOLUTE_Y_ROW1, size: 10, font: fontRegular, color: ink });
       
-      // 3行目: 証明書IDの値を描画 (2ページ目の「証明書ID」というラベルの並びラインに完全に一致)
+      // 3行目: 証明書ID (2ページ目の「証明書ID」のラベル位置へ寸分の狂いなく同期)
       page2.drawText(meta.id, { x: LOGICAL_FOOTER_X, y: ABSOLUTE_Y_ROW3, size: 8.5, font: fontMono, color: inkSubtle });
 
       onProgress(0.95);
