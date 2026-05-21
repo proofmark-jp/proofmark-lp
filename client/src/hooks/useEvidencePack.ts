@@ -440,28 +440,31 @@ async function buildCertificatePdf(
     const purple = rgb(0x6c / 255, 0x3e / 255, 0xf4 / 255);
 
     // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
-      // 座標設定 (A4: 595.28 x 841.89 pt)
+      // 最終確定：ピクセルパーフェクト座標設定 (A4: 595.28 x 841.89 pt)
       // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
       
-      const FOOTER_X = 115; // ラベルとの美しい余白を保つX座標
+      const FOOTER_X = 145; // ラベル「発行日」「納品物」の右端に完全に揃えるX座標
 
       // ── Page 1: Footer 注入 ──
-      // 発行日（-42pt: フッターラベルの正確なベースラインへ降下）
+      // 発行日（ラベル「発行日」の右隣へピタッと配置）
       page1.drawText(meta.issuedAtJst, { x: FOOTER_X, y: 50, size: 10.5, font: fontRegular, color: ink });
-      // 納品物 (ファイル名) 
-      drawWrappedText(page1, meta.fileName, FOOTER_X, 35, 300, fontRegular, 10.5, ink, 14);
+      
+      // 納品物 (ファイル名) - X座標を固定値のFOOTER_Xに変更して左ズレを完全解消
+      drawWrappedText(page1, meta.fileName, FOOTER_X, 35, 260, fontRegular, 10.5, ink, 14);
+      
       // 証明書ID
       page1.drawText(meta.id, { x: FOOTER_X, y: 20, size: 9, font: fontMono, color: inkSubtle });
 
 
       // ── Page 2: Body & Footer 注入 ──
-      // 01・オンライン検証 URL（-34pt: グレーボックスの垂直中央へ降下）
-      page2.drawText(meta.verifyUrl, { x: 72, y: 608, size: 10, font: fontMono, color: purple });
+      // 01・オンライン検証 URL（+34pt引き上げ：グレーボックス内の垂直・水平ど真ん中へ完璧に配置）
+      page2.drawText(meta.verifyUrl, { x: 74, y: 642, size: 9.5, font: fontMono, color: purple });
       
-      // 発行日 (フッター)
+      // 発行日 (2ページ目フッター - 1ページ目と完全に同じ高さに整列)
       page2.drawText(meta.issuedAtJst, { x: FOOTER_X, y: 50, size: 10.5, font: fontRegular, color: ink });
-      // 証明書ID (フッター ※Page 2は2行構成のため位置を一つ上げる)
-      page2.drawText(meta.id, { x: FOOTER_X, y: 35, size: 9, font: fontMono, color: inkSubtle });
+      
+      // 証明書ID (2ページ目フッター - ラベル「証明書ID」のベースライン20ptへ正確に降下)
+      page2.drawText(meta.id, { x: FOOTER_X, y: 20, size: 9, font: fontMono, color: inkSubtle });
 
       onProgress(0.95);
       const bytes = await pdf.save();
