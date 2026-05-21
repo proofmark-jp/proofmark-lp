@@ -440,31 +440,43 @@ async function buildCertificatePdf(
     const purple = rgb(0x6c / 255, 0x3e / 255, 0xf4 / 255);
 
     // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
-      // 最終確定：ピクセルパーフェクト座標設定 (A4: 595.28 x 841.89 pt)
+      // 【最終確定】ピクセルパーフェクト・ベースライン同期システム
+      // A4規格(595.28 x 841.89 pt)の絶対グリッドに完全固定
       // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
       
-      const FOOTER_X = 145; // ラベル「発行日」「納品物」の右端に完全に揃えるX座標
-
-      // ── Page 1: Footer 注入 ──
-      // 発行日（ラベル「発行日」の右隣へピタッと配置）
-      page1.drawText(meta.issuedAtJst, { x: FOOTER_X, y: 50, size: 10.5, font: fontRegular, color: ink });
+      const FOOTER_X = 115; // 静的ラベル「発行日」「納品物」の文字直後から美しく開始するX座標
       
-      // 納品物 (ファイル名) - X座標を固定値のFOOTER_Xに変更して左ズレを完全解消
-      drawWrappedText(page1, meta.fileName, FOOTER_X, 35, 260, fontRegular, 10.5, ink, 14);
+      // 1ページ目と2ページ目で完全に同じ位置に配置するための絶対Y座標（1ptの狂いも許さない）
+      const BASELINE_Y_ROW1 = 51.5; // 「発行日」のテキストが完全に静的ラベルと平行になる高さ
+      const BASELINE_Y_ROW2 = 39.5; // 「納品物」のテキスト用ベースライン
+      const BASELINE_Y_ROW3 = 28.0; // 「証明書ID」のテキスト用ベースライン
+
+      // 長すぎるファイル名によるフッター崩れを未然に防ぐプロのUX処理（最大32文字で切り詰め）
+      const truncateFileName = (name: string): string => {
+        return name.length > 32 ? name.slice(0, 30) + '...' : name;
+      };
+      const cleanFileName = truncateFileName(meta.fileName);
+
+      // ── Page 1: Footer 注入 ────────────────────────────────
+      // 1行目: 発行日
+      page1.drawText(meta.issuedAtJst, { x: FOOTER_X, y: BASELINE_Y_ROW1, size: 10, font: fontRegular, color: ink });
       
-      // 証明書ID
-      page1.drawText(meta.id, { x: FOOTER_X, y: 20, size: 9, font: fontMono, color: inkSubtle });
+      // 2行目: 納品物 (関数を排除し、固定のY座標で描画することで左ズレ・下落ちを永久に根絶)
+      page1.drawText(cleanFileName, { x: FOOTER_X, y: BASELINE_Y_ROW2, size: 10, font: fontRegular, color: ink });
+      
+      // 3行目: 証明書ID
+      page1.drawText(meta.id, { x: FOOTER_X, y: BASELINE_Y_ROW3, size: 8.5, font: fontMono, color: inkSubtle });
 
 
-      // ── Page 2: Body & Footer 注入 ──
-      // 01・オンライン検証 URL（+34pt引き上げ：グレーボックス内の垂直・水平ど真ん中へ完璧に配置）
+      // ── Page 2: Body & Footer 注入 ─────────────────────────
+      // 01・オンライン検証 URL（グレーボックスの完全に中央に配置するためのマニアック調整）
       page2.drawText(meta.verifyUrl, { x: 74, y: 642, size: 9.5, font: fontMono, color: purple });
       
-      // 発行日 (2ページ目フッター - 1ページ目と完全に同じ高さに整列)
-      page2.drawText(meta.issuedAtJst, { x: FOOTER_X, y: 50, size: 10.5, font: fontRegular, color: ink });
+      // 1行目: 発行日（1ページ目と完全に同じY座標へ整列）
+      page2.drawText(meta.issuedAtJst, { x: FOOTER_X, y: BASELINE_Y_ROW1, size: 10, font: fontRegular, color: ink });
       
-      // 証明書ID (2ページ目フッター - ラベル「証明書ID」のベースライン20ptへ正確に降下)
-      page2.drawText(meta.id, { x: FOOTER_X, y: 20, size: 9, font: fontMono, color: inkSubtle });
+      // 3行目: 証明書ID（2ページ目には「納品物」項目がないため、3行目のラベル位置に完全合致させる）
+      page2.drawText(meta.id, { x: FOOTER_X, y: BASELINE_Y_ROW3, size: 8.5, font: fontMono, color: inkSubtle });
 
       onProgress(0.95);
       const bytes = await pdf.save();
