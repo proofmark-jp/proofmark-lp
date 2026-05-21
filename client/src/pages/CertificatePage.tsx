@@ -56,6 +56,21 @@ export default function CertificatePage() {
     // 💡 複数ボタンに対応するためコピー状態を文字列で管理
     const [copiedType, setCopiedType] = useState<string | null>(null);
     const { user, profile, signOut } = useAuth(); // profileを追加
+    
+    // この証明書の作成者（クリエイター）本人かどうかを判定
+    const isOwner = user && user.id === cert?.user_id;
+
+    // 違法・悪質コンテンツの通報ハンドラー（お守り機能）
+    const handleReportAbuse = () => {
+        const subject = encodeURIComponent(`【通報】違法・悪質なコンテンツについて (ID: ${cert?.id})`);
+        const body = encodeURIComponent(
+            `以下の証明書ページにて、違法または悪質なコンテンツを確認しました。\n\n` +
+            `証明書URL: ${window.location.href}\n\n` +
+            `通報の理由（詳細をご記入ください）:\n`
+        );
+        window.location.href = `mailto:support@proofmark.jp?subject=${subject}&body=${body}`;
+    };
+
     const actualPlanVariable = user?.user_metadata?.plan_type;
     const currentPlan = (actualPlanVariable || '').toLowerCase();
     const isPaidPlan = ['light', 'creator', 'studio', 'admin'].includes(currentPlan);
@@ -427,12 +442,7 @@ export default function CertificatePage() {
                     </button>
                     {isPaidPlan ? (
                         <>
-                            <button
-                                onClick={() => window.print()}
-                                className="no-print bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2"
-                            >
-                                <FileText className="w-4 h-4" /> PDFとして保存
-                            </button>
+                            {/* 「PDFとして保存」はUXの混乱を避けるため完全削除し、Evidence Packボタンへ一本化 */}
                             <div className="no-print w-full sm:w-auto sm:min-w-[280px]">
                                 <EvidencePackDownloadButton certId={cert.id} />
                             </div>
@@ -459,55 +469,57 @@ export default function CertificatePage() {
                     </button>
                 </div>
 
-                {/* 💡 2パターンの強力なテンプレート */}
-                <div className="print:hidden w-full max-w-5xl mt-16 bg-[#0D0B24] p-6 sm:p-8 rounded-2xl border border-[#1C1A38] mb-20">
-                    <h3 className="text-[#00D4AA] font-bold mb-4 flex items-center gap-2">
-                        <span className="text-xl">💡</span> クライアント・提出先向け 説明テンプレート
-                    </h3>
-                    <p className="text-sm text-[#A8A0D8] mb-6">用途に合わせて以下のテキストをコピーし、納品時やSNSでの作品公開時にご活用ください。</p>
+                {/* 作成者（オーナー）本人にしか見せない「マジックの裏側」のUI */}
+                {isOwner && (
+                    <div className="print:hidden w-full max-w-5xl mt-16 bg-[#0D0B24] p-6 sm:p-8 rounded-2xl border border-[#1C1A38] mb-20">
+                        <h3 className="text-[#00D4AA] font-bold mb-4 flex items-center gap-2">
+                            <span className="text-xl">💡</span> クライアント・提出先向け 説明テンプレート
+                        </h3>
+                        <p className="text-sm text-[#A8A0D8] mb-6">用途に合わせて以下のテキストをコピーし、納品時やSNSでの作品公開時にご活用ください。</p>
 
-                    <div className="space-y-6">
-                        {/* パターン1: 納品用 */}
-                        <div>
-                            <p className="text-sm text-white font-bold mb-2">▼ 納品・コンテスト提出用（フォーマル）</p>
-                            <div className="relative p-4 rounded-lg bg-[#0f1629] border border-[#2a2a4e]">
-                                <button
-                                    onClick={() => handleCopy(templateFormal, 'formal')}
-                                    className="absolute top-3 right-3 p-2 rounded-md bg-[#1a233a] hover:bg-[#2a3655] transition-colors flex items-center gap-2 text-xs font-bold text-white border border-[#2a2a4e]"
-                                >
-                                    {copiedType === 'formal' ? (
-                                        <><Check className="w-4 h-4 text-[#00d4aa]" /> コピー完了！</>
-                                    ) : (
-                                        <><Copy className="w-4 h-4 text-[#6c3ef4]" /> コピーする</>
-                                    )}
-                                </button>
-                                <p className="text-sm text-gray-300 whitespace-pre-wrap pr-28 leading-relaxed">
-                                    {templateFormal}
-                                </p>
+                        <div className="space-y-6">
+                            {/* パターン1: 納品用 */}
+                            <div>
+                                <p className="text-sm text-white font-bold mb-2">▼ 納品・コンテスト提出用（フォーマル）</p>
+                                <div className="relative p-4 rounded-lg bg-[#0f1629] border border-[#2a2a4e]">
+                                    <button
+                                        onClick={() => handleCopy(templateFormal, 'formal')}
+                                        className="absolute top-3 right-3 p-2 rounded-md bg-[#1a233a] hover:bg-[#2a3655] transition-colors flex items-center gap-2 text-xs font-bold text-white border border-[#2a2a4e]"
+                                    >
+                                        {copiedType === 'formal' ? (
+                                            <><Check className="w-4 h-4 text-[#00d4aa]" /> コピー完了！</>
+                                        ) : (
+                                            <><Copy className="w-4 h-4 text-[#6c3ef4]" /> コピーする</>
+                                        )}
+                                    </button>
+                                    <p className="text-sm text-gray-300 whitespace-pre-wrap pr-28 leading-relaxed">
+                                        {templateFormal}
+                                    </p>
+                                </div>
                             </div>
-                        </div>
 
-                        {/* パターン2: SNS用 */}
-                        <div>
-                            <p className="text-sm text-white font-bold mb-2">▼ SNS公開用（無断転載・自作発言対策）</p>
-                            <div className="relative p-4 rounded-lg bg-[#0f1629] border border-[#2a2a4e]">
-                                <button
-                                    onClick={() => handleCopy(templateSNS, 'sns')}
-                                    className="absolute top-3 right-3 p-2 rounded-md bg-[#1a233a] hover:bg-[#2a3655] transition-colors flex items-center gap-2 text-xs font-bold text-white border border-[#2a2a4e]"
-                                >
-                                    {copiedType === 'sns' ? (
-                                        <><Check className="w-4 h-4 text-[#00d4aa]" /> コピー完了！</>
-                                    ) : (
-                                        <><Copy className="w-4 h-4 text-[#6c3ef4]" /> コピーする</>
-                                    )}
-                                </button>
-                                <p className="text-sm text-gray-300 whitespace-pre-wrap pr-28 leading-relaxed">
-                                    {templateSNS}
-                                </p>
+                            {/* パターン2: SNS用 */}
+                            <div>
+                                <p className="text-sm text-white font-bold mb-2">▼ SNS公開用（無断転載・自作発言対策）</p>
+                                <div className="relative p-4 rounded-lg bg-[#0f1629] border border-[#2a2a4e]">
+                                    <button
+                                        onClick={() => handleCopy(templateSNS, 'sns')}
+                                        className="absolute top-3 right-3 p-2 rounded-md bg-[#1a233a] hover:bg-[#2a3655] transition-colors flex items-center gap-2 text-xs font-bold text-white border border-[#2a2a4e]"
+                                    >
+                                        {copiedType === 'sns' ? (
+                                            <><Check className="w-4 h-4 text-[#00d4aa]" /> コピー完了！</>
+                                        ) : (
+                                            <><Copy className="w-4 h-4 text-[#6c3ef4]" /> コピーする</>
+                                        )}
+                                    </button>
+                                    <p className="text-sm text-gray-300 whitespace-pre-wrap pr-28 leading-relaxed">
+                                        {templateSNS}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 {/* Chain of Evidence タイムライン */}
                 {bundle && (
@@ -519,15 +531,13 @@ export default function CertificatePage() {
 
                 {/* 🚨 通報導線 (Report Abuse) */}
                 <div className="mt-12 text-center pb-8 print:hidden">
-                    <a
-                        href="https://forms.gle/YOUR_GOOGLE_FORM_ID_HERE"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-slate-600 hover:text-slate-400 underline transition-colors flex items-center justify-center gap-1"
+                    <button
+                        onClick={handleReportAbuse}
+                        className="text-xs text-gray-500 underline hover:text-gray-300 transition-colors flex items-center justify-center gap-1 mx-auto"
                     >
                         <Flag className="w-3 h-3" />
                         違法・悪質なコンテンツを通報する (Report Abuse)
-                    </a>
+                    </button>
                 </div>
 
             </div>
