@@ -509,17 +509,24 @@ async function buildCertificatePdf(
     page.drawText('NAME', {
         x: cardX + 6 * MM, y: inner, size: 7.5, font: fontBold, color: inkSubtle, characterSpacing: 2,
     });
-    page.drawText(truncate(meta.title, 64), {
-        x: cardX + 6 * MM, y: inner - 5 * MM, size: 14, font: fontBold, color: ink,
-    });
+    const textMaxWidth = cardW - (12 * MM); // カード幅から左右の余白を引いた最大幅
+
+    drawWrappedText(
+        page, meta.title, 
+        cardX + 6 * MM, inner - 5 * MM, 
+        textMaxWidth, fontBold, 14, ink, 18
+    );
     inner -= 12 * MM;
 
     page.drawText('FILE', {
         x: cardX + 6 * MM, y: inner, size: 7.5, font: fontBold, color: inkSubtle, characterSpacing: 2,
     });
-    page.drawText(truncate(meta.fileName, 64), {
-        x: cardX + 6 * MM, y: inner - 5 * MM, size: 11, font: fontRegular, color: ink,
-    });
+    
+    drawWrappedText(
+        page, meta.fileName, 
+        cardX + 6 * MM, inner - 5 * MM, 
+        textMaxWidth, fontRegular, 11, ink, 14
+    );
     inner -= 12 * MM;
 
     page.drawText('SHA-256', {
@@ -609,4 +616,33 @@ function chunkString(s: string, n: number): string[] {
     const out: string[] = [];
     for (let i = 0; i < s.length; i += n) out.push(s.slice(i, i + n));
     return out;
+}
+
+function drawWrappedText(
+    page: any,
+    text: string,
+    x: number,
+    y: number,
+    maxWidth: number,
+    font: any,
+    size: number,
+    color: any,
+    lineHeight: number
+): void {
+    let currentLine = '';
+    let cursorY = y;
+    for (const char of text) {
+        const testLine = currentLine + char;
+        const width = font.widthOfTextAtSize(testLine, size);
+        if (width > maxWidth && currentLine.length > 0) {
+            page.drawText(currentLine, { x, y: cursorY, font, size, color });
+            currentLine = char;
+            cursorY -= lineHeight;
+        } else {
+            currentLine = testLine;
+        }
+    }
+    if (currentLine) {
+        page.drawText(currentLine, { x, y: cursorY, font, size, color });
+    }
 }
