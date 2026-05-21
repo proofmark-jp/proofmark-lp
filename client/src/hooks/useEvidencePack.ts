@@ -392,8 +392,8 @@ async function buildCertificatePdf(
     const pdf = await PDFDocument.create();
     pdf.registerFontkit(fontkit);
 
-    const fontRegular = await pdf.embedFont(fonts.regular, { subset: true });
-    const fontBold = await pdf.embedFont(fonts.bold, { subset: true });
+    const fontRegular = await pdf.embedFont(fonts.regular, { subset: false });
+    const fontBold = await pdf.embedFont(fonts.bold, { subset: false });
     const fontMono = await pdf.embedFont(StandardFonts.Courier);
 
     const page = pdf.addPage([210 * MM, 297 * MM]);
