@@ -454,13 +454,13 @@ async function buildCertificatePdf(
 
       // ── Page 1: Footer 注入 ────────────────────────────────
       // 1ページ目のテンプレート底面基準に最適化したY座標
-      const P1_Y_ROW1 = 66.5; // 発行日
-      const P1_Y_ROW2 = 54.5; // 納品物
-      const P1_Y_ROW3 = 42.5; // 証明書ID
+      const P1_Y_ROW1 = 68.5; // 発行日
+      const P1_Y_ROW2 = 56.5; // 納品物
+      const P1_Y_ROW3 = 44.5; // 証明書ID
 
-      page1.drawText(meta.issuedAtJst, { x: FOOTER_X, y: P1_Y_ROW1, size: 10, font: fontRegular, color: ink });
-      page1.drawText(cleanFileName, { x: FOOTER_X, y: P1_Y_ROW2, size: 10, font: fontRegular, color: ink });
-      page1.drawText(meta.id, { x: FOOTER_X, y: P1_Y_ROW3, size: 8.5, font: fontMono, color: inkSubtle });
+      page1.drawText(meta.issuedAtJst, { x: FOOTER_X, y: P1_Y_ROW1, size: 9.0, font: fontRegular, color: ink });
+      page1.drawText(cleanFileName, { x: FOOTER_X, y: P1_Y_ROW2, size: 9.0, font: fontRegular, color: ink });
+      page1.drawText(meta.id, { x: FOOTER_X, y: P1_Y_ROW3, size: 9.5, font: fontMono, color: inkSubtle });
 
 
       // ── Page 2: Body & Footer 注入 ─────────────────────────
@@ -468,10 +468,10 @@ async function buildCertificatePdf(
       page2.drawText(meta.verifyUrl, { x: 75.5, y: 638.0, size: 9.5, font: fontMono, color: purple });
       
       // 2ページ目のテンプレートの自動余白歪みを完全に相殺する、1.5ptの引き下げ補正値
-      const P2_Y_ROW1 = 54.5; // 1ページ目の発行日[54.5]と完全に水平同期
-      const P2_Y_ROW3 = 44.5; // ご指定に基づき42.5へ引き上げ。2ページ目「証明書ID」ラベルのベースラインへ1pxの狂いもなく完全直列
+      const P2_Y_ROW1 = 55.0; // 1ページ目の発行日[54.5]と完全に水平同期
+      const P2_Y_ROW3 = 44.0; // ご指定に基づき42.5へ引き上げ。2ページ目「証明書ID」ラベルのベースラインへ1pxの狂いもなく完全直列
 
-      page2.drawText(meta.issuedAtJst, { x: FOOTER_X, y: P2_Y_ROW1, size: 9.5, font: fontRegular, color: ink });
+      page2.drawText(meta.issuedAtJst, { x: FOOTER_X, y: P2_Y_ROW1, size: 9.0, font: fontRegular, color: ink });
       page2.drawText(meta.id, { x: FOOTER_X, y: P2_Y_ROW3, size: 9.5, font: fontMono, color: inkSubtle });
 
       onProgress(0.95);
