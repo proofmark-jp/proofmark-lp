@@ -47,6 +47,7 @@ export default function EvidencePackDownloadButton({
 }: Props): JSX.Element {
     const { state, download, cancel, reset } = useEvidencePack();
     const [expanded, setExpanded] = useState(false);
+    const [theme, setTheme] = useState<'color' | 'mono'>('color');
 
     // 完了 / エラーは 3 秒後に自動 idle へ
     useEffect(() => {
@@ -71,8 +72,8 @@ export default function EvidencePackDownloadButton({
             cancel();
             return;
         }
-        void download(certId);
-    }, [isBusy, cancel, download, certId]);
+        void download(certId, theme);
+    }, [isBusy, cancel, download, certId, theme]);
 
     const baseBtn =
         variant === 'primary'
@@ -80,7 +81,24 @@ export default function EvidencePackDownloadButton({
             : 'border border-white/12 bg-white/[0.04] text-white';
 
     return (
-        <div className="w-full">
+        <div className="w-full flex flex-col gap-4">
+            <div className="flex w-full rounded-xl bg-white/5 p-1">
+                <button
+                    type="button"
+                    onClick={() => setTheme('color')}
+                    className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-colors ${theme === 'color' ? 'bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white shadow-sm' : 'text-white/60 hover:text-white/80'}`}
+                >
+                    クリエイター向け (Color)
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setTheme('mono')}
+                    className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-colors ${theme === 'mono' ? 'bg-white/20 text-white shadow-sm' : 'text-white/60 hover:text-white/80'}`}
+                >
+                    法人・法務向け (Mono)
+                </button>
+            </div>
+
             <button
                 type="button"
                 onClick={handleClick}

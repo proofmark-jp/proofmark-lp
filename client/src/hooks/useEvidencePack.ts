@@ -135,7 +135,7 @@ export function useEvidencePack() {
     );
 
     const download = useCallback(
-        async (certId: string): Promise<void> => {
+        async (certId: string, theme: 'color' | 'mono' = 'color'): Promise<void> => {
             // 二重発火防止
             abortRef.current?.abort();
             abortRef.current = new AbortController();
@@ -168,7 +168,7 @@ export function useEvidencePack() {
 
                 // ── 3. Certificate PDF 生成 ───────────────────────
                 setPhase('generating_certificate', 0);
-                const certPdf = await buildCertificatePdf(payload.certificate, (p) =>
+                const certPdf = await buildCertificatePdf(payload.certificate, theme, (p) =>
                     setPhase('generating_certificate', p),
                 );
                 setPhase('generating_certificate', 1);
@@ -381,253 +381,10 @@ async function loadNotoSansJp(): Promise<{ regular: ArrayBuffer; bold: ArrayBuff
     return fontCache;
 }
 
-async function buildCertificatePdf(
-    meta: CertificateMeta,
-    onProgress: (p: number) => void,
-): Promise<Uint8Array> {
-    onProgress(0.05);
-    const fonts = await loadNotoSansJp();
-    onProgress(0.45);
-
-    const pdf = await PDFDocument.create();
-    pdf.registerFontkit(fontkit);
-
-    const fontRegular = await pdf.embedFont(fonts.regular, { subset: false });
-    const fontBold = await pdf.embedFont(fonts.bold, { subset: false });
-    const fontMono = await pdf.embedFont(StandardFonts.Courier);
-
-    const page = pdf.addPage([210 * MM, 297 * MM]);
-    const { width, height } = page.getSize();
-
-    // index-5.html: 余白 30mm
-    const margin = 30 * MM;
-
-    // ── トーン ──
-    const ink = rgb(0x1d / 255, 0x1d / 255, 0x1f / 255);     // #1d1d1f
-    const inkSoft = rgb(0x6e / 255, 0x6e / 255, 0x73 / 255); // #6e6e73
-    const inkSubtle = rgb(0x86 / 255, 0x86 / 255, 0x8b / 255);
-    const accent = rgb(0x6c / 255, 0x3e / 255, 0xf4 / 255);
-    const success = rgb(0x00 / 255, 0xb8 / 255, 0x96 / 255);
-    const rule = rgb(0xd2 / 255, 0xd2 / 255, 0xd7 / 255);
-
-    let cursorY = height - margin;
-
-    // ── Eyebrow ──
-    page.drawText('CERTIFICATE OF AUTHENTICITY', {
-        x: margin,
-        y: cursorY,
-        size: 9,
-        font: fontBold,
-        color: inkSubtle,
-        characterSpacing: 3,
-    });
-    cursorY -= 8 * MM;
-
-    // ── Title (JP) ──
-    page.drawText('納品物 真正性証明書', {
-        x: margin,
-        y: cursorY - 6 * MM,
-        size: 28,
-        font: fontBold,
-        color: ink,
-    });
-    cursorY -= 18 * MM;
-
-    // ── Divider ──
-    page.drawLine({
-        start: { x: margin, y: cursorY },
-        end: { x: width - margin, y: cursorY },
-        thickness: 0.4,
-        color: rule,
-    });
-    cursorY -= 10 * MM;
-
-    // ── Issued by block (right-aligned author / left meta) ──
-    page.drawText('発行者 / Issued by', {
-        x: margin,
-        y: cursorY,
-        size: 8,
-        font: fontBold,
-        color: inkSubtle,
-        characterSpacing: 1.5,
-    });
-    cursorY -= 5 * MM;
-    page.drawText(meta.authorLabel, {
-        x: margin,
-        y: cursorY,
-        size: 13,
-        font: fontBold,
-        color: ink,
-    });
-
-    // 発行日 (右寄せ)
-    const dateLabel = '発行日時 / Certified at';
-    page.drawText(dateLabel, {
-        x: width - margin - fontBold.widthOfTextAtSize(dateLabel, 8),
-        y: cursorY + 5 * MM,
-        size: 8,
-        font: fontBold,
-        color: inkSubtle,
-        characterSpacing: 1.5,
-    });
-    page.drawText(meta.issuedAtJst, {
-        x: width - margin - fontBold.widthOfTextAtSize(meta.issuedAtJst, 13),
-        y: cursorY,
-        size: 13,
-        font: fontBold,
-        color: ink,
-    });
-    cursorY -= 14 * MM;
-
-    // ── Statement (本文) ──
-    const statement = [
-        '本書は、下記に示すデジタル成果物が、明記された発行日時に、',
-        '明記された発行者の手から確かに納品されたことを、',
-        '国際標準 RFC3161 タイムスタンプおよび SHA-256 ハッシュにより、',
-        '第三者が独立して検証可能な形で証明するものです。',
-    ];
-    for (const line of statement) {
-        page.drawText(line, {
-            x: margin,
-            y: cursorY,
-            size: 10.5,
-            font: fontRegular,
-            color: inkSoft,
-            lineHeight: 16,
-        });
-        cursorY -= 5.5 * MM;
-    }
-    cursorY -= 4 * MM;
-
-    // ── Asset card (rounded panel) ──
-    const cardX = margin;
-    const cardW = width - margin * 2;
-    const cardH = 38 * MM;
-    drawCard(page, cardX, cursorY - cardH, cardW, cardH, rule);
-
-    let inner = cursorY - 8 * MM;
-    page.drawText('NAME', {
-        x: cardX + 6 * MM, y: inner, size: 7.5, font: fontBold, color: inkSubtle, characterSpacing: 2,
-    });
-    const textMaxWidth = cardW - (12 * MM); // カード幅から左右の余白を引いた最大幅
-
-    drawWrappedText(
-        page, meta.title, 
-        cardX + 6 * MM, inner - 5 * MM, 
-        textMaxWidth, fontBold, 14, ink, 18
-    );
-    inner -= 12 * MM;
-
-    page.drawText('FILE', {
-        x: cardX + 6 * MM, y: inner, size: 7.5, font: fontBold, color: inkSubtle, characterSpacing: 2,
-    });
-    
-    drawWrappedText(
-        page, meta.fileName, 
-        cardX + 6 * MM, inner - 5 * MM, 
-        textMaxWidth, fontRegular, 11, ink, 14
-    );
-    inner -= 12 * MM;
-
-    page.drawText('SHA-256', {
-        x: cardX + 6 * MM, y: inner, size: 7.5, font: fontBold, color: inkSubtle, characterSpacing: 2,
-    });
-    // hash は monospace + 折返し
-    const hashLines = chunkString(meta.sha256, 32);
-    let hashY = inner - 5 * MM;
-    for (const h of hashLines) {
-        page.drawText(h, {
-            x: cardX + 6 * MM, y: hashY, size: 10, font: fontMono, color: ink,
-        });
-        hashY -= 4.6 * MM;
-    }
-    cursorY -= cardH + 10 * MM;
-
-    // ── Verify URL + ID ──
-    page.drawText('ワンクリック検証', {
-        x: margin, y: cursorY, size: 8, font: fontBold, color: inkSubtle, characterSpacing: 1.5,
-    });
-    cursorY -= 5.5 * MM;
-    page.drawText(meta.verifyUrl, {
-        x: margin, y: cursorY, size: 11, font: fontBold, color: accent,
-    });
-    cursorY -= 10 * MM;
-
-    // ── Trust footer ──
-    page.drawLine({
-        start: { x: margin, y: cursorY },
-        end: { x: width - margin, y: cursorY },
-        thickness: 0.4,
-        color: rule,
-    });
-    cursorY -= 8 * MM;
-
-    page.drawText('RFC3161 · SHA-256 · Independent Verifiable', {
-        x: margin, y: cursorY, size: 9, font: fontBold, color: success, characterSpacing: 2,
-    });
-
-    const tsaLabel = `TSA: ${meta.tsaProvider}`;
-    page.drawText(tsaLabel, {
-        x: width - margin - fontRegular.widthOfTextAtSize(tsaLabel, 9),
-        y: cursorY, size: 9, font: fontRegular, color: inkSoft,
-    });
-    cursorY -= 5.5 * MM;
-    page.drawText(`Certificate ID: ${meta.id}`, {
-        x: margin, y: cursorY, size: 8.5, font: fontMono, color: inkSubtle,
-    });
-
-    // ── ProofMark seal (右下) — シンプルなマーク + テキスト
-    page.drawText('ProofMark', {
-        x: width - margin - fontBold.widthOfTextAtSize('ProofMark', 11),
-        y: cursorY,
-        size: 11,
-        font: fontBold,
-        color: ink,
-    });
-
-    onProgress(0.95);
-    const bytes = await pdf.save();
-    onProgress(1);
-    return bytes;
-}
-
-function drawCard(
-    page: ReturnType<PDFDocument['addPage']>,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    borderColor: ReturnType<typeof rgb>,
-): void {
-    page.drawRectangle({
-        x, y, width: w, height: h,
-        color: rgb(0.99, 0.99, 0.992),
-        borderColor,
-        borderWidth: 0.5,
-    });
-}
-
-function truncate(str: string, max: number): string {
-    if (str.length <= max) return str;
-    return `${str.slice(0, max - 1)}…`;
-}
-
-function chunkString(s: string, n: number): string[] {
-    const out: string[] = [];
-    for (let i = 0; i < s.length; i += n) out.push(s.slice(i, i + n));
-    return out;
-}
-
+// --- Helper: テキストの自動改行 ---
 function drawWrappedText(
-    page: any,
-    text: string,
-    x: number,
-    y: number,
-    maxWidth: number,
-    font: any,
-    size: number,
-    color: any,
-    lineHeight: number
+    page: any, text: string, x: number, y: number, maxWidth: number,
+    font: any, size: number, color: any, lineHeight: number
 ): void {
     let currentLine = '';
     let cursorY = y;
@@ -645,4 +402,69 @@ function drawWrappedText(
     if (currentLine) {
         page.drawText(currentLine, { x, y: cursorY, font, size, color });
     }
+}
+
+// --- Core PDF Builder ---
+async function buildCertificatePdf(
+    meta: CertificateMeta,
+    theme: 'color' | 'mono',
+    onProgress: (p: number) => void,
+): Promise<Uint8Array> {
+    onProgress(0.05);
+    
+    // 1. フォントとテンプレートのロード
+    const fonts = await loadNotoSansJp();
+    const templatePath = theme === 'color' ? '/template-color.pdf' : '/template-mono.pdf';
+    const templateBytes = await fetch(templatePath).then(res => {
+        if (!res.ok) throw new Error(`Template not found: ${templatePath}`);
+        return res.arrayBuffer();
+    });
+
+    onProgress(0.45);
+
+    // 2. PDFドキュメントの初期化（白紙作成ではなく、テンプレートの読み込み）
+    const pdf = await PDFDocument.load(templateBytes);
+    pdf.registerFontkit(fontkit);
+
+    // 3. 欧文・和文の混植フォント登録 (subset: false で文字化け完全防止)
+    const fontRegular = await pdf.embedFont(fonts.regular, { subset: false });
+    const fontMono = await pdf.embedFont(StandardFonts.Courier);
+    
+    const pages = pdf.getPages();
+    const page1 = pages[0]; // 1ページ目 (表紙・挨拶)
+    const page2 = pages[1]; // 2ページ目 (検証手順)
+
+    // 色の定義 (Ink)
+    const ink = rgb(0x0f / 255, 0x0f / 255, 0x11 / 255);
+    const inkSubtle = rgb(0x3a / 255, 0x3a / 255, 0x42 / 255);
+    const purple = rgb(0x6c / 255, 0x3e / 255, 0xf4 / 255);
+
+    // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
+    // 座標設定 (※A4サイズ: 幅約595pt x 高さ約842pt 左下が原点[0,0])
+    // ベースPDFのデザインに合わせて、ここの数値を後から微調整してください。
+    // ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝ ＝
+    
+    const FOOTER_X = 145; // 「発行日」などのラベルの右側のX座標
+
+    // ── Page 1: Footer 注入 ──
+    // 発行日
+    page1.drawText(meta.issuedAtJst, { x: FOOTER_X, y: 135, size: 10.5, font: fontRegular, color: ink });
+    // 納品物 (ファイル名) - 自動改行対応 (最大幅300pt)
+    drawWrappedText(page1, meta.fileName, FOOTER_X, 115, 300, fontRegular, 10.5, ink, 14);
+    // 証明書ID
+    page1.drawText(meta.id, { x: FOOTER_X, y: 88, size: 9, font: fontMono, color: inkSubtle });
+
+    // ── Page 2: Body & Footer 注入 ──
+    // 01・オンライン検証 URL
+    page2.drawText(meta.verifyUrl, { x: 75, y: 550, size: 10, font: fontMono, color: purple });
+    
+    // 発行日 (フッター)
+    page2.drawText(meta.issuedAtJst, { x: FOOTER_X, y: 135, size: 10.5, font: fontRegular, color: ink });
+    // 証明書ID (フッター)
+    page2.drawText(meta.id, { x: FOOTER_X, y: 115, size: 9, font: fontMono, color: inkSubtle });
+
+    onProgress(0.95);
+    const bytes = await pdf.save();
+    onProgress(1);
+    return bytes;
 }
