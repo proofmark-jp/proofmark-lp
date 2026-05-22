@@ -16,6 +16,7 @@ import founderBadge from '../assets/logo/badges/proofmark-badge-founder.svg';
 import { supabase } from '../lib/supabase';
 import { getC2paSummary } from '../lib/c2pa-schema';
 import { ContentCredentialsSection } from '../components/cert/ContentCredentialsSection';
+import VerifyDropzone from '../components/VerifyDropzone';
 
 // ---- RFC3161 FreeTSA Timestamp API ----
 const applyRFC3161Timestamp = async (certId: string, hash: string) => {
@@ -528,6 +529,17 @@ export default function CertificatePage() {
                         <ProofBundleTimelineCard bundle={bundle} />
                     </div>
                 )}
+
+                {/* ✨ Zero-Knowledge Web Verifier (ブラウザ内オフライン検証) ✨ */}
+                <div className="w-full max-w-5xl mt-24 print:hidden">
+                    <div className="bg-[#f5f5f7] rounded-[2.5rem] py-16 px-4 sm:px-12 shadow-[0_20px_80px_rgba(0,0,0,0.5)] border border-[#e5e5e7]/10 relative overflow-hidden transition-all hover:shadow-[0_20px_100px_rgba(0,212,170,0.15)]">
+                        {/* 上部に落ちる淡い光沢（ガラス表現） */}
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-12 bg-gradient-to-b from-white/80 to-transparent blur-xl pointer-events-none"></div>
+                        
+                        {/* Verifier 本体 */}
+                        <VerifyDropzone />
+                    </div>
+                </div>
 
                 {/* 🚨 通報導線 (Report Abuse) */}
                 <div className="mt-12 text-center pb-8 print:hidden">
