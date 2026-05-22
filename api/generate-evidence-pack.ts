@@ -129,11 +129,13 @@ function buildClientLetter(
     const issuedAt = cert.certified_at ?? cert.proven_at ?? cert.created_at ?? '';
     const niceTitle = cert.title ?? cert.original_filename ?? cert.file_name ?? 'Verified Digital Artwork';
     const sha256 = cert.sha256 ?? '';
+    const isPrivate = cert.proof_mode === 'private';
 
     const verifySteps: string[] = [
-        '1. Compute SHA-256 of the supplied file and ensure it matches "SHA-256" above.',
-        '2. Run `verify.sh` (or `verify.py`) inside this archive to verify the RFC3161',
-        '   timestamp token (timestamp.tsr) using OpenSSL.',
+        isPrivate 
+            ? '1. [ZERO-KNOWLEDGE MODE] Original file is NOT included. Place your original file in this folder and run `verify.sh <your_file>` to confirm its SHA-256 matches.'
+            : '1. Compute SHA-256 of the supplied original file and ensure it matches "SHA-256" above.',
+        '2. Run `verify.sh` (or `verify.py`) inside this archive to verify the RFC3161 timestamp token (timestamp.tsr) using OpenSSL.',
     ];
     let n = 3;
     if (options.c2paIncluded) {
@@ -150,13 +152,9 @@ function buildClientLetter(
     }
     verifySteps.push(`${n}. Optionally open Verify URL to compare against the public certificate page.`);
 
-    const inclusions: string[] = [];
-    if (options.c2paIncluded) inclusions.push('a scrubbed Content Credentials (C2PA) manifest as c2pa.json');
-    if (options.chainIncluded) inclusions.push('a tamper-evident audit chain as chain_of_evidence.json');
-    if (options.legalGuideIncluded) inclusions.push('a legal context PDF under /legal_guide/');
-    const inclusionLine = inclusions.length
-        ? `It additionally embeds ${inclusions.join('; ')}.`
-        : '';
+    const tsaStatus = cert.timestamp_token 
+        ? 'This package includes an RFC3161-compliant timestamp token (timestamp.tsr).'
+        : 'This package serves as a Primary Cryptographic Proof (SHA-256) registered in the ProofMark immutable ledger. An institutional RFC3161 timestamp is currently being provisioned in the background. Once complete, an extended package will be available.';
 
     return [
         'ProofMark Evidence Pack — Client Hand-off Letter',
@@ -165,13 +163,13 @@ function buildClientLetter(
         `Issued at   : ${issuedAt}`,
         `SHA-256     : ${sha256}`,
         `Verify URL  : ${verifyUrl}`,
+        `Mode        : ${isPrivate ? 'Private (Zero-Knowledge)' : 'Shareable'}`,
         '',
         'About this Evidence Pack',
         '------------------------',
-        'This package contains the cryptographic timestamp data and verification scripts',
-        'required to independently confirm that the file with the SHA-256 above existed',
-        'at the issued time and has not been modified since.',
-        inclusionLine,
+        tsaStatus,
+        'It contains the cryptographic data and verification scripts required to independently',
+        'confirm that the file with the SHA-256 above existed at the issued time.',
         '',
         'How to verify (no ProofMark account required)',
         '----------------------------------------------',
@@ -179,9 +177,8 @@ function buildClientLetter(
         '',
         'Notes',
         '-----',
-        "ProofMark issues RFC3161-compliant timestamp data. Whether such data is",
-        'admissible as evidence depends on the venue, jurisdiction, and TSA in use.',
-        'See https://proofmark.jp/trust-center for the current TSA configuration.',
+        'For details on the issuing TSA and its legal admissibility, please refer to',
+        'the Trust Center: [https://proofmark.jp/trust-center](https://proofmark.jp/trust-center)',
     ].filter((line) => line !== '').join('\n');
 }
 
