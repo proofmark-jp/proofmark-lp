@@ -40,49 +40,37 @@ import { useC2pa, probeC2paMagic } from '../hooks/useC2pa';
 import { C2paUpsell } from './cert/C2paUpsell';
 import type { C2paManifest } from '../lib/c2pa-schema';
 
-async function requestUploadUrl(args: { file: File; token: string }) {
+async function requestUploadUrl(file: File, token: string) {
   const res = await fetch('/api/upload-url', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${args.token}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
-      filename: args.file.name,
-      contentType: args.file.type || 'application/octet-stream',
-      size: args.file.size
-    })
+      fileName: file.name,
+      fileSize: file.size,
+      mimeType: file.type || 'application/octet-stream',
+    }),
   });
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || 'Failed to request upload URL');
+    const j = await res.json().catch(() => ({}));
+    throw new Error(j.error || 'Failed to get upload URL');
   }
   return res.json() as Promise<{ signedUrl: string; quarantinePath: string }>;
 }
 
-function putToSignedUrl(args: { signedUrl: string; file: File; onProgress?: (p: number) => void }): Promise<void> {
+function putToSignedUrl(signedUrl: string, file: File): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('PUT', args.signedUrl);
-    xhr.setRequestHeader('Content-Type', args.file.type || 'application/octet-stream');
-    
-    if (args.onProgress) {
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          args.onProgress(Math.round((e.loaded / e.total) * 100));
-        }
-      };
-    }
-    
+    xhr.open('PUT', signedUrl, true);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
-      } else {
-        reject(new Error(`Upload failed with status ${xhr.status}`));
-      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`Upload failed with status ${xhr.status}`));
     };
     xhr.onerror = () => reject(new Error('Network error during upload'));
-    xhr.send(args.file);
+    xhr.send(file);
   });
 }
 
@@ -245,6 +233,7 @@ export default function CertificateUpload() {
     if (!file) return;
     setIsProcessing(true);
     try {
+      setProcessStatus('準備中...');
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
@@ -252,36 +241,31 @@ export default function CertificateUpload() {
         setIsProcessing(false);
         setProcessStatus('');
         alert('安全のため、自動的にログアウトしました。お手数ですが、もう一度ログインをお願いします。');
-        window.location.href = '/auth'; // ログイン画面へ強制リダイレクト
-        return; // これ以上処理を進めない
+        window.location.href = '/auth';
+        return;
       }
 
-      let quarantinePath: string | null = null;
-      let signedUrl: string | null = null;
+      // 並列処理: ハッシュ計算 & アップロードURL取得
+      setProcessStatus('ハッシュ計算 & セキュア通信の準備中...');
+      const [hashResult, uploadInfo] = await Promise.all([
+        hashFile(file),
+        requestUploadUrl(file, token)
+      ]);
 
-      if (proofMode === 'shareable') {
-        setProcessStatus('アップロードURLを取得中...');
-        const uploadInfo = await requestUploadUrl({ file, token });
-        quarantinePath = uploadInfo.quarantinePath;
-        signedUrl = uploadInfo.signedUrl;
-      }
-
-      setProcessStatus('ハッシュ計算とアップロードを実行中...');
-      const hashPromise = hashFile(file).then(res => res.sha256);
-      const uploadPromise = (proofMode === 'shareable' && signedUrl)
-        ? putToSignedUrl({ signedUrl, file, onProgress: (p) => setProcessStatus(`アップロード中... ${p}%`) })
-        : Promise.resolve();
-
-      const [fileHash] = await Promise.all([hashPromise, uploadPromise]);
+      const fileHash = hashResult.sha256;
       setHash(fileHash);
 
-      setProcessStatus('証明書を発行中...');
+      // ダイレクトアップロード (Vercelを経由せずSupabase Storageへ直行)
+      setProcessStatus('セキュア領域へ暗号化転送中...');
+      await putToSignedUrl(uploadInfo.signedUrl, file);
 
+      // APIへJSONだけを送信 (Zero-Copy Promote)
+      setProcessStatus('証明書を発行中...');
       const payload = {
-        quarantinePath: proofMode === 'shareable' ? quarantinePath : null,
+        quarantinePath: uploadInfo.quarantinePath,
         sha256: fileHash,
         title: file.name,
-        proofMode,
+        proofMode: proofMode,
         visibility: proofMode === 'shareable' ? visibility : 'private',
         file_name: file.name,
         file_size: file.size,
@@ -289,16 +273,16 @@ export default function CertificateUpload() {
         metadataJson: {
           original_filename: file.name,
           original_size: file.size,
-          is_preview_compressed: false
+          is_preview_compressed: false,
         },
-        c2paManifest: (isPaidPlan && c2paManifest) ? JSON.stringify(c2paManifest) : null
+        c2paManifest: isPaidPlan && c2paManifest ? JSON.stringify(c2paManifest) : null,
       };
 
       const res = await fetch('/api/certificates/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
@@ -321,6 +305,7 @@ export default function CertificateUpload() {
           window.location.href = targetUrl;
         }
       }, 500);
+
     } catch (e) {
       console.error(e);
       const errMsg = (e as Error).message || 'エラーが発生しました';
