@@ -358,14 +358,18 @@ export async function verifyTimestamp(
   /* ── 3-7. SignedData の署名検証 ── */
   signedData.certificates = [...(signedData.certificates ?? []), tsaCert];
 
+  // ★ 究極のハック: pkijs が TSTInfo と認識して勝手に元データを要求するのを防ぐため、
+  // 一時的に ContentType を「単なるデータ(Data: 1.2.840.113549.1.7.1)」に偽装する。
+  const originalContentType = signedData.encapContentInfo.eContentType;
+  signedData.encapContentInfo.eContentType = '1.2.840.113549.1.7.1';
+
   let signatureValid = false;
   try {
-    // TSTInfoのパースやハッシュの自動検証をpkijsに強制させず、純粋なCMS署名の正当性のみを検証する
+    // eContentType が Data に偽装されているため、純粋な CMS 署名検証のみが実行される
     const verifyResult = await signedData.verify({
       signer: 0,
       trustedCerts: [caCert, tsaCert],
       checkChain: false,
-      extendedMode: true,
     } as Parameters<typeof signedData.verify>[0]);
 
     if (typeof verifyResult === 'boolean') {
@@ -382,6 +386,9 @@ export async function verifyTimestamp(
       'TSA署名の検証に失敗しました',
       msg,
     );
+  } finally {
+    // 検証が終わったら本来の TSTInfo の OID に戻す (後続のパース処理のため)
+    signedData.encapContentInfo.eContentType = originalContentType;
   }
 
   if (!signatureValid) {
