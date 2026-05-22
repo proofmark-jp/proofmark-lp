@@ -47,10 +47,10 @@ async function requestUploadUrl(file: File, token: string) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      fileName: file.name,
-      fileSize: file.size,
-      mimeType: file.type || 'application/octet-stream',
+body: JSON.stringify({
+      filename: file.name,
+      file_size: file.size,
+      mime_type: file.type || 'application/octet-stream',
     }),
   });
   if (!res.ok) {
