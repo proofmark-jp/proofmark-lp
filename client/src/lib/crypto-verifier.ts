@@ -356,24 +356,14 @@ export async function verifyTimestamp(
   const caCert = parseCertificate(caCertBytes);
 
   /* ── 3-7. SignedData の署名検証 ── */
-  // ── A. eContent を平坦 OCTET STRING へ再構築 ─────────────
-  try {
-    const flatOctet = new asn1js.OctetString({ valueHex: tstBuffer });
-    signedData.encapContentInfo.eContent = flatOctet;
-  } catch (err) {
-    console.warn('[verifyTimestamp] eContent normalize skipped', err);
-  }
-
-  // ── B. signer の証明書候補を明示 ──────────────────────────
   signedData.certificates = [...(signedData.certificates ?? []), tsaCert];
 
-  // ── C. extendedMode + data を両渡しで pkijs に判定させる ──
   let signatureValid = false;
   try {
+    // TSTInfoのパースやハッシュの自動検証をpkijsに強制させず、純粋なCMS署名の正当性のみを検証する
     const verifyResult = await signedData.verify({
       signer: 0,
       trustedCerts: [caCert, tsaCert],
-      data: tsstBufferLike(tstBuffer),
       checkChain: false,
       extendedMode: true,
     } as Parameters<typeof signedData.verify>[0]);
@@ -387,13 +377,6 @@ export async function verifyTimestamp(
     }
   } catch (err) {
     const msg = (err as Error)?.message ?? '';
-    if (msg.includes('Missed detached data')) {
-      throw new VerifierError(
-        'INVALID_TSA_SIGNATURE',
-        'TSA署名の eContent が検出できません (detached 互換モードで失敗)',
-        msg,
-      );
-    }
     throw new VerifierError(
       'INVALID_TSA_SIGNATURE',
       'TSA署名の検証に失敗しました',
@@ -625,11 +608,4 @@ const OID_TO_LABEL: Record<string, string> = {
   '1.2.840.113549.1.9.1': 'EMAIL',
 };
 
-/**
- * pkijs.SignedData.verify の `data` 引数は
- * 「ArrayBuffer | ArrayBuffer[] | Uint8Array」のいずれかを受け付ける。
- * 単一 ArrayBuffer を 1 要素配列に包んで両対応にするためのヘルパー。
- */
-function tsstBufferLike(buf: ArrayBuffer): ArrayBuffer {
-  return buf.slice(0);
-}
+
