@@ -372,27 +372,51 @@ export async function verifyTimestamp(
   const caCert = parseCertificate(caCertBytes);
 
   /* ── 3-7. SignedData の署名検証 ── */
-  // pkijs は SignedData.certificates が空でも signer を解決できるよう、
-  // 明示的に candidate を渡す
+  // ── A. eContent を平坦 OCTET STRING へ再構築 ─────────────
+  try {
+    const flatOctet = new asn1js.OctetString({ valueHex: tstBuffer });
+    signedData.encapContentInfo.eContent = flatOctet;
+  } catch (err) {
+    console.warn('[verifyTimestamp] eContent normalize skipped', err);
+  }
+
+  // ── B. signer の証明書候補を明示 ──────────────────────────
   signedData.certificates = [...(signedData.certificates ?? []), tsaCert];
 
-  let signatureValid: boolean;
+  // ── C. extendedMode + data を両渡しで pkijs に判定させる ──
+  let signatureValid = false;
   try {
-    signatureValid = await signedData.verify({
+    const verifyResult = await signedData.verify({
       signer: 0,
-      trustedCerts: [caCert],
-      // 注: TSR の SignedData は eContent 内蔵 (not detached) なので
-      //     data オプションは渡さない。pkijs が internal で eContent を使用する。
+      trustedCerts: [caCert, tsaCert],
+      data: tsstBufferLike(tstBuffer),
       checkChain: false,
-      extendedMode: false,
-    });
+      extendedMode: true,
+    } as Parameters<typeof signedData.verify>[0]);
+
+    if (typeof verifyResult === 'boolean') {
+      signatureValid = verifyResult;
+    } else if (verifyResult && typeof verifyResult === 'object' && 'signatureVerified' in verifyResult) {
+      signatureValid = Boolean((verifyResult as { signatureVerified?: boolean }).signatureVerified);
+    } else {
+      signatureValid = false;
+    }
   } catch (err) {
+    const msg = (err as Error)?.message ?? '';
+    if (msg.includes('Missed detached data')) {
+      throw new VerifierError(
+        'INVALID_TSA_SIGNATURE',
+        'TSA署名の eContent が検出できません (detached 互換モードで失敗)',
+        msg,
+      );
+    }
     throw new VerifierError(
       'INVALID_TSA_SIGNATURE',
       'TSA署名の検証に失敗しました',
-      (err as Error).message,
+      msg,
     );
   }
+
   if (!signatureValid) {
     throw new VerifierError(
       'INVALID_TSA_SIGNATURE',
@@ -610,3 +634,12 @@ const OID_TO_LABEL: Record<string, string> = {
   '2.5.4.11': 'OU',
   '1.2.840.113549.1.9.1': 'EMAIL',
 };
+
+/**
+ * pkijs.SignedData.verify の `data` 引数は
+ * 「ArrayBuffer | ArrayBuffer[] | Uint8Array」のいずれかを受け付ける。
+ * 単一 ArrayBuffer を 1 要素配列に包んで両対応にするためのヘルパー。
+ */
+function tsstBufferLike(buf: ArrayBuffer): ArrayBuffer {
+  return buf.slice(0);
+}

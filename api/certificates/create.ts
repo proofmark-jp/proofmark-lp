@@ -1,20 +1,14 @@
 /**
- * api/certificates/create.ts — Phase Studio Repair
+ * api/certificates/create.ts — Zero-Copy Promote
  *
- * 致命的な「400 Bad Request (file is required)」を修正。
+ * - FormData / file 本体は一切受け取らない (JSON only)
+ * - クライアントは { quarantinePath, sha256, ... } のみ送信
+ * - Supabase SDK の move/copy でメタのみ移動 (バイト本体はストリーミングされない)
+ * - shareable: quarantine -> proofmark-public/certificates/{id}.ext
+ * - private  : quarantine を最終領域 proofmark-originals/{userId}/{id}.ext へ昇格
+ *              （※ Zero-Knowledge ポリシーで「保存しない」運用にする場合は remove のみ）
  *
- * 設計方針:
- *   1. proofMode === 'private' (Zero-Knowledge) では `file` 実体を**絶対に**要求しない。
- *      クライアントが安全にハッシュだけを送ってくる正常フローを尊重する。
- *   2. proofMode === 'shareable' のときのみ multipart の `file` を必須にする。
- *      画像のみアップロード→公開可能 (既存仕様)。
- *   3. file_hash / file_name / file_size はボディから受け取り、形式と上限を検証する。
- *      file_hash は SHA-256 (16進64文字) を厳格に判定。改ざんされた長さ・記号は弾く。
- *   4. RateLimit / C2PA Gate / Edge runtime / 既存 INSERT 列は**1ミリも壊さない**。
- *
- * 影響範囲:
- *   - api/certificates/create.ts (本ファイル) のみ。
- *   - 同じテーブル列・同じ formData フィールド名・同じ JSON レスポンス Schema を維持。
+ * runtime: edge (バイト本体を扱わないため Edge で問題なし)
  */
 
 export const config = { runtime: 'edge' };
@@ -24,33 +18,186 @@ import { resolveC2paForPersistence } from '../_lib/c2pa-validate.js';
 import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
 
-// Vercel Edge body limit (4.5MB) よりやや安全側にマージン
-const MAX_FILE_SIZE = 4 * 1024 * 1024;
-// Private モードでクライアントが申告できるオリジナルサイズの理論上限 (500MB)
-const MAX_DECLARED_SIZE = 500 * 1024 * 1024;
+/* ─────────────────────────────────────────────
+ *  Constants
+ * ───────────────────────────────────────────── */
+
 const SHA256_HEX = /^[a-f0-9]{64}$/i;
+const MAX_DECLARED_SIZE = 500 * 1024 * 1024; // 500MB
+const ORIGINALS_BUCKET = 'proofmark-originals';
+const PUBLIC_BUCKET = 'proofmark-public';
+const QUARANTINE_PREFIX = 'quarantine';
+/** quarantine 内のオブジェクト存在を確認する許容ウィンドウ (ms) */
+const QUARANTINE_FRESHNESS_MS = 30 * 60 * 1000; // 30 min
 
 type ProofMode = 'private' | 'shareable';
 type Visibility = 'private' | 'unlisted' | 'public';
 
-function asProofMode(raw: string): ProofMode {
+interface CreateBody {
+  /** 隔離パス: "quarantine/{userId}/{uuid}.ext" */
+  quarantinePath: string;
+  /** SHA-256 hex (64 chars) — クライアント側で hashWorker が出した値 */
+  sha256: string;
+  /** ユーザ表示用タイトル */
+  title: string;
+  /** モード */
+  proofMode: ProofMode;
+  /** 公開設定 */
+  visibility?: Visibility;
+  /** 元ファイル名 (UI 表示用) */
+  file_name: string;
+  /** バイト数 */
+  file_size: number;
+  /** MIME (申告値) */
+  mime_type?: string | null;
+  /** メタ JSON */
+  metadataJson?: Record<string, unknown> | null;
+  /** C2PA manifest (文字列 / null) */
+  c2paManifest?: string | null;
+}
+
+/* ─────────────────────────────────────────────
+ *  Helpers
+ * ───────────────────────────────────────────── */
+
+function clampFileName(name: string): string {
+  const stripped = (name ?? '').replace(/[\u0000-\u001f\u007f/\\]+/g, '_').trim();
+  return stripped.length > 240 ? stripped.slice(0, 240) : stripped || 'untitled';
+}
+
+function safeExt(name: string): string {
+  const ext = (name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
+  return ext || 'bin';
+}
+
+function normalizeProofMode(raw: unknown): ProofMode {
   return raw === 'shareable' ? 'shareable' : 'private';
 }
-function asVisibility(raw: string, mode: ProofMode): Visibility {
+
+function normalizeVisibility(raw: unknown, mode: ProofMode): Visibility {
   if (mode === 'private') return 'private';
   if (raw === 'public' || raw === 'unlisted') return raw;
   return 'private';
 }
-function clampFileName(name: string): string {
-  // 制御文字・パス区切り・改行を除去し、長さを 240 で切る (ストレージキー安全)
-  const stripped = name.replace(/[\u0000-\u001f\u007f/\\]+/g, '_').trim();
-  return stripped.length > 240 ? stripped.slice(0, 240) : stripped || 'untitled';
+
+/**
+ * quarantine path が「期待される命名規約」かつ「呼び出し元 user のものか」を保証する。
+ * `quarantine/{userId}/{anything}` 以外を一切受け入れない。
+ */
+function assertQuarantineOwnership(path: string, userId: string): void {
+  const parts = path.split('/');
+  if (parts.length < 3) throw new HttpError(400, 'invalid quarantine path');
+  if (parts[0] !== QUARANTINE_PREFIX) throw new HttpError(400, 'path must start with quarantine/');
+  if (parts[1] !== userId) throw new HttpError(403, 'quarantine ownership mismatch');
+  if (parts.some((seg) => seg === '' || seg === '..' || seg === '.' || seg.includes('\\'))) {
+    throw new HttpError(400, 'path traversal detected');
+  }
 }
 
-export default async function handler(request: Request) {
+class HttpError extends Error {
+  constructor(public status: number, message: string) { super(message); }
+}
+
+/* ─────────────────────────────────────────────
+ *  Quarantine stat (SDK list with prefix)
+ *  Supabase JS v2 は HEAD オブジェクトを直接サポートしないため、
+ *  親 prefix を list して file 名一致と更新時刻を確認する。
+ * ───────────────────────────────────────────── */
+
+interface QuarantineStat {
+  size: number;
+  lastModified: Date;
+  contentType: string | null;
+}
+
+async function statQuarantineObject(path: string): Promise<QuarantineStat> {
+  const lastSlash = path.lastIndexOf('/');
+  const parent = path.slice(0, lastSlash);
+  const name = path.slice(lastSlash + 1);
+
+  const { data, error } = await supabaseAdmin.storage
+    .from(ORIGINALS_BUCKET)
+    .list(parent, { search: name, limit: 1 });
+
+  if (error || !data || data.length === 0) {
+    throw new HttpError(404, 'quarantine object not found');
+  }
+  const entry = data.find((e) => e.name === name);
+  if (!entry) throw new HttpError(404, 'quarantine object not found (exact)');
+
+  const size = (entry.metadata as { size?: number } | null)?.size ?? 0;
+  const lastModifiedRaw = entry.updated_at ?? entry.created_at ?? new Date().toISOString();
+  const lastModified = new Date(lastModifiedRaw);
+  const ageMs = Date.now() - lastModified.getTime();
+  if (ageMs > QUARANTINE_FRESHNESS_MS) {
+    throw new HttpError(410, 'quarantine object is too old (must be promoted within 30 min)');
+  }
+
+  const contentType = (entry.metadata as { mimetype?: string } | null)?.mimetype ?? null;
+  return { size, lastModified, contentType };
+}
+
+/* ─────────────────────────────────────────────
+ *  Zero-copy promote
+ *
+ *  Supabase Storage の copy/move はサーバサイドでメタのみ更新する S3 ライク API。
+ *  Edge ランタイムにバイトを流さないため Vercel メモリは増えない。
+ * ───────────────────────────────────────────── */
+
+async function promoteFromQuarantine(args: {
+  quarantinePath: string;
+  certId: string;
+  fileExt: string;
+  proofMode: ProofMode;
+  userId: string;
+}): Promise<{
+  storagePath: string | null;
+  publicImageUrl: string | null;
+}> {
+  const { quarantinePath, certId, fileExt, proofMode, userId } = args;
+
+  if (proofMode === 'shareable') {
+    // shareable: public bucket へ copy → quarantine を remove
+    const publicPath = `certificates/${certId}.${fileExt}`;
+    const { error: copyErr } = await supabaseAdmin.storage
+      .from(ORIGINALS_BUCKET)
+      .copy(quarantinePath, publicPath, { destinationBucket: PUBLIC_BUCKET });
+    if (copyErr) throw new HttpError(500, `copy failed: ${copyErr.message}`);
+
+    // 同時に originals 側にも保管 (改ざん検証用バックアップ)
+    const originalsLivePath = `${userId}/certificates/${certId}.${fileExt}`;
+    const { error: moveErr } = await supabaseAdmin.storage
+      .from(ORIGINALS_BUCKET)
+      .move(quarantinePath, originalsLivePath);
+    if (moveErr) {
+      // public への copy は成功している。original 側だけ失敗してもユーザ操作は止めない。
+      console.error('[promote] originals move failed (kept quarantine)', moveErr);
+    }
+
+    const { data: publicData } = supabaseAdmin.storage.from(PUBLIC_BUCKET).getPublicUrl(publicPath);
+    return {
+      storagePath: originalsLivePath,
+      publicImageUrl: publicData.publicUrl,
+    };
+  }
+
+  // private: Zero-Knowledge ポリシー
+  //   現行仕様では原本サーバ保存を最小化したいので、quarantine は破棄する。
+  //   将来「Private でも自分専用に保持」したい要件が来たら下の remove を move に差し替える。
+  const { error: rmErr } = await supabaseAdmin.storage.from(ORIGINALS_BUCKET).remove([quarantinePath]);
+  if (rmErr) console.error('[promote] quarantine remove failed (private mode)', rmErr);
+
+  return { storagePath: null, publicImageUrl: null };
+}
+
+/* ─────────────────────────────────────────────
+ *  Handler
+ * ───────────────────────────────────────────── */
+
+export default async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
-  /* ───────── Rate limit (既存) ───────── */
+  /* ── Rate limit (best effort) ── */
   try {
     const redis = new Redis({
       url: process.env.KV_REST_API_URL || '',
@@ -62,60 +209,63 @@ export default async function handler(request: Request) {
       analytics: true,
     });
     const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
-    const { success } = await ratelimit.limit(`ratelimit_${ip}`);
+    const { success } = await ratelimit.limit(`pm_create_${ip}`);
     if (!success) {
-      console.warn(`[RateLimit] Blocked request from IP: ${ip}`);
       return json(429, { error: 'Too many requests. Please wait a few seconds.' });
     }
-  } catch (error) {
-    console.error('[RateLimit] Bypassing safely:', error);
+  } catch (e) {
+    console.error('[RateLimit] bypass', e);
   }
 
-  /* ───────── multipart parse ───────── */
-  let formData: FormData;
+  /* ── JSON parse (ファイルは入っていない) ── */
+  let body: CreateBody;
   try {
-    formData = await request.formData();
-  } catch {
-    return json(400, { error: 'Invalid form data. File might be too large (Limit is 4MB).' });
-  }
-
-  // クライアントから来る共通フィールド
-  const fileEntry = formData.get('file'); // private のときは null
-  const title = String(formData.get('title') || '').trim();
-  const sha256Raw = String(formData.get('sha256') || formData.get('file_hash') || '').trim().toLowerCase();
-  const proofMode = asProofMode(String(formData.get('proofMode') || 'private'));
-  const visibility = asVisibility(String(formData.get('visibility') || 'private'), proofMode);
-  const metadataJsonRaw = String(formData.get('metadataJson') || '{}');
-  const c2paRaw = formData.get('c2paManifest');
-
-  // private モード用の追加フィールド (ファイル本体なしでも file_name / file_size を受ける)
-  const declaredFileName = clampFileName(String(formData.get('file_name') || formData.get('original_filename') || ''));
-  const declaredFileSizeRaw = String(formData.get('file_size') || formData.get('original_size') || '');
-
-  /* ───────── 共通バリデーション ───────── */
-  if (!title) return json(400, { error: 'title is required' });
-  if (!sha256Raw) return json(400, { error: 'sha256 is required' });
-  if (!SHA256_HEX.test(sha256Raw)) return json(400, { error: 'sha256 must be 64 hex chars (SHA-256)' });
-
-  let parsedMetadata: Record<string, unknown> = {};
-  try {
-    parsedMetadata = JSON.parse(metadataJsonRaw);
-    if (typeof parsedMetadata !== 'object' || parsedMetadata === null || Array.isArray(parsedMetadata)) {
-      return json(400, { error: 'metadataJson must be a JSON object' });
+    const ctype = request.headers.get('content-type') || '';
+    if (!ctype.includes('application/json')) {
+      return json(400, { error: 'Content-Type must be application/json' });
     }
+    body = (await request.json()) as CreateBody;
   } catch {
-    return json(400, { error: 'Invalid metadataJson format' });
+    return json(400, { error: 'invalid JSON body' });
   }
 
-  /* ───────── 認証 ───────── */
+  /* ── 認証 ── */
   let userId = '';
   try {
     userId = await getAuthenticatedUserId(request);
-  } catch (error) {
-    return json(401, { error: error instanceof Error ? error.message : 'Unauthorized' });
+  } catch (err) {
+    return json(401, { error: err instanceof Error ? err.message : 'Unauthorized' });
   }
 
-  /* ───────── プロファイル / プラン ───────── */
+  /* ── 入力バリデーション ── */
+  const proofMode = normalizeProofMode(body.proofMode);
+  const visibility = normalizeVisibility(body.visibility, proofMode);
+  const title = String(body.title ?? '').trim();
+  const sha256 = String(body.sha256 ?? '').trim().toLowerCase();
+  const declaredFileName = clampFileName(String(body.file_name ?? ''));
+  const declaredSize = Number(body.file_size ?? 0);
+  const declaredMime = String(body.mime_type ?? '').trim() || 'application/octet-stream';
+  const quarantinePath = String(body.quarantinePath ?? '');
+  const metadataJson = (body.metadataJson && typeof body.metadataJson === 'object')
+    ? (body.metadataJson as Record<string, unknown>)
+    : {};
+
+  if (!title) return json(400, { error: 'title is required' });
+  if (!SHA256_HEX.test(sha256)) return json(400, { error: 'sha256 must be 64 hex chars' });
+  if (!declaredFileName) return json(400, { error: 'file_name is required' });
+  if (!Number.isFinite(declaredSize) || declaredSize < 0 || declaredSize > MAX_DECLARED_SIZE) {
+    return json(400, { error: 'file_size out of range' });
+  }
+  if (!quarantinePath) return json(400, { error: 'quarantinePath is required' });
+
+  try {
+    assertQuarantineOwnership(quarantinePath, userId);
+  } catch (e) {
+    if (e instanceof HttpError) return json(e.status, { error: e.message });
+    return json(400, { error: 'invalid quarantine path' });
+  }
+
+  /* ── プロファイル ── */
   const { data: profile } = await supabaseAdmin
     .from('profiles')
     .select('plan_tier')
@@ -123,68 +273,16 @@ export default async function handler(request: Request) {
     .single();
   const planTier = (profile?.plan_tier ?? 'free') as string;
 
-  /* ───────── proofMode 別の入力解釈 ─────────
-   *
-   *   ① shareable: ファイル本体が必須 → これまでと同じパス
-   *   ② private  : ファイル本体は不要 → file_name / file_size を文字列で受け取る
-   */
-  let resolvedFileName = '';
-  let resolvedMime: string | null = null;
-  let resolvedSize = 0;
-  let shareableFile: File | null = null;
-
-  if (proofMode === 'shareable') {
-    if (!fileEntry || typeof fileEntry === 'string' || !('name' in fileEntry)) {
-      return json(400, { error: 'file is required for shareable proof' });
-    }
-    if (fileEntry.size > MAX_FILE_SIZE) {
-      return json(413, { error: 'File size exceeds 4MB limit. Please compress the file.' });
-    }
-    if (!fileEntry.type.startsWith('image/')) {
-      return json(400, { error: 'shareable proof requires an image file' });
-    }
-    shareableFile = fileEntry;
-    resolvedFileName = clampFileName(fileEntry.name);
-    resolvedMime = fileEntry.type || null;
-    resolvedSize = fileEntry.size;
-  } else {
-    // ── Zero-Knowledge: ファイル実体は受け取らない ──
-    if (fileEntry && typeof fileEntry !== 'string' && 'size' in fileEntry) {
-      // 互換: 旧クライアントが間違って実体を送ってきても private では捨てる
-      console.warn({ event: 'private.file_body_ignored', size: (fileEntry as File).size });
-    }
-    if (!declaredFileName) {
-      return json(400, { error: 'file_name is required (private mode)' });
-    }
-    const declaredSize = Number.parseInt(declaredFileSizeRaw, 10);
-    if (!Number.isFinite(declaredSize) || declaredSize < 0 || declaredSize > MAX_DECLARED_SIZE) {
-      return json(400, { error: 'file_size must be a non-negative integer ≤ 500MB' });
-    }
-    resolvedFileName = declaredFileName;
-    resolvedMime = String(formData.get('mime_type') || 'application/octet-stream');
-    resolvedSize = declaredSize;
-  }
-
-  /* ───────── C2PA Gate (差分は最小) ───────── */
-  if (c2paRaw instanceof File) {
-    console.warn({ event: 'c2pa.binary_field_ignored' });
-  }
-  const { value: c2paValue, gate } = resolveC2paForPersistence(
-    c2paRaw instanceof File ? null : c2paRaw,
-    planTier,
-  );
-  if (gate.kind === 'reject') {
-    console.warn({ event: 'c2pa.rejected', reason: gate.reason });
-  }
-
-  /* ───────── 重複検出 (sha256 単位) ───────── */
+  /* ── 重複 SHA-256 ── */
   const duplicate = await supabaseAdmin
     .from('certificates')
     .select('id, public_verify_token, proven_at')
-    .eq('sha256', sha256Raw)
+    .eq('sha256', sha256)
     .limit(1)
     .maybeSingle();
   if (duplicate.data) {
+    // 失敗時は quarantine を残さない (孤立オブジェクト防止)
+    await supabaseAdmin.storage.from(ORIGINALS_BUCKET).remove([quarantinePath]).catch(() => undefined);
     return json(409, {
       error: 'duplicate certificate exists',
       duplicate: true,
@@ -192,64 +290,99 @@ export default async function handler(request: Request) {
     });
   }
 
-  /* ───────── アップロード (shareable のみ) ───────── */
-  const certificateId = crypto.randomUUID();
-  const ext = resolvedFileName.split('.').pop()?.toLowerCase() || 'bin';
-  const storagePath = proofMode === 'shareable'
-    ? `${userId}/certificates/${certificateId}.${ext}`
-    : null;
-  let publicImageUrl: string | null = null;
-
-  if (proofMode === 'shareable' && shareableFile && storagePath) {
-    const rawFileBuffer = await shareableFile.arrayBuffer();
-    const publicPreviewPath = `certificates/${certificateId}.${ext}`;
-    const [originalUpload, previewCopy] = await Promise.all([
-      supabaseAdmin.storage.from('proofmark-originals').upload(storagePath, rawFileBuffer, {
-        upsert: false,
-        contentType: resolvedMime || 'application/octet-stream',
-        cacheControl: '31536000',
-      }),
-      supabaseAdmin.storage.from('proofmark-public').upload(publicPreviewPath, rawFileBuffer, {
-        upsert: false,
-        contentType: resolvedMime || 'application/octet-stream',
-        cacheControl: '31536000',
-      }),
-    ]);
-    if (originalUpload.error) return json(500, { error: originalUpload.error.message });
-    if (previewCopy.error) return json(500, { error: previewCopy.error.message });
-
-    const { data: previewPublicData } = supabaseAdmin.storage
-      .from('proofmark-public')
-      .getPublicUrl(publicPreviewPath);
-    publicImageUrl = previewPublicData.publicUrl;
+  /* ── quarantine stat (改ざん検知 / 経過時間) ── */
+  let stat: QuarantineStat;
+  try {
+    stat = await statQuarantineObject(quarantinePath);
+  } catch (e) {
+    if (e instanceof HttpError) return json(e.status, { error: e.message });
+    return json(500, { error: 'quarantine stat failed' });
   }
 
-  /* ───────── INSERT ───────── */
+  // 申告サイズとの突合 (タンパー検知)
+  if (stat.size !== declaredSize) {
+    await supabaseAdmin.storage.from(ORIGINALS_BUCKET).remove([quarantinePath]).catch(() => undefined);
+    return json(409, {
+      error: 'declared_size mismatch with uploaded object',
+      details: { declared: declaredSize, observed: stat.size },
+    });
+  }
+
+  // shareable は画像のみ
+  if (proofMode === 'shareable') {
+    const liveMime = (stat.contentType || declaredMime).toLowerCase();
+    if (!liveMime.startsWith('image/')) {
+      await supabaseAdmin.storage.from(ORIGINALS_BUCKET).remove([quarantinePath]).catch(() => undefined);
+      return json(400, { error: 'shareable proof requires an image file' });
+    }
+  }
+
+  /* ── C2PA gate ── */
+  const { value: c2paValue, gate } = resolveC2paForPersistence(
+    typeof body.c2paManifest === 'string' ? body.c2paManifest : null,
+    planTier,
+  );
+  if (gate.kind === 'reject') {
+    console.warn({ event: 'c2pa.rejected', reason: gate.reason });
+  }
+
+  /* ── Promote: zero-copy ── */
+  const certificateId = crypto.randomUUID();
+  const fileExt = safeExt(declaredFileName);
+
+  let promoteResult: { storagePath: string | null; publicImageUrl: string | null };
+  try {
+    promoteResult = await promoteFromQuarantine({
+      quarantinePath,
+      certId: certificateId,
+      fileExt,
+      proofMode,
+      userId,
+    });
+  } catch (e) {
+    return json(500, {
+      error: 'promote failed',
+      details: e instanceof Error ? e.message : 'unknown',
+    });
+  }
+
+  /* ── INSERT ── */
   const { data, error } = await supabaseAdmin
     .from('certificates')
     .insert({
       id: certificateId,
       user_id: userId,
       title,
-      sha256: sha256Raw,
+      sha256,
       proof_mode: proofMode,
       visibility,
       public_verify_token: crypto.randomUUID(),
-      public_image_url: publicImageUrl,
-      storage_path: storagePath,
-      file_name: resolvedFileName,
-      mime_type: resolvedMime,
-      file_size: resolvedSize,
+      public_image_url: promoteResult.publicImageUrl,
+      storage_path: promoteResult.storagePath,
+      file_name: declaredFileName,
+      mime_type: stat.contentType || declaredMime,
+      file_size: stat.size,
       metadata_json: {
-        ...parsedMetadata,
+        ...metadataJson,
         integrity_model: 'proofmark.chain-ready.v1',
+        upload_pipeline: 'quarantine-promote.v1',
+        quarantine_path: quarantinePath,
       },
       c2pa_manifest: c2paValue,
     })
     .select('*')
     .single();
 
-  if (error) return json(500, { error: error.message });
+  if (error) {
+    // INSERT に失敗したら、promote した本番ファイルも掃除して整合性を保つ
+    if (promoteResult.storagePath) {
+      await supabaseAdmin.storage.from(ORIGINALS_BUCKET).remove([promoteResult.storagePath]).catch(() => undefined);
+    }
+    if (proofMode === 'shareable') {
+      await supabaseAdmin.storage.from(PUBLIC_BUCKET).remove([`certificates/${certificateId}.${fileExt}`]).catch(() => undefined);
+    }
+    return json(500, { error: error.message });
+  }
 
   return json(200, {
     certificate: data,
