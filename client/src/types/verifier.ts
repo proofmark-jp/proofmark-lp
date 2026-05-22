@@ -31,23 +31,25 @@ export interface VerificationSuccess {
   originalFileSize: number;
   /** ローカルで計算した SHA-256 (hex, lowercase) */
   computedSha256Hex: string;
-  /** TSR から取り出した messageImprint (hex, lowercase) */
-  tsrSha256Hex: string;
-  /** TSR が示すタイムスタンプ発行時刻 (UTC, ISO 8601) */
-  timestampUtcIso: string;
+  /** TSR から取り出した messageImprint (hex, lowercase) — TSA未付与時は省略 */
+  tsrSha256Hex?: string;
+  /** TSR が示すタイムスタンプ発行時刻 (UTC, ISO 8601) — TSA未付与時は省略 */
+  timestampUtcIso?: string;
   /** 人間に見せる JST フォーマット */
   timestampJstHuman: string;
-  /** TSA の証明書 Subject DN (人間可読) */
-  tsaSubject: string;
-  /** TSA 証明書のシリアル (hex) */
-  tsaSerialHex: string;
+  /** TSA の証明書 Subject DN (人間可読) — TSA未付与時は省略 */
+  tsaSubject?: string;
+  /** TSA 証明書のシリアル (hex) — TSA未付与時は省略 */
+  tsaSerialHex?: string;
   /** 同梱されていたか — 検証完了時のスナップショット */
   hadC2pa: boolean;
   hadChain: boolean;
-  /** TSR の serialNumber (hex) — 監査ログ用 */
-  tsrSerialHex: string;
+  /** TSR の serialNumber (hex) — 監査ログ用、TSA未付与時は省略 */
+  tsrSerialHex?: string;
   /** 検証に要した時間 (ms) */
   durationMs: number;
+  /** TSA が未発行の Primary Proof のみ (SHA-256 台帳照合成功) */
+  isPrimaryProofOnly?: boolean;
 }
 
 /* ─────────────────────────────────────────────
@@ -109,14 +111,17 @@ export interface ParsedTimestamp {
 export interface LoadedEvidencePack {
   archiveName: string;
   originalFile: { name: string; bytes: ArrayBuffer };
-  tsrBytes: ArrayBuffer;
-  tsaCertDerOrPem: ArrayBuffer;
-  caCertDerOrPem: ArrayBuffer;
+  /** TSA 未付与パックでは null */
+  tsrBytes: ArrayBuffer | null;
+  tsaCertDerOrPem: ArrayBuffer | null;
+  caCertDerOrPem: ArrayBuffer | null;
   /** hash.txt の本文 (存在すれば) */
   hashTxt: string | null;
   /** c2pa.json / chain.json はメタ情報のみ追跡 */
   hasC2paJson: boolean;
   hasChainJson: boolean;
-  /** timestamp.MISSING.txt が同梱されていた (= Private Proof 未発行など) */
+  /** timestamp.MISSING.txt が同梱されていた — TSA 発行待ちとして正常扱い */
   timestampMissingSentinel: boolean;
+  /** TSA トークンが未発行の Primary Proof パック */
+  isPendingTsa?: boolean;
 }

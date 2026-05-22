@@ -181,33 +181,17 @@ export async function loadEvidencePack(archive: File): Promise<LoadedEvidencePac
     }
   }
 
-  if (timestampMissingSentinel) {
-    throw new VerifierError(
-      'TIMESTAMP_EXPLICITLY_MISSING',
-      'このパックにはタイムスタンプが意図的に同梱されていません',
-      'timestamp.MISSING.txt が検出されました',
-    );
-  }
-  if (!tsrBytes) {
-    throw new VerifierError('MISSING_TIMESTAMP', 'timestamp.tsr が見つかりません');
-  }
-  if (!tsaCert) {
-    throw new VerifierError('MISSING_TSA_CERT', 'TSA 公開鍵証明書 (freetsa-tsa.crt) が見つかりません');
-  }
-  if (!caCert) {
-    throw new VerifierError('MISSING_CA_CERT', 'CA 公開鍵証明書 (freetsa-ca.crt) が見つかりません');
-  }
-
   return {
     archiveName: archive.name,
     originalFile: originalFile ?? { name: '(absent)', bytes: new ArrayBuffer(0) },
-    tsrBytes,
-    tsaCertDerOrPem: tsaCert,
-    caCertDerOrPem: caCert,
+    tsrBytes: tsrBytes ?? null,
+    tsaCertDerOrPem: tsaCert ?? null,
+    caCertDerOrPem: caCert ?? null,
     hashTxt,
     hasC2paJson: hasC2pa,
     hasChainJson: hasChain,
-    timestampMissingSentinel: false,
+    timestampMissingSentinel: timestampMissingSentinel,
+    isPendingTsa: timestampMissingSentinel,
   };
 }
 
@@ -494,7 +478,13 @@ export function extractHashFromHashTxt(
     throw new VerifierError('HASH_TXT_MALFORMED', 'hash.txt が空です');
   }
 
-  // 1 行目だけ採用 (複数行ある場合はファイル名一致行を優先)
+  // "SHA256= <hex>" 形式のマッチ（イコール前後のスペースを許容）
+  const sha256EqMatch = trimmed.match(/SHA256\s*=\s*([a-fA-F0-9]{64})/i);
+  if (sha256EqMatch) {
+    return sha256EqMatch[1].toLowerCase();
+  }
+
+  // sha256sum 形式: "<hex>  <filename>"、ファイル名一致行を優先
   const lines = trimmed.split(/\r?\n/);
   for (const line of lines) {
     const m = line.match(/^([0-9a-fA-F]{64})\s+\*?(.+?)\s*$/);

@@ -109,12 +109,27 @@ export function useVerifier() {
         );
       }
 
+      /* ── 2-c. Primary Proof (TSA 未付与) の早期成功 ────────── */
+      if (pack.isPendingTsa || !pack.tsrBytes) {
+        safeSet({ kind: 'SUCCESS', result: {
+          originalFileName: pack.originalFile.name,
+          originalFileSize: pack.originalFile.bytes.byteLength,
+          computedSha256Hex: computedHex,
+          timestampJstHuman: 'ProofMark 内部台帳に記録済 (TSA発行待ち)',
+          hadC2pa: pack.hasC2paJson,
+          hadChain: pack.hasChainJson,
+          durationMs: Math.round(performance.now() - startedAt),
+          isPrimaryProofOnly: true,
+        }});
+        return;
+      }
+
       /* ── 3. RFC3161 署名 + チェーン検証 ─────────────────── */
       safeSet({ kind: 'VERIFYING_SIGNATURE', progress: 0 });
       const parsed = await verifyTimestamp(
         pack.tsrBytes,
-        pack.tsaCertDerOrPem,
-        pack.caCertDerOrPem,
+        pack.tsaCertDerOrPem!,
+        pack.caCertDerOrPem!,
         computedHex,
         (p) => safeSet({ kind: 'VERIFYING_SIGNATURE', progress: p }),
       );

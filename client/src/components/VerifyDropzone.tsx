@@ -292,6 +292,7 @@ function SuccessPanel({
   reduceMotion: boolean;
 }): JSX.Element {
   const r = state.result;
+  const isPrimary = !!r.isPrimaryProofOnly;
 
   return (
     <div>
@@ -329,9 +330,19 @@ function SuccessPanel({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: EASE, delay: 0.36 }}
       >
-        このファイルは {r.timestampJstHuman} から
-        <br className="hidden sm:block" />
-        1ビットも改ざんされていません。
+        {isPrimary ? (
+          <>
+            ProofMark の内部台帳と一致しました。
+            <br className="hidden sm:block" />
+            <span className="text-[#00B896]">(現在、認定TSAの発行待ちです)</span>
+          </>
+        ) : (
+          <>
+            このファイルは {r.timestampJstHuman} から
+            <br className="hidden sm:block" />
+            1ビットも改ざんされていません。
+          </>
+        )}
       </motion.h2>
 
       <motion.dl
@@ -346,8 +357,13 @@ function SuccessPanel({
           value={`${r.computedSha256Hex.slice(0, 32)}…${r.computedSha256Hex.slice(-8)}`}
           mono
         />
-        <KV label="TSA" value={r.tsaSubject} />
-        <KV label="TSR SERIAL" value={r.tsrSerialHex} mono />
+        <KV
+          label="TSA"
+          value={isPrimary ? '— (プロビジョニング中)' : (r.tsaSubject ?? '—')}
+        />
+        {!isPrimary && r.tsrSerialHex && (
+          <KV label="TSR SERIAL" value={r.tsrSerialHex} mono />
+        )}
       </motion.dl>
 
       <motion.button
@@ -367,6 +383,7 @@ function SuccessPanel({
     </div>
   );
 }
+
 
 function KV({
   label,
