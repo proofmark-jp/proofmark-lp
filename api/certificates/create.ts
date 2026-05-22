@@ -194,23 +194,24 @@ export default async function handler(request: Request) {
 
   /* ───────── アップロード (shareable のみ) ───────── */
   const certificateId = crypto.randomUUID();
-  const ext = resolvedFileName.split('.').pop()?.toLowerCase() || (proofMode === 'shareable' ? 'png' : 'bin');
+  const ext = resolvedFileName.split('.').pop()?.toLowerCase() || 'bin';
   const storagePath = proofMode === 'shareable'
     ? `${userId}/certificates/${certificateId}.${ext}`
     : null;
   let publicImageUrl: string | null = null;
 
   if (proofMode === 'shareable' && shareableFile && storagePath) {
+    const rawFileBuffer = await shareableFile.arrayBuffer();
     const publicPreviewPath = `certificates/${certificateId}.${ext}`;
     const [originalUpload, previewCopy] = await Promise.all([
-      supabaseAdmin.storage.from('proofmark-originals').upload(storagePath, shareableFile, {
+      supabaseAdmin.storage.from('proofmark-originals').upload(storagePath, rawFileBuffer, {
         upsert: false,
-        contentType: shareableFile.type || 'application/octet-stream',
+        contentType: resolvedMime || 'application/octet-stream',
         cacheControl: '31536000',
       }),
-      supabaseAdmin.storage.from('proofmark-public').upload(publicPreviewPath, shareableFile, {
+      supabaseAdmin.storage.from('proofmark-public').upload(publicPreviewPath, rawFileBuffer, {
         upsert: false,
-        contentType: shareableFile.type || 'application/octet-stream',
+        contentType: resolvedMime || 'application/octet-stream',
         cacheControl: '31536000',
       }),
     ]);
