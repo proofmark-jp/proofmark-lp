@@ -259,8 +259,10 @@ export default defineConfig({
     },
   },
   // hash-wasm は wasm を fetch するため pre-bundle 対象から外す
+  // pkijs はブラウザ実行時の pre-bundle クラッシュ（時限爆弾）を防ぐために除外する
   optimizeDeps: {
-    exclude: ['hash-wasm'],
+    exclude: ['hash-wasm', 'pkijs'],
+    include: ['asn1js', 'jszip'],
   },
   server: {
     port: 3000,
