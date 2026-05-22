@@ -48,7 +48,7 @@ async function requestUploadUrl(file: File, token: string) {
       Authorization: `Bearer ${token}`,
     },
 body: JSON.stringify({
-      filename: file.name,
+      file_name: file.name,
       file_size: file.size,
       mime_type: file.type || 'application/octet-stream',
     }),
