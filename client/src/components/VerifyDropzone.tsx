@@ -170,7 +170,7 @@ export default function VerifyDropzone(): JSX.Element {
                 <Upload className="h-7 w-7" />
               </div>
               <p className="text-[19px] font-semibold tracking-tight text-[#1d1d1f]">
-                Evidence Pack をここにドロップ
+                Evidence Pack と 原本ファイル をここにドロップ
               </p>
               <p className="mt-2 text-[13px] text-[#86868b]">
                 またはタップしてファイルを選択 — ZIP 形式
