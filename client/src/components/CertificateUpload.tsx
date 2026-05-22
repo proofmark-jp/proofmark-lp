@@ -65,27 +65,16 @@ export default function CertificateUpload() {
 
       setProcessStatus('証明書とセキュアストレージデータをサーバーで処理中...');
 
-      let payload;
-      try {
-        setProcessStatus('ペイロードを最適化中（画像の場合は軽量プレビューを生成）...');
-        payload = await prepareEvidencePayload(file, fileHash);
-      } catch (prepErr: any) {
-        alert('ペイロード生成エラー: ' + prepErr.message);
-        setProcessStatus('エラーが発生しました。もう一度お試しください。');
-        setIsProcessing(false);
-        return;
-      }
-
       const metadataJson = JSON.stringify({
-        original_filename: payload.originalName,
-        original_size: payload.originalSize,
-        is_preview_compressed: payload.isCompressed,
+        original_filename: file.name,
+        original_size: file.size,
+        is_preview_compressed: false, // 圧縮・変換を完全停止
       });
 
       const formData = new FormData();
-      formData.append('file', payload.fileToSend);
+      formData.append('file', file); // 圧縮前の生ファイル（原本）をそのまま格納
       formData.append('title', file.name);
-      formData.append('sha256', payload.originalSha256);
+      formData.append('sha256', fileHash); // Web Workerが計算した純粋な原本ハッシュ
       formData.append('proofMode', proofMode);
       formData.append('visibility', proofMode === 'shareable' ? visibility : 'private');
       formData.append('metadataJson', metadataJson);
