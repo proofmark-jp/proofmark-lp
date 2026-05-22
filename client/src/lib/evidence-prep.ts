@@ -22,7 +22,6 @@ export async function prepareEvidencePayload(originalFile: File, precomputedHash
     originalSize: originalFile.size,
     isCompressed: false,
   };
-}
 
   // 🛡️ 画像以外のファイルで4.5MB制限を超える場合の防衛線
   const MAX_API_PAYLOAD = 4 * 1024 * 1024;
