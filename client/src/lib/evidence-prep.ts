@@ -9,33 +9,20 @@ export interface PreparedEvidence {
 }
 
 /**
- * ProofMark ハイブリッド・ペイロード生成エンジン
- * ※ハッシュ計算は既存のWorker等で計算済みのもの（precomputedHash）を受け取る
+ * ProofMark 原本保存エンジン
+ * 圧縮・変換を一切行わず、純度100%のバイナリをそのまま通過させる
  */
 export async function prepareEvidencePayload(originalFile: File, precomputedHash: string): Promise<PreparedEvidence> {
-  let fileToSend: File | Blob = originalFile;
-  let isCompressed = false;
-
-  // 🛡️ 画像ファイルの場合のみ、Vercel通過用の軽量プレビューを生成する
-  if (originalFile.type.startsWith('image/')) {
-    const options = {
-      maxSizeMB: 1.5,
-      maxWidthOrHeight: 1920,
-      useWebWorker: true,
-      fileType: 'image/webp',
-      initialQuality: 0.8,
-    };
-
-    try {
-      const compressedBlob = await imageCompression(originalFile, options);
-      const newFileName = originalFile.name.replace(/\.[^/.]+$/, ".webp");
-      fileToSend = new File([compressedBlob], newFileName, { type: 'image/webp' });
-      isCompressed = true;
-      console.log(`[ProofMark] プレビュー圧縮成功: ${(originalFile.size / 1024 / 1024).toFixed(2)}MB -> ${(fileToSend.size / 1024 / 1024).toFixed(2)}MB`);
-    } catch (error) {
-      console.warn('[ProofMark] 画像圧縮に失敗。元のファイルを使用します:', error);
-    }
-  }
+  // 圧縮・変換・リサイズ処理をすべて廃止。
+  // 受け取った純度100%のバイナリ（originalFile）をそのまま右から左へ流す。
+  return {
+    fileToSend: originalFile,
+    originalSha256: precomputedHash,
+    originalName: originalFile.name,
+    originalSize: originalFile.size,
+    isCompressed: false,
+  };
+}
 
   // 🛡️ 画像以外のファイルで4.5MB制限を超える場合の防衛線
   const MAX_API_PAYLOAD = 4 * 1024 * 1024;
