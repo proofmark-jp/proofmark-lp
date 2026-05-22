@@ -17,8 +17,10 @@ export type VerifierState =
   | { kind: 'UNZIPPING';            archiveName: string }
   | { kind: 'HASHING';               progress: number;   fileName: string }
   | { kind: 'VERIFYING_SIGNATURE';   progress: number }
+  | { kind: 'AWAITING_ORIGINAL';     archiveName: string }
   | { kind: 'SUCCESS';               result: VerificationSuccess }
   | { kind: 'ERROR';                 reason: VerificationFailureReason; message: string; detail?: string };
+
 
 /* ─────────────────────────────────────────────
  *  Success payload

@@ -28,23 +28,40 @@ const EASE = [0.16, 1, 0.3, 1] as const;
  * ───────────────────────────────────────────── */
 
 export default function VerifyDropzone(): JSX.Element {
-  const { state, verify, reset } = useVerifier();
+  const { state, verify, reset, resumeWithOriginal } = useVerifier();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const reduceMotion = useReducedMotion();
 
-  const handlePick = useCallback(
-    async (file: File | null | undefined): Promise<void> => {
-      if (!file) return;
-      // 大きい ZIP は警告だけ出して継続
-      await verify(file);
+  /* ファイルを受け取ってルーティングする共通ハンドラ */
+  const handleFiles = useCallback(
+    async (files: FileList | File[]): Promise<void> => {
+      const arr = Array.from(files);
+      if (arr.length === 0) return;
+
+      // AWAITING_ORIGINAL 待機中 → 最初のファイルを原本として渡す
+      if (state.kind === 'AWAITING_ORIGINAL') {
+        await resumeWithOriginal(arr[0]);
+        return;
+      }
+
+      // ZIP を探す
+      const zip = arr.find((f) => f.name.endsWith('.zip') || f.type === 'application/zip');
+      if (!zip) return;
+      const other = arr.find((f) => f !== zip);
+      await verify(zip, other);
     },
-    [verify],
+    [state.kind, verify, resumeWithOriginal],
   );
 
   /* ファイル選択ダイアログ */
   const openPicker = useCallback((): void => {
-    if (state.kind !== 'IDLE' && state.kind !== 'ERROR' && state.kind !== 'SUCCESS') return;
+    if (
+      state.kind !== 'IDLE' &&
+      state.kind !== 'ERROR' &&
+      state.kind !== 'SUCCESS' &&
+      state.kind !== 'AWAITING_ORIGINAL'
+    ) return;
     inputRef.current?.click();
   }, [state.kind]);
 
@@ -53,10 +70,9 @@ export default function VerifyDropzone(): JSX.Element {
     (e: React.DragEvent<HTMLDivElement>): void => {
       e.preventDefault();
       setDragOver(false);
-      const file = e.dataTransfer.files?.[0];
-      void handlePick(file);
+      void handleFiles(e.dataTransfer.files);
     },
-    [handlePick],
+    [handleFiles],
   );
 
   /* paste 不可・URL 不可 (Zero-Knowledge の物理的保証) */
@@ -71,6 +87,7 @@ export default function VerifyDropzone(): JSX.Element {
   }, []);
 
   const showOverlay = state.kind === 'SUCCESS' || state.kind === 'ERROR';
+  const isAwaiting = state.kind === 'AWAITING_ORIGINAL';
   const isBusy =
     state.kind === 'UNZIPPING' ||
     state.kind === 'HASHING' ||
@@ -128,12 +145,13 @@ export default function VerifyDropzone(): JSX.Element {
         <input
           ref={inputRef}
           type="file"
-          accept=".zip,application/zip"
+          multiple
+          accept={state.kind === 'AWAITING_ORIGINAL' ? '*/*' : '.zip,application/zip'}
           className="sr-only"
           onChange={(e) => {
-            const f = e.target.files?.[0];
+            const files = e.target.files;
             e.target.value = ''; // 同一ファイル再選択を許可
-            void handlePick(f);
+            if (files && files.length > 0) void handleFiles(files);
           }}
         />
 
@@ -166,6 +184,10 @@ export default function VerifyDropzone(): JSX.Element {
           )}
 
           {isBusy && <BusyView key="busy" state={state} reduceMotion={!!reduceMotion} />}
+
+          {isAwaiting && state.kind === 'AWAITING_ORIGINAL' && (
+            <AwaitingOriginalView key="awaiting" archiveName={state.archiveName} reduceMotion={!!reduceMotion} />
+          )}
         </AnimatePresence>
       </div>
 
@@ -205,6 +227,64 @@ export default function VerifyDropzone(): JSX.Element {
         本検証はあなたのブラウザの中でのみ行われます。証明データは外部に送信されません。
       </footer>
     </section>
+  );
+}
+
+/* ─────────────────────────────────────────────
+ *  Awaiting Original panel
+ *  Private Proof の ZIP 展開後、手元の原本を要求する
+ * ───────────────────────────────────────────── */
+
+function AwaitingOriginalView({
+  archiveName,
+  reduceMotion,
+}: {
+  archiveName: string;
+  reduceMotion: boolean;
+}): JSX.Element {
+  return (
+    <motion.div
+      key="awaiting"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.45, ease: EASE }}
+      className="flex w-full max-w-sm flex-col items-center"
+    >
+      {/* アイコンリング */}
+      <motion.div
+        className="relative flex h-16 w-16 items-center justify-center rounded-2xl"
+        style={{
+          background: 'linear-gradient(160deg, rgba(0,0,0,0.04), rgba(0,0,0,0.02))',
+          boxShadow: '0 0 0 1px rgba(29,29,31,0.10), 0 8px 24px rgba(29,29,31,0.06)',
+        }}
+        animate={reduceMotion ? {} : { boxShadow: [
+          '0 0 0 1px rgba(29,29,31,0.10), 0 8px 24px rgba(29,29,31,0.06)',
+          '0 0 0 1px rgba(29,29,31,0.16), 0 8px 32px rgba(29,29,31,0.12)',
+          '0 0 0 1px rgba(29,29,31,0.10), 0 8px 24px rgba(29,29,31,0.06)',
+        ]}}
+        transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <Lock className="h-7 w-7 text-[#1d1d1f]" strokeWidth={1.5} />
+      </motion.div>
+
+      {/* ラベル */}
+      <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.32em] text-[#86868b]">
+        Zero-Knowledge Package
+      </p>
+      <p className="mt-2 text-[18px] font-semibold leading-[1.3] tracking-tight text-[#1d1d1f]">
+        Zero-Knowledge パッケージを展開しました
+      </p>
+      <p className="mt-3 text-[13px] leading-[1.7] text-[#6e6e73]">
+        このパックには原本ファイルが含まれていません。<br />
+        検証を完了させるため、<strong className="text-[#1d1d1f] font-semibold">お手元の原本ファイル</strong>をここにドロップしてください。
+      </p>
+
+      {/* 補足 */}
+      <p className="mt-5 text-[11px] text-[#86868b]">
+        {archiveName} を展開済み — ファイルはサーバーへ送信されません
+      </p>
+    </motion.div>
   );
 }
 
