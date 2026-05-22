@@ -35,11 +35,56 @@ import { PM, EASE, D } from './dashboard/obsidian-tokens';
 
 import { useAuth } from '../hooks/useAuth';
 import { useHashFile } from '../hooks/useHashFile';
-import { prepareEvidencePayload } from '../lib/evidence-prep';
 import { supabase } from '../lib/supabase';
 import { useC2pa, probeC2paMagic } from '../hooks/useC2pa';
 import { C2paUpsell } from './cert/C2paUpsell';
 import type { C2paManifest } from '../lib/c2pa-schema';
+
+async function requestUploadUrl(args: { file: File; token: string }) {
+  const res = await fetch('/api/upload-url', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${args.token}`,
+    },
+    body: JSON.stringify({
+      filename: args.file.name,
+      contentType: args.file.type || 'application/octet-stream',
+      size: args.file.size
+    })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to request upload URL');
+  }
+  return res.json() as Promise<{ signedUrl: string; quarantinePath: string }>;
+}
+
+function putToSignedUrl(args: { signedUrl: string; file: File; onProgress?: (p: number) => void }): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', args.signedUrl);
+    xhr.setRequestHeader('Content-Type', args.file.type || 'application/octet-stream');
+    
+    if (args.onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          args.onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      };
+    }
+    
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error(`Upload failed with status ${xhr.status}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Network error during upload'));
+    xhr.send(args.file);
+  });
+}
 
 type ProofMode = 'private' | 'shareable';
 type VisibilityMode = 'private' | 'public';
@@ -200,44 +245,6 @@ export default function CertificateUpload() {
     if (!file) return;
     setIsProcessing(true);
     try {
-      setProcessStatus('Web Worker で SHA-256 を計算中...');
-      const { sha256: fileHash } = await hashFile(file);
-      setHash(fileHash);
-
-      const formData = new FormData();
-      formData.append('title', file.name);
-      formData.append('sha256', fileHash);
-      formData.append('proofMode', proofMode);
-      formData.append('visibility', proofMode === 'shareable' ? visibility : 'private');
-
-      if (proofMode === 'shareable') {
-        // ── Shareable: プレビュー用にファイル本体を送信 ──
-        setProcessStatus('ペイロードを最適化中...');
-        const payload = await prepareEvidencePayload(file, fileHash);
-        formData.append('file', payload.fileToSend);
-        formData.append('metadataJson', JSON.stringify({
-          original_filename: payload.originalName,
-          original_size: payload.originalSize,
-          is_preview_compressed: payload.isCompressed,
-        }));
-      } else {
-        // ── Private: ゼロ知識。ファイル実体は絶対に送信しない ──
-        formData.append('file_name', file.name);
-        formData.append('file_size', String(file.size));
-        formData.append('mime_type', file.type || 'application/octet-stream');
-        formData.append('metadataJson', JSON.stringify({
-          original_filename: file.name,
-          original_size: file.size,
-          is_preview_compressed: false,
-        }));
-      }
-
-      // ── Phase 10: scrubbed C2PA をペイロードに付ける (有料プランのみ) ──
-      if (isPaidPlan && c2paManifest) {
-        // size_hint は Worker 側で実測済み。改ざん検知はサーバ側 gate でも実施
-        formData.append('c2paManifest', JSON.stringify(c2paManifest));
-      }
-
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
@@ -249,13 +256,51 @@ export default function CertificateUpload() {
         return; // これ以上処理を進めない
       }
 
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
+      let quarantinePath: string | null = null;
+      let signedUrl: string | null = null;
+
+      if (proofMode === 'shareable') {
+        setProcessStatus('アップロードURLを取得中...');
+        const uploadInfo = await requestUploadUrl({ file, token });
+        quarantinePath = uploadInfo.quarantinePath;
+        signedUrl = uploadInfo.signedUrl;
+      }
+
+      setProcessStatus('ハッシュ計算とアップロードを実行中...');
+      const hashPromise = hashFile(file).then(res => res.sha256);
+      const uploadPromise = (proofMode === 'shareable' && signedUrl)
+        ? putToSignedUrl({ signedUrl, file, onProgress: (p) => setProcessStatus(`アップロード中... ${p}%`) })
+        : Promise.resolve();
+
+      const [fileHash] = await Promise.all([hashPromise, uploadPromise]);
+      setHash(fileHash);
+
+      setProcessStatus('証明書を発行中...');
+
+      const payload = {
+        quarantinePath: proofMode === 'shareable' ? quarantinePath : null,
+        sha256: fileHash,
+        title: file.name,
+        proofMode,
+        visibility: proofMode === 'shareable' ? visibility : 'private',
+        file_name: file.name,
+        file_size: file.size,
+        mime_type: file.type || 'application/octet-stream',
+        metadataJson: {
+          original_filename: file.name,
+          original_size: file.size,
+          is_preview_compressed: false
+        },
+        c2paManifest: (isPaidPlan && c2paManifest) ? JSON.stringify(c2paManifest) : null
+      };
 
       const res = await fetch('/api/certificates/create', {
         method: 'POST',
-        headers,
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
