@@ -17,7 +17,7 @@
  *       * Framer Motion は whileInView (once: true) で 1 回限り発火
  */
 
-import { type ReactNode } from 'react';
+
 import { Link } from 'wouter';
 import { motion } from 'framer-motion';
 import {
@@ -38,9 +38,12 @@ import {
   Star,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import UpgradeModal from '../components/UpgradeModal';
+import HeroCertificateShowcase from '../components/HeroCertificateShowcase';
+import { FAQAccordion } from '../components/FAQAccordion';
 import { useAuth } from '@/hooks/useAuth';
 import HeroDemo from '../components/HeroDemo';
-import { lazy, Suspense } from 'react';
+import { type ReactNode, Suspense, lazy } from 'react';
 import LoadingFallback from '../components/LoadingFallback';
 
 const InlineHashDemo = lazy(() => import('../components/InlineHashDemo'));
@@ -107,116 +110,48 @@ export default function Home() {
     <div style={{ background: '#07061A', minHeight: '100vh', color: '#FFFFFF' }}>
       <Navbar user={user} signOut={signOut} />
 
-      {/* [S1] Hero — 即座の確信・期待 */}
-      <section
-        aria-labelledby="hero-title"
-        style={{ background: '#07061A' }}
-        className="relative overflow-hidden"
-      >
-        {/* SVG ノイズグラデーション (静的、軽量) */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <div
-            className="absolute -left-32 top-32 h-[420px] w-[420px] rounded-full"
-            style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgba(108,62,244,0.20), transparent 70%)' }}
-          />
-          <div
-            className="absolute -right-24 top-64 h-[360px] w-[360px] rounded-full"
-            style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgba(0,212,170,0.16), transparent 70%)' }}
-          />
-        </div>
-
-        <div className="pm-container relative flex min-h-[100vh] items-center pb-24 pt-32 lg:pb-32 lg:pt-40">
-          <div className="grid w-full grid-cols-1 items-center gap-16 lg:grid-cols-[55fr_45fr] lg:gap-12">
-            {/* 左 55% — テキスト */}
-            <div>
-              <motion.div {...fadeInProps()}>
-                <Eyebrow>YOUR CREATION. YOUR PROOF.</Eyebrow>
-              </motion.div>
-
-              <motion.h1
-                id="hero-title"
-                className="pm-display mt-6"
-                {...fadeInProps(0.05)}
-              >
-                作った、その瞬間が
-                <br />
-                <span className="pm-accent-text">永遠の証拠</span>
-                になる。
-              </motion.h1>
-
-              <motion.p
-                className="pm-body mt-7 max-w-[520px]"
-                {...fadeInProps(0.10)}
-              >
-                あなたの作品を、見知らぬ誰かが「自分が作った」と言い始めたとき——証明できますか？
+      {/* ───────── [S1] Hero ───────── */}
+      <section id="hero" aria-labelledby="hero-title" className="pm-section pt-12 sm:pt-16 lg:pt-20">
+        <div className="pm-container">
+          <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
+            <motion.div {...fadeInProps()}>
+              <span className="pm-label inline-block">PROOFMARK — DIGITAL EXISTENCE</span>
+              <h1 id="hero-title" className="pm-display mt-5">
+                AI 時代の納品に、
                 <br className="hidden md:inline" />
-                AIで生成した作品に、世界標準のタイムスタンプを。無料で、今すぐ。
-              </motion.p>
+                <span className="pm-accent-text">改ざん不能な指紋を。</span>
+              </h1>
+              <p className="pm-body mt-5 max-w-xl">
+                あなたの作品ファイルを投げるだけ。数秒で、法的に有効な「納品レベルの証明書（Evidence Pack）」が完成します。原本はどこにも送りません。
+              </p>
 
-              <motion.div
-                className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4"
-                {...fadeInProps(0.15)}
-              >
-                <Link href="/spot-issue">
-                  <span className="pm-cta-primary">
-                    今すぐ1件だけ試す（登録不要）
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </span>
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+                <Link href="/spot-issue" className="pm-cta-primary">
+                  1件だけ試す（¥480・登録不要）
+                  <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link href="/auth?mode=signup">
-                  <span className="pm-cta-ghost">
-                    無料でアカウントを作成する
-                  </span>
+                <Link href="/auth?mode=signup" className="pm-cta-ghost">
+                  無料アカウントを作成する
                 </Link>
-              </motion.div>
-
-              <motion.div
-                className="mt-8 flex items-center gap-5 text-[13px]"
-                style={{ color: 'rgba(255,255,255,0.55)' }}
-                {...fadeInProps(0.20)}
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <ShieldCheck className="h-4 w-4" style={{ color: '#00D4AA' }} aria-hidden="true" />
-                  RFC3161 準拠
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Hash className="h-4 w-4" style={{ color: '#00D4AA' }} aria-hidden="true" />
-                  SHA-256
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Eye className="h-4 w-4" style={{ color: '#00D4AA' }} aria-hidden="true" />
-                  原画は預けない
-                </span>
-              </motion.div>
-            </div>
-
-            {/* 右 45% — 静的モックアップ（視線をコピーとCTAに集中させる） */}
-            <motion.div {...fadeInProps(0.10)} className="w-full perspective-1000">
-              <div
-                className="relative overflow-hidden rounded-[24px] border border-white/10 shadow-[0_20px_80px_-20px_rgba(108,62,244,0.4)]"
-                style={{ transform: 'rotateY(-5deg) rotateX(2deg)' }}
-              >
-                <img
-                  src="/fantasy_artwork_final.jpg"
-                  alt="ProofMark Showcase"
-                  className="w-full h-auto object-cover opacity-90 hover:opacity-100 transition-opacity"
-                />
               </div>
+            </motion.div>
+
+            <motion.div {...fadeInProps(0.1)} className="w-full">
+              {/* 右カラム差替え: Canva/DocuSign哲学のトレースコンポーネント */}
+              <HeroCertificateShowcase />
             </motion.div>
           </div>
         </div>
       </section>
 
-      {/* トラスト・コンポーネント（安全な復元） */}
+      {/* TrustSignalRow (※中に入っていたTeaserとC2paはここから削除) */}
       <section className="pm-section">
-        <div className="pm-container space-y-24 md:space-y-32">
+        <div className="pm-container">
           <TrustSignalRow />
-          <EvidencePackTeaser />
-          <C2paComparisonRow />
         </div>
       </section>
 
-      {/* [S2] Problem — 共感と危機感 */}
+{/* [S2] Problem — 共感と危機感 */}
       <section aria-labelledby="problem-title" className="pm-section">
         <div className="pm-container">
           <SectionHeader
@@ -254,7 +189,29 @@ export default function Home() {
         </div>
       </section>
 
-      {/* [S3] Solution — 安堵と理解 */}
+      {/* ★NEW POSITION: Stripe/Canva 哲学を注入した最高峰デモを一等地に引き上げ */}
+      <section id="try" aria-labelledby="demo-title" className="pm-section" style={{ background: '#07061A' }}>
+        <div className="pm-container">
+          <motion.div className="mb-12 text-center" {...fadeInProps()}>
+            <span className="text-[11px] font-bold uppercase tracking-[0.26em] text-[#6C3EF4]">TRY IT NOW</span>
+            <h2 id="demo-title" className="pm-h2 mt-4">
+              あなたのファイルで、
+              <br className="hidden md:inline" />
+              <span className="pm-accent-text">証明書をプレビューする。</span>
+            </h2>
+            <p className="pm-body mx-auto mt-5 max-w-xl">
+              ブラウザ内で SHA-256 を計算します。原本はサーバーに一切送信されません。
+              ここで動作を確認して、気に入ったら正式発行（¥480）へ。
+            </p>
+          </motion.div>
+
+          <Suspense fallback={<LoadingFallback variant="inline" label="hash-demo" />}>
+            <InlineHashDemo />
+          </Suspense>
+        </div>
+      </section>
+
+{/* [S3] Solution — 安堵と理解 */}
       <section aria-labelledby="solution-title" className="pm-section">
         <div className="pm-container">
           <SectionHeader
@@ -294,7 +251,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* [S3] 自動再生デモ（ProofMarkの凄さを視覚的に理解させる） */}
+{/* [S3] 自動再生デモ（ProofMarkの凄さを視覚的に理解させる） */}
       <section className="pm-section bg-[#07061A]" aria-label="動作デモ">
         <div className="pm-container max-w-5xl">
           <div className="relative mx-auto max-w-[800px] rounded-[32px] p-2 sm:p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
@@ -306,16 +263,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* [S3.5] インラインハッシュデモ */}
-      <section id="try" aria-label="ハッシュデモ" className="pm-section bg-[#07061A]">
-        <div className="pm-container">
-          <Suspense fallback={<LoadingFallback variant="inline" />}>
-            <InlineHashDemo />
-          </Suspense>
-        </div>
-      </section>
-
-      {/* [S4] Technology — 確信・信頼 */}
+{/* [S4] Technology — 確信・信頼 */}
       <section aria-labelledby="tech-title" className="pm-section">
         <div className="pm-container">
           <SectionHeader
@@ -366,7 +314,21 @@ export default function Home() {
         </div>
       </section>
 
-      {/* [S5] Use Cases — 自分ごと化 */}
+      {/* ★移動してきた EvidencePackTeaser セクション */}
+      <section className="pm-section">
+        <div className="pm-container">
+          <EvidencePackTeaser />
+        </div>
+      </section>
+
+      {/* ★移動してきた C2paComparisonRow セクション */}
+      <section className="pm-section">
+        <div className="pm-container">
+          <C2paComparisonRow />
+        </div>
+      </section>
+
+{/* [S5] Use Cases — 自分ごと化 */}
       <section aria-labelledby="usecase-title" className="pm-section">
         <div className="pm-container">
           <SectionHeader
@@ -396,7 +358,7 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* [S6] Pricing — 決断・低ハードル */}
+{/* [S6] Pricing — 決断・低ハードル */}
       <section aria-labelledby="pricing-title" className="pm-section">
         <div className="pm-container">
           <SectionHeader
@@ -468,65 +430,53 @@ export default function Home() {
         </div>
       </section>
 
-      {/* [S7] Final CTA — 最終行動 */}
-      <section
-        aria-labelledby="final-title"
-        className="pm-section relative overflow-hidden"
-      >
-        {/* このセクションのみ、微かなグラデーション背景 (仕様書 §2 [S7]) */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                'radial-gradient(60% 70% at 50% 50%, rgba(108,62,244,0.18), transparent 70%), radial-gradient(40% 50% at 80% 100%, rgba(0,212,170,0.16), transparent 70%)',
-            }}
-          />
-          {/* 巨大なシール透かし */}
-          <div
-            className="absolute right-[-10%] top-[8%] h-[420px] w-[420px] rounded-full"
-            style={{
-              border: '1px solid rgba(255,255,255,0.06)',
-              boxShadow: 'inset 0 0 0 60px rgba(255,255,255,0.025)',
-            }}
-          />
-        </div>
-
-        <div className="pm-container relative">
-          <motion.div className="mx-auto max-w-3xl text-center" {...fadeInProps()}>
-            <Eyebrow>FIRST PROOF</Eyebrow>
-            <h2 id="final-title" className="pm-h2 mt-5">
-              あなたの次の作品に、
+      {/* [S7] Final CTA (※元の古い InlineHashDemo があった場所を、最強 of Final CTA に変更) */}
+      <section id="final-cta" aria-labelledby="final-title" className="pm-section relative overflow-hidden">
+        <div aria-hidden className="pointer-events-none absolute inset-0"
+          style={{ background: 'radial-gradient(60% 60% at 50% 0%, rgba(108,62,244,0.20) 0%, rgba(108,62,244,0) 70%)' }} />
+        <div className="pm-container relative z-10 text-center">
+          <motion.div {...fadeInProps()}>
+            <span className="text-[11px] font-bold uppercase tracking-[0.26em] text-[#6C3EF4]">READY</span>
+            <h2 id="final-title" className="pm-h2 mt-4">
+              30秒で、あなたの作品に
               <br className="hidden md:inline" />
-              <span className="pm-accent-text">最初の証明書</span>
-              を発行しませんか。
+              <span className="pm-accent-text">「存在の証明」を刻む。</span>
             </h2>
-            <p className="pm-body mt-6 max-w-2xl mx-auto">
-              SHA-256 はブラウザ内で計算され、原画は送信されません。最短 30 秒、無料で完了します。
+            <p className="pm-body mx-auto mt-5 max-w-xl">
+              ¥480 で 1 件だけ試すか、無料アカウントで継続的に管理するか。どちらでも始められます。
             </p>
-            <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center sm:gap-4">
-              <Link href="/auth?mode=signup">
-                <span
-                  className="inline-flex h-[56px] items-center justify-center gap-2 rounded-full px-8 text-[15px] font-bold tracking-tight"
-                  style={{
-                    background: '#FFFFFF',
-                    color: '#6C3EF4',
-                    boxShadow: '0 18px 40px -16px rgba(255,255,255,0.45)',
-                  }}
-                >
-                  無料で証明書を発行する
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </span>
+
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Link href="/spot-issue"
+                className="inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-bold text-white transition-all hover:scale-[1.02]"
+                style={{
+                  background: 'linear-gradient(135deg, #6C3EF4 0%, #00D4AA 100%)',
+                  boxShadow: '0 14px 32px rgba(108,62,244,0.42), 0 0 0 1px rgba(255,255,255,0.06) inset',
+                }}
+              >
+                1件だけ試す（登録不要・¥480）
+                <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link href="/spot-issue">
-                <span className="pm-cta-ghost">
-                  登録せずに 1 件だけ
-                </span>
+              <Link href="/auth?mode=signup"
+                className="inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-bold transition-all hover:bg-white/[0.02]"
+                style={{
+                  borderColor: 'rgba(255,255,255,0.16)',
+                  background: 'rgba(255,255,255,0.04)',
+                  color: '#FFFFFF',
+                }}
+              >
+                無料アカウントを作成する
               </Link>
             </div>
+
+            <p className="mt-6 text-[12px]" style={{ color: 'rgba(255,255,255,0.45)' }}>
+              Stripe による安全な決済 · クレカ不要・アカウント不要 · 24時間後データ物理削除
+            </p>
           </motion.div>
         </div>
       </section>
+
+      <FAQAccordion />
     </div>
   );
 }

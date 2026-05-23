@@ -1,266 +1,280 @@
 /**
- * SpotIssue.tsx — Phase 12.3 (429 Graceful Handling 対応版)
+ * SpotIssue.tsx — 1案件だけ発行（魔法の箱）
+ * ─────────────────────────────────────────────────────────────
+ *  Phase 1 完成版
  *
- * Spot は本来 Free プラン制限の対象ではない (1案件購入フローで Stripe を経由する)。
- * しかし本ファイルは「ログイン済みユーザーが認証フローで Spot 画面に来た場合」も
- * 想定して、429 を受けたら UpgradeModal をマウントするハンドラを共通化する。
- *
- * 変更点:
- *   • UpgradeModal を import し、`upgradeOpen` で制御。
- *   • startCheckout の throw が `quota_exceeded` を含む / status 429 を伴う場合、
- *     エラートーストではなく UpgradeModal を強制展開する。
- *   • 既存の UI / コピーは一切退行させない。
+ *  - ログイン済みは /dashboard へリダイレクト
+ *  - 2 カラム: 左=SpotDropZone / 右=CertificatePreview
+ *  - SHA-256 はブラウザ内で計算 (subtle.digest)
+ *  - 🚨 修正1: Shareable (画像) の File はブラウザメモリで揮発するため、
+ *              Stripe へ遷移する「直前」に Supabase の
+ *              `proofmark-quarantine` バケットへ事前アップロードする
+ *  - PAYING 状態は SpotDropZone 側の Stripe 的ローディング演出に渡す
+ * ─────────────────────────────────────────────────────────────
  */
 
-import { useCallback, useMemo, useState } from 'react';
-import { Link } from 'wouter';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation } from 'wouter';
 import { motion } from 'framer-motion';
-import { useDropzone } from 'react-dropzone';
-import { CheckCircle, ShieldCheck, FileText, Loader2, Lock, Sparkles, Upload, X } from 'lucide-react';
-import Navbar from '../components/Navbar';
-import SEO from '../components/SEO';
-import UpgradeModal from '../components/UpgradeModal';
-import { useAuth } from '../hooks/useAuth';
-import { startCheckout } from '../lib/checkout';
+import { ShieldCheck } from 'lucide-react';
 
-async function sha256FromFile(file: File): Promise<string> {
-    const buf = await file.arrayBuffer();
-    const digest = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(digest))
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
+import Navbar from '@/components/Navbar';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/lib/supabase';
+import SpotDropZone from '@/components/spot/SpotDropZone';
+import CertificatePreview, {
+  type SpotState,
+} from '@/components/spot/CertificatePreview';
+
+const PM_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
+const MAX_BYTES = 50 * 1024 * 1024; // 50MB
+
+/* ─────────────────────────────────────────────
+ *  hash util — Web Crypto subtle.digest
+ * ───────────────────────────────────────────── */
+
+async function subtleSha256Hex(buf: ArrayBuffer): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', buf);
+  const arr = new Uint8Array(digest);
+  let out = '';
+  for (let i = 0; i < arr.length; i++) out += arr[i].toString(16).padStart(2, '0');
+  return out;
 }
 
-interface QuotaError {
-    status: number;
-    body?: { error?: string; quota?: number; used?: number; resetAt?: string };
-}
+/* ─────────────────────────────────────────────
+ *  Component
+ * ───────────────────────────────────────────── */
 
-function isQuotaError(err: unknown): err is QuotaError {
-    if (!err || typeof err !== 'object') return false;
-    const e = err as { status?: number; body?: { error?: string } };
-    if (e.status === 429) return true;
-    if (e.body?.error === 'quota_exceeded') return true;
-    return false;
-}
+export default function SpotIssue(): JSX.Element {
+  const { user, signOut, loading } = useAuth();
+  const [, navigate] = useLocation();
 
-export default function SpotIssue() {
-    const { user, signOut } = useAuth();
-    const [file, setFile] = useState<File | null>(null);
-    const [sha256, setSha256] = useState<string | null>(null);
-    const [email, setEmail] = useState('');
-    const [agreed, setAgreed] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+  // ログイン済みは /dashboard へ
+  useEffect(() => {
+    if (!loading && user) navigate('/dashboard', { replace: true });
+  }, [loading, user, navigate]);
 
-    // Phase 12.3 — Graceful upsell
-    const [upgradeOpen, setUpgradeOpen] = useState(false);
-    const [quotaContext, setQuotaContext] = useState<{ used?: number; quota?: number; resetAt?: string }>({});
+  /* ── state ── */
+  const [state, setState] = useState<SpotState>('IDLE');
+  const [file, setFile] = useState<File | null>(null);
+  const [hash, setHash] = useState<string | null>(null);
+  const [progress, setProgress] = useState<number>(0);
+  const [paying, setPaying] = useState<boolean>(false);
 
-    const onDrop = useCallback(async (accepted: File[]) => {
-        if (!accepted[0]) return;
-        setError(null);
-        const f = accepted[0];
-        setFile(f);
-        setSha256(null);
-        try {
-            const hash = await sha256FromFile(f);
-            setSha256(hash);
-        } catch {
-            setError('ファイルのハッシュ計算に失敗しました');
+  const abortRef = useRef<AbortController | null>(null);
+
+  /* ─────────────────────────────────────────────
+   *  Hash pipeline
+   *  - 体感進捗を 8 段階で滑らかに描画
+   *  - 実 hash 計算は subtle.digest で正確に
+   * ───────────────────────────────────────────── */
+  const onFile = useCallback(async (target: File): Promise<void> => {
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+    const { signal } = abortRef.current;
+
+    setFile(target);
+    setHash(null);
+    setProgress(0);
+    setState('HASHING');
+
+    try {
+      const buf = await target.arrayBuffer();
+
+      // 段階的に体感進捗を上げる (合計 ~720ms。3 秒以内完了を保証)
+      const steps = [8, 18, 30, 44, 58, 72, 84, 92];
+      for (const p of steps) {
+        await new Promise((r) => window.setTimeout(r, 88));
+        if (signal.aborted) return;
+        setProgress(p);
+      }
+
+      const hex = await subtleSha256Hex(buf);
+      if (signal.aborted) return;
+
+      setProgress(97);
+      await new Promise((r) => window.setTimeout(r, 130));
+      setHash(hex);
+      setProgress(100);
+      setState('PREVIEW');
+    } catch (e) {
+      console.error('[SpotIssue] hash failed', e);
+      setState('ERROR');
+    }
+  }, []);
+
+  /* ─────────────────────────────────────────────
+   *  🚨 修正1: Checkout pipeline
+   *
+   *  Step A: Shareable (画像) は proofmark-quarantine へ事前アップロード
+   *          → Stripe 遷移後にブラウザメモリの File が消えてもサーバ側で
+   *            完成証明書の作成が可能になる
+   *  Step B: /api/create-checkout-session に sha256 + quarantine_path を渡す
+   *  Step C: Stripe Hosted Checkout に遷移
+   *
+   *  失敗時は PREVIEW に戻し、再試行を許可する
+   * ───────────────────────────────────────────── */
+  const onCheckout = useCallback(async (): Promise<void> => {
+    if (!file || !hash) return;
+    setPaying(true);
+    setState('PAYING'); // SpotDropZone 側で Stripe 的ローディングが起動
+
+    try {
+      let quarantinePath: string | undefined = undefined;
+      const isShareable =
+        file.type.startsWith('image/') && file.size <= MAX_BYTES;
+
+      // ── Step A: 揮発する File を Supabase quarantine に退避 ──
+      if (isShareable) {
+        const ext = (file.name.split('.').pop() || 'bin')
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '')
+          .slice(0, 8) || 'bin';
+        const safeName = `${Date.now()}_${Math.random()
+          .toString(36)
+          .substring(2)}.${ext}`;
+        const filePath = `anonymous/${hash}/${safeName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('proofmark-quarantine')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: file.type || 'application/octet-stream',
+          });
+
+        if (uploadError) {
+          throw new Error(`Quarantine upload failed: ${uploadError.message}`);
         }
-    }, []);
+        quarantinePath = filePath;
+      }
 
-    const { getRootProps, getInputProps, isDragActive } = useDropzone({
-        onDrop,
-        multiple: false,
-        maxSize: 50 * 1024 * 1024,
-    });
+      // ── Step B: Checkout Session 発行 ──
+      const res = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source: 'spot_issue',
+          sha256: hash,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type || 'application/octet-stream',
+          quarantine_path: quarantinePath,
+        }),
+      });
 
-    const isReady = useMemo(
-        () => !!file && !!sha256 && agreed && !loading,
-        [file, sha256, agreed, loading],
-    );
+      if (!res.ok) throw new Error(`checkout ${res.status}`);
+      const data = (await res.json()) as { url?: string };
+      if (!data.url) throw new Error('checkout url missing');
 
-    const handlePurchase = async () => {
-        if (!isReady || !sha256 || !file) return;
-        setLoading(true);
-        setError(null);
-        try {
-            await startCheckout({
-                plan: 'spot',
-                sha256,
-                filename: file.name,
-                spotEmail: email || undefined,
-            });
-        } catch (err: unknown) {
-            // Phase 12.3 — 429 は単純トーストではなく UpgradeModal で受け止める
-            if (isQuotaError(err)) {
-                const body = (err as QuotaError).body ?? {};
-                setQuotaContext({
-                    used: body.used,
-                    quota: body.quota ?? 30,
-                    resetAt: body.resetAt,
-                });
-                setUpgradeOpen(true);
-            } else {
-                const message = err && typeof err === 'object' && 'message' in err
-                    ? String((err as { message: string }).message)
-                    : '決済の開始に失敗しました';
-                setError(message);
-            }
-            setLoading(false);
-        }
-    };
+      // ── Step C: Stripe Hosted Checkout へ遷移 ──
+      window.location.href = data.url;
+    } catch (err) {
+      console.error('[SpotIssue] checkout failed', err);
+      setPaying(false);
+      setState('PREVIEW');
+      window.alert(
+        '通信エラーが発生しました。ネットワーク状況を確認し、再度お試しください。',
+      );
+    }
+  }, [file, hash]);
 
-    return (
-        <div className="min-h-screen bg-[#07061A] text-[#F0EFF8] font-sans selection:bg-[#00D4AA]/30">
-            <SEO
-                title="今この1案件だけ — Spot Evidence Pack | ProofMark"
-                description="アカウント登録不要。1案件だけ、納品信頼つきの Evidence Pack を即時発行できる Spot プランです。Stripe決済 → ダウンロードまで最短2分。"
-                url="https://proofmark.jp/spot-issue"
-            />
-            <Navbar user={user} signOut={signOut} />
+  const onReset = useCallback(() => {
+    abortRef.current?.abort();
+    setState('IDLE');
+    setFile(null);
+    setHash(null);
+    setProgress(0);
+  }, []);
 
-            <main className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-32">
-                <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00D4AA]/10 border border-[#00D4AA]/30 text-[#00D4AA] text-xs font-bold tracking-widest uppercase mb-5">
-                        <Sparkles className="w-3.5 h-3.5" /> Spot — 1案件だけ
-                    </div>
-                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight leading-tight">
-                        アカウント登録不要。<br className="sm:hidden" />
-                        1案件だけ、<span className="text-[#00D4AA]">Evidence Pack</span> を発行する。
-                    </h1>
-                    <p className="mt-5 text-[#A8A0D8] leading-relaxed">
-                        ファイルをドロップするとブラウザ内で SHA-256 を計算します（原本は送信されません）。
-                        決済完了後、PDF・タイムスタンプトークン・検証スクリプトをまとめた Evidence Pack を即時ダウンロードできます。
-                        Spot のデータは <strong className="text-white">24時間で物理削除</strong> されます。
-                    </p>
-                </motion.div>
+  return (
+    <div
+      style={{
+        background: '#07061A',
+        minHeight: '100vh',
+        color: '#FFFFFF',
+      }}
+    >
+      <Navbar user={user} signOut={signOut} />
 
-                <motion.div
-                    initial={{ opacity: 0, y: 24 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                    className="mt-10 rounded-3xl border border-[#1C1A38] bg-[#0D0B24]/80 backdrop-blur-md p-6 sm:p-8"
-                >
-                    <div
-                        {...getRootProps()}
-                        className={`group flex flex-col items-center justify-center gap-3 py-12 px-6 rounded-2xl border-2 border-dashed transition-all cursor-pointer ${isDragActive
-                            ? 'border-[#00D4AA] bg-[#00D4AA]/5'
-                            : 'border-[#2a2a4e] hover:border-[#00D4AA]/40 hover:bg-white/[0.02]'
-                            }`}
-                    >
-                        <input {...getInputProps()} aria-label="ファイル選択" />
-                        <Upload className="w-8 h-8 text-[#A8A0D8] group-hover:text-[#00D4AA] transition-colors" />
-                        <p className="text-sm text-[#A8A0D8]">
-                            {file ? (
-                                <span className="flex items-center gap-2 text-white">
-                                    <FileText className="w-4 h-4 text-[#00D4AA]" /> {file.name}{' '}
-                                    <span className="text-xs text-[#A8A0D8]">({(file.size / 1024).toFixed(1)} KB)</span>
-                                </span>
-                            ) : isDragActive ? (
-                                'ここにドロップ'
-                            ) : (
-                                <>
-                                    ファイルをドロップ、または<span className="text-[#00D4AA] underline">クリックして選択</span>
-                                    <span className="block mt-1 text-xs">最大50MBまで</span>
-                                </>
-                            )}
-                        </p>
-                        {sha256 && (
-                            <div className="mt-3 px-3 py-2 rounded-lg bg-black/40 border border-[#1C1A38]">
-                                <span className="text-[10px] tracking-widest text-[#00D4AA] font-bold uppercase">SHA-256 (計算済み)</span>
-                                <p className="font-mono text-[11px] text-white/85 break-all">{sha256}</p>
-                            </div>
-                        )}
-                    </div>
+      <section className="pm-section pt-10 sm:pt-14 lg:pt-16">
+        <div className="pm-container">
+          {/* ── Header ── */}
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-80px' }}
+            transition={{ duration: 0.6, ease: PM_EASE }}
+            className="max-w-3xl"
+          >
+            <span className="pm-label inline-block">SPOT — 1案件だけ</span>
+            <h1 className="pm-display mt-4">
+              ファイルを投げると、
+              <br className="hidden md:inline" />
+              <span className="pm-accent-text">証明書が生まれる。</span>
+            </h1>
+            <p className="pm-body mt-5 max-w-xl">
+              アカウント登録不要。ブラウザ内で SHA-256 を計算し、RFC3161
+              タイムスタンプを発行します。原本はどこにも送信されません。
+            </p>
+          </motion.div>
 
-                    <div className="mt-6 grid gap-4">
-                        <label className="block">
-                            <span className="block text-xs font-bold tracking-widest text-[#A8A0D8] uppercase mb-2">
-                                Eメール（任意・受領確認）
-                            </span>
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="you@example.com"
-                                className="w-full px-4 py-3 rounded-xl bg-[#0F0E26] border border-[#2a2a4e] text-white placeholder-[#48456A] focus:outline-none focus:border-[#00D4AA]"
-                            />
-                        </label>
+          {/* ── 2-column grid ── */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-60px' }}
+            transition={{ duration: 0.7, delay: 0.1, ease: PM_EASE }}
+            className="mt-10 grid gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:gap-8"
+          >
+            <div>
+              <SpotDropZone
+                state={state}
+                file={file}
+                hashProgress={progress}
+                onFile={onFile}
+                onCheckout={onCheckout}
+                onReset={onReset}
+                busy={paying}
+              />
+            </div>
+            <div>
+              <CertificatePreview
+                state={state}
+                file={file}
+                hash={hash}
+                hashProgress={progress}
+              />
+            </div>
+          </motion.div>
 
-                        <label className="flex items-start gap-3 text-sm text-[#A8A0D8] leading-relaxed cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={agreed}
-                                onChange={(e) => setAgreed(e.target.checked)}
-                                className="mt-0.5 w-4 h-4 accent-[#00D4AA]"
-                            />
-                            <span>
-                                <strong className="text-white">同意:</strong> Spot プランのデータは発行から24時間で
-                                <Link href="/trust-center#s4" className="text-[#00D4AA] underline mx-1">物理削除</Link>
-                                されます。Evidence Pack のZIPはお手元で必ず保存してください。
-                                <Link href="/terms" className="text-[#00D4AA] underline ml-2">利用規約</Link>と
-                                <Link href="/privacy" className="text-[#00D4AA] underline ml-1">プライバシー</Link>に同意します。
-                            </span>
-                        </label>
-                    </div>
-
-                    {error && (
-                        <div className="mt-4 px-4 py-3 rounded-xl bg-[#3a1212] border border-[#FF4D4D]/40 text-[#FFB8B8] text-sm flex items-center gap-2">
-                            <X className="w-4 h-4" />
-                            {error}
-                        </div>
-                    )}
-
-                    <button
-                        onClick={handlePurchase}
-                        disabled={!isReady}
-                        className={`mt-6 w-full py-4 rounded-full font-black text-base transition-all flex items-center justify-center gap-2 ${isReady
-                            ? 'bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white shadow-[0_0_24px_rgba(108,62,244,0.45)] hover:scale-[1.02]'
-                            : 'bg-[#1C1A38] text-[#A8A0D8] cursor-not-allowed'
-                            }`}
-                    >
-                        {loading ? (
-                            <>
-                                <Loader2 className="w-5 h-5 animate-spin" /> 決済画面へ遷移中…
-                            </>
-                        ) : (
-                            <>
-                                <Lock className="w-5 h-5" /> ¥480 で Evidence Pack を発行する
-                            </>
-                        )}
-                    </button>
-
-                    <p className="mt-4 text-[11px] text-[#48456A] flex items-center justify-center gap-2">
-                        <ShieldCheck className="w-3.5 h-3.5 text-[#00D4AA]" />
-                        Stripeによるセキュアな決済 / アカウント登録不要 / 24時間後にデータ削除
-                    </p>
-                </motion.div>
-
-                <div className="mt-12 grid gap-3 sm:grid-cols-3">
-                    {[
-                        { icon: <CheckCircle className="w-4 h-4 text-[#00D4AA]" />, text: 'PDF証明書（A4 提出用）' },
-                        { icon: <FileText className="w-4 h-4 text-[#00D4AA]" />, text: 'RFC3161 タイムスタンプトークン' },
-                        { icon: <ShieldCheck className="w-4 h-4 text-[#00D4AA]" />, text: 'OpenSSL 検証スクリプト' },
-                    ].map((item) => (
-                        <div key={item.text} className="rounded-xl border border-[#1C1A38] bg-[#0D0B24]/70 px-4 py-3 flex items-center gap-3 text-sm text-[#A8A0D8]">
-                            {item.icon}
-                            {item.text}
-                        </div>
-                    ))}
-                </div>
-            </main>
-
-            {/* Phase 12.3 — 429 Graceful Upsell */}
-            <UpgradeModal
-                open={upgradeOpen}
-                onClose={() => setUpgradeOpen(false)}
-                used={quotaContext.used}
-                quota={quotaContext.quota ?? 30}
-                resetAt={quotaContext.resetAt ?? null}
-            />
+          {/* ── Footer trust badges ── */}
+          <div
+            className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t pt-6 text-[12px]"
+            style={{
+              borderColor: 'rgba(255,255,255,0.08)',
+              color: 'rgba(255,255,255,0.55)',
+            }}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck
+                className="h-3.5 w-3.5"
+                style={{ color: '#00D4AA' }}
+              />
+              Stripe による安全な決済
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              📋 アカウント登録不要
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              🗑 24時間後にデータ物理削除
+            </span>
+          </div>
         </div>
-    );
+      </section>
+
+      {/* モバイル CTA は SpotDropZone 内で fixed bottom bar として表示 */}
+      <div className="md:h-0 h-[88px]" aria-hidden />
+    </div>
+  );
 }
