@@ -322,8 +322,8 @@ export default function CertificateUpload() {
     } catch (e) {
       console.error(e);
       const errMsg = (e as Error).message || 'エラーが発生しました';
-      setShellError(errMsg.length > 50 ? `${errMsg.slice(0, 48)}...` : errMsg);
-      setTimeout(() => setShellError(null), 4200);
+      setShellError(errMsg); // 全文をそのまま渡す
+      //       setTimeout(() => setShellError(null), 4200);
       setProcessStatus('エラーが発生しました。もう一度お試しください。');
       setIsProcessing(false);
     }
