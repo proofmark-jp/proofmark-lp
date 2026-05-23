@@ -471,7 +471,11 @@ export default function CertificateUpload() {
                     <Shield className={`w-5 h-5 ${proofMode === 'private' ? 'text-[#00D4AA]' : 'text-slate-500'}`} />
                     <h4 className={`font-bold ${proofMode === 'private' ? 'text-[#00D4AA]' : 'text-slate-300'}`}>Private Proof</h4>
                   </div>
-                  <p className="text-xs text-[#A8A0D8]">原画を一切送信せず、ハッシュ情報のみで存在を証明します。</p>
+                  <p className="text-xs text-[#A8A0D8] mb-3 font-semibold">ファイルはPCから一歩も外に出ません。数GBの機密データも一瞬で存在証明が完了します</p>
+                  <div className="flex flex-col gap-1.5 text-[11px] text-slate-400">
+                    <p>対応形式: <span className="text-white">すべてのファイル（動画、ZIP、3Dモデル、ソースコード等）</span></p>
+                    <p>上限サイズ: <span className="text-[#00D4AA] font-bold">無制限 (Unlimited)</span> ※ブラウザの処理能力に依存</p>
+                  </div>
                 </div>
 
                 <div
@@ -503,7 +507,11 @@ export default function CertificateUpload() {
                     <Eye className={`w-5 h-5 ${proofMode === 'shareable' ? 'text-[#6C3EF4]' : 'text-slate-500'}`} />
                     <h4 className={`font-bold ${proofMode === 'shareable' ? 'text-[#6C3EF4]' : 'text-slate-300'}`}>Shareable Proof</h4>
                   </div>
-                  <p className="text-xs text-[#A8A0D8]">画像をセキュアストレージに保存し、公開検証ページに表示します。</p>
+                  <p className="text-xs text-[#A8A0D8] mb-3 font-semibold">ポートフォリオやSNSでの公開・シェアに特化した軽量モード</p>
+                  <div className="flex flex-col gap-1.5 text-[11px] text-slate-400">
+                    <p>対応形式: <span className="text-white">画像のみ (JPG, PNG, WEBP 等)</span></p>
+                    <p>上限サイズ: <span className="text-white">50MBまで</span></p>
+                  </div>
                 </div>
               </div>
 

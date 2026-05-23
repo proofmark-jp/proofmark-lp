@@ -10,7 +10,9 @@ import {
   Crown,
   Users,
   ArrowRight,
+  Lock,
 } from 'lucide-react';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { Link, useLocation } from 'wouter';
 import { motion } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
@@ -86,6 +88,8 @@ function FeatureRow({
   label,
   state,
   highlight,
+  tooltip,
+  vaultIcon,
 }: PricingPlan['features'][number]) {
   if (state === 'exclude') {
     return (
@@ -119,8 +123,32 @@ function FeatureRow({
 
   return (
     <li className="flex items-start gap-3 text-sm">
-      <Check className={`w-5 h-5 shrink-0 ${accent}`} />
-      <span className="text-white">{label}</span>
+      <Check className={`w-5 h-5 shrink-0 mt-0.5 ${accent}`} />
+      <span className="text-white flex items-center gap-1.5 flex-wrap">
+        {vaultIcon && <Lock className="w-3.5 h-3.5 text-[#00D4AA]" />}
+        {label}
+        {tooltip && (
+          <Tooltip.Provider delayDuration={200}>
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <span className="text-[#A8A0D8] border-b border-dashed border-[#A8A0D8] cursor-help ml-1 text-[11px] leading-none pb-0.5 whitespace-nowrap">
+                  [?]
+                </span>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content
+                  sideOffset={4}
+                  className="z-50 max-w-[240px] px-3 py-2 rounded-lg text-xs shadow-2xl leading-relaxed"
+                  style={{ backgroundColor: '#151d2f', border: '1px solid #2a2a4e', color: '#a0a0c0' }}
+                >
+                  {tooltip}
+                  <Tooltip.Arrow className="fill-[#2a2a4e] w-3 h-1.5" />
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+          </Tooltip.Provider>
+        )}
+      </span>
     </li>
   );
 }
