@@ -297,6 +297,19 @@ export default function CertificateUpload() {
 
       const result = await res.json();
       const certId = result.certificate.id;
+
+      // --- Fire and Forget TSA Trigger (バックグラウンド自動付与) ---
+      // ユーザーの画面遷移をブロックしないようawaitせず、keepaliveでブラウザに確実な送信を担保させる
+      fetch('/api/timestamp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ certId, hash: fileHash }),
+        keepalive: true,
+      }).catch(err => console.error('[Background TSA] Failed to trigger:', err));
+      // --------------------------------------------------------------
       setProcessStatus('完了。証明書ページへ遷移します...');
       const targetUrl = `/cert/${certId}`;
       setLocation(targetUrl);

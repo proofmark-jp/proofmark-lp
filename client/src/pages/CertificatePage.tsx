@@ -18,30 +18,7 @@ import { getC2paSummary } from '../lib/c2pa-schema';
 import { ContentCredentialsSection } from '../components/cert/ContentCredentialsSection';
 import VerifyDropzone from '../components/VerifyDropzone';
 
-// ---- RFC3161 FreeTSA Timestamp API ----
-const applyRFC3161Timestamp = async (certId: string, hash: string) => {
-    try {
-        // 👑 ユーザーの現在の身分証（トークン）を取得
-        const { data: { session } } = await supabase.auth.getSession();
 
-        const response = await fetch('/api/timestamp', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session?.access_token}`,
-            },
-            body: JSON.stringify({ certId, hash }),
-        });
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'タイムスタンプの取得に失敗しました');
-        }
-        return await response.json();
-    } catch (error) {
-        console.error('Timestamp request failed:', error);
-        throw error;
-    }
-};
 
 export default function CertificatePage() {
     const [match, params] = useRoute('/cert/:id');
@@ -77,9 +54,7 @@ export default function CertificatePage() {
     const isPaidPlan = ['light', 'creator', 'studio', 'admin'].includes(currentPlan);
     const c2pa = useMemo(() => getC2paSummary(cert?.c2pa_manifest), [cert?.c2pa_manifest]);
 
-    // ---- RFC3161 Timestamp State ----
-    const [isStamping, setIsStamping] = useState(false);
-    const [verifiedTime, setVerifiedTime] = useState<string | null>(cert?.certified_at || null);
+
 
     useEffect(() => {
         async function fetchCertificate() {
@@ -98,7 +73,6 @@ export default function CertificatePage() {
 
             if (!certError && certData) {
                 setCert(certData);
-                setVerifiedTime(certData.certified_at || null);
 
                 // 2. 最新のプロフィール情報を取得（ユーザー名変更に対応）
                 if (certData.user_id) {
@@ -136,26 +110,7 @@ export default function CertificatePage() {
         }
     };
 
-    // ---- RFC3161 Timestamp Handler ----
-    const handleApplyTimestamp = async () => {
-        if (!cert || !cert.id || !cert.sha256) return;
-        setIsStamping(true);
-        try {
-            const result = await applyRFC3161Timestamp(cert.id, cert.sha256);
-            if (result.success) {
-                setVerifiedTime(result.certified_at);
-                alert('FreeTSAによる公的タイムスタンプの付与に成功しました！');
-            }
-        } catch (error: any) {
-            if (error.message === 'free_quota_exceeded') {
-                alert('今月の無料枠（30件）を使い切りました。引き続きスタンプを付与するにはプランをアップグレードしてください。');
-            } else {
-                alert(`エラーが発生しました: ${error.message}`);
-            }
-        } finally {
-            setIsStamping(false);
-        }
-    };
+
 
     const handleCopy = async (textToCopy: string, type: string) => {
         try {
@@ -225,7 +180,7 @@ export default function CertificatePage() {
     const ogTitle = getDisplayTitle();
     const ogThumb = cert.public_image_url || '';
     const ogHash = cert.sha256 ? cert.sha256.substring(0, 12) : '000000000000';
-    const ogTimestamp = verifiedTime || cert.created_at || '';
+    const ogTimestamp = cert?.certified_at || cert?.created_at || '';
     const formattedTimestamp = new Date(ogTimestamp).toLocaleString('ja-JP');
     const ogCreator = authorProfile?.username || 'Anonymous';
 
@@ -361,7 +316,7 @@ export default function CertificatePage() {
                                         <p className="text-xl sm:text-2xl font-bold text-white tracking-tight print:text-black">
                                             {new Date(cert.created_at).toLocaleString('ja-JP')}
                                         </p>
-                                        {verifiedTime && (
+                                        {cert?.certified_at && (
                                             <div className="mt-2 flex items-center space-x-1.5 text-[#00D4AA] bg-[#00D4AA]/10 border border-[#00D4AA]/20 px-3 py-1 rounded-full w-fit print:bg-teal-50 print:border-teal-200 print:text-teal-700">
                                                 <ShieldCheck className="w-3.5 h-3.5" />
                                                 <span className="text-[10px] font-black tracking-widest uppercase">
@@ -398,40 +353,7 @@ export default function CertificatePage() {
 
                 {/* --- 🚫 ここから下は印刷時すべて非表示 (print:hidden) --- */}
 
-                {/* ---- RFC3161 FreeTSA Timestamp Action ---- */}
-                <div className="flex flex-col items-center mt-8 print:hidden">
-                    {!verifiedTime && (
-                        <div className="flex flex-col items-center gap-2 mt-4">
-                            <button
-                                onClick={() => {
-                                    if (window.confirm("今月のTSA発行枠を 1件 消費します。本当によろしいですか？")) {
-                                        handleApplyTimestamp();
-                                    }
-                                }}
-                                disabled={isStamping}
-                                className={`flex items-center px-6 py-3 rounded-full font-bold transition-all ${isStamping
-                                    ? 'bg-gray-600 cursor-not-allowed text-gray-300'
-                                    : 'bg-[#6C3EF4] hover:bg-[#5A33CC] text-white shadow-[0_0_15px_rgba(108,62,244,0.5)]'
-                                    }`}
-                            >
-                                {isStamping ? (
-                                    <>
-                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        Contacting TSA...
-                                    </>
-                                ) : (
-                                    '公的タイムスタンプを付与する'
-                                )}
-                            </button>
-                            <p className="text-xs text-[#A8A0D8]/80 text-center">
-                                ※実行すると月間発行枠を1件消費します。
-                            </p>
-                        </div>
-                    )}
-                </div>
+
 
                 <div className="pt-8 border-t border-slate-700 flex flex-wrap gap-4">
                     <button
