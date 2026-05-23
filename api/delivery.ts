@@ -32,8 +32,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).send('Forbidden Host');
     }
 
-    // 🚨 2. Privateバケット突破: 神の鍵（Service Role Key）を付与してFetch
-    const upstreamRes = await fetch(targetUrl, {
+    // 🚨 2. Privateバケット突破: URLを認証用エンドポイントに書き換えて神の鍵でFetch
+    const fetchUrl = targetUrl.replace('/object/public/', '/object/authenticated/');
+    
+    const upstreamRes = await fetch(fetchUrl, {
       headers: {
         'Authorization': `Bearer ${SERVICE_ROLE_KEY}`
       }
