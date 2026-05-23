@@ -9,8 +9,10 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { Readable } from 'stream';
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
@@ -22,31 +24,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).send('URL is required');
   }
 
-  // 🚨 SSRF防御: 自身のSupabaseストレージURL以外はプロキシを拒否する
-  if (!targetUrl.startsWith(SUPABASE_URL)) {
-    return res.status(403).send('Forbidden URL');
-  }
-
   try {
-    const upstreamRes = await fetch(targetUrl);
+    // 🚨 1. SSRF防御: 厳格なホストネーム一致による検問
+    const parsedTarget = new URL(targetUrl);
+    const parsedSupabase = new URL(SUPABASE_URL);
+    if (parsedTarget.hostname !== parsedSupabase.hostname) {
+      return res.status(403).send('Forbidden Host');
+    }
+
+    // 🚨 2. Privateバケット突破: 神の鍵（Service Role Key）を付与してFetch
+    const upstreamRes = await fetch(targetUrl, {
+      headers: {
+        'Authorization': `Bearer ${SERVICE_ROLE_KEY}`
+      }
+    });
 
     if (!upstreamRes.ok) {
       return res.status(upstreamRes.status).send('Asset not found');
     }
 
-    // 🚨 世界基準の無害化ヘッダー強制付与（Sandboxed Delivery）
+    // 🚨 無害化ヘッダー強制付与（Sandboxed Delivery）
     res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox;");
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // エッジキャッシュ
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
 
     const contentType = upstreamRes.headers.get('content-type');
     if (contentType) res.setHeader('Content-Type', contentType);
 
-    const arrayBuffer = await upstreamRes.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    return res.status(200).send(buffer);
+    // 🚨 3. OOM防御: メモリに溜め込まず、直接ストリーミング（Pipe）する
+    if (upstreamRes.body) {
+      // Web StreamをNode.jsのReadable Streamに変換してレスポンスに繋ぐ
+      const readable = Readable.fromWeb(upstreamRes.body as any);
+      readable.pipe(res);
+      
+      // ストリームの完了またはエラーを監視
+      readable.on('error', (err) => {
+        console.error('[Stream Error]', err);
+        if (!res.headersSent) res.status(500).end();
+      });
+    } else {
+      res.status(204).end(); // bodyがない場合
+    }
 
   } catch (err) {
     console.error('[Sandboxed Delivery] Error:', err);

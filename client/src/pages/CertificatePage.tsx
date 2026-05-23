@@ -267,7 +267,9 @@ export default function CertificatePage() {
                             {/* 左側：アートワーク または ZK表示 */}
                             <div className="w-full md:w-2/5 flex-shrink-0 print:w-[38%]">
                                 <div className="aspect-square w-full rounded-2xl border border-[#1C1A38] bg-[#07061A] flex flex-col items-center justify-center overflow-hidden relative shadow-inner print:border-gray-300 print:bg-gray-50 print:shadow-none">
-                                    {cert.proof_mode === 'shareable' && cert.public_image_url && (cert.visibility === 'public' || (user && user.id === cert.user_id)) ? (
+                                    {cert.is_asset_purged === true ? (
+                                        <PurgedVaultFull />
+                                    ) : cert.proof_mode === 'shareable' && cert.public_image_url && (cert.visibility === 'public' || (user && user.id === cert.user_id)) ? (
                                         <img src={secureImageUrl} alt="Artwork" className="w-full h-full object-cover" />
                                     ) : user && user.id === cert.user_id && cert.public_image_url ? (
                                         <TranslucentVaultFull imageUrl={secureImageUrl} />
@@ -484,6 +486,42 @@ export default function CertificatePage() {
 }
 
 /* ─── Vault components (CertificatePage local) ─────────────── */
+
+const PurgedVaultFull = () => (
+  <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-950 p-8 text-center relative overflow-hidden border border-zinc-800/50 rounded-xl">
+    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,212,170,0.03)_0%,transparent_70%)] pointer-events-none" />
+    
+    <div className="relative z-10 flex flex-col items-center max-w-md">
+      <div className="w-20 h-20 rounded-full bg-zinc-900/80 border border-zinc-800 flex items-center justify-center mb-6 shadow-lg shadow-black/50 backdrop-blur-sm">
+        <svg className="w-10 h-10 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+      </div>
+      
+      <h3 className="text-xl font-semibold text-zinc-200 mb-3 tracking-wide">
+        原本ストレージ期間終了
+      </h3>
+      
+      <p className="text-sm text-zinc-400 leading-relaxed mb-6">
+        Freeプランの保存期間（30日）が終了したため、表示用の原本ファイルはサーバーから完全に削除されました。
+      </p>
+      
+      <div className="bg-emerald-950/20 border border-emerald-900/30 rounded-lg p-5 w-full backdrop-blur-sm text-left">
+        <div className="flex items-start gap-3">
+          <svg className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+          <div>
+            <p className="text-sm text-emerald-400 font-medium">暗号学的なハッシュ台帳は永久です</p>
+            <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+              お手元の原本ファイルを専用の検証エリア（Verify）にドロップすれば、いつでも改ざんされていないことの存在証明が可能です。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 function TheVaultFull() {
     return (

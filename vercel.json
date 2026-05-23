@@ -104,6 +104,10 @@
     {
       "path": "/api/cron/cleanup-spot-data",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/upsell-warning",
+      "schedule": "0 1 * * *"
     }
   ]
 }
