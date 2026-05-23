@@ -17,14 +17,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).send('Method Not Allowed');
   }
 
-  const path = req.query.path as string;
-  if (!path) {
-    return res.status(400).send('Path is required');
+  const targetUrl = req.query.url as string;
+  if (!targetUrl) {
+    return res.status(400).send('URL is required');
+  }
+
+  // 🚨 SSRF防御: 自身のSupabaseストレージURL以外はプロキシを拒否する
+  if (!targetUrl.startsWith(SUPABASE_URL)) {
+    return res.status(403).send('Forbidden URL');
   }
 
   try {
-    const assetUrl = `${SUPABASE_URL}/storage/v1/object/public/proofmark-public/${encodeURI(path)}`;
-    const upstreamRes = await fetch(assetUrl);
+    const upstreamRes = await fetch(targetUrl);
 
     if (!upstreamRes.ok) {
       return res.status(upstreamRes.status).send('Asset not found');
@@ -35,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // エッジキャッシュ
 
     const contentType = upstreamRes.headers.get('content-type');
     if (contentType) res.setHeader('Content-Type', contentType);

@@ -161,9 +161,9 @@ export default function CertificatePage() {
 
     const verifyUrl = `${window.location.origin}/cert/${cert.id}`;
 
-    const secureImageUrl = cert?.storage_path
-        ? `/api/delivery?path=${encodeURIComponent(cert.storage_path)}`
-        : cert?.public_image_url;
+    const secureImageUrl = cert?.public_image_url
+        ? `/api/delivery?url=${encodeURIComponent(cert.public_image_url)}`
+        : undefined;
 
     const templateFormal = `納品データ一式をお送りいたします。本作品は、AI生成ベースに当方で独自の加筆修正を施したオリジナル作品です。『ProofMark』にて制作日時と元データを暗号化・保全し、正当な制作プロセスを証明しております。\n証明書URL: ${verifyUrl}`;
     const templateSNS = `本作品の制作日時とオリジナルデータは『ProofMark』にて改ざん不能な状態で証明・保全されています。無断転載や自作発言等の不正利用はお控えください。\n証明書URL: ${verifyUrl}`;
