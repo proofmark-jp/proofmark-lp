@@ -38,9 +38,12 @@ const MAX_DECLARED_SIZE = 500 * 1024 * 1024; // 500MB
 
 interface UploadUrlBody {
   filename?: string;
+  fileName?: string;   // クライアント送信キー名 (CertificateUpload.c2pa-patch.tsx)
   contentType?: string;
+  mimeType?: string;   // クライアント送信キー名 (CertificateUpload.c2pa-patch.tsx)
   /** クライアントが申告するサイズ。大きすぎる場合は早期 reject。 */
   size?: number;
+  fileSize?: number;   // クライアント送信キー名 (CertificateUpload.c2pa-patch.tsx)
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -50,9 +53,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   try {
     const user = await requireUser(req);
     const body = (req.body ?? {}) as UploadUrlBody;
-    const filename = (body.filename ?? '').toString();
-    const contentType = (body.contentType ?? '').toString();
-    const declaredSize = Number.isFinite(body.size) ? Number(body.size) : 0;
+    // クライアント送信キーと旧キーの両方を受け付ける
+    const filename = (body.fileName ?? body.filename ?? '').toString();
+    const contentType = (body.mimeType ?? body.contentType ?? '').toString();
+    const declaredSize = Number.isFinite(body.fileSize) ? Number(body.fileSize)
+                       : Number.isFinite(body.size)     ? Number(body.size) : 0;
 
     if (!supabaseUrl || !serviceRoleKey) {
       json(res, 500, { error: 'サーバーの設定エラー（環境変数）' });
@@ -76,6 +81,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     const ext = (filename.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) || 'bin';
+
+    // --- 🚨 AUP Defense Line (フィッシング・マルウェア配布の防止) ---
+    const DANGEROUS_EXTS = ['html', 'htm', 'js', 'mjs', 'svg', 'exe', 'sh', 'bat', 'cmd', 'php', 'ps1', 'vbs'];
+    if (DANGEROUS_EXTS.includes(ext)) {
+      json(res, 403, {
+        error: 'セキュリティ保護のため、このファイル形式は直接アップロードできません。ZIP等に圧縮してからご利用ください。',
+      });
+      return;
+    }
+    // ---------------------------------------------------------------
+
     const uuid = randomUUID();
     const quarantinePath = `${QUARANTINE_PREFIX}/${user.id}/${uuid}.${ext}`;
 

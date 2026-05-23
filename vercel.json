@@ -21,6 +21,9 @@
     "api/cron/cleanup-spot-data.ts": {
       "maxDuration": 60
     },
+    "api/delivery.ts": {
+      "maxDuration": 15
+    },
     "api/storefront-html.ts": {
       "includeFiles": "dist/index.html"
     }
