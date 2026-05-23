@@ -51,7 +51,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       { label: 'Webタイムスタンプ証明（月30件）', state: 'include' },
       { label: '原本ストレージ: 30日間（以降はハッシュ検証のみ）', state: 'include' },
       { label: '公開ポートフォリオ機能', state: 'include' },
-      { label: 'Evidence Pack（真正性証明書PDF ＋ 暗号学的証拠一式）の発行', state: 'exclude' },
+      { label: 'PDF発行 / 原本ストレージ: 30日間', state: 'exclude' },
     ],
   },
   {
@@ -84,8 +84,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     ctaLabel: { authed: 'Creatorに切り替える', guest: '先行特典を予約する' },
     ctaHref: { authed: '/settings#plan', guest: '/auth?mode=signup&plan=creator' },
     features: [
-      { label: 'Evidence Pack（真正性証明書PDF ＋ 暗号学的証拠一式）：月30件発行', state: 'include', highlight: 'primary' },
-      { label: 'Evidence Vault（永久不変の原本ストレージ）', state: 'include', vaultIcon: true, tooltip: '解約しない限り、あなたの作品原本は堅牢なVaultに永遠に保護されます' },
+      { label: '納品用PDF証明書 ＆ Evidence Pack (証拠一式)：月30件発行', state: 'include', highlight: 'primary' },
+      { label: 'Evidence Vault (永久不変の原本ストレージ)', state: 'include', highlight: 'accent' },
       { label: 'AIプロンプト・シード値の証跡封入', state: 'planned' },
       { label: 'C2PAメタデータ読取連携', state: 'include' },
       { label: '案件・クライアント単位の整理', state: 'include' },
@@ -105,8 +105,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     ctaHref: { authed: '/settings#plan', guest: '/auth?mode=signup&plan=studio' },
     features: [
       { label: 'Creator のすべての機能', state: 'include' },
-      { label: 'Evidence Pack（真正性証明書PDF ＋ 暗号学的証拠一式）：月150件発行', state: 'include' },
-      { label: 'Evidence Vault（永久不変の原本ストレージ）', state: 'include', vaultIcon: true, tooltip: '解約しない限り、あなたの作品原本は堅牢なVaultに永遠に保護されます' },
+      { label: '納品用PDF証明書 ＆ Evidence Pack (証拠一式)：月150件発行', state: 'include' },
+      { label: 'Evidence Vault (永久不変の原本ストレージ)', state: 'include', highlight: 'accent' },
       { label: '検証ページのホワイトラベル化（自社ロゴ）', state: 'planned' },
       { label: '複数席・監査ログ・Chain of Evidence', state: 'include' },
       { label: '案件単位のクライアント共有', state: 'include' },

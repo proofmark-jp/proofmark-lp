@@ -319,7 +319,7 @@ export default function CertificateUpload(): JSX.Element {
           <input {...getInputProps()} />
           <UploadCloud className="w-12 h-12 mx-auto mb-4 text-slate-400" />
           <p className="text-white font-bold text-xl mb-2">証明するファイルをドロップ</p>
-          <p className="text-[#A8A0D8] text-sm">Private は全ファイル形式 / Shareable は画像のみ・最大 500MB</p>
+          <p className="text-[#A8A0D8] text-sm">Private: 容量無制限 / Shareable: 画像のみ 50MBまで</p>
         </div>
       ) : (
         <div className="space-y-7 animate-in fade-in duration-500">

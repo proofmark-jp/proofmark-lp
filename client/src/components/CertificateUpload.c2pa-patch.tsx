@@ -395,7 +395,7 @@ export default function CertificateUpload() {
             <input {...getInputProps()} />
             <IdleHero
               title="証明するファイルをドロップ"
-              subtitle="最大 15MB（Private: 全ファイル形式 / Shareable: 画像のみ）"
+              subtitle="Private: 容量無制限 / Shareable: 画像のみ 50MBまで"
             />
           </div>
         ) : (

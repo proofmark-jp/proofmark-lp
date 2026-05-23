@@ -105,14 +105,14 @@ const faqData: FAQItem[] = [
     id: 'storage',
     question: '原画は保存されますか？',
     schemaText:
-      'Private Proofモードでは原画はサーバーに送られません。Shareable Proofモードを選んだ場合のみ、ポートフォリオ表示用の画像がVercelをバイパスしてSupabase Storageに直接転送されます。',
+      'Private Proofモードでは原画はサーバーに送られません。Shareable Proofモードを選んだ場合のみ、ポートフォリオ表示用の画像（最大50MB）がセキュアストレージに転送されます。',
     answer: (
       <>
         <p>
           <strong>Private Proof モード</strong>では、原画はProofMarkのサーバーに送信されません。SHA-256ハッシュ計算がブラウザ内で完結し、ProofMarkに保存されるのはハッシュ値とタイムスタンプ情報のみです。
         </p>
         <p>
-          <strong>Shareable Proof モード</strong>を選んだ場合のみ、ポートフォリオ表示や検証ページ用の画像が、Vercelをバイパスして Supabase Storage に直接暗号化転送されます。どちらのモードで発行したかはダッシュボードで明示されます。
+          <strong>Shareable Proof モード</strong>を選んだ場合のみ、ポートフォリオ表示用の画像（最大50MB）がセキュアストレージに転送されます。どちらのモードで発行したかはダッシュボードで明示されます。
         </p>
       </>
     ),
