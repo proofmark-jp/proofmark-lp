@@ -161,6 +161,10 @@ export default function CertificatePage() {
 
     const verifyUrl = `${window.location.origin}/cert/${cert.id}`;
 
+    const secureImageUrl = cert?.storage_path
+        ? `/api/delivery?path=${encodeURIComponent(cert.storage_path)}`
+        : cert?.public_image_url;
+
     const templateFormal = `納品データ一式をお送りいたします。本作品は、AI生成ベースに当方で独自の加筆修正を施したオリジナル作品です。『ProofMark』にて制作日時と元データを暗号化・保全し、正当な制作プロセスを証明しております。\n証明書URL: ${verifyUrl}`;
     const templateSNS = `本作品の制作日時とオリジナルデータは『ProofMark』にて改ざん不能な状態で証明・保全されています。無断転載や自作発言等の不正利用はお控えください。\n証明書URL: ${verifyUrl}`;
 
@@ -264,9 +268,9 @@ export default function CertificatePage() {
                             <div className="w-full md:w-2/5 flex-shrink-0 print:w-[38%]">
                                 <div className="aspect-square w-full rounded-2xl border border-[#1C1A38] bg-[#07061A] flex flex-col items-center justify-center overflow-hidden relative shadow-inner print:border-gray-300 print:bg-gray-50 print:shadow-none">
                                     {cert.proof_mode === 'shareable' && cert.public_image_url && (cert.visibility === 'public' || (user && user.id === cert.user_id)) ? (
-                                        <img src={cert.public_image_url} alt="Artwork" className="w-full h-full object-cover" />
+                                        <img src={secureImageUrl} alt="Artwork" className="w-full h-full object-cover" />
                                     ) : user && user.id === cert.user_id && cert.public_image_url ? (
-                                        <TranslucentVaultFull imageUrl={cert.public_image_url} />
+                                        <TranslucentVaultFull imageUrl={secureImageUrl} />
                                     ) : user && user.id === cert.user_id ? (
                                         <OwnerVaultFull />
                                     ) : (
