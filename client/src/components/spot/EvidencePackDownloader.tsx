@@ -369,15 +369,30 @@ export default function EvidencePackDownloader({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, delay: 0.42, ease: PM_EASE }}
-        className="mt-5 flex flex-col gap-2"
+        className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3"
       >
         <button
           type="button"
+          onClick={() => {
+            document.getElementById('verify-section')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold text-[#0D0B24] transition-transform hover:scale-[1.02]"
+          style={{
+            background: '#00D4AA',
+            boxShadow: '0 8px 24px rgba(0,212,170,0.32)',
+          }}
+        >
+          <ShieldCheck className="h-4 w-4" />
+          クライアントの検証を体験する
+        </button>
+
+        <button
+          type="button"
           onClick={redownload}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl border px-5 py-3 text-sm font-bold text-white"
+          className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold text-white transition-colors hover:bg-white/[0.04]"
           style={{
             borderColor: 'rgba(255,255,255,0.16)',
-            background: 'rgba(255,255,255,0.04)',
+            background: 'transparent',
           }}
         >
           <Download className="h-4 w-4" />

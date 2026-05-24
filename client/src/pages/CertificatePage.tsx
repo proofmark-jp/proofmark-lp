@@ -476,7 +476,8 @@ export default function CertificatePage() {
                 )}
 
                 {/* ✨ Zero-Knowledge Web Verifier (ブラウザ内オフライン検証) ✨ */}
-                <div className="w-full max-w-5xl mt-24 print:hidden">
+                {/* 🚨 ID `verify-section` とスムーススクロール用の `scroll-mt-24` を追加 */}
+                <div id="verify-section" className="w-full max-w-5xl mt-24 print:hidden scroll-mt-24">
                     <div className="bg-[#f5f5f7] rounded-[2.5rem] py-16 px-4 sm:px-12 shadow-[0_20px_80px_rgba(0,0,0,0.5)] border border-[#e5e5e7]/10 relative overflow-hidden transition-all hover:shadow-[0_20px_100px_rgba(0,212,170,0.15)]">
                         {/* 上部に落ちる淡い光沢（ガラス表現） */}
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-12 bg-gradient-to-b from-white/80 to-transparent blur-xl pointer-events-none"></div>
