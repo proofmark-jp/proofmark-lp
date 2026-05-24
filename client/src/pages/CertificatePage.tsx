@@ -85,7 +85,8 @@ export default function CertificatePage() {
                     proof_mode: certData.proof_mode || 'private',
                     tsr_token_base64: certData.tsr_token_base64 || '', // Supabaseのレコードから直接Base64を取得
                     thumbnail_data_url: certData.public_image_url || undefined,
-                    creator_display_name: authorProfile?.username ? `@${authorProfile.username}` : 'ProofMark Verified Creator'
+                    // 🚨 シングルクォートをバッククォートに変更し、末尾にカンマを追加
+                    creator_display_name: authorProfile?.username ? `@${authorProfile.username}` : 'ProofMark Verified Creator',
                     legal_name: authorProfile?.legal_name || '',
                     default_persona: authorProfile?.default_persona || 'creator'
                 };
