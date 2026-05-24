@@ -6,6 +6,7 @@ import { jsPDF } from 'jspdf';
 export async function optimizeImageForPdf(dataUrl: string, maxDim: number = 800): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    img.crossOrigin = 'Anonymous';
     img.onload = () => {
       let { width, height } = img;
       if (width > maxDim || height > maxDim) {

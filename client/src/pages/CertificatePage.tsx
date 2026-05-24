@@ -72,7 +72,23 @@ export default function CertificatePage() {
                 .single();
 
             if (!certError && certData) {
-                setCert(certData);
+                // 🚨 Opusのダウンローダー(SpotIssueApiResponse)が必要とするデータを既存のcertDataからマッピングして統合
+                const extendedCertData = {
+                    ...certData,
+                    certificate_id: certData.id,
+                    original_file_name: certData.original_filename || 'unknown_asset',
+                    original_file_size: certData.file_size || 0,
+                    sha256_hash: certData.sha256,
+                    timestamp_jst: new Date(certData.certified_at || certData.created_at).toLocaleString('ja-JP'),
+                    timestamp_iso: certData.certified_at || certData.created_at,
+                    verification_url: `${window.location.origin}/cert/${certData.id}`,
+                    proof_mode: certData.proof_mode || 'private',
+                    tsr_token_base64: certData.tsr_token_base64 || '', // Supabaseのレコードから直接Base64を取得
+                    thumbnail_data_url: certData.public_image_url || undefined,
+                    creator_display_name: authorProfile?.username ? `@${authorProfile.username}` : 'ProofMark Verified Creator'
+                };
+                
+                setCert(extendedCertData);
 
                 // 2. 最新のプロフィール情報を取得（ユーザー名変更に対応）
                 if (certData.user_id) {
@@ -369,11 +385,12 @@ export default function CertificatePage() {
                         <svg viewBox="0 0 24 24" aria-hidden="true" className="w-5 h-5 fill-current"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 22.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.008 3.827H5.078z"></path></svg>
                         Xで証明をシェア
                     </button>
-                    {isPaidPlan ? (
+                    {/* 有料プラン、または user_id が存在しない（＝未ログインで決済を突破したSpotユーザー）場合は開放 */}
+                    {isPaidPlan || !cert.user_id ? (
                         <>
                             {/* 「PDFとして保存」はUXの混乱を避けるため完全削除し、Evidence Packボタンへ一本化 */}
                             <div className="no-print w-full sm:w-auto sm:min-w-[280px]">
-                                <EvidencePackDownloadButton certId={cert.id} />
+                                <EvidencePackDownloadButton certId={cert.id} apiData={cert} />
                             </div>
                         </>
                     ) : (
