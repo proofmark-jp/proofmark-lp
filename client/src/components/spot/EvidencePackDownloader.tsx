@@ -543,6 +543,10 @@ function ManifestRow({ muted = false }: { muted?: boolean }): JSX.Element {
         <Terminal className="h-3.5 w-3.5" style={{ color: 'rgba(255,255,255,0.62)' }} />
         verify.sh / .py
       </span>
+      <span className="inline-flex items-center gap-1.5">
+        <FileText className="h-3.5 w-3.5" style={{ color: 'rgba(255,255,255,0.62)' }} />
+        HOW_TO_VERIFY.txt
+      </span>
     </div>
   );
 }
@@ -572,6 +576,11 @@ function ManifestList(): JSX.Element {
       icon: <Terminal className="h-4 w-4" style={{ color: 'rgba(255,255,255,0.78)' }} />,
       title: 'verify.sh / verify.py',
       note: 'OpenSSL ベースの独立検証スクリプト',
+    },
+    {
+      icon: <FileText className="h-4 w-4" style={{ color: 'rgba(255,255,255,0.78)' }} />,
+      title: 'HOW_TO_VERIFY.txt',
+      note: '検証手順書 (クライアント向け1分ガイド)',
     },
   ];
 

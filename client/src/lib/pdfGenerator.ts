@@ -49,8 +49,13 @@ const COLOR = {
   inkMuted: [120, 120, 140] as const,
   inkSubtle: [165, 165, 185] as const,
   rule: [220, 220, 230] as const,
-  watermark: [235, 235, 240] as const,
+  watermark: [248, 248, 250] as const,     // 修正: 透過なしの極薄グレー
   cardFill: [250, 250, 252] as const,
+  bgPurple: [243, 239, 253] as const,      // Purple 8% 相当のソリッドカラー
+  bgTeal: [230, 251, 246] as const,        // Teal 10% 相当のソリッドカラー
+  bgTealLight: [237, 252, 249] as const,   // Teal 7% 相当のソリッドカラー
+  bgTealDark: [209, 247, 239] as const,    // Teal 18% 相当のソリッドカラー
+  bgGold: [254, 251, 243] as const,        // Gold 6% 相当のソリッドカラー
 } as const;
 
 /* ─────────────────────────────────────────────
@@ -150,10 +155,6 @@ export async function generateCertificatePDF(
  * ───────────────────────────────────────────── */
 
 function drawWatermark(doc: jsPDF, pageW: number, pageH: number): void {
-  doc.saveGraphicsState();
-  // GState 経由で global alpha を下げる
-  // @ts-expect-error jspdf GState 型
-  doc.setGState(new (doc as unknown as { GState: new (o: Record<string, unknown>) => unknown }).GState({ opacity: 0.04 }));
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(120);
   doc.setTextColor(COLOR.watermark[0], COLOR.watermark[1], COLOR.watermark[2]);
@@ -161,7 +162,6 @@ function drawWatermark(doc: jsPDF, pageW: number, pageH: number): void {
     align: 'center',
     angle: -28,
   });
-  doc.restoreGraphicsState();
 }
 
 function drawLogo(doc: jsPDF, x: number, y: number): void {
@@ -225,7 +225,7 @@ function drawBadges(doc: jsPDF, pageW: number, y: number): void {
   // VERIFIED (Teal)
   drawPillBadge(doc, cx, y, wV, {
     label: labelV,
-    fill: [0, 212, 170, 0.10],
+    fill: COLOR.bgTeal,
     border: COLOR.teal,
     text: COLOR.teal,
     dot: true,
@@ -235,7 +235,7 @@ function drawBadges(doc: jsPDF, pageW: number, y: number): void {
   // PROOFMARK PROTOCOL (Purple)
   drawPillBadge(doc, cx, y, wF, {
     label: labelF,
-    fill: [108, 62, 244, 0.08],
+    fill: COLOR.bgPurple,
     border: COLOR.purple,
     text: COLOR.purple,
     dot: false,
@@ -249,19 +249,15 @@ function drawPillBadge(
   w: number,
   opts: {
     label: string;
-    fill: readonly [number, number, number, number];
+    fill: readonly [number, number, number];
     border: readonly [number, number, number];
     text: readonly [number, number, number];
     dot: boolean;
   },
 ): void {
   const h = 18;
-  doc.saveGraphicsState();
-  // @ts-expect-error jspdf GState
-  doc.setGState(new (doc as unknown as { GState: new (o: Record<string, unknown>) => unknown }).GState({ opacity: opts.fill[3] }));
   doc.setFillColor(opts.fill[0], opts.fill[1], opts.fill[2]);
   doc.roundedRect(x, y - 13, w, h, 9, 9, 'F');
-  doc.restoreGraphicsState();
   doc.setDrawColor(opts.border[0], opts.border[1], opts.border[2]);
   doc.setLineWidth(0.6);
   doc.roundedRect(x, y - 13, w, h, 9, 9, 'S');
@@ -321,12 +317,8 @@ async function drawAssetBlock(
   }
 
   // small "Sealed" tag on top-right of thumb
-  doc.saveGraphicsState();
-  // @ts-expect-error jspdf GState
-  doc.setGState(new (doc as unknown as { GState: new (o: Record<string, unknown>) => unknown }).GState({ opacity: 0.18 }));
-  doc.setFillColor(COLOR.teal[0], COLOR.teal[1], COLOR.teal[2]);
+  doc.setFillColor(COLOR.bgTealDark[0], COLOR.bgTealDark[1], COLOR.bgTealDark[2]);
   doc.roundedRect(thumbX + thumbW - 50, thumbY + 6, 44, 14, 7, 7, 'F');
-  doc.restoreGraphicsState();
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.5);
   doc.setTextColor(COLOR.teal[0], COLOR.teal[1], COLOR.teal[2]);
@@ -415,12 +407,8 @@ function drawHashPanel(
   const h = 64;
 
   // panel
-  doc.saveGraphicsState();
-  // @ts-expect-error jspdf GState
-  doc.setGState(new (doc as unknown as { GState: new (o: Record<string, unknown>) => unknown }).GState({ opacity: 0.07 }));
-  doc.setFillColor(COLOR.teal[0], COLOR.teal[1], COLOR.teal[2]);
+  doc.setFillColor(COLOR.bgTealLight[0], COLOR.bgTealLight[1], COLOR.bgTealLight[2]);
   doc.roundedRect(x, y, w, h, 8, 8, 'F');
-  doc.restoreGraphicsState();
   doc.setDrawColor(COLOR.teal[0], COLOR.teal[1], COLOR.teal[2]);
   doc.setLineWidth(0.7);
   doc.roundedRect(x, y, w, h, 8, 8, 'S');
@@ -463,12 +451,8 @@ function drawTimestampPanel(
   const w = pageW - margin * 2;
   const h = 64;
 
-  doc.saveGraphicsState();
-  // @ts-expect-error jspdf GState
-  doc.setGState(new (doc as unknown as { GState: new (o: Record<string, unknown>) => unknown }).GState({ opacity: 0.06 }));
-  doc.setFillColor(COLOR.gold[0], COLOR.gold[1], COLOR.gold[2]);
+  doc.setFillColor(COLOR.bgGold[0], COLOR.bgGold[1], COLOR.bgGold[2]);
   doc.roundedRect(x, y, w, h, 8, 8, 'F');
-  doc.restoreGraphicsState();
   doc.setDrawColor(COLOR.gold[0], COLOR.gold[1], COLOR.gold[2]);
   doc.setLineWidth(0.7);
   doc.roundedRect(x, y, w, h, 8, 8, 'S');
@@ -497,12 +481,8 @@ function drawTimestampPanel(
 function drawRfcChip(doc: jsPDF, x: number, y: number): void {
   const w = 82;
   const h = 16;
-  doc.saveGraphicsState();
-  // @ts-expect-error jspdf GState
-  doc.setGState(new (doc as unknown as { GState: new (o: Record<string, unknown>) => unknown }).GState({ opacity: 0.12 }));
-  doc.setFillColor(COLOR.teal[0], COLOR.teal[1], COLOR.teal[2]);
+  doc.setFillColor(COLOR.bgTeal[0], COLOR.bgTeal[1], COLOR.bgTeal[2]);
   doc.roundedRect(x, y, w, h, 8, 8, 'F');
-  doc.restoreGraphicsState();
   doc.setDrawColor(COLOR.teal[0], COLOR.teal[1], COLOR.teal[2]);
   doc.setLineWidth(0.5);
   doc.roundedRect(x, y, w, h, 8, 8, 'S');
