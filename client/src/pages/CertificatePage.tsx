@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRoute, useLocation, Link } from 'wouter';
 import { QRCodeSVG } from 'qrcode.react';
-import { CheckCircle, Clock, ShieldCheck, Image as ImageIcon, Copy, Check, FileText, Lock, ShieldAlert, Flag, Package } from 'lucide-react';
+import { CheckCircle, Clock, ShieldCheck, Image as ImageIcon, Copy, Check, FileText, Lock, ShieldAlert, Flag, Package, Gavel } from 'lucide-react';
 import { motion } from 'framer-motion';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useAuth } from '../hooks/useAuth';
@@ -17,6 +17,7 @@ import { supabase } from '../lib/supabase';
 import { getC2paSummary } from '../lib/c2pa-schema';
 import { ContentCredentialsSection } from '../components/cert/ContentCredentialsSection';
 import VerifyDropzone from '../components/VerifyDropzone';
+import TakedownNoticeModal from '../components/proof/TakedownNoticeModal'; // 🚨 追加: DMCAモーダル
 
 
 
@@ -33,6 +34,7 @@ export default function CertificatePage() {
 
     // 💡 複数ボタンに対応するためコピー状態を文字列で管理
     const [copiedType, setCopiedType] = useState<string | null>(null);
+    const [isTakedownOpen, setTakedownOpen] = useState(false); // 🚨 追加: DMCAモーダル開閉ステート
     const { user, profile, signOut } = useAuth(); // profileを追加
     
     // この証明書の作成者（クリエイター）本人かどうかを判定
@@ -472,6 +474,23 @@ export default function CertificatePage() {
                                     </p>
                                 </div>
                             </div>
+
+                            {/* 🚨 パターン3: 法的削除要請（DMCA） */}
+                            <div className="pt-6 mt-2 border-t border-[#1C1A38]">
+                                <p className="text-sm text-[#FF453A] font-bold mb-2 flex items-center gap-2">
+                                    <ShieldAlert className="w-4 h-4" /> ▼ 無断転載への法的措置（DMCA / 送信防止措置）
+                                </p>
+                                <p className="text-xs text-[#A8A0D8] mb-4">
+                                    プラットフォーム（X, Google, 各種プロバイダ等）に対して、法的効力を持つ削除要請書（Takedown Notice）を即時生成します。
+                                </p>
+                                <button
+                                    onClick={() => setTakedownOpen(true)}
+                                    className="bg-[#FF453A]/10 hover:bg-[#FF453A]/20 border border-[#FF453A]/30 text-[#FF453A] px-5 py-3 rounded-xl font-bold transition-all flex items-center gap-2 text-sm"
+                                >
+                                    <Gavel className="w-4 h-4" />
+                                    法的削除要請書 (PDF) を作成する
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -506,6 +525,27 @@ export default function CertificatePage() {
                         違法・悪質なコンテンツを通報する (Report Abuse)
                     </button>
                 </div>
+
+                {/* 🚨 DMCA / Takedown Notice Modal */}
+                {isOwner && cert && (
+                    <TakedownNoticeModal
+                        open={isTakedownOpen}
+                        onClose={() => setTakedownOpen(false)}
+                        certificate={{
+                            certificateId: cert.id,
+                            timestampJst: new Date(cert.certified_at || cert.created_at).toLocaleString('ja-JP'),
+                            verificationUrl: `${window.location.origin}/cert/${cert.id}`,
+                            originalFileName: cert.original_filename || 'unknown_asset',
+                        }}
+                        claimant={{
+                            creatorDisplayName: cert.creator_display_name || 'ProofMark Verified Creator',
+                            legalName: cert.legal_name || null,
+                            email: user?.email || '',
+                            defaultPersona: cert.default_persona || 'creator',
+                        }}
+                        defaultLanguage="ja"
+                    />
+                )}
 
             </div>
         </>
