@@ -173,12 +173,13 @@ export function useEvidencePack() {
         const mtime = new Date(api.timestamp_iso);
         const safeMtime = Number.isNaN(mtime.getTime()) ? new Date() : mtime;
 
-        folder.file('Certificate_of_Authenticity.pdf', certPdfBlob, { date: safeMtime });
-        folder.file('Cover_Letter.pdf', coverLetterBlob, { date: safeMtime });
-        folder.file('TIMESTAMP.tsr', tsrBinary, { binary: true, date: safeMtime });
-        folder.file('verify.sh', verifySh, { date: safeMtime, unixPermissions: 0o755 });
-        folder.file('verify.py', verifyPy, { date: safeMtime, unixPermissions: 0o755 });
-        folder.file('HOW_TO_VERIFY.txt', howTo, { date: safeMtime });
+        // 🚨 読ませる順番をファイル名で強制（アンボクシングUXのハック）
+        folder.file('01_Cover_Letter.pdf', coverLetterBlob, { date: safeMtime });
+        folder.file('02_Certificate_of_Authenticity.pdf', certPdfBlob, { date: safeMtime });
+        folder.file('03_HOW_TO_VERIFY.txt', howTo, { date: safeMtime });
+        folder.file('04_TIMESTAMP.tsr', tsrBinary, { binary: true, date: safeMtime });
+        folder.file('05_verify.sh', verifySh, { date: safeMtime, unixPermissions: 0o755 });
+        folder.file('06_verify.py', verifyPy, { date: safeMtime, unixPermissions: 0o755 });
 
         const zipBlob = await zip.generateAsync(
           {

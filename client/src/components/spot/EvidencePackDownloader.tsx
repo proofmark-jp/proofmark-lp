@@ -558,29 +558,29 @@ function ManifestList(): JSX.Element {
     note: string;
   }> = [
     {
-      icon: <FileText className="h-4 w-4" style={{ color: '#00D4AA' }} />,
-      title: 'Certificate_of_Authenticity.pdf',
-      note: '美術品レベルの真正証明書 (印刷・提出用)',
-    },
-    {
       icon: <FileText className="h-4 w-4" style={{ color: '#BC78FF' }} />,
-      title: 'Cover_Letter.pdf',
+      title: '01_Cover_Letter.pdf',
       note: 'クライアントへの説明書 (受領時の安心)',
     },
     {
+      icon: <FileText className="h-4 w-4" style={{ color: '#00D4AA' }} />,
+      title: '02_Certificate_of_Authenticity.pdf',
+      note: '美術品レベルの真正証明書 (印刷・提出用)',
+    },
+    {
+      icon: <FileText className="h-4 w-4" style={{ color: 'rgba(255,255,255,0.78)' }} />,
+      title: '03_HOW_TO_VERIFY.txt',
+      note: '検証手順書 (クライアント向け1分ガイド)',
+    },
+    {
       icon: <ShieldCheck className="h-4 w-4" style={{ color: '#F0BB38' }} />,
-      title: 'TIMESTAMP.tsr',
+      title: '04_TIMESTAMP.tsr',
       note: 'RFC3161 タイムスタンプ生バイナリ',
     },
     {
       icon: <Terminal className="h-4 w-4" style={{ color: 'rgba(255,255,255,0.78)' }} />,
-      title: 'verify.sh / verify.py',
+      title: '05_verify.sh / 06_verify.py',
       note: 'OpenSSL ベースの独立検証スクリプト',
-    },
-    {
-      icon: <FileText className="h-4 w-4" style={{ color: 'rgba(255,255,255,0.78)' }} />,
-      title: 'HOW_TO_VERIFY.txt',
-      note: '検証手順書 (クライアント向け1分ガイド)',
     },
   ];
 
