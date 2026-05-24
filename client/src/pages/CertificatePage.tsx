@@ -86,15 +86,23 @@ export default function CertificatePage() {
                     tsr_token_base64: certData.tsr_token_base64 || '', // Supabaseのレコードから直接Base64を取得
                     thumbnail_data_url: certData.public_image_url || undefined,
                     creator_display_name: authorProfile?.username ? `@${authorProfile.username}` : 'ProofMark Verified Creator'
+                    legal_name: authorProfile?.legal_name || '',
+                    default_persona: authorProfile?.default_persona || 'creator'
                 };
                 
                 setCert(extendedCertData);
 
                 // 2. 最新のプロフィール情報を取得（ユーザー名変更に対応）
                 if (certData.user_id) {
+                    // 🚨 セキュリティ: 閲覧者が「所有者本人」の場合のみ、非公開情報（本名・設定）をフェッチする
+                    const isOwnerFetch = user && user.id === certData.user_id;
+                    const selectQuery = isOwnerFetch 
+                        ? 'username, avatar_url, legal_name, default_persona' 
+                        : 'username, avatar_url';
+
                     const { data: profileData } = await supabase
                         .from('profiles')
-                        .select('username, avatar_url')
+                        .select(selectQuery)
                         .eq('id', certData.user_id)
                         .maybeSingle();
 

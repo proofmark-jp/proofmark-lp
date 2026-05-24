@@ -12,7 +12,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AnimatePresence,
   motion,
@@ -20,6 +20,7 @@ import {
 } from 'framer-motion';
 import {
   AlertTriangle,
+  Briefcase,
   CheckCircle2,
   Download,
   FileText,
@@ -29,6 +30,7 @@ import {
   ShieldCheck,
   Sparkles,
   Terminal,
+  UserCircle,
 } from 'lucide-react';
 
 import {
@@ -66,10 +68,16 @@ export default function EvidencePackDownloader({
   const { state, generatePack, reset, redownload } = useEvidencePack();
   const reduce = useReducedMotion() ?? false;
 
+  const [persona, setPersona] = useState<'creator' | 'legal'>(apiData.default_persona || 'creator');
+  
+  const printName = persona === 'creator' 
+    ? apiData.creator_display_name 
+    : (apiData.legal_name || apiData.creator_display_name);
+
   /* autoStart */
   useEffect(() => {
     if (autoStart && state.status === 'idle') {
-      void generatePack(apiData, thumbnailDataUrl);
+      void generatePack({ ...apiData, creator_display_name: printName }, thumbnailDataUrl);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -124,14 +132,49 @@ export default function EvidencePackDownloader({
           </div>
         </div>
 
+        {apiData.legal_name && (
+          <div className="mt-5 rounded-2xl border p-1" style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}>
+            <div className="flex items-center justify-between p-2 mb-1">
+              <span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                PDF Printed Name
+              </span>
+            </div>
+            <div className="flex w-full rounded-xl bg-[#07061A] p-1">
+              <button
+                type="button"
+                onClick={() => setPersona('creator')}
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 rounded-lg py-2 text-[12px] font-bold transition-all ${
+                  persona === 'creator' ? 'bg-[#2A2A4E] text-white shadow-sm' : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                <span className="flex items-center gap-1.5"><UserCircle className="w-3.5 h-3.5" />公開名義</span>
+                <span className={`text-[10px] font-medium ${persona === 'creator' ? 'text-white/70' : 'opacity-0'}`}>
+                  {apiData.creator_display_name}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPersona('legal')}
+                className={`flex-1 flex flex-col items-center justify-center gap-0.5 rounded-lg py-2 text-[12px] font-bold transition-all ${
+                  persona === 'legal' ? 'bg-[#2A2A4E] text-[#00D4AA] shadow-sm' : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                <span className="flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" />契約名義 (法的氏名)</span>
+                <span className={`text-[10px] font-medium ${persona === 'legal' ? 'text-[#00D4AA]/80' : 'opacity-0'}`}>
+                  {apiData.legal_name}
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
         <button
           type="button"
-          onClick={() => void generatePack(apiData, thumbnailDataUrl)}
+          onClick={() => void generatePack({ ...apiData, creator_display_name: printName }, thumbnailDataUrl)}
           className="group mt-5 inline-flex w-full items-center justify-between gap-3 rounded-2xl px-5 py-4 font-bold text-white"
           style={{
             background: 'linear-gradient(135deg, #6C3EF4 0%, #00D4AA 100%)',
-            boxShadow:
-              '0 14px 32px rgba(108,62,244,0.42), 0 0 0 1px rgba(255,255,255,0.06) inset',
+            boxShadow: '0 14px 32px rgba(108,62,244,0.42), 0 0 0 1px rgba(255,255,255,0.06) inset',
           }}
         >
           <span className="flex flex-col text-left leading-tight">
@@ -139,8 +182,9 @@ export default function EvidencePackDownloader({
               <Download className="h-4 w-4" />
               Evidence Pack をダウンロード
             </span>
+            {/* 🚨 マイクロコピーを動的に変更：選択中の名義を明示して100%の確信を与える */}
             <span className="text-[11px] font-medium text-white/72">
-              証明書PDF · カバーレター · TSR · 検証スクリプト一式
+              証明書PDF · カバーレター · TSR一式（印字名義: <span className="text-[#00D4AA] font-bold">{printName}</span>）
             </span>
           </span>
           <Sparkles className="h-5 w-5" />
@@ -193,7 +237,7 @@ export default function EvidencePackDownloader({
             type="button"
             onClick={() => {
               reset();
-              void generatePack(apiData, thumbnailDataUrl);
+              void generatePack({ ...apiData, creator_display_name: printName }, thumbnailDataUrl);
             }}
             className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold text-white"
             style={{

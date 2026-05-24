@@ -46,6 +46,8 @@ export interface SpotIssueApiResponse {
   proof_mode: 'shareable' | 'private';
   thumbnail_data_url?: string;
   creator_display_name?: string;
+  legal_name?: string;
+  default_persona?: 'creator' | 'legal';
 }
 
 export type EvidencePackStatus =
