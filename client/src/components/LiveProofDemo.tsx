@@ -800,7 +800,7 @@ function ReadyCta({ onReset }: { onReset: () => void }): JSX.Element {
           className="text-[12.5px] font-semibold underline-offset-4 hover:underline"
           style={{ color: 'rgba(255,255,255,0.65)' }}
         >
-          無料アカウントで発行する →
+          無料でWeb証明だけ試す →
         </Link>
         <button
           type="button"

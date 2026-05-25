@@ -35,6 +35,7 @@ import Navbar from '@/components/Navbar';
 import LoadingFallback from '@/components/LoadingFallback';
 import HeroCertificateShowcase from '@/components/HeroCertificateShowcase';
 import { useAuth } from '@/hooks/useAuth';
+import { PRICING_PLANS } from '@/data/pricingPlans'; // 🚨 データソース（SSOT）をインポート
 
 const LiveProofDemo = lazy(() => import('@/components/LiveProofDemo'));
 const ZipContentsShowcase = lazy(() => import('@/components/ZipContentsShowcase'));
@@ -314,65 +315,10 @@ function ProofSection(): JSX.Element {
  *  Section 5: PRICING
  * ═════════════════════════════════════════════ */
 
-interface PricingPlan {
-  id: 'free' | 'spot' | 'creator';
-  name: string;
-  price: string;
-  unit?: string;
-  tagline: string;
-  features: ReadonlyArray<string>;
-  ctaLabel: string;
-  ctaHref: string;
-  recommended?: boolean;
-}
-
-const PRICING: ReadonlyArray<PricingPlan> = [
-  {
-    id: 'free',
-    name: 'FREE',
-    price: '¥0',
-    unit: '/ 月',
-    tagline: 'まずは試したい個人向け',
-    features: [
-      'Webタイムスタンプ証明 (月30件)',
-      'OpenSSL 独立検証可能',
-      '※PDF・Evidence Pack発行は不可',
-    ],
-    ctaLabel: '無料で始める',
-    ctaHref: '/auth?mode=signup',
-  },
-  {
-    id: 'spot',
-    name: 'SPOT',
-    price: '¥480',
-    unit: '/ 件',
-    tagline: 'この1案件だけ、確実に守りたい',
-    features: [
-      'Evidence Pack (証明ZIP) 即時発行',
-      'クライアント納品用 高品質PDF',
-      'アカウント・カード登録不要',
-    ],
-    ctaLabel: '今すぐ1件発行する',
-    ctaHref: '/spot-issue',
-    recommended: true,
-  },
-  {
-    id: 'creator',
-    name: 'CREATOR',
-    price: '¥1,480',
-    unit: '/ 月',
-    tagline: '毎月納品するプロクリエイター向け',
-    features: [
-      '納品用 Evidence Pack (月30件)',
-      'Shareable Proof (公開検証ページ)',
-      'NDA案件の非公開モード対応',
-    ],
-    ctaLabel: '先行特典を予約する',
-    ctaHref: '/auth?mode=signup',
-  },
-];
-
 function PricingSection(): JSX.Element {
+  // 🚨 LPには Studio / Business プランを出さず、3カラムに絞る
+  const visiblePlans = PRICING_PLANS.filter(p => ['free', 'spot', 'creator'].includes(p.id));
+
   return (
     <section
       id="pricing"
@@ -397,7 +343,7 @@ function PricingSection(): JSX.Element {
         </motion.div>
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-6">
-          {PRICING.map((p) => (
+          {visiblePlans.map((p) => (
             <PricingCard key={p.id} plan={p} />
           ))}
         </div>
@@ -433,7 +379,7 @@ function PricingSection(): JSX.Element {
   );
 }
 
-function PricingCard({ plan }: { plan: PricingPlan }): JSX.Element {
+function PricingCard({ plan }: { plan: any }): JSX.Element {
   const isSpot = plan.id === 'spot';
   const isFree = plan.id === 'free';
 
@@ -475,14 +421,14 @@ function PricingCard({ plan }: { plan: PricingPlan }): JSX.Element {
           className="text-[36px] font-black text-white"
           style={{ letterSpacing: '-0.025em' }}
         >
-          {plan.price}
+          {plan.priceLabel}
         </span>
-        {plan.unit ? (
+        {plan.priceUnit ? (
           <span
             className="text-[13px] font-semibold"
             style={{ color: 'rgba(255,255,255,0.55)' }}
           >
-            {plan.unit}
+            {plan.priceUnit}
           </span>
         ) : null}
       </div>
@@ -494,20 +440,20 @@ function PricingCard({ plan }: { plan: PricingPlan }): JSX.Element {
       </p>
 
       <ul className="mt-5 flex flex-1 flex-col gap-2.5">
-        {plan.features.map((f) => (
-          <li key={f} className="flex items-start gap-2 text-[13px] text-white">
+        {plan.features.map((f: any) => (
+          <li key={f.label} className={`flex items-start gap-2 text-[13px] ${f.state === 'exclude' ? 'text-white/40' : 'text-white'}`}>
             <Check
               className="mt-[3px] h-3.5 w-3.5 flex-shrink-0"
-              style={{ color: '#00D4AA' }}
+              style={{ color: f.state === 'exclude' ? 'rgba(255,255,255,0.2)' : '#00D4AA' }}
             />
-            <span>{f}</span>
+            <span>{f.label}</span>
           </li>
         ))}
       </ul>
 
       <div className="mt-6 flex flex-col gap-2">
         <Link
-          href={plan.ctaHref}
+          href={plan.ctaHref.guest}
           className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl px-4 text-[14px] font-bold"
           style={
             isSpot
@@ -530,7 +476,7 @@ function PricingCard({ plan }: { plan: PricingPlan }): JSX.Element {
                   }
           }
         >
-          {plan.ctaLabel}
+          {plan.ctaLabel.guest}
           <ArrowRight className="h-4 w-4" />
         </Link>
 
