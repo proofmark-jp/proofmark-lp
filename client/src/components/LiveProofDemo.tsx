@@ -1435,10 +1435,32 @@ function FakeQrCells(): JSX.Element {
       </div>
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div
-          className="flex items-center justify-center rounded-md border bg-white p-1 shadow-sm"
-          style={{ borderColor: '#E5E5EA' }}
+          className="flex h-6 w-6 items-center justify-center rounded-md bg-white p-0.5"
+          style={{ 
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            border: '2px solid white' 
+          }}
         >
-          <Layers className="h-4 w-4 text-zinc-900" />
+          {/* 🚨 本物の ProofMark 公式ロゴ SVG */}
+          <svg viewBox="0 0 100 100" className="h-full w-full rounded-[4px]">
+            <defs>
+              <linearGradient id="pm-qr-logo-grad" x1="15%" y1="0%" x2="85%" y2="100%">
+                <stop offset="0%" stopColor="#5830CC" />
+                <stop offset="100%" stopColor="#00B896" />
+              </linearGradient>
+            </defs>
+            <rect width="100" height="100" rx="22" fill="#0D0B24" />
+            <path
+              d="M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 87,25 L 82,29 L 76,18 Z"
+              fill="none"
+              stroke="url(#pm-qr-logo-grad)"
+              strokeWidth="3.8"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              opacity="0.85"
+            />
+            <polygon points="17,46 27,47 39,62 79,22 83,28 36,70 23,58" fill="#00D4AA" />
+          </svg>
         </div>
       </div>
     </div>
