@@ -220,7 +220,7 @@ const INITIAL_STATE: DemoState = {
   hash: null,
 };
 
-const ISSUED_COUNT_BASE = 12_848;
+const ISSUED_COUNT_BASE = 482; // 🚨 誠実なテスト稼働実績値に修正
 
 /* ═════════════════════════════════════════════
  *  hash util — Web Crypto subtle.digest
