@@ -1,60 +1,45 @@
 /**
- * src/pages/Home.tsx — Phase 1 (Task C) 世界基準 LP 本体
+ * Home.tsx — ProofMark LP 完全再設計
+ * ─────────────────────────────────────────────────────────────
+ *  Section 1: HERO
+ *  Section 2: THE MOMENT   ← LiveProofDemo
+ *  Section 3: WHAT YOU GET ← ZipContentsShowcase
+ *  Section 4: PROOF        ← TestimonialCarousel
+ *  Section 5: PRICING
+ *  Section 6: FINAL CTA
  *
- * 仕様書 §2「ランディングページ（/）情報アーキテクチャ」に厳密準拠。
- * 1 セクション = 1 感情 (フック→危機感→安堵→確信→行動) で展開する。
- *
- * 設計上の不変条件:
- *   - 既存の API、Supabase、認証ロジックには一切触れない (静的フロント)。
- *   - 背景は #07061A 統一。セクションの区切りは「色」ではなく「余白」で。
- *   - スクロール出現は opacity 0→1 + translateY 24→0、
- *     easing は cubic-bezier(0.16,1,0.3,1)。Framer Motion を使用。
- *   - Hero 右側カラムは <HeroMockup /> (空コンテナ) を配置するのみ。
- *     アニメーション本体は別チームから後日納品される (Task D)。
- *   - Lighthouse 90+ を維持するため:
- *       * embla / dropzone / sonner 等の重量 import は呼ばない
- *       * 画像は SVG/CSS で表現
- *       * Framer Motion は whileInView (once: true) で 1 回限り発火
+ *  以下は完全削除:
+ *    THE RISK / 4-step SOLUTION / TECHNOLOGY セクション /
+ *    EvidencePackTeaser / C2paComparisonRow / WhoItsForSection /
+ *    TrustSignalRow / 旧 HeroDemo
+ * ─────────────────────────────────────────────────────────────
  */
 
-
+import { Suspense, lazy, useState } from 'react';
 import { Link } from 'wouter';
-import { motion } from 'framer-motion';
 import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+} from 'framer-motion';
+import {
+  ArrowDown,
   ArrowRight,
+  Check,
+  ChevronDown,
   ShieldCheck,
-  Hash,
-  Clock,
-  Lock,
-  GitBranch,
-  Eye,
-  CheckCircle2,
-  PenTool,
-  BookOpen,
-  Palette,
-  Code2,
-  AlertTriangle,
-  Minus,
-  Star,
+  Sparkles,
 } from 'lucide-react';
+
 import Navbar from '@/components/Navbar';
-import UpgradeModal from '../components/UpgradeModal';
-import HeroCertificateShowcase from '../components/HeroCertificateShowcase';
-import { FAQAccordion } from '../components/FAQAccordion';
+import LoadingFallback from '@/components/LoadingFallback';
+import HeroCertificateShowcase from '@/components/HeroCertificateShowcase';
 import { useAuth } from '@/hooks/useAuth';
-import HeroDemo from '../components/HeroDemo';
-import { type ReactNode, Suspense, lazy } from 'react';
-import LoadingFallback from '../components/LoadingFallback';
 
-const InlineHashDemo = lazy(() => import('../components/InlineHashDemo'));
+const LiveProofDemo = lazy(() => import('@/components/LiveProofDemo'));
+const ZipContentsShowcase = lazy(() => import('@/components/ZipContentsShowcase'));
+const TestimonialCarousel = lazy(() => import('@/components/TestimonialCarousel'));
 
-// Added for integration
-import TrustSignalRow from '@/components/TrustSignalRow';
-import EvidencePackTeaser from '@/components/EvidencePackTeaser';
-import C2paComparisonRow from '@/components/lp/C2paComparisonRow';
-import { PRICING_PLANS, FOUNDER_OFFER } from '@/data/pricingPlans';
-
-/* Apple-grade easing と統一トランジション (仕様書 §1-3) */
 const PM_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 const fadeInProps = (delay = 0) => ({
@@ -64,628 +49,661 @@ const fadeInProps = (delay = 0) => ({
   transition: { duration: 0.7, delay, ease: PM_EASE },
 });
 
-/* ───────────────────────────────────────────────────────────────────
- * 共通レイアウト要素
- * ─────────────────────────────────────────────────────────────────── */
+const TRUST_SIGNALS: ReadonlyArray<string> = [
+  'RFC3161準拠',
+  '原本送信ゼロ',
+  '12,848件発行済み',
+  'OpenSSLで独立検証可能',
+];
 
-function Eyebrow({ children }: { children: ReactNode }) {
-  return <span className="pm-label">{children}</span>;
-}
+/* ═════════════════════════════════════════════ */
 
-function SectionHeader({
-  eyebrow,
-  title,
-  sub,
-  align = 'left',
-}: {
-  eyebrow: string;
-  title: ReactNode;
-  sub?: ReactNode;
-  align?: 'left' | 'center';
-}) {
-  const alignClass = align === 'center' ? 'text-center mx-auto' : '';
-  return (
-    <header className={`max-w-3xl ${alignClass}`}>
-      <Eyebrow>{eyebrow}</Eyebrow>
-      <motion.h2 className="pm-h2 mt-4" {...fadeInProps()}>
-        {title}
-      </motion.h2>
-      {sub ? (
-        <motion.p className="pm-body mt-5 max-w-2xl" {...fadeInProps(0.05)}>
-          {sub}
-        </motion.p>
-      ) : null}
-    </header>
-  );
-}
-
-/* ───────────────────────────────────────────────────────────────────
- * Page
- * ─────────────────────────────────────────────────────────────────── */
-
-export default function Home() {
+export default function Home(): JSX.Element {
   const { user, signOut } = useAuth();
 
   return (
     <div style={{ background: '#07061A', minHeight: '100vh', color: '#FFFFFF' }}>
       <Navbar user={user} signOut={signOut} />
 
-      {/* ───────── [S1] Hero ───────── */}
-      <section id="hero" aria-labelledby="hero-title" className="pm-section pt-12 sm:pt-16 lg:pt-20">
-        <div className="pm-container">
-          <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
-            <motion.div {...fadeInProps()}>
-              <span className="pm-label inline-block">PROOFMARK — DIGITAL EXISTENCE</span>
-              <h1 id="hero-title" className="pm-display mt-5">
-                AI 時代の納品に、
-                <br className="hidden md:inline" />
-                <span className="pm-accent-text">改ざん不能な指紋を。</span>
-              </h1>
-              <p className="pm-body mt-5 max-w-xl">
-                あなたの作品ファイルを投げるだけ。数秒で、法的に有効な「納品レベルの証明書（Evidence Pack）」が完成します。原本はどこにも送りません。
-              </p>
-
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <Link href="/spot-issue" className="pm-cta-primary">
-                  1件だけ試す（¥480・登録不要）
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-                <Link href="/auth?mode=signup" className="pm-cta-ghost">
-                  無料アカウントを作成する
-                </Link>
-              </div>
-            </motion.div>
-
-            <motion.div {...fadeInProps(0.1)} className="w-full">
-              {/* 右カラム差替え: Canva/DocuSign哲学のトレースコンポーネント */}
-              <HeroCertificateShowcase />
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* TrustSignalRow (※中に入っていたTeaserとC2paはここから削除) */}
-      <section className="pm-section">
-        <div className="pm-container">
-          <TrustSignalRow />
-        </div>
-      </section>
-
-{/* [S2] Problem — 共感と危機感 */}
-      <section aria-labelledby="problem-title" className="pm-section">
-        <div className="pm-container">
-          <SectionHeader
-            eyebrow="THE RISK"
-            title={
-              <>
-                あなたのAI作品、誰かに先に使われたとき、
-                <br className="hidden md:inline" />
-                どう証明しますか？
-              </>
-            }
-            sub="作成日のメタデータは書き換えられる。SNSの投稿日時は証拠にならない。「私が先に作った」を証明する手段が、今はない。"
-          />
-
-          <motion.div
-            className="mt-14 grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-6"
-            {...fadeInProps(0.05)}
-          >
-            <PainCard
-              icon={<AlertTriangle className="h-5 w-5" />}
-              title="メタデータは書き換え可能"
-              body="EXIF / 作成日時はソフトで簡単に偽造できます。後日「自分が先に作った」と言い張る相手に、技術的な反論ができません。"
-            />
-            <PainCard
-              icon={<Clock className="h-5 w-5" />}
-              title="SNSの投稿日時は不十分"
-              body="プラットフォーム側のメタは消されます。スクリーンショットは原本ではなく、第三者検証もできません。"
-            />
-            <PainCard
-              icon={<Lock className="h-5 w-5" />}
-              title="原画を渡したくない"
-              body="法的証明のために原画を第三者に預けるのは現実的ではない。NDA案件なら尚更です。"
-            />
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ★NEW POSITION: Stripe/Canva 哲学を注入した最高峰デモを一等地に引き上げ */}
-      <section id="try" aria-labelledby="demo-title" className="pm-section" style={{ background: '#07061A' }}>
-        <div className="pm-container">
-          <motion.div className="mb-12 text-center" {...fadeInProps()}>
-            <span className="text-[11px] font-bold uppercase tracking-[0.26em] text-[#6C3EF4]">TRY IT NOW</span>
-            <h2 id="demo-title" className="pm-h2 mt-4">
-              あなたのファイルで、
-              <br className="hidden md:inline" />
-              <span className="pm-accent-text">証明書をプレビューする。</span>
-            </h2>
-            <p className="pm-body mx-auto mt-5 max-w-xl">
-              ブラウザ内で SHA-256 を計算します。原本はサーバーに一切送信されません。
-              ここで動作を確認して、気に入ったら正式発行（¥480）へ。
-            </p>
-          </motion.div>
-
-          <Suspense fallback={<LoadingFallback variant="inline" label="hash-demo" />}>
-            <InlineHashDemo />
-          </Suspense>
-        </div>
-      </section>
-
-{/* [S3] Solution — 安堵と理解 */}
-      <section aria-labelledby="solution-title" className="pm-section">
-        <div className="pm-container">
-          <SectionHeader
-            eyebrow="THE SOLUTION"
-            title={
-              <>
-                ファイルをアップロードするだけ。
-                <br className="hidden md:inline" />
-                <span className="pm-accent-text">改ざん不可能な証明</span>
-                が、その瞬間に刻まれる。
-              </>
-            }
-          />
-
-          <div className="mt-14 grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16">
-            <StepRow
-              index="01"
-              title="アップロード"
-              body="ブラウザ内でSHA-256を計算します。原画はあなたの端末から外に出ません。"
-            />
-            <StepRow
-              index="02"
-              title="ハッシュ生成"
-              body="作品を一意に識別する64桁の指紋(SHA-256)を作成します。逆計算は実質的に不可能です。"
-            />
-            <StepRow
-              index="03"
-              title="証明書発行"
-              body="RFC3161準拠の公的タイムスタンプ機関がハッシュに署名します。発行後の改ざんは検出可能です。"
-            />
-            <StepRow
-              index="04"
-              title="検証 URL"
-              body="発行直後に検証 URL とPDFを取得。納品時はそのURLを添えるだけで第三者が再検証できます。"
-            />
-          </div>
-        </div>
-      </section>
-
-{/* [S3] 自動再生デモ（ProofMarkの凄さを視覚的に理解させる） */}
-      <section className="pm-section bg-[#07061A]" aria-label="動作デモ">
-        <div className="pm-container max-w-5xl">
-          <div className="relative mx-auto max-w-[800px] rounded-[32px] p-2 sm:p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <HeroDemo
-              thumbnailSrc="/fantasy_artwork_final.jpg"
-              initialCount={12846}
-            />
-          </div>
-        </div>
-      </section>
-
-{/* [S4] Technology — 確信・信頼 */}
-      <section aria-labelledby="tech-title" className="pm-section">
-        <div className="pm-container">
-          <SectionHeader
-            eyebrow="TECHNOLOGY"
-            title="世界標準の技術基盤で、あなたの作品を守る。"
-            sub="独自規格ではなく、IETF 標準と暗号学的事実だけを根拠にしています。"
-          />
-
-          <motion.div
-            className="mt-14 grid grid-cols-1 gap-5 sm:grid-cols-2"
-            {...fadeInProps(0.05)}
-          >
-            <TechCard
-              icon={<Hash className="h-5 w-5" />}
-              title="SHA-256"
-              body="NIST FIPS 180-4 規格。同じ出力を作る別ファイルを意図的に作ることは、現代の計算資源では不可能です。"
-            />
-            <TechCard
-              icon={<Clock className="h-5 w-5" />}
-              title="RFC3161 タイムスタンプ"
-              body="主要 TSA が署名した公的な時刻証明。OpenSSL 等で誰でも検証可能で、特定ベンダーへのロックインがありません。"
-            />
-            <TechCard
-              icon={<CheckCircle2 className="h-5 w-5" />}
-              title="検証可能"
-              body="発行された証明はあなたの手元に残り、ProofMark が消えても OpenSSL だけで再検証できます。"
-            />
-            <TechCard
-              icon={<Eye className="h-5 w-5" />}
-              title="透明性"
-              body="証明アルゴリズム・検証スクリプト・データ保持ポリシーをすべて Trust Center で公開しています。"
-            />
-          </motion.div>
-
-          {/* GitHub 風バッジ — verify.py オープンソース検証 */}
-          <motion.div className="mt-10" {...fadeInProps(0.10)}>
-            <a
-              href="https://proofmark.jp/trust-center"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:border-white/30"
-            >
-              <GitBranch className="h-4 w-4" style={{ color: '#00D4AA' }} aria-hidden="true" />
-              <span>verify.py</span>
-              <span className="text-white/45">|</span>
-              <span style={{ color: '#00D4AA' }}>open source</span>
-              <ArrowRight className="h-3.5 w-3.5 text-white/55" aria-hidden="true" />
-            </a>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ★移動してきた EvidencePackTeaser セクション */}
-      <section className="pm-section">
-        <div className="pm-container">
-          <EvidencePackTeaser />
-        </div>
-      </section>
-
-      {/* ★移動してきた C2paComparisonRow セクション */}
-      <section className="pm-section">
-        <div className="pm-container">
-          <C2paComparisonRow />
-        </div>
-      </section>
-
-{/* [S5] Use Cases — 自分ごと化 */}
-      <section aria-labelledby="usecase-title" className="pm-section">
-        <div className="pm-container">
-          <SectionHeader
-            eyebrow="WHO IT'S FOR"
-            title="すべてのクリエイターの、すべての作品のために。"
-          />
-        </div>
-
-        {/* 横スクロールカルーセル (デスクトップ・モバイル共通) */}
-        <motion.div
-          className="mt-12 overflow-x-auto pl-6 pr-6 [scrollbar-width:thin]"
-          style={{
-            scrollSnapType: 'x mandatory',
-            WebkitOverflowScrolling: 'touch',
-          }}
-          {...fadeInProps(0.05)}
-        >
-          <ul
-            className="flex gap-4 pb-6 md:gap-6"
-            role="list"
-            style={{ width: 'max-content' }}
-          >
-            {USE_CASES.map((u) => (
-              <UseCaseCard key={u.title} {...u} />
-            ))}
-          </ul>
-        </motion.div>
-      </section>
-
-{/* [S6] Pricing — 決断・低ハードル */}
-      <section aria-labelledby="pricing-title" className="pm-section">
-        <div className="pm-container">
-          <SectionHeader
-            eyebrow="PRICING"
-            title="まず、無料で始める。"
-            sub="クレジットカード不要。アカウント登録だけで今日から使えます。"
-            align="center"
-          />
-
-          <motion.div
-            className="mx-auto mt-16 grid w-full max-w-7xl grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4 md:gap-6"
-            {...fadeInProps(0.05)}
-          >
-            {PRICING_PLANS.filter((plan) => plan.id !== 'business').map((plan) => (
-              <PricingCard
-                key={plan.id}
-                tier={plan.name}
-                price={plan.priceLabel}
-                cadence={plan.priceUnit || ''}
-                tagline={plan.tagline}
-                features={plan.features}
-                ctaLabel={plan.ctaLabel.guest}
-                ctaHref={plan.ctaHref.guest}
-                highlighted={plan.recommended}
-              />
-            ))}
-          </motion.div>
-
-          {/* インライン異議処理 */}
-          <motion.div
-            className="mt-14 grid gap-4 sm:grid-cols-3 max-w-4xl mx-auto"
-            {...fadeInProps(0.1)}
-          >
-            {[
-              {
-                q: "FreeTSAって信頼できるの？",
-                a: "Trust Centerで第三者検証済み。OpenSSL等で誰でも再検証可能であり、特定の企業に依存しません。",
-              },
-              {
-                q: "解約したら証明書は消えるの？",
-                a: "取得したZIPファイル（Evidence Pack）がお手元にあれば、サービス終了後も法的効力は永続します。",
-              },
-              {
-                q: "法的な場面で本当に使えるの？",
-                a: "RFC3161は電子署名法に対応。発行された証明書はそのまま弁護士・裁判所に提出可能な形式です。",
-              },
-            ].map(({ q, a }) => (
-              <div
-                key={q}
-                className="p-5 rounded-2xl"
-                style={{
-                  background: "rgba(255,255,255,0.025)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                }}
-              >
-                <p className="text-[13px] font-bold text-white/80 mb-2">Q: {q}</p>
-                <p className="text-[12px] text-white/50 leading-relaxed">{a}</p>
-              </div>
-            ))}
-          </motion.div>
-
-          <motion.p
-            className="mt-6 text-center text-[14px] font-bold"
-            style={{ color: FOUNDER_OFFER.highlight }}
-            {...fadeInProps(0.15)}
-          >
-            {FOUNDER_OFFER.text}
-          </motion.p>
-        </div>
-      </section>
-
-      {/* [S7] Final CTA (※元の古い InlineHashDemo があった場所を、最強 of Final CTA に変更) */}
-      <section id="final-cta" aria-labelledby="final-title" className="pm-section relative overflow-hidden">
-        <div aria-hidden className="pointer-events-none absolute inset-0"
-          style={{ background: 'radial-gradient(60% 60% at 50% 0%, rgba(108,62,244,0.20) 0%, rgba(108,62,244,0) 70%)' }} />
-        <div className="pm-container relative z-10 text-center">
-          <motion.div {...fadeInProps()}>
-            <span className="text-[11px] font-bold uppercase tracking-[0.26em] text-[#6C3EF4]">READY</span>
-            <h2 id="final-title" className="pm-h2 mt-4">
-              30秒で、あなたの作品に
-              <br className="hidden md:inline" />
-              <span className="pm-accent-text">「存在の証明」を刻む。</span>
-            </h2>
-            <p className="pm-body mx-auto mt-5 max-w-xl">
-              ¥480 で 1 件だけ試すか、無料アカウントで継続的に管理するか。どちらでも始められます。
-            </p>
-
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link href="/spot-issue"
-                className="inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-bold text-white transition-all hover:scale-[1.02]"
-                style={{
-                  background: 'linear-gradient(135deg, #6C3EF4 0%, #00D4AA 100%)',
-                  boxShadow: '0 14px 32px rgba(108,62,244,0.42), 0 0 0 1px rgba(255,255,255,0.06) inset',
-                }}
-              >
-                1件だけ試す（登録不要・¥480）
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link href="/auth?mode=signup"
-                className="inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-bold transition-all hover:bg-white/[0.02]"
-                style={{
-                  borderColor: 'rgba(255,255,255,0.16)',
-                  background: 'rgba(255,255,255,0.04)',
-                  color: '#FFFFFF',
-                }}
-              >
-                無料アカウントを作成する
-              </Link>
-            </div>
-
-            <p className="mt-6 text-[12px]" style={{ color: 'rgba(255,255,255,0.45)' }}>
-              Stripe による安全な決済 · クレカ不要・アカウント不要 · 24時間後データ物理削除
-            </p>
-          </motion.div>
-        </div>
-      </section>
-
-      <FAQAccordion />
+      <HeroSection />
+      <MomentSection />
+      <WhatYouGetSection />
+      <ProofSection />
+      <PricingSection />
+      <FinalCtaSection />
     </div>
   );
 }
 
-/* ───────────────────────────────────────────────────────────────────
- * 部分コンポーネント
- * ─────────────────────────────────────────────────────────────────── */
+/* ═════════════════════════════════════════════
+ *  Section 1: HERO
+ * ═════════════════════════════════════════════ */
 
-function PainCard({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
+function HeroSection(): JSX.Element {
   return (
-    <article className="pm-glass p-7">
-      <span
-        aria-hidden="true"
-        className="inline-flex h-10 w-10 items-center justify-center rounded-xl"
-        style={{
-          color: '#00D4AA',
-          background: 'rgba(0,212,170,0.10)',
-          border: '1px solid rgba(0,212,170,0.30)',
-        }}
-      >
-        {icon}
-      </span>
-      <h3 className="mt-5 text-[20px] font-bold tracking-tight text-white">{title}</h3>
-      <p className="pm-body mt-3 text-[15px]">{body}</p>
-    </article>
+    <section
+      id="hero"
+      aria-labelledby="hero-title"
+      className="pm-section pt-12 sm:pt-16 lg:pt-20"
+    >
+      <div className="pm-container">
+        <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
+          <motion.div {...fadeInProps()}>
+            <span className="pm-label inline-block">
+              PROOFMARK — DIGITAL EXISTENCE
+            </span>
+            <h1
+              id="hero-title"
+              className="pm-display mt-5"
+              style={{ letterSpacing: '-0.025em' }}
+            >
+              AIで作った作品を、
+              <br />
+              クライアントに
+              <br />
+              <span className="pm-accent-text">「本物だ」</span>と<br />
+              言わせたい。
+            </h1>
+            <p className="pm-body mt-6 max-w-xl">
+              ファイルをドロップするだけ。30秒後には、
+              <br className="hidden sm:inline" />
+              クライアントに渡せる証明書ZIPが完成します。
+              <br className="hidden sm:inline" />
+              原本はどこにも送りません。
+            </p>
+
+            {/* CTAs */}
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/spot-issue"
+                className="group inline-flex h-[56px] items-center justify-center gap-2 rounded-2xl px-7 text-[15px] font-bold text-white"
+                style={{
+                  background:
+                    'linear-gradient(135deg, #6C3EF4 0%, #00D4AA 100%)',
+                  boxShadow:
+                    '0 14px 32px rgba(108,62,244,0.42), 0 0 0 1px rgba(255,255,255,0.06) inset',
+                }}
+              >
+                今すぐ1件試す（¥480・登録不要）
+                <ArrowRight className="h-4 w-4 transition-transform group-active:translate-x-0.5" />
+              </Link>
+              <a
+                href="#demo"
+                className="inline-flex h-[56px] items-center justify-center gap-2 text-[14px] font-semibold underline-offset-4 hover:underline"
+                style={{ color: 'rgba(255,255,255,0.78)' }}
+              >
+                デモを見る <ArrowDown className="h-4 w-4" />
+              </a>
+            </div>
+
+            {/* Trust signals (1 line) */}
+            <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-2">
+              {TRUST_SIGNALS.map((t) => (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold"
+                  style={{ color: 'rgba(255,255,255,0.55)' }}
+                >
+                  <Check className="h-3 w-3" style={{ color: '#00D4AA' }} />
+                  {t}
+                </span>
+              ))}
+            </div>
+          </motion.div>
+
+          <motion.div {...fadeInProps(0.1)} className="w-full">
+            <HeroCertificateShowcase />
+          </motion.div>
+        </div>
+      </div>
+    </section>
   );
 }
 
-function StepRow({ index, title, body }: { index: string; title: string; body: string }) {
+/* ═════════════════════════════════════════════
+ *  Section 2: THE MOMENT (LiveProofDemo)
+ * ═════════════════════════════════════════════ */
+
+function MomentSection(): JSX.Element {
   return (
-    <motion.div className="flex items-start gap-6 md:gap-8" {...fadeInProps()}>
+    <section
+      id="demo"
+      aria-labelledby="demo-title"
+      className="pm-section"
+      style={{
+        background: '#07061A',
+        scrollMarginTop: 80,
+      }}
+    >
+      <div className="pm-container">
+        <motion.div className="mb-10 text-center" {...fadeInProps()}>
+          <Eyebrow>TRY IT NOW</Eyebrow>
+          <h2
+            id="demo-title"
+            className="pm-h2 mt-4"
+            style={{ letterSpacing: '-0.02em' }}
+          >
+            ファイルを投げると、
+            <br className="hidden md:inline" />
+            <span className="pm-accent-text">証明書が生まれます。</span>
+          </h2>
+        </motion.div>
+
+        <Suspense
+          fallback={<LoadingFallback variant="inline" label="live-demo" />}
+        >
+          <LiveProofDemo />
+        </Suspense>
+      </div>
+    </section>
+  );
+}
+
+/* ═════════════════════════════════════════════
+ *  Section 3: WHAT YOU GET
+ * ═════════════════════════════════════════════ */
+
+function WhatYouGetSection(): JSX.Element {
+  return (
+    <section
+      id="evidence"
+      aria-labelledby="evidence-title"
+      className="pm-section"
+    >
+      <div className="pm-container">
+        <motion.div className="mb-10 max-w-3xl" {...fadeInProps()}>
+          <Eyebrow>EVIDENCE PACK</Eyebrow>
+          <h2
+            id="evidence-title"
+            className="pm-h2 mt-4"
+            style={{ letterSpacing: '-0.02em' }}
+          >
+            ZIPを1つ。
+            <br className="hidden sm:inline" />
+            その中に、
+            <span className="pm-accent-text">全部入っています。</span>
+          </h2>
+        </motion.div>
+
+        <Suspense fallback={<LoadingFallback variant="inline" label="zip" />}>
+          <ZipContentsShowcase />
+        </Suspense>
+
+        {/* technical trust row */}
+        <motion.div
+          className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-3"
+          {...fadeInProps(0.1)}
+        >
+          <TechChip emoji="#" label="SHA-256 / NIST準拠" />
+          <TechChip emoji="🕐" label="RFC3161 / IETF標準" />
+          <TechChip emoji="🔓" label="ProofMarkなしで独立検証可能" />
+        </motion.div>
+
+        <div className="mt-6 text-center">
+          <Link
+            href="/trust-center"
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold underline-offset-4 hover:underline"
+            style={{ color: '#00D4AA' }}
+          >
+            技術的な詳細 <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TechChip({
+  emoji,
+  label,
+}: {
+  emoji: string;
+  label: string;
+}): JSX.Element {
+  return (
+    <div
+      className="inline-flex items-center gap-3 rounded-2xl border px-4 py-3.5"
+      style={{
+        background:
+          'linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.005))',
+        borderColor: '#1C1A38',
+      }}
+    >
+      <span className="text-[18px]">{emoji}</span>
+      <span className="text-[13px] font-semibold text-white">{label}</span>
+    </div>
+  );
+}
+
+/* ═════════════════════════════════════════════
+ *  Section 4: PROOF (Testimonials)
+ * ═════════════════════════════════════════════ */
+
+function ProofSection(): JSX.Element {
+  return (
+    <section
+      id="stories"
+      aria-labelledby="stories-title"
+      className="pm-section"
+    >
+      <div className="pm-container">
+        <motion.div className="mb-10 max-w-3xl" {...fadeInProps()}>
+          <Eyebrow>CREATOR STORIES</Eyebrow>
+          <h2
+            id="stories-title"
+            className="pm-h2 mt-4"
+            style={{ letterSpacing: '-0.02em' }}
+          >
+            ProofMarkを
+            <span className="pm-accent-text">選んだ人</span>
+            たちの話。
+          </h2>
+        </motion.div>
+
+        <Suspense
+          fallback={<LoadingFallback variant="inline" label="stories" />}
+        >
+          <TestimonialCarousel />
+        </Suspense>
+      </div>
+    </section>
+  );
+}
+
+/* ═════════════════════════════════════════════
+ *  Section 5: PRICING
+ * ═════════════════════════════════════════════ */
+
+interface PricingPlan {
+  id: 'free' | 'spot' | 'creator';
+  name: string;
+  price: string;
+  unit?: string;
+  tagline: string;
+  features: ReadonlyArray<string>;
+  ctaLabel: string;
+  ctaHref: string;
+  recommended?: boolean;
+}
+
+const PRICING: ReadonlyArray<PricingPlan> = [
+  {
+    id: 'free',
+    name: 'FREE',
+    price: '¥0',
+    unit: '/ 月',
+    tagline: 'まずは触ってみる',
+    features: [
+      '毎月 3件まで発行',
+      'Private Proof (Zero-Knowledge)',
+      'OpenSSL 独立検証',
+    ],
+    ctaLabel: '無料で始める',
+    ctaHref: '/auth?mode=signup',
+  },
+  {
+    id: 'spot',
+    name: 'SPOT',
+    price: '¥480',
+    unit: '/ 件',
+    tagline: '1案件だけ、登録なしで',
+    features: [
+      'Evidence Pack 即時発行',
+      'クライアント納品向け書面 PDF',
+      'Stripe 安全決済 · カード登録不要',
+    ],
+    ctaLabel: '今すぐ発行する',
+    ctaHref: '/spot-issue',
+    recommended: true,
+  },
+  {
+    id: 'creator',
+    name: 'CREATOR',
+    price: '¥1,480',
+    unit: '/ 月',
+    tagline: '本業として運用する',
+    features: [
+      '毎月 50件まで発行',
+      'Shareable Proof (公開検証ページ)',
+      'プロジェクト管理 · 履歴',
+    ],
+    ctaLabel: '先行特典で始める',
+    ctaHref: '/auth?mode=signup',
+  },
+];
+
+function PricingSection(): JSX.Element {
+  return (
+    <section
+      id="pricing"
+      aria-labelledby="pricing-title"
+      className="pm-section"
+    >
+      <div className="pm-container">
+        <motion.div className="mb-10 max-w-3xl text-center sm:text-left" {...fadeInProps()}>
+          <Eyebrow>PRICING</Eyebrow>
+          <h2
+            id="pricing-title"
+            className="pm-h2 mt-4"
+            style={{ letterSpacing: '-0.02em' }}
+          >
+            まず1件試す。
+            <br className="hidden sm:inline" />
+            気に入ったら<span className="pm-accent-text">続ける。</span>
+          </h2>
+          <p className="pm-body mt-4">
+            クレジットカード登録不要で始められます。
+          </p>
+        </motion.div>
+
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-6">
+          {PRICING.map((p) => (
+            <PricingCard key={p.id} plan={p} />
+          ))}
+        </div>
+
+        {/* Studio link only */}
+        <div className="mt-7 text-center">
+          <Link
+            href="/business"
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold underline-offset-4 hover:underline"
+            style={{ color: '#A8A0D8' }}
+          >
+            チーム・スタジオ向けプランはこちら
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        {/* FAQ */}
+        <div className="mt-12">
+          <PricingFaq />
+          <div className="mt-5 text-center">
+            <Link
+              href="/trust-center"
+              className="inline-flex items-center gap-1.5 text-[13px] font-semibold underline-offset-4 hover:underline"
+              style={{ color: '#00D4AA' }}
+            >
+              詳細FAQ・法的有効性について
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PricingCard({ plan }: { plan: PricingPlan }): JSX.Element {
+  const isSpot = plan.id === 'spot';
+  const isFree = plan.id === 'free';
+
+  return (
+    <motion.div
+      {...fadeInProps()}
+      className="relative flex flex-col rounded-[24px] border p-6 sm:p-7"
+      style={{
+        background: plan.recommended
+          ? 'linear-gradient(160deg, rgba(108,62,244,0.18) 0%, rgba(0,212,170,0.06) 60%, rgba(13,11,36,0.92) 100%)'
+          : '#0D0B24',
+        borderColor: plan.recommended ? 'rgba(108,62,244,0.50)' : '#1C1A38',
+        boxShadow: plan.recommended
+          ? '0 30px 60px rgba(108,62,244,0.22), 0 0 0 1px rgba(108,62,244,0.18) inset'
+          : 'inset 0 0 0 1px rgba(255,255,255,0.04)',
+      }}
+    >
+      {plan.recommended ? (
+        <span
+          className="absolute -top-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em]"
+          style={{
+            background: 'rgba(0,212,170,0.10)',
+            borderColor: 'rgba(0,212,170,0.45)',
+            color: '#00D4AA',
+          }}
+        >
+          <Sparkles className="h-3 w-3" /> RECOMMENDED
+        </span>
+      ) : null}
+
       <span
-        aria-hidden="true"
-        className="pm-accent-text shrink-0 font-extrabold leading-none"
-        style={{ fontSize: 88, letterSpacing: '-0.04em' }}
+        className="text-[11px] font-bold uppercase tracking-[0.26em]"
+        style={{ color: 'rgba(255,255,255,0.55)' }}
       >
-        {index}
+        {plan.name}
       </span>
-      <div>
-        <h3 className="text-[22px] font-bold tracking-tight text-white">{title}</h3>
-        <p className="pm-body mt-3 max-w-md text-[15px]">{body}</p>
+      <div className="mt-3 flex items-baseline gap-1.5">
+        <span
+          className="text-[36px] font-black text-white"
+          style={{ letterSpacing: '-0.025em' }}
+        >
+          {plan.price}
+        </span>
+        {plan.unit ? (
+          <span
+            className="text-[13px] font-semibold"
+            style={{ color: 'rgba(255,255,255,0.55)' }}
+          >
+            {plan.unit}
+          </span>
+        ) : null}
+      </div>
+      <p
+        className="mt-2 text-[13px]"
+        style={{ color: 'rgba(255,255,255,0.62)' }}
+      >
+        {plan.tagline}
+      </p>
+
+      <ul className="mt-5 flex flex-1 flex-col gap-2.5">
+        {plan.features.map((f) => (
+          <li key={f} className="flex items-start gap-2 text-[13px] text-white">
+            <Check
+              className="mt-[3px] h-3.5 w-3.5 flex-shrink-0"
+              style={{ color: '#00D4AA' }}
+            />
+            <span>{f}</span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-6 flex flex-col gap-2">
+        <Link
+          href={plan.ctaHref}
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl px-4 text-[14px] font-bold"
+          style={
+            isSpot
+              ? {
+                  background:
+                    'linear-gradient(135deg, #6C3EF4 0%, #00D4AA 100%)',
+                  color: '#FFFFFF',
+                  boxShadow: '0 12px 28px rgba(108,62,244,0.42)',
+                }
+              : isFree
+                ? {
+                    border: '1px solid rgba(255,255,255,0.16)',
+                    background: 'rgba(255,255,255,0.04)',
+                    color: '#FFFFFF',
+                  }
+                : {
+                    background: 'rgba(108,62,244,0.18)',
+                    color: '#FFFFFF',
+                    border: '1px solid rgba(108,62,244,0.42)',
+                  }
+          }
+        >
+          {plan.ctaLabel}
+          <ArrowRight className="h-4 w-4" />
+        </Link>
+
+        {/* Stripe 文言は SPOT (有料即時) の直下にのみ配置 — 仕様厳守 */}
+        {isSpot ? (
+          <p
+            className="text-center text-[10.5px]"
+            style={{ color: 'rgba(255,255,255,0.55)' }}
+          >
+            Stripeによる安全な決済 · カード情報登録不要
+          </p>
+        ) : null}
       </div>
     </motion.div>
   );
 }
 
-function TechCard({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
-  return (
-    <article
-      className="rounded-3xl p-7"
-      style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.08)' }}
-    >
-      <span
-        aria-hidden="true"
-        className="inline-flex h-10 w-10 items-center justify-center rounded-xl"
-        style={{
-          color: '#00D4AA',
-          background: 'rgba(0,212,170,0.10)',
-          border: '1px solid rgba(0,212,170,0.30)',
-        }}
-      >
-        {icon}
-      </span>
-      <h3 className="mt-5 text-[20px] font-bold tracking-tight text-white">{title}</h3>
-      <p className="pm-body mt-3 text-[15px]">{body}</p>
-    </article>
-  );
-}
+/* ─── Pricing FAQ (3) ────────────────────────── */
 
-interface UseCaseSpec {
-  title: string;
-  body: string;
-  icon: ReactNode;
-}
-
-const USE_CASES: ReadonlyArray<UseCaseSpec> = [
+const FAQS: ReadonlyArray<{ q: string; a: string }> = [
   {
-    title: 'AIイラストレーター',
-    body: 'Xに投稿した作品が2週間後に別アカウントで商用利用されていた。ProofMarkの証拠があったため、プラットフォーム申告で即座に解決できた。',
-    icon: <Palette className="h-5 w-5" />,
+    q: '原画はサーバーに送られますか？',
+    a: 'いいえ。SHA-256 ハッシュ計算はあなたのブラウザ内で完結し、ProofMark のサーバには「指紋」と最小限のメタデータしか到達しません。Shareable Proof を選んだ場合のみ、公開ページ表示用の画像が暗号化された隔離領域へ送られます。',
   },
   {
-    title: '小説家・脚本家',
-    body: 'プロットを共同制作する際、どこまでが自分のアイデアかをタイムスタンプで保全。その後の権利交渉がスムーズに運んだ。',
-    icon: <BookOpen className="h-5 w-5" />,
+    q: '解約したら証明書は消えますか？',
+    a: '消えません。RFC3161 タイムスタンプは IETF 標準のため、ProofMark のサービスが将来停止しても OpenSSL 等の標準ツールで独立検証可能です。Evidence Pack はクライアント側に永続的に残ります。',
   },
   {
-    title: 'デザイナー・写真家',
-    body: '納品物に検証URLを添付するようにしてから、クライアントからの著作権に関する問い合わせがゼロになった。',
-    icon: <PenTool className="h-5 w-5" />,
-  },
-  {
-    title: '開発者',
-    body: 'ゲームのリリース前にProofMarkで証明。リリース後に類似アセットの盗用申告を受けたが、タイムスタンプの日付で即座に反証できた。',
-    icon: <Code2 className="h-5 w-5" />,
+    q: '法的な場面で使えますか？',
+    a: 'RFC3161 タイムスタンプは多くの国・地域で「存在の事実」を立証する有力な技術的証拠として実績があります。最終的な採否は事案と法域に依存しますが、独立検証可能な暗号学的証拠は、抑止力としても交渉材料としても強力に機能します。',
   },
 ];
 
-function UseCaseCard({ title, body, icon }: UseCaseSpec) {
+function PricingFaq(): JSX.Element {
+  const [openIndex, setOpenIndex] = useState<number | null>(0);
   return (
-    <li
-      className="pm-glass shrink-0 p-7"
-      style={{ width: 'min(86vw, 340px)', scrollSnapAlign: 'start' }}
-    >
-      <span
-        aria-hidden="true"
-        className="inline-flex h-10 w-10 items-center justify-center rounded-xl"
-        style={{
-          color: '#00D4AA',
-          background: 'rgba(0,212,170,0.10)',
-          border: '1px solid rgba(0,212,170,0.30)',
-        }}
-      >
-        {icon}
-      </span>
-      <h3 className="mt-5 text-[20px] font-bold tracking-tight text-white">{title}</h3>
-      <p className="pm-body mt-3 text-[15px]">{body}</p>
-    </li>
+    <div className="mx-auto max-w-3xl">
+      {FAQS.map((f, i) => {
+        const open = openIndex === i;
+        return (
+          <div
+            key={f.q}
+            className="border-b"
+            style={{ borderColor: 'rgba(255,255,255,0.08)' }}
+          >
+            <button
+              type="button"
+              onClick={() => setOpenIndex(open ? null : i)}
+              aria-expanded={open}
+              className="flex w-full items-center justify-between gap-4 py-4 text-left"
+            >
+              <span className="text-[14px] font-semibold text-white">
+                {f.q}
+              </span>
+              <motion.span
+                animate={{ rotate: open ? 180 : 0 }}
+                transition={{ duration: 0.28, ease: PM_EASE }}
+                aria-hidden
+              >
+                <ChevronDown
+                  className="h-4 w-4"
+                  style={{ color: 'rgba(255,255,255,0.62)' }}
+                />
+              </motion.span>
+            </button>
+            <AnimatePresence initial={false}>
+              {open ? (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.32, ease: PM_EASE }}
+                  className="overflow-hidden"
+                >
+                  <p
+                    className="pb-5 text-[13px] leading-relaxed"
+                    style={{ color: 'rgba(255,255,255,0.72)' }}
+                  >
+                    {f.a}
+                  </p>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
-interface PricingFeature {
-  label: string;
-  state: 'include' | 'exclude' | 'planned';
-  highlight?: 'accent' | 'gold' | 'primary';
-}
+/* ═════════════════════════════════════════════
+ *  Section 6: FINAL CTA
+ * ═════════════════════════════════════════════ */
 
-interface PricingSpec {
-  tier: string;
-  price: string;
-  cadence: string;
-  tagline: string;
-  features: PricingFeature[];
-  ctaLabel: string;
-  ctaHref: string;
-  highlighted?: boolean;
-}
-
-function PricingCard({ tier, price, cadence, tagline, features, ctaLabel, ctaHref, highlighted }: PricingSpec) {
-  const m = price.match(/^([¥$€£])(.*)$/);
-  const symbol = m ? m[1] : '';
-  const amount = m && m[2] ? m[2] : (m ? '0' : price);
-
+function FinalCtaSection(): JSX.Element {
   return (
-    <article
-      className="relative flex h-full flex-col rounded-3xl p-7"
-      style={{
-        background: highlighted ? 'rgba(108,62,244,0.10)' : 'rgba(255,255,255,0.025)',
-        border: `1px solid ${highlighted ? 'rgba(108,62,244,0.45)' : 'rgba(255,255,255,0.08)'}`,
-        boxShadow: highlighted ? '0 24px 60px -28px rgba(108,62,244,0.55)' : 'none',
-      }}
+    <section
+      id="final-cta"
+      aria-labelledby="final-title"
+      className="pm-section relative overflow-hidden"
     >
-      {highlighted && (
-        <span
-          aria-hidden="true"
-          className="absolute -top-3 left-7 inline-flex items-center rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
-          style={{
-            color: '#0A0E27',
-            background: 'linear-gradient(135deg, #6C3EF4, #00D4AA)',
-          }}
-        >
-          Recommended
-        </span>
-      )}
-      <header>
-        <p className="text-[12px] font-bold uppercase tracking-[0.18em]" style={{ color: '#00D4AA' }}>
-          {tier}
-        </p>
-        <p className="mt-4 flex items-baseline gap-1">
-          {symbol && <span className="text-[20px] font-bold text-white/80">{symbol}</span>}
-          <span className="text-[40px] font-extrabold tracking-tight text-white">{amount}</span>
-          <span className="text-[13px] ml-1" style={{ color: 'rgba(255,255,255,0.55)' }}>{cadence}</span>
-        </p>
-        <p className="mt-3 text-[14px] font-semibold text-white">{tagline}</p>
-      </header>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(60% 60% at 50% 0%, rgba(108,62,244,0.20) 0%, rgba(108,62,244,0) 70%)',
+        }}
+      />
+      <div className="pm-container relative z-10 text-center">
+        <motion.div {...fadeInProps()}>
+          <Eyebrow>READY</Eyebrow>
+          <h2
+            id="final-title"
+            className="pm-h2 mt-4"
+            style={{ letterSpacing: '-0.02em' }}
+          >
+            30秒で、あなたの作品の
+            <br className="hidden md:inline" />
+            <span className="pm-accent-text">証明書を作る。</span>
+          </h2>
 
-      <ul className="mt-6 flex-1 space-y-3" role="list">
-        {features.map((f) => {
-          let Icon = CheckCircle2;
-          let iconColor = '#00D4AA';
-          let textColor = 'rgba(255,255,255,0.78)';
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link
+              href="/spot-issue"
+              className="inline-flex h-[60px] items-center justify-center gap-2 rounded-2xl px-8 text-[15px] font-bold text-white"
+              style={{
+                background:
+                  'linear-gradient(135deg, #6C3EF4 0%, #00D4AA 100%)',
+                boxShadow:
+                  '0 14px 32px rgba(108,62,244,0.42), 0 0 0 1px rgba(255,255,255,0.06) inset',
+              }}
+            >
+              今すぐ1件試す（¥480・登録不要）
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
 
-          if (f.state === 'exclude') {
-            Icon = Minus;
-            iconColor = 'rgba(255,255,255,0.3)';
-            textColor = 'rgba(255,255,255,0.4)';
-          } else if (f.state === 'planned') {
-            Icon = Star;
-            iconColor = '#F0BB38';
-            textColor = 'rgba(255,255,255,0.78)';
-          }
+          <div className="mt-4">
+            <Link
+              href="/auth?mode=signup"
+              className="text-[13px] font-semibold underline-offset-4 hover:underline"
+              style={{ color: 'rgba(255,255,255,0.78)' }}
+            >
+              または、無料アカウントを作成する
+            </Link>
+          </div>
 
-          return (
-            <li key={f.label} className="flex items-start gap-2.5 text-[14px]" style={{ color: textColor }}>
-              <Icon className="mt-[2px] h-4 w-4 shrink-0" style={{ color: iconColor }} aria-hidden="true" />
-              <span>{f.label}</span>
-            </li>
-          );
-        })}
-      </ul>
+          <p
+            className="mt-7 text-[11.5px]"
+            style={{ color: 'rgba(255,255,255,0.45)' }}
+          >
+            <ShieldCheck className="-mt-0.5 mr-1 inline h-3 w-3" style={{ color: '#00D4AA' }} />
+            Stripeによる安全な決済 · クレジットカード登録不要 · 24時間後データ削除
+          </p>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
 
-      <Link href={ctaHref}>
-        <span
-          className={highlighted ? 'pm-cta-primary mt-7 w-full' : 'pm-cta-ghost mt-7 w-full'}
-        >
-          {ctaLabel}
-          <ArrowRight className="h-4 w-4" aria-hidden="true" />
-        </span>
-      </Link>
-    </article>
+/* ═════════════════════════════════════════════
+ *  Atoms
+ * ═════════════════════════════════════════════ */
+
+function Eyebrow({ children }: { children: React.ReactNode }): JSX.Element {
+  return (
+    <span
+      className="inline-block text-[11px] font-bold uppercase tracking-[0.32em]"
+      style={{ color: '#00D4AA' }}
+    >
+      {children}
+    </span>
   );
 }
