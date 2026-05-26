@@ -1444,9 +1444,9 @@ export default function NDAProofDemo() {
               className="hidden sm:flex items-center gap-1.5"
               style={{ color: COLOR.textSubtle }}
             >
-              <span>累計</span>
+              <span>テスト稼働中</span>
               <NumberRoll
-                value={12_848}
+                value={482}
                 duration={1.6}
                 className="font-mono"
               />
@@ -1503,7 +1503,7 @@ export default function NDAProofDemo() {
           </div>
 
           {/* RIGHT — slab preview */}
-          <div ref={previewRef} className="min-h-[520px]">
+          <div ref={previewRef} className="min-h-[520px] scroll-mt-24 md:scroll-mt-0">
             <SlabPreview state={state} termLines={termLines} />
           </div>
         </div>
