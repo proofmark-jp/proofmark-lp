@@ -39,6 +39,7 @@ import { PRICING_PLANS } from '@/data/pricingPlans'; // 🚨 データソース�
 
 const LiveProofDemo = lazy(() => import('@/components/LiveProofDemo'));
 const ZipContentsShowcase = lazy(() => import('@/components/ZipContentsShowcase'));
+const NDAProofDemo = lazy(() => import('@/components/NDAProofDemo')); // 🚨 NDAデモの追加
 const TestimonialCarousel = lazy(() => import('@/components/TestimonialCarousel'));
 
 const PM_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
@@ -69,6 +70,12 @@ export default function Home(): JSX.Element {
       <HeroSection />
       <MomentSection />
       <WhatYouGetSection />
+
+      {/* 🚨 NDAデモ（遅延読み込み）を What You Get と Proof の間に配置 */}
+      <Suspense fallback={<LoadingFallback variant="inline" label="nda-demo" />}>
+        <NDAProofDemo />
+      </Suspense>
+
       <ProofSection />
       <PricingSection />
       <FinalCtaSection />
