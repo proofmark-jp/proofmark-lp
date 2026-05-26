@@ -7,6 +7,7 @@ import { useHashFile } from '../hooks/useHashFile';
 import { supabase } from '../lib/supabase';
 import UpgradeModal from './UpgradeModal';
 import { useCertIssueQuota } from '../hooks/useCertIssueQuota';
+import LimitReachedModal from './proof/LimitReachedModal'; // 🚨 月間制限用アップセルモーダル
 
 /* ─────────────────────────────────────────────
  *  Types
@@ -121,6 +122,7 @@ export default function CertificateUpload(): JSX.Element {
 
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [quotaContext, setQuotaContext] = useState<{ used?: number; quota?: number; resetAt?: string }>({});
+  const [isLimitModalOpen, setIsLimitModalOpen] = useState(false); // 🚨 月間制限モーダル用ステート
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -235,7 +237,14 @@ export default function CertificateUpload(): JSX.Element {
       });
 
       if (!createRes.ok) {
-        const errData = (await createRes.json().catch(() => ({}))) as { error?: string; certificate?: { public_verify_token?: string } };
+        const errData = (await createRes.json().catch(() => ({}))) as { error?: string; message?: string; certificate?: { public_verify_token?: string } };
+        
+        // 🚨 DBトリガーからの例外エラーメッセージを確実に捕捉（API実装による揺らぎを吸収）
+        const errorStr = String(errData.error || errData.message || '');
+        if (errorStr.includes('MONTHLY_LIMIT_EXCEEDED')) {
+          throw new Error('MONTHLY_LIMIT_EXCEEDED');
+        }
+
         if (createRes.status === 429 || errData.error === 'quota_exceeded') {
           throw { status: createRes.status, body: errData } as QuotaError;
         }
@@ -257,6 +266,12 @@ export default function CertificateUpload(): JSX.Element {
       }, 400);
     } catch (err) {
       if ((err as Error)?.name === 'AbortError') {
+        setPhase('idle');
+        return;
+      }
+      // 🚨 DBトリガーの月間上限エラーを傍受し、アップセルモーダルを展開
+      if (err instanceof Error && err.message === 'MONTHLY_LIMIT_EXCEEDED') {
+        setIsLimitModalOpen(true);
         setPhase('idle');
         return;
       }
@@ -403,6 +418,12 @@ export default function CertificateUpload(): JSX.Element {
         used={quotaContext.used}
         quota={quotaContext.quota ?? 30}
         resetAt={quotaContext.resetAt ?? null}
+      />
+
+      {/* 🚨 月間発行枠上限 到達時の極上セールスモーダル (DBトリガー連動) */}
+      <LimitReachedModal 
+        isOpen={isLimitModalOpen} 
+        onClose={() => setIsLimitModalOpen(false)} 
       />
     </div>
   );
