@@ -47,7 +47,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     tagline: 'まずは試したい個人向け',
     features: [
       { label: 'Webタイムスタンプ証明 (月3件)', state: 'include' },
-      { label: 'OpenSSL 独立検証可能', state: 'include' },
+      { label: 'Zero-Knowledge 原本非送信', state: 'include' },
+      { label: '30日間のポートフォリオ公開', state: 'include' },
       { label: '※PDF・Evidence Pack発行不可', state: 'exclude' }
     ],
     ctaLabel: { guest: '無料で始める', authed: '現在のプラン' },
@@ -60,15 +61,16 @@ export const PRICING_PLANS: PricingPlan[] = [
     priceLabel: '¥480',
     priceUnit: '/ 件',
     audience: '単発で1案件だけEvidence Packを使いたい方',
-    tagline: 'この1案件だけ、確実に守りたい',
+    tagline: 'この1案件だけ、確実に守り抜きたい',
     features: [
       { label: 'Evidence Pack (証明ZIP) 即時発行', state: 'include' },
-      { label: 'クライアント納品用 高品質PDF', state: 'include' },
-      { label: 'アカウント・カード登録不要', state: 'include' }
+      { label: 'クライアント納品用 高高品質PDF', state: 'include' }, // Note: High quality PDF representation
+      { label: 'Zero-Knowledge 原本非送信', state: 'include' },
+      { label: 'アカウント・クレジットカード登録不要', state: 'include' }
     ],
     ctaLabel: { guest: '今すぐ1件発行する', authed: '今すぐ1件発行する' },
     ctaHref: { guest: '/spot-issue', authed: '/spot-issue' },
-    recommended: true
+    recommended: false
   },
   {
     id: 'creator',
@@ -76,33 +78,36 @@ export const PRICING_PLANS: PricingPlan[] = [
     priceLabel: '¥1,480',
     priceUnit: '/ 月',
     audience: '受注クリエイター・有償案件を持つ個人',
-    tagline: '毎月納品するプロクリエイター向け',
+    tagline: '毎月納品するプロフェッショナルの月額保険',
     features: [
-      { label: '納品用 Evidence Pack (月50件)', state: 'include' },
-      { label: 'ペルソナ切替 (本名/公開名義)', state: 'include' },
-      { label: 'Shareable Proof (公開検証ページ)', state: 'include' }
+      { label: '納品用 Evidence Pack (月30件)', state: 'include' },
+      { label: 'NDA案件の「漆黒の金庫」モード (無制限)', state: 'include', vaultIcon: true },
+      { label: 'ペルソナ切替 (法的本名 / 公開名義)', state: 'include' },
+      { label: 'Shareable Proof (永続的な公開検証ページ)', state: 'include' },
+      { label: 'AIプロンプト・シード値の証拠封入', state: 'planned', highlight: 'gold' },
+      { label: '優先カスタマーサポート', state: 'include' }
     ],
     ctaLabel: { guest: '先行特典を予約する', authed: 'プランをアップグレード' },
     ctaHref: { guest: '/auth?mode=signup', authed: '/settings/billing' },
-    recommended: false
+    recommended: true,
+    badge: 'おすすめ'
   },
   {
     id: 'studio',
-    name: 'Studio',
-    tagline: 'チームで制作・複数案件を一元管理したい人向け',
+    name: 'STUDIO',
     priceLabel: '¥4,980',
-    priceUnit: '/月',
+    priceUnit: '/ 月',
     audience: '小規模制作会社・チーム',
+    tagline: '法人取引・複数案件を一元管理したいチーム向け',
+    features: [
+      { label: '納品用 Evidence Pack (月150件)', state: 'include' },
+      { label: '検証ページのホワイトラベル化 (自社ロゴ)', state: 'planned', highlight: 'gold' },
+      { label: '複数人でのチーム管理・案件共有', state: 'include' },
+      { label: 'WORM監査ログ・改ざん検知', state: 'include' },
+      { label: 'APIアクセスによる自動打刻', state: 'planned' }
+    ],
     ctaLabel: { authed: 'Studioに切り替える', guest: 'Studioを予約する' },
     ctaHref: { authed: '/settings#plan', guest: '/auth?mode=signup&plan=studio' },
-    features: [
-      { label: 'Creator のすべての機能', state: 'include' },
-      { label: '納品用PDF証明書 ＆ Evidence Pack (証拠一式)：月150件発行', state: 'include' },
-      { label: 'Evidence Vault (永久不変の原本ストレージ)', state: 'include', highlight: 'accent' },
-      { label: '検証ページのホワイトラベル化（自社ロゴ）', state: 'planned' },
-      { label: '複数席・監査ログ・Chain of Evidence', state: 'include' },
-      { label: '案件単位のクライアント共有', state: 'include' },
-    ],
   },
   {
     id: 'business',

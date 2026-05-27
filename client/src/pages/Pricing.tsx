@@ -440,12 +440,12 @@ export default function Pricing() {
         {/* ── ROI Navigation（5-Second ROI Map） ── */}
         <RoiNavigation />
 
-        {/* ── Plan Grid ───────────────────── */}
+        {/* ── 3-Column Plan Grid ───────────────────── */}
         <div
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-stretch max-w-7xl mx-auto"
+          className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch max-w-6xl mx-auto"
           role="list"
         >
-          {visiblePlans.map((plan, idx) => (
+          {visiblePlans.filter(p => ['free', 'spot', 'creator'].includes(p.id)).map((plan, idx) => (
             <PlanCard
               key={plan.id}
               plan={plan}
@@ -456,6 +456,59 @@ export default function Pricing() {
             />
           ))}
         </div>
+
+        {/* ── Studio Wide Banner ───────────────────── */}
+        {visiblePlans.find(p => p.id === 'studio') && (
+          <div className="max-w-6xl mx-auto mt-8">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="relative flex flex-col md:flex-row items-center justify-between bg-[#0D0B24] border border-[#1C1A38] rounded-2xl p-8 hover:border-[#F0BB38]/30 transition-all duration-300"
+            >
+              <div className="flex-1 mb-6 md:mb-0 md:pr-8 w-full">
+                <span className="inline-block px-3 py-1 rounded-full bg-[#F0BB38]/10 text-[#F0BB38] text-[10px] font-bold tracking-wider uppercase mb-3 border border-[#F0BB38]/20">
+                  For Teams & Studios
+                </span>
+                <h3 className="text-xl font-black text-white tracking-wider mb-2 uppercase">
+                  {visiblePlans.find(p => p.id === 'studio')?.name}
+                </h3>
+                <p className="text-[#A8A0D8] text-sm mb-5">
+                  {visiblePlans.find(p => p.id === 'studio')?.tagline}
+                </p>
+                
+                {/* 2カラムで機能を並べる */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6">
+                  <ul className="space-y-3">
+                    {visiblePlans.find(p => p.id === 'studio')?.features.slice(0, 3).map((feature, i) => (
+                      <FeatureRow key={i} {...feature} />
+                    ))}
+                  </ul>
+                  <ul className="space-y-3">
+                    {visiblePlans.find(p => p.id === 'studio')?.features.slice(3).map((feature, i) => (
+                      <FeatureRow key={i} {...feature} />
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <div className="w-full md:w-auto shrink-0 flex flex-col items-center md:items-end md:pl-8 md:border-l border-[#1C1A38]">
+                <PriceLabel 
+                  priceLabel={visiblePlans.find(p => p.id === 'studio')?.priceLabel || ''} 
+                  priceUnit={visiblePlans.find(p => p.id === 'studio')?.priceUnit || ''} 
+                />
+                <p className="mt-3 mb-6 text-xs text-[#A8A0D8]/80 text-center md:text-right">
+                  対象: {visiblePlans.find(p => p.id === 'studio')?.audience}
+                </p>
+                <Link href={!!user ? visiblePlans.find(p => p.id === 'studio')!.ctaHref.authed : visiblePlans.find(p => p.id === 'studio')!.ctaHref.guest}>
+                  <button className="w-full md:w-auto px-8 py-3.5 rounded-xl font-bold transition-all border border-[#1C1A38] bg-[#151332]/50 text-white hover:bg-[#1C1A38]">
+                    {!!user ? visiblePlans.find(p => p.id === 'studio')?.ctaLabel.authed : visiblePlans.find(p => p.id === 'studio')?.ctaLabel.guest}
+                  </button>
+                </Link>
+              </div>
+            </motion.div>
+          </div>
+        )}
 
         {/* ── Fair Use Cap Note ── */}
         <div className="mt-8 max-w-4xl mx-auto px-4 text-center">
