@@ -425,23 +425,9 @@ export default function LiveProofDemo(): JSX.Element {
       <div ref={rootRef} className="relative">
         {/* counter chip (top-right) */}
         <div className="mb-6 flex items-center justify-end">
-          <div
-            className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold"
-            style={{
-              borderColor: 'rgba(0,212,170,0.28)',
-              background: 'rgba(0,212,170,0.06)',
-              color: '#00D4AA',
-            }}
-          >
-            <span
-              className="inline-block h-1.5 w-1.5 rounded-full"
-              style={{
-                background: '#00D4AA',
-                boxShadow: '0 0 10px #00D4AA',
-              }}
-            />
-            <NumberRoll value={count} reduce={reduce} />
-            <span className="opacity-80">件発行済み</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] font-bold" style={{ background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.3)', color: '#00D4AA' }}>
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Zero-Knowledge Architecture
           </div>
         </div>
 

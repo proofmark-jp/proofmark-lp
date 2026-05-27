@@ -1440,18 +1440,7 @@ export default function NDAProofDemo() {
               label="NDA Compliant"
               tone="term"
             />
-            <div
-              className="hidden sm:flex items-center gap-1.5"
-              style={{ color: COLOR.textSubtle }}
-            >
-              <span>テスト稼働中</span>
-              <NumberRoll
-                value={482}
-                duration={1.6}
-                className="font-mono"
-              />
-              <span>件の機密案件で利用</span>
-            </div>
+            {/* ※フェイクの利用件数カウンターは信頼性担保のため完全削除 */}
           </div>
         </div>
 
