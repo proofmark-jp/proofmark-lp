@@ -3,7 +3,7 @@
  * ─────────────────────────────────────────────────────────────
  *  Section 1: HERO
  *  Section 2: THE MOMENT   ← LiveProofDemo
- *  Section 3: WHAT YOU GET ← ZipContentsShowcase
+ *  Section 3: WHAT YOU GET ← EvidencePackExplorer
  *  Section 4: PROOF        ← TestimonialCarousel
  *  Section 5: PRICING
  *  Section 6: FINAL CTA
@@ -38,7 +38,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { PRICING_PLANS } from '@/data/pricingPlans'; // 🚨 データソース（SSOT）をインポート
 
 const LiveProofDemo = lazy(() => import('@/components/LiveProofDemo'));
-const ZipContentsShowcase = lazy(() => import('@/components/ZipContentsShowcase'));
+const EvidencePackExplorer = lazy(() => import('@/components/EvidencePackExplorer'));
 const NDAProofDemo = lazy(() => import('@/components/NDAProofDemo')); // 🚨 NDAデモの追加
 const TestimonialCarousel = lazy(() => import('@/components/TestimonialCarousel'));
 
@@ -234,7 +234,7 @@ function WhatYouGetSection(): JSX.Element {
         </motion.div>
 
         <Suspense fallback={<LoadingFallback variant="inline" label="zip" />}>
-          <ZipContentsShowcase />
+          <EvidencePackExplorer />
         </Suspense>
 
         {/* technical trust row */}
