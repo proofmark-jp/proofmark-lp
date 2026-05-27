@@ -941,16 +941,36 @@ function CoverLetterPreview() {
             Certificate #{SAMPLE_CERT_ID}
           </p>
         </div>
-        <div
-          className="h-12 w-12 rounded-full flex items-center justify-center"
+        <svg
+          viewBox="0 0 100 100"
+          fill="none"
+          className="h-12 w-12 shrink-0"
           style={{
-            border: `1.5px solid ${C.purple}`,
-            color: C.purple,
-            background: 'rgba(108,62,244,0.06)',
+            filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))'
           }}
+          xmlns="http://www.w3.org/2000/svg"
         >
-          <ShieldCheck className="h-5 w-5" />
-        </div>
+          <defs>
+            <linearGradient id="pm-logo-grad" x1="15%" y1="0%" x2="85%" y2="100%">
+              <stop offset="0%" stopColor="#5830CC" />
+              <stop offset="100%" stopColor="#00B896" />
+            </linearGradient>
+          </defs>
+          <rect width="100" height="100" rx="22" fill="#0D0B24" />
+          <path
+            d="M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 87,25 L 82,29 L 76,18 Z"
+            fill="none"
+            stroke="url(#pm-logo-grad)"
+            strokeWidth="3.8"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            opacity=".85"
+          />
+          <polygon
+            points="17,46 27,47 39,62 79,22 83,28 36,70 23,58"
+            fill="#00D4AA"
+          />
+        </svg>
       </div>
     </div>
   );
