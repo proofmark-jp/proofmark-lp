@@ -64,7 +64,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     tagline: 'この1案件だけ、確実に守り抜きたい',
     features: [
       { label: 'Evidence Pack (証明ZIP) 即時発行', state: 'include' },
-      { label: 'クライアント納品用 高高品質PDF', state: 'include' }, // Note: High quality PDF representation
+      { label: 'クライアント納品用 高品質PDF', state: 'include' }, // Note: High quality PDF representation
       { label: 'Zero-Knowledge 原本非送信', state: 'include' },
       { label: 'アカウント・クレジットカード登録不要', state: 'include' }
     ],
