@@ -103,8 +103,8 @@ export const PRICING_PLANS: PricingPlan[] = [
       { label: '納品用 Evidence Pack (月150件)', state: 'include' },
       { label: '検証ページのホワイトラベル化 (自社ロゴ)', state: 'planned', highlight: 'gold' },
       { label: '複数人でのチーム管理・案件共有', state: 'include' },
-      { label: 'WORM監査ログ・改ざん検知', state: 'include' },
-      { label: 'APIアクセスによる自動打刻', state: 'planned' }
+      { label: 'Chain of Evidence (制作工程の連鎖証明)', state: 'include' },
+      { label: 'WORM監査ログ・改ざん検知', state: 'include' }
     ],
     ctaLabel: { authed: 'Studioに切り替える', guest: 'Studioを予約する' },
     ctaHref: { authed: '/settings#plan', guest: '/auth?mode=signup&plan=studio' },
@@ -119,9 +119,9 @@ export const PRICING_PLANS: PricingPlan[] = [
     ctaLabel: { authed: '相談する', guest: '相談する' },
     ctaHref: { authed: '/contact', guest: '/contact' },
     features: [
-      { label: 'API / Webhook', state: 'include' },
+      { label: 'APIアクセスによる自動打刻 / Webhook', state: 'include' },
       { label: '商用TSA（GlobalSign/DigiCert級）への切替', state: 'include' },
-      { label: 'SLA / DPA', state: 'include' },
+      { label: 'SLA (稼働保証) / 個別DPA締結', state: 'include' },
       { label: '導入支援・監査証跡 / 長期検証 (LTV)', state: 'include' },
     ],
   },
