@@ -429,7 +429,7 @@ export default function Pricing() {
             transition={{ delay: 0.2 }}
             className="text-[#A8A0D8] text-base sm:text-lg max-w-2xl mx-auto leading-relaxed"
           >
-            まずは Free で月30件まで試せます。本番運用は{' '}
+            まずは Free で月3件まで試せます。本番運用は{' '}
             <span className="text-white">Creator</span>、
             <br className="hidden md:block" />
             チーム運用は <span className="text-white">Studio</span>、API/SLAが必要な制作会社向けは{' '}
