@@ -94,21 +94,23 @@ export function ContentCredentialsSection({ manifest, compact = false }: Props) 
             proofmark://vault/c2pa
           </span>
         </div>
-        <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em]">
-          <span className="flex items-center gap-1.5" style={{ color: '#A8A0D8' }}>
-            <motion.span
-              className="inline-block h-1.5 w-1.5 rounded-full"
-              style={{ background: tone.color, boxShadow: `0 0 8px ${tone.color}` }}
-              animate={{ opacity: [1, 0.35, 1] }}
-              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-            />
-            <span style={{ color: tone.color }}>{tone.statusText}</span>
-          </span>
-          <span className="hidden sm:inline text-[#5E5A8A]">|</span>
-          <span className="hidden sm:inline text-[#A8A0D8]">
-            tty-vault.{summary.present ? '01' : '00'}
-          </span>
-        </div>
+        {summary.present && (
+          <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em]">
+            <span className="flex items-center gap-1.5" style={{ color: '#A8A0D8' }}>
+              <motion.span
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{ background: tone.color, boxShadow: `0 0 8px ${tone.color}` }}
+                animate={{ opacity: [1, 0.35, 1] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+              />
+              <span style={{ color: tone.color }}>{tone.statusText}</span>
+            </span>
+            <span className="hidden sm:inline text-[#5E5A8A]">|</span>
+            <span className="hidden sm:inline text-[#A8A0D8]">
+              tty-vault.{summary.present ? '01' : '00'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── Header ── */}

@@ -129,9 +129,9 @@ export default function VerifyDropzone(): JSX.Element {
             className="bg-clip-text text-transparent"
             style={{ backgroundImage: 'linear-gradient(90deg, #00D4AA 0%, #6C3EF4 100%)' }}
           >
-            光学的に
+            暗号学的に
           </span>
-          確認する。
+          検証する。
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 8 }}
@@ -140,8 +140,7 @@ export default function VerifyDropzone(): JSX.Element {
           transition={{ duration: 0.6, delay: 0.2, ease: EASE }}
           className="mx-auto mt-5 max-w-xl text-[14.5px] leading-[1.75] text-[#A8A0D8]"
         >
-          Evidence Pack (ZIP) をここにドロップしてください。ファイルはサーバーへ一切送信されません。
-          展開・SHA-256 計算・RFC3161 署名検証は、すべてあなたのデバイス内の光学スキャナーで完結します。
+          ファイルはサーバーへ一切送信されません。展開・SHA-256計算・RFC3161署名検証は、すべてあなたのデバイス内で完結します。
         </motion.p>
       </header>
 
@@ -298,7 +297,7 @@ export default function VerifyDropzone(): JSX.Element {
               </motion.div>
 
               <p className="text-[19px] font-semibold tracking-tight text-white">
-                Evidence Pack と 原本ファイル をここにドロップ
+                Evidence Pack (ZIP) と 原本ファイルをここにドロップ
               </p>
               <p className="mt-2 text-[12.5px] text-[#A8A0D8] font-mono uppercase tracking-[0.18em]">
                 or tap to select — ZIP format
