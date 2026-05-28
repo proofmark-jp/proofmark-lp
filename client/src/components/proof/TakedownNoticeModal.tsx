@@ -147,8 +147,8 @@ export default function TakedownNoticeModal({
 
   /* ── Inputs ── */
   const [infringingUrl, setInfringingUrl] = useState<string>('');
-  const [persona, setPersona] = useState<'creator' | 'legal'>(
-    claimant.defaultPersona ?? 'creator',
+  const [signature, setSignature] = useState<string>(
+    claimant.legalName || claimant.creatorDisplayName || ''
   );
   const [language, setLanguage] = useState<'en' | 'ja'>(defaultLanguage);
 
@@ -192,17 +192,10 @@ export default function TakedownNoticeModal({
 
   /* ── Derived values ── */
   const claimantName = useMemo<string>(() => {
-    if (persona === 'legal' && claimant.legalName && claimant.legalName.trim() !== '') {
-      return claimant.legalName;
-    }
-    if (claimant.creatorDisplayName && claimant.creatorDisplayName.trim() !== '' && claimant.creatorDisplayName !== 'ProofMark Verified Creator') {
-      return claimant.creatorDisplayName;
-    }
-    if (claimant.legalName && claimant.legalName.trim() !== '') {
-      return claimant.legalName;
-    }
-    return '氏名未設定 (Unspecified)';
-  }, [persona, claimant]);
+    return signature.trim() || '氏名未設定 (Unspecified)';
+  }, [signature]);
+
+  const isValidSignature = useMemo<boolean>(() => signature.trim().length > 0, [signature]);
 
   const isValidUrl = useMemo<boolean>(() => {
     const v = infringingUrl.trim();
@@ -217,7 +210,7 @@ export default function TakedownNoticeModal({
 
   /* ── Generation pipeline ── */
   const runGeneration = useCallback(async () => {
-    if (!isValidUrl) return;
+    if (!isValidUrl || !isValidSignature) return;
     setPhase('generating');
     setErrorMessage(null);
 
@@ -272,6 +265,7 @@ export default function TakedownNoticeModal({
     }
   }, [
     isValidUrl,
+    isValidSignature,
     reduce,
     certificate.certificateId,
     certificate.timestampJst,
@@ -425,10 +419,9 @@ export default function TakedownNoticeModal({
                     isValidUrl={isValidUrl}
                     language={language}
                     onLanguageChange={setLanguage}
-                    persona={persona}
-                    onPersonaChange={setPersona}
-                    creatorDisplayName={claimant.creatorDisplayName}
-                    legalName={claimant.legalName ?? null}
+                    signature={signature}
+                    onSignatureChange={setSignature}
+                    isValidSignature={isValidSignature}
                     claimantEmail={claimant.email}
                     onSubmit={runGeneration}
                   />
@@ -498,10 +491,9 @@ interface IdleBodyProps {
   isValidUrl: boolean;
   language: 'en' | 'ja';
   onLanguageChange: (v: 'en' | 'ja') => void;
-  persona: 'creator' | 'legal';
-  onPersonaChange: (v: 'creator' | 'legal') => void;
-  creatorDisplayName: string;
-  legalName: string | null;
+  signature: string;
+  onSignatureChange: (v: string) => void;
+  isValidSignature: boolean;
   claimantEmail: string;
   onSubmit: () => void;
 }
@@ -512,10 +504,9 @@ function IdleBody({
   isValidUrl,
   language,
   onLanguageChange,
-  persona,
-  onPersonaChange,
-  creatorDisplayName,
-  legalName,
+  signature,
+  onSignatureChange,
+  isValidSignature,
   claimantEmail,
   onSubmit,
 }: IdleBodyProps): JSX.Element {
@@ -626,6 +617,52 @@ function IdleBody({
         )}
       </div>
 
+      {/* Signature */}
+      <div className="mt-5">
+        <label
+          htmlFor="legal-signature"
+          className="block text-[10.5px] font-bold uppercase tracking-[0.22em]"
+          style={{ color: 'rgba(255,255,255,0.62)' }}
+        >
+          電子署名 (Legal Name / Signature)
+          <span style={{ color: '#FF8B8B' }}> *</span>
+        </label>
+        <div
+          className="relative mt-2 flex items-center overflow-hidden rounded-xl border transition-colors"
+          style={{
+            background: '#07061A',
+            borderColor:
+              signature.length === 0
+                ? 'rgba(255,255,255,0.10)'
+                : isValidSignature
+                  ? 'rgba(0,212,170,0.38)'
+                  : 'rgba(255,69,58,0.40)',
+          }}
+        >
+          <div className="ml-3 shrink-0 flex items-center justify-center text-[12px] font-bold" style={{ color: isValidSignature ? '#00D4AA' : 'rgba(255,255,255,0.35)' }}>
+            /s/
+          </div>
+          <input
+            id="legal-signature"
+            type="text"
+            autoComplete="off"
+            placeholder="John Doe"
+            value={signature}
+            onChange={(e) => onSignatureChange(e.target.value)}
+            className="flex-1 bg-transparent px-2 py-3 text-[13px] text-white placeholder:text-white/30 focus:outline-none"
+          />
+        </div>
+        {signature.length === 0 && (
+          <p
+            className="mt-1.5 flex items-center gap-1 text-[11px]"
+            style={{ color: '#FF8B8B' }}
+          >
+            <AlertTriangle className="h-3 w-3" />
+            電子署名は法的要件として必須です
+          </p>
+        )}
+      </div>
+
       {/* Language toggle */}
       <div className="mt-5">
         <div className="flex items-center justify-between">
@@ -662,42 +699,6 @@ function IdleBody({
           />
         </div>
       </div>
-
-      {/* Persona toggle (legalName がある場合のみ) */}
-      {legalName && (
-        <div className="mt-5">
-          <span
-            className="text-[10.5px] font-bold uppercase tracking-[0.22em]"
-            style={{ color: 'rgba(255,255,255,0.62)' }}
-          >
-            電子署名に印字する氏名
-          </span>
-          <div
-            className="mt-2 flex w-full rounded-xl border p-1"
-            style={{
-              background: '#07061A',
-              borderColor: 'rgba(255,255,255,0.08)',
-            }}
-          >
-            <ToggleButton
-              active={persona === 'creator'}
-              onClick={() => onPersonaChange('creator')}
-              icon={<UserCircle className="h-3.5 w-3.5" />}
-              label="公開名義"
-              sub={creatorDisplayName}
-              tone="default"
-            />
-            <ToggleButton
-              active={persona === 'legal'}
-              onClick={() => onPersonaChange('legal')}
-              icon={<Briefcase className="h-3.5 w-3.5" />}
-              label="契約名義 (法的氏名)"
-              sub={legalName}
-              tone="teal"
-            />
-          </div>
-        </div>
-      )}
 
       {/* Compliance hint */}
       <div
@@ -739,7 +740,7 @@ function IdleBody({
       {/* Submit */}
       <button
         type="button"
-        disabled={!isValidUrl}
+        disabled={!isValidUrl || !isValidSignature}
         onClick={onSubmit}
         className="group mt-6 inline-flex w-full items-center justify-between gap-3 rounded-2xl px-5 py-4 font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
         style={{
@@ -758,9 +759,7 @@ function IdleBody({
               ? '送信防止措置依頼書 · 印字名義: '
               : 'DMCA Notice · Signed as: '}
             <span className="font-bold text-[#FFF]">
-              {persona === 'legal' && legalName
-                ? legalName
-                : creatorDisplayName}
+              {signature.trim() || '氏名未入力'}
             </span>
           </span>
         </span>
