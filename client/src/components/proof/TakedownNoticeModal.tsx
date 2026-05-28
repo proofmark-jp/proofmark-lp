@@ -1521,16 +1521,27 @@ function TakedownNoticeDocument({ data }: { data: TakedownNoticeInput }) {
           <View>
             <View style={pdfStyles.logoGroup}>
               <View style={{ width: 18, height: 18, marginRight: 6 }}>
-                {/* ▽▽ ここから公式ロゴ ▽▽ */}
+                {/* ▽▽ ここから公式 Navbar ロゴ ▽▽ */}
                 <Svg viewBox="0 0 100 100" width="100%" height="100%">
                   <Defs>
-                    <LinearGradient id="header-grad" x1="15%" y1="0%" x2="85%" y2="100%">
-                      <Stop offset="0%" stopColor="#5830CC" />
-                      <Stop offset="100%" stopColor="#00B896" />
+                    <LinearGradient id="header-grad" x1="0.15" y1="0" x2="0.85" y2="1">
+                      <Stop offset="0" stopColor="#5830CC" />
+                      <Stop offset="1" stopColor="#00B896" />
                     </LinearGradient>
                   </Defs>
-                  <Path d="M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 88,26 L 84,28 L 78,20 Z" fill="none" stroke="url(#header-grad)" strokeWidth={4} strokeLinejoin="round" strokeLinecap="round" opacity={0.85} />
-                  <Polygon points="18,46 28,46 40,60 78,22 82,27 37,69 24,57" fill="#00D4AA" />
+                  {/* 黒いRect背景は完全削除 */}
+                  <Path 
+                    d="M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 88,26 L 84,28 L 78,20 Z" 
+                    fill="none" 
+                    stroke="url(#header-grad)" 
+                    strokeWidth={4} 
+                    strokeLinejoin="round" 
+                    strokeLinecap="round" 
+                  />
+                  <Polygon 
+                    points="18,46 28,46 40,60 78,22 82,27 37,69 24,57" 
+                    fill="#00D4AA" 
+                  />
                 </Svg>
                 {/* △△ ここまで △△ */}
               </View>
