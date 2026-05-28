@@ -153,8 +153,7 @@ export function ContentCredentialsSection({ manifest, compact = false }: Props) 
               Content Credentials
             </h2>
             <p className="mt-1.5 text-[12.5px] leading-relaxed text-[#A8A0D8] max-w-2xl">
-              画像ファイルそのものに埋め込まれる、来歴や編集履歴の標準規格（C2PA）です。
-              ProofMarkによる外部からの存在証明とは独立して、ファイル内部のメタデータ状態をありのままに開示します。
+              画像ファイルそのものに埋め込まれる、来歴や編集履歴の標準規格（C2PA）です。ProofMarkによる外部からの存在証明とは独立して、ファイル内部のメタデータ状態をありのままに開示します。
             </p>
           </div>
         </div>

@@ -672,7 +672,7 @@ export default function CertificatePage() {
                                     <ShieldAlert className="w-4 h-4" /> ▼ 無断転載への法的措置（DMCA / 送信防止措置）
                                 </p>
                                 <p className="text-xs text-[#A8A0D8] mb-4">
-                                    プラットフォーム（X, Google等）に対して、送信防止措置（DMCA等）の『法的要件を満たした』削除要請書を即時生成します。
+                                    プラットフォーム（X, Google等）に対して、送信防止措置（DMCA等）の法的要件を満たした削除要請書を即時生成します。
                                 </p>
                                 <motion.button
                                     whileHover={{ y: -1, scale: 1.01 }}
