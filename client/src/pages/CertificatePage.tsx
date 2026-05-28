@@ -17,9 +17,12 @@ import { supabase } from '../lib/supabase';
 import { getC2paSummary } from '../lib/c2pa-schema';
 import { ContentCredentialsSection } from '../components/cert/ContentCredentialsSection';
 import VerifyDropzone from '../components/VerifyDropzone';
-import TakedownNoticeModal from '../components/proof/TakedownNoticeModal'; // 🚨 追加: DMCAモーダル
+import TakedownNoticeModal from '../components/proof/TakedownNoticeModal';
 
-
+/* ═══════════════════════════════════════════════
+ *   God-Mode shared easing/tokens
+ * ═══════════════════════════════════════════════ */
+const PM_EASE = [0.16, 1, 0.3, 1] as const;
 
 export default function CertificatePage() {
     const [match, params] = useRoute('/cert/:id');
@@ -32,15 +35,12 @@ export default function CertificatePage() {
     const [loading, setLoading] = useState(true);
     const [isHashCopied, setIsHashCopied] = useState(false);
 
-    // 💡 複数ボタンに対応するためコピー状態を文字列で管理
     const [copiedType, setCopiedType] = useState<string | null>(null);
-    const [isTakedownOpen, setTakedownOpen] = useState(false); // 🚨 追加: DMCAモーダル開閉ステート
-    const { user, profile, signOut } = useAuth(); // profileを追加
-    
-    // この証明書の作成者（クリエイター）本人かどうかを判定
+    const [isTakedownOpen, setTakedownOpen] = useState(false);
+    const { user, profile, signOut } = useAuth();
+
     const isOwner = user && user.id === cert?.user_id;
 
-    // 違法・悪質コンテンツの通報ハンドラー（お守り機能）
     const handleReportAbuse = () => {
         const subject = encodeURIComponent(`【通報】違法・悪質なコンテンツについて (ID: ${cert?.id})`);
         const body = encodeURIComponent(
@@ -56,17 +56,14 @@ export default function CertificatePage() {
     const isPaidPlan = ['light', 'creator', 'studio', 'admin'].includes(currentPlan);
     const c2pa = useMemo(() => getC2paSummary(cert?.c2pa_manifest), [cert?.c2pa_manifest]);
 
-
-
     useEffect(() => {
         async function fetchCertificate() {
-            setBundle(null); // Reset the timeline on page change
+            setBundle(null);
             if (!id) {
                 setLoading(false);
                 return;
             }
 
-            // 1. 証明書データの取得
             const { data: certData, error: certError } = await supabase
                 .from('certificates')
                 .select('*')
@@ -74,7 +71,6 @@ export default function CertificatePage() {
                 .single();
 
             if (!certError && certData) {
-                // 🚨 Opusのダウンローダー(SpotIssueApiResponse)が必要とするデータを既存のcertDataからマッピングして統合
                 const extendedCertData = {
                     ...certData,
                     certificate_id: certData.id,
@@ -85,22 +81,19 @@ export default function CertificatePage() {
                     timestamp_iso: certData.certified_at || certData.created_at,
                     verification_url: `${window.location.origin}/cert/${certData.id}`,
                     proof_mode: certData.proof_mode || 'private',
-                    tsr_token_base64: certData.tsr_token_base64 || '', // Supabaseのレコードから直接Base64を取得
+                    tsr_token_base64: certData.tsr_token_base64 || '',
                     thumbnail_data_url: certData.public_image_url || undefined,
-                    // 🚨 シングルクォートをバッククォートに変更し、末尾にカンマを追加
                     creator_display_name: authorProfile?.username ? `@${authorProfile.username}` : 'ProofMark Verified Creator',
                     legal_name: authorProfile?.legal_name || '',
                     default_persona: authorProfile?.default_persona || 'creator'
                 };
-                
+
                 setCert(extendedCertData);
 
-                // 2. 最新のプロフィール情報を取得（ユーザー名変更に対応）
                 if (certData.user_id) {
-                    // 🚨 セキュリティ: 閲覧者が「所有者本人」の場合のみ、非公開情報（本名・設定）をフェッチする
                     const isOwnerFetch = user && user.id === certData.user_id;
-                    const selectQuery = isOwnerFetch 
-                        ? 'username, avatar_url, legal_name, default_persona' 
+                    const selectQuery = isOwnerFetch
+                        ? 'username, avatar_url, legal_name, default_persona'
                         : 'username, avatar_url';
 
                     const { data: profileData } = await supabase
@@ -114,7 +107,6 @@ export default function CertificatePage() {
                     }
                 }
 
-                // 3. Chain of Evidence バンドルの取得
                 if (certData.process_bundle_id && certData.public_verify_token) {
                     try {
                         const bundle = await getProcessBundleByVerifyToken(certData.public_verify_token);
@@ -137,8 +129,6 @@ export default function CertificatePage() {
         }
     };
 
-
-
     const handleCopy = async (textToCopy: string, type: string) => {
         try {
             await navigator.clipboard.writeText(textToCopy);
@@ -157,7 +147,31 @@ export default function CertificatePage() {
     };
 
     if (loading) {
-        return <div className="min-h-screen bg-[#07061A] text-[#00D4AA] flex justify-center items-center font-bold tracking-widest print:bg-white print:text-black">VERIFYING...</div>;
+        return (
+            <div className="min-h-screen bg-[#07061A] text-[#00D4AA] flex justify-center items-center font-bold tracking-widest print:bg-white print:text-black relative overflow-hidden">
+                {/* God-mode loading aura */}
+                <div className="absolute inset-0 pointer-events-none">
+                    <motion.div
+                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[480px] h-[480px] rounded-full bg-[#6C3EF4]/15 blur-[120px]"
+                        animate={{ opacity: [0.4, 0.8, 0.4] }}
+                        transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                    <motion.div
+                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[360px] h-[360px] rounded-full bg-[#00D4AA]/12 blur-[100px]"
+                        animate={{ opacity: [0.3, 0.65, 0.3] }}
+                        transition={{ duration: 3.4, delay: 0.6, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                </div>
+                <div className="relative flex items-center gap-3">
+                    <motion.span
+                        className="block h-2 w-2 rounded-full bg-[#00D4AA]"
+                        animate={{ opacity: [1, 0.2, 1] }}
+                        transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                    VERIFYING...
+                </div>
+            </div>
+        );
     }
 
     if (!cert) {
@@ -195,7 +209,6 @@ export default function CertificatePage() {
     const templateFormal = `納品データ一式をお送りいたします。本作品は、AI生成ベースに当方で独自の加筆修正を施したオリジナル作品です。『ProofMark』にて制作日時と元データを暗号化・保全し、正当な制作プロセスを証明しております。\n証明書URL: ${verifyUrl}`;
     const templateSNS = `本作品の制作日時とオリジナルデータは『ProofMark』にて改ざん不能な状態で証明・保全されています。無断転載や自作発言等の不正利用はお控えください。\n証明書URL: ${verifyUrl}`;
 
-    // --- 動的OGP用のパラメータ抽出 ---
     const getDisplayTitle = () => {
         if (cert.title) return cert.title;
         if (cert.original_filename && cert.original_filename !== 'unknown_file') return cert.original_filename;
@@ -217,6 +230,12 @@ export default function CertificatePage() {
 
     const ogpUrl = `https://proofmark.jp/api/og?id=${cert.id}&title=${encodeURIComponent(ogTitle)}&thumb=${encodeURIComponent(ogThumb)}&hash=${ogHash}&timestamp=${encodeURIComponent(formattedTimestamp)}&creator=${encodeURIComponent(ogCreator)}`;
 
+    /* Has-visual = どの Vault でもなく、本物の画像が表示されるかどうか */
+    const hasVisualAsset = !cert.is_asset_purged &&
+        cert.proof_mode === 'shareable' &&
+        cert.public_image_url &&
+        (cert.visibility === 'public' || (user && user.id === cert.user_id));
+
     return (
         <>
             <SEO
@@ -225,7 +244,6 @@ export default function CertificatePage() {
                 image={ogpUrl}
                 url={verifyUrl}
             />
-            {/* 🖨️ ブラウザの印刷基本設定を強制（Tailwindと併用して最強にする） */}
             <style>{`
                 @media print {
                     @page { size: A4 landscape; margin: 10mm; }
@@ -235,27 +253,111 @@ export default function CertificatePage() {
                         background: white !important; 
                         zoom: 0.88; 
                     }
-                    /* 余分な空白を詰める */
                     .print-compact { padding: 1rem !important; margin-bottom: 0 !important; }
                 }
+
+                /* ───────── God-Mode shimmer for primary CTA ───────── */
+                @keyframes pm-shimmer {
+                  0%   { transform: translateX(-120%) skewX(-12deg); }
+                  100% { transform: translateX(220%)  skewX(-12deg); }
+                }
+                .pm-shimmer-host { position: relative; overflow: hidden; isolation: isolate; }
+                .pm-shimmer-host::after {
+                  content: '';
+                  position: absolute;
+                  inset: 0;
+                  background: linear-gradient(90deg,
+                    transparent 0%,
+                    rgba(255,255,255,0.0) 30%,
+                    rgba(255,255,255,0.45) 50%,
+                    rgba(255,255,255,0.0) 70%,
+                    transparent 100%);
+                  transform: translateX(-120%) skewX(-12deg);
+                  animation: pm-shimmer 3.4s ease-in-out infinite;
+                  animation-delay: 1.2s;
+                  pointer-events: none;
+                  z-index: 1;
+                }
+
+                /* SEALED stamp rotation breathing */
+                @keyframes pm-seal-orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                @keyframes pm-seal-orbit-rev { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
             `}</style>
 
-            {/* 💡 Tailwindの `print:` クラスを駆使して印刷時の見た目を完全にコントロール */}
-            <div className="min-h-screen bg-[#07061A] text-[#F0EFF8] flex flex-col items-center py-10 px-4 sm:px-8 font-sans print:min-h-0 print:bg-white print:py-0 print:px-0">
+            <div className="min-h-screen bg-[#07061A] text-[#F0EFF8] flex flex-col items-center py-10 px-4 sm:px-8 font-sans print:min-h-0 print:bg-white print:py-0 print:px-0 relative overflow-x-hidden">
+
+                {/* ═══════════ God-Mode: Abyss Aura (background) ═══════════ */}
+                <div aria-hidden className="print:hidden pointer-events-none fixed inset-0 -z-0 overflow-hidden">
+                    <motion.div
+                        className="absolute -top-40 -left-40 w-[700px] h-[700px] rounded-full bg-[#6C3EF4] opacity-[0.10] blur-[160px]"
+                        animate={{ opacity: [0.07, 0.13, 0.07], scale: [1, 1.04, 1] }}
+                        transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                    <motion.div
+                        className="absolute -bottom-40 -right-40 w-[700px] h-[700px] rounded-full bg-[#00D4AA] opacity-[0.10] blur-[160px]"
+                        animate={{ opacity: [0.07, 0.13, 0.07], scale: [1, 1.05, 1] }}
+                        transition={{ duration: 9, delay: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                    <motion.div
+                        className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] rounded-full bg-[#F0BB38] opacity-[0.04] blur-[140px]"
+                        animate={{ opacity: [0.02, 0.06, 0.02] }}
+                        transition={{ duration: 10, delay: 0.6, repeat: Infinity, ease: 'easeInOut' }}
+                    />
+                    {/* Subtle grid */}
+                    <div
+                        className="absolute inset-0 opacity-[0.025]"
+                        style={{
+                            backgroundImage:
+                                'linear-gradient(0deg, rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)',
+                            backgroundSize: '48px 48px',
+                            maskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
+                        }}
+                    />
+                </div>
 
                 <Navbar user={user} signOut={signOut} />
 
-                {/* --- 📜 証明書カード本体 --- */}
-                <div className="print-compact w-full max-w-5xl bg-[#0D0B24] border border-[#1C1A38] rounded-3xl p-8 sm:p-12 shadow-[0_0_50px_rgba(108,62,244,0.1)] relative overflow-hidden print:bg-white print:border-2 print:border-gray-200 print:shadow-none print:p-4 print:w-full print:max-w-none print:break-inside-avoid">
+                {/* ═══════════ Certificate Card ═══════════ */}
+                <motion.div
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.7, ease: PM_EASE }}
+                    className="print-compact w-full max-w-5xl bg-[#0D0B24] border border-[#1C1A38] rounded-3xl p-8 sm:p-12 relative overflow-hidden print:bg-white print:border-2 print:border-gray-200 print:shadow-none print:p-4 print:w-full print:max-w-none print:break-inside-avoid"
+                    style={{
+                        boxShadow:
+                            '0 0 0 1px rgba(255,255,255,0.03) inset, 0 40px 100px -40px rgba(108,62,244,0.35), 0 20px 60px -30px rgba(0,212,170,0.18)',
+                    }}
+                >
+                    {/* top gradient hairline */}
+                    <div
+                        aria-hidden
+                        className="print:hidden absolute inset-x-8 top-0 h-px"
+                        style={{
+                            background:
+                                'linear-gradient(90deg, transparent, rgba(108,62,244,0.8), rgba(0,212,170,0.8), rgba(240,187,56,0.6), transparent)',
+                        }}
+                    />
 
+                    {/* internal orbs */}
                     <div className="print:hidden absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-                        <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#6C3EF4] opacity-10 blur-[100px] rounded-full"></div>
-                        <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-[#00D4AA] opacity-10 blur-[100px] rounded-full"></div>
+                        <motion.div
+                            className="absolute -top-32 -left-32 w-96 h-96 bg-[#6C3EF4] opacity-10 blur-[100px] rounded-full"
+                            animate={{ opacity: [0.08, 0.14, 0.08] }}
+                            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+                        />
+                        <motion.div
+                            className="absolute -bottom-32 -right-32 w-96 h-96 bg-[#00D4AA] opacity-10 blur-[100px] rounded-full"
+                            animate={{ opacity: [0.08, 0.14, 0.08] }}
+                            transition={{ duration: 6, delay: 1, repeat: Infinity, ease: 'easeInOut' }}
+                        />
                     </div>
 
                     <div className="w-full relative z-10">
                         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8 border-b border-[#1C1A38] pb-6 print:border-gray-300">
                             <div>
+                                <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-[#A8A0D8] mb-3 print:text-gray-500">
+                                    ProofMark · Verifiable Existence
+                                </p>
                                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tighter mb-2 leading-tight print:text-black">
                                     CERTIFICATE OF<br />AUTHENTICITY
                                 </h1>
@@ -263,52 +365,102 @@ export default function CertificatePage() {
                             </div>
 
                             <div className="flex flex-wrap items-center gap-3">
-                                <div className="flex items-center gap-1.5 bg-[#00D4AA]/10 border border-[#00D4AA]/30 text-[#00D4AA] px-4 py-2 rounded-full text-xs font-black tracking-widest uppercase print:bg-teal-50 print:border-teal-500 print:text-teal-700">
-                                    <ShieldCheck className="w-4 h-4" /> VERIFIED
-                                </div>
+                                {/* VERIFIED — breathing badge */}
+                                <BreathingBadge
+                                    color="#00D4AA"
+                                    rgb="0,212,170"
+                                    icon={<ShieldCheck className="w-4 h-4" />}
+                                    label="VERIFIED"
+                                    printClass="print:bg-teal-50 print:border-teal-500 print:text-teal-700"
+                                />
+
                                 {c2pa.present && (
-                                    <div className="flex items-center gap-1.5 bg-[#6C3EF4]/10 border border-[#6C3EF4]/50 shadow-[0_0_12px_rgba(108,62,244,0.4)] text-[#BC78FF] px-4 py-2 rounded-full text-xs font-black tracking-widest uppercase print:bg-purple-50 print:border-purple-500 print:text-purple-700">
-                                        <ShieldCheck className="w-4 h-4" /> C2PA VERIFIED
-                                    </div>
+                                    <BreathingBadge
+                                        color="#BC78FF"
+                                        rgb="188,120,255"
+                                        icon={<ShieldCheck className="w-4 h-4" />}
+                                        label="C2PA VERIFIED"
+                                        printClass="print:bg-purple-50 print:border-purple-500 print:text-purple-700"
+                                    />
                                 )}
-                                <div className="flex items-center gap-1.5 bg-[#6C3EF4]/10 border border-[#6C3EF4]/50 shadow-[0_0_12px_rgba(108,62,244,0.4)] text-[#BC78FF] px-4 py-2 rounded-full text-xs font-black tracking-widest uppercase print:bg-purple-50 print:border-purple-500 print:text-purple-700">
-                                    <img src={founderBadge} alt="Founder" className="w-4 h-4 print:hidden" />
-                                    <span className="hidden print:inline-block w-4 h-4 text-center leading-4">🚀</span>
-                                    FOUNDER
-                                </div>
+
+                                <BreathingBadge
+                                    color="#F0BB38"
+                                    rgb="240,187,56"
+                                    icon={
+                                        <>
+                                            <img src={founderBadge} alt="Founder" className="w-4 h-4 print:hidden" />
+                                            <span className="hidden print:inline-block w-4 h-4 text-center leading-4">🚀</span>
+                                        </>
+                                    }
+                                    label="FOUNDER"
+                                    printClass="print:bg-amber-50 print:border-amber-500 print:text-amber-700"
+                                />
                             </div>
                             {authorProfile?.username && (
                                 <div className="mt-4 no-print text-center lg:text-left">
                                     <Link href={`/u/${authorProfile.username}`}>
-                                        <span className="inline-flex items-center gap-2 text-sm font-bold text-[#00D4AA] hover:text-white transition-colors cursor-pointer bg-[#00D4AA]/10 border border-[#00D4AA]/20 px-4 py-2 rounded-full">
+                                        <motion.span
+                                            whileHover={{ scale: 1.03 }}
+                                            whileTap={{ scale: 0.98 }}
+                                            className="inline-flex items-center gap-2 text-sm font-bold text-[#00D4AA] hover:text-white transition-colors cursor-pointer bg-[#00D4AA]/10 border border-[#00D4AA]/30 px-4 py-2 rounded-full"
+                                            style={{ boxShadow: '0 0 24px rgba(0,212,170,0.15)' }}
+                                        >
                                             👤 @{authorProfile.username} の公開ギャラリーを見る
-                                        </span>
+                                        </motion.span>
                                     </Link>
                                 </div>
                             )}
                         </div>
 
-                        {/* 💡 print:flex-row を追加して印刷時に横並びを強制 */}
                         <div className="flex flex-col md:flex-row gap-10 print:flex-row print:gap-8 print:items-center">
 
-                            {/* 左側：アートワーク または ZK表示 */}
+                            {/* 左側: アートワーク または SEALED Stamp */}
                             <div className="w-full md:w-2/5 flex-shrink-0 print:w-[38%]">
-                                <div className="aspect-square w-full rounded-2xl border border-[#1C1A38] bg-[#07061A] flex flex-col items-center justify-center overflow-hidden relative shadow-inner print:border-gray-300 print:bg-gray-50 print:shadow-none">
+                                <div
+                                    className="aspect-square w-full rounded-2xl border border-[#1C1A38] bg-[#07061A] flex flex-col items-center justify-center overflow-hidden relative shadow-inner print:border-gray-300 print:bg-gray-50 print:shadow-none group"
+                                    style={{
+                                        boxShadow: hasVisualAsset
+                                            ? '0 30px 80px -30px rgba(0,212,170,0.45), 0 0 0 1px rgba(255,255,255,0.03) inset'
+                                            : '0 30px 80px -30px rgba(240,187,56,0.35), 0 0 0 1px rgba(255,255,255,0.03) inset',
+                                    }}
+                                >
+                                    {/* Under-card glow for visual assets */}
+                                    {hasVisualAsset && (
+                                        <motion.div
+                                            aria-hidden
+                                            className="print:hidden absolute -inset-6 rounded-[28px] blur-3xl pointer-events-none -z-10"
+                                            style={{
+                                                background:
+                                                    'radial-gradient(ellipse at 50% 80%, rgba(0,212,170,0.35) 0%, transparent 60%), radial-gradient(ellipse at 50% 20%, rgba(108,62,244,0.25) 0%, transparent 55%)',
+                                            }}
+                                            animate={{ opacity: [0.7, 1, 0.7] }}
+                                            transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+                                        />
+                                    )}
+
                                     {cert.is_asset_purged === true ? (
                                         <PurgedVaultFull />
                                     ) : cert.proof_mode === 'shareable' && cert.public_image_url && (cert.visibility === 'public' || (user && user.id === cert.user_id)) ? (
-                                        <img src={secureImageUrl} alt="Artwork" className="w-full h-full object-cover" />
+                                        <motion.img
+                                            src={secureImageUrl}
+                                            alt="Artwork"
+                                            className="w-full h-full object-cover"
+                                            initial={{ opacity: 0, scale: 1.02 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            transition={{ duration: 0.8, ease: PM_EASE }}
+                                        />
                                     ) : user && user.id === cert.user_id && cert.public_image_url ? (
                                         <TranslucentVaultFull imageUrl={secureImageUrl} />
                                     ) : user && user.id === cert.user_id ? (
                                         <OwnerVaultFull />
                                     ) : (
-                                        <TheVaultFull />
+                                        <SealedStampVault />
                                     )}
                                 </div>
                             </div>
 
-                            {/* 右側：データ表示 */}
+                            {/* 右側 */}
                             <div className="w-full md:w-3/5 flex flex-col justify-center space-y-6 print:w-[62%] print:space-y-4">
 
                                 <div>
@@ -316,7 +468,6 @@ export default function CertificatePage() {
                                     <p className="font-mono text-xs sm:text-sm text-white/80 print:text-black">{cert.id}</p>
                                 </div>
 
-                                {/* 💡 【NEW】ファイル名を表示して作品との紐付けを明確化 */}
                                 <div>
                                     <p className="text-[10px] sm:text-xs font-bold text-[#A8A0D8] uppercase tracking-widest mb-1 flex items-center gap-1 print:text-gray-500">
                                         <FileText className="w-3 h-3" /> Protected Asset
@@ -326,19 +477,44 @@ export default function CertificatePage() {
                                     </p>
                                 </div>
 
-                                <div className="p-4 sm:p-5 rounded-2xl border border-[#00D4AA]/20 bg-gradient-to-r from-[#00D4AA]/10 to-transparent relative group print:bg-none print:bg-gray-50 print:border-gray-300 print:shadow-none">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <CheckCircle className="w-4 h-4 text-[#00D4AA] print:text-teal-600" />
-                                        <h2 className="text-[10px] sm:text-xs font-bold text-[#00D4AA] uppercase tracking-widest print:text-teal-700">SHA-256 Hash Signature</h2>
+                                {/* SHA-256 panel — animated border sheen */}
+                                <motion.div
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.6, delay: 0.2, ease: PM_EASE }}
+                                    className="relative p-4 sm:p-5 rounded-2xl border border-[#00D4AA]/25 bg-gradient-to-r from-[#00D4AA]/10 to-transparent group overflow-hidden print:bg-none print:bg-gray-50 print:border-gray-300 print:shadow-none"
+                                    style={{ boxShadow: '0 0 0 1px rgba(0,212,170,0.05) inset' }}
+                                >
+                                    {/* moving sheen */}
+                                    <div
+                                        aria-hidden
+                                        className="print:hidden absolute -inset-px rounded-2xl pointer-events-none"
+                                        style={{
+                                            background:
+                                                'conic-gradient(from var(--a, 0deg), transparent 0deg, rgba(0,212,170,0.4) 60deg, transparent 120deg, transparent 360deg)',
+                                            WebkitMaskImage:
+                                                'linear-gradient(#000 0 0), linear-gradient(#000 0 0)',
+                                            WebkitMaskComposite: 'xor',
+                                            maskComposite: 'exclude',
+                                            padding: 1,
+                                            opacity: 0.18,
+                                        }}
+                                    />
+                                    <div className="relative">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <CheckCircle className="w-4 h-4 text-[#00D4AA] print:text-teal-600" />
+                                            <h2 className="text-[10px] sm:text-xs font-bold text-[#00D4AA] uppercase tracking-widest print:text-teal-700">SHA-256 Hash Signature</h2>
+                                        </div>
+                                        <p className="font-mono text-[#F0EFF8] text-[10px] sm:text-xs break-all pr-8 leading-relaxed print:text-gray-800">{cert.sha256}</p>
+                                        <button
+                                            onClick={handleHashCopy}
+                                            className="print:hidden absolute top-1/2 -translate-y-1/2 right-0 p-2 rounded-lg bg-[#00D4AA]/10 hover:bg-[#00D4AA]/25 transition-colors"
+                                            aria-label="ハッシュをコピー"
+                                        >
+                                            {isHashCopied ? <CheckCircle className="w-4 h-4 text-[#00D4AA]" /> : <Copy className="w-4 h-4 text-[#00D4AA]" />}
+                                        </button>
                                     </div>
-                                    <p className="font-mono text-[#F0EFF8] text-[10px] sm:text-xs break-all pr-8 leading-relaxed print:text-gray-800">{cert.sha256}</p>
-                                    <button
-                                        onClick={handleHashCopy}
-                                        className="print:hidden absolute top-1/2 -translate-y-1/2 right-3 p-2 rounded-lg bg-[#00D4AA]/10 hover:bg-[#00D4AA]/20 transition-colors"
-                                    >
-                                        {isHashCopied ? <CheckCircle className="w-4 h-4 text-[#00D4AA]" /> : <Copy className="w-4 h-4 text-[#00D4AA]" />}
-                                    </button>
-                                </div>
+                                </motion.div>
 
                                 <div className="flex flex-row gap-6 items-center justify-between border-t border-[#1C1A38] pt-6 print:border-gray-300 print:pt-4">
                                     <div className="flex-1">
@@ -346,22 +522,36 @@ export default function CertificatePage() {
                                             <Clock className="w-4 h-4 text-[#F0BB38] print:text-yellow-600" />
                                             <h2 className="text-[10px] sm:text-xs font-bold text-[#F0BB38] uppercase tracking-widest print:text-gray-600">Digital Timestamp (JST)</h2>
                                         </div>
-                                        <p className="text-xl sm:text-2xl font-bold text-white tracking-tight print:text-black">
+                                        <p className="text-xl sm:text-2xl font-bold text-white tracking-tight print:text-black"
+                                            style={{ fontVariantNumeric: 'tabular-nums' }}>
                                             {new Date(cert.created_at).toLocaleString('ja-JP')}
                                         </p>
                                         {cert?.certified_at && (
-                                            <div className="mt-2 flex items-center space-x-1.5 text-[#00D4AA] bg-[#00D4AA]/10 border border-[#00D4AA]/20 px-3 py-1 rounded-full w-fit print:bg-teal-50 print:border-teal-200 print:text-teal-700">
+                                            <motion.div
+                                                className="mt-2 flex items-center space-x-1.5 text-[#00D4AA] bg-[#00D4AA]/10 border border-[#00D4AA]/30 px-3 py-1 rounded-full w-fit print:bg-teal-50 print:border-teal-200 print:text-teal-700"
+                                                animate={{
+                                                    boxShadow: [
+                                                        '0 0 0 0 rgba(0,212,170,0.5)',
+                                                        '0 0 0 6px rgba(0,212,170,0)',
+                                                        '0 0 0 0 rgba(0,212,170,0.5)',
+                                                    ],
+                                                }}
+                                                transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+                                            >
                                                 <ShieldCheck className="w-3.5 h-3.5" />
                                                 <span className="text-[10px] font-black tracking-widest uppercase">
                                                     RFC3161 Verified
                                                 </span>
-                                            </div>
+                                            </motion.div>
                                         )}
                                         <p className="text-[10px] sm:text-xs text-[#A8A0D8] mt-1 print:text-gray-500">改ざん不能な技術で真正性が担保されています</p>
                                     </div>
 
                                     <div className="flex-shrink-0 flex flex-col items-center gap-1">
-                                        <div className="p-2 sm:p-3 bg-white rounded-xl shadow-lg border border-gray-100 print:shadow-none print:border-gray-300">
+                                        <div
+                                            className="p-2 sm:p-3 bg-white rounded-xl border border-gray-100 print:shadow-none print:border-gray-300"
+                                            style={{ boxShadow: '0 8px 24px rgba(0,212,170,0.18)' }}
+                                        >
                                             <QRCodeSVG
                                                 value={verifyUrl}
                                                 size={70}
@@ -378,64 +568,67 @@ export default function CertificatePage() {
                             </div>
                         </div>
                     </div>
-                </div>
+                </motion.div>
 
-                <div className="w-full max-w-5xl mt-8">
+                <div className="w-full max-w-5xl mt-8 relative z-10">
                     <ContentCredentialsSection manifest={cert?.c2pa_manifest} />
                 </div>
 
-                {/* --- 🚫 ここから下は印刷時すべて非表示 (print:hidden) --- */}
-
-
-
-                <div className="pt-8 border-t border-slate-700 flex flex-wrap gap-4">
-                    <button
+                {/* ═══════════ Actions ═══════════ */}
+                <div className="pt-8 mt-4 border-t border-slate-700/40 flex flex-wrap gap-4 relative z-10 w-full max-w-5xl justify-start">
+                    <motion.button
                         onClick={shareOnX}
+                        whileHover={{ y: -2 }}
+                        whileTap={{ scale: 0.97 }}
                         className="no-print bg-[#0f1419] hover:bg-[#272c30] text-white px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2 border border-slate-700"
                     >
                         <svg viewBox="0 0 24 24" aria-hidden="true" className="w-5 h-5 fill-current"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 22.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.008 3.827H5.078z"></path></svg>
                         Xで証明をシェア
-                    </button>
-                    {/* 有料プラン、または user_id が存在しない（＝未ログインで決済を突破したSpotユーザー）場合は開放 */}
+                    </motion.button>
+
                     {isPaidPlan || !cert.user_id ? (
-                        <>
-                            {/* 「PDFとして保存」はUXの混乱を避けるため完全削除し、Evidence Packボタンへ一本化 */}
-                            <div className="no-print w-full sm:w-auto sm:min-w-[280px]">
-                                <EvidencePackDownloadButton certId={cert.id} apiData={cert} />
-                            </div>
-                        </>
+                        <div className="no-print w-full sm:w-auto sm:min-w-[280px] pm-shimmer-host rounded-xl">
+                            <EvidencePackDownloadButton certId={cert.id} apiData={cert} />
+                        </div>
                     ) : (
-                        <button
+                        <motion.button
+                            whileHover={{ y: -2 }}
+                            whileTap={{ scale: 0.97 }}
                             onClick={() => {
                                 alert('PDF証明書と Evidence Pack ダウンロードは Creator / Studio プラン限定の機能です。今すぐ、プランをアップグレードしてください。');
                                 window.location.href = '/pricing#creator';
                             }}
-                            className="no-print bg-slate-800 text-slate-400 px-6 py-3 rounded-xl font-bold border border-slate-700 flex items-center gap-2 hover:bg-slate-700 hover:text-white transition-all cursor-pointer relative group"
+                            className="no-print bg-slate-800/80 text-slate-300 px-6 py-3 rounded-xl font-bold border border-slate-700 flex items-center gap-2 hover:bg-slate-700 hover:text-white transition-all cursor-pointer relative group backdrop-blur"
                         >
                             <Lock className="w-4 h-4" /> PDF・Evidence Pack をロック解除
-                            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#F0BB38] text-[#1A1200] text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                            <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#F0BB38] text-[#1A1200] text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none font-mono">
                                 Creatorプラン限定
                             </span>
-                        </button>
+                        </motion.button>
                     )}
-                    <button
+
+                    <motion.button
+                        whileHover={{ y: -2 }}
+                        whileTap={{ scale: 0.97 }}
                         onClick={() => setLocation('/')}
-                        className="no-print bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-all"
+                        className="no-print bg-gradient-to-br from-[#6C3EF4] to-[#8B61FF] hover:brightness-110 text-white px-6 py-3 rounded-xl font-bold transition-all"
+                        style={{ boxShadow: '0 12px 32px -10px rgba(108,62,244,0.65)' }}
                     >
                         トップに戻る
-                    </button>
+                    </motion.button>
                 </div>
 
-                {/* 作成者（オーナー）本人にしか見せない「マジックの裏側」のUI */}
+                {/* Owner-only block */}
                 {isOwner && (
-                    <div className="print:hidden w-full max-w-5xl mt-16 bg-[#0D0B24] p-6 sm:p-8 rounded-2xl border border-[#1C1A38] mb-20">
+                    <div className="print:hidden w-full max-w-5xl mt-16 bg-[#0D0B24] p-6 sm:p-8 rounded-2xl border border-[#1C1A38] mb-20 relative z-10"
+                        style={{ boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.03), 0 24px 60px -30px rgba(0,212,170,0.18)' }}
+                    >
                         <h3 className="text-[#00D4AA] font-bold mb-4 flex items-center gap-2">
                             <span className="text-xl">💡</span> クライアント・提出先向け 説明テンプレート
                         </h3>
                         <p className="text-sm text-[#A8A0D8] mb-6">用途に合わせて以下のテキストをコピーし、納品時やSNSでの作品公開時にご活用ください。</p>
 
                         <div className="space-y-6">
-                            {/* パターン1: 納品用 */}
                             <div>
                                 <p className="text-sm text-white font-bold mb-2">▼ 納品・コンテスト提出用（フォーマル）</p>
                                 <div className="relative p-4 rounded-lg bg-[#0f1629] border border-[#2a2a4e]">
@@ -455,7 +648,6 @@ export default function CertificatePage() {
                                 </div>
                             </div>
 
-                            {/* パターン2: SNS用 */}
                             <div>
                                 <p className="text-sm text-white font-bold mb-2">▼ SNS公開用（無断転載・自作発言対策）</p>
                                 <div className="relative p-4 rounded-lg bg-[#0f1629] border border-[#2a2a4e]">
@@ -475,7 +667,6 @@ export default function CertificatePage() {
                                 </div>
                             </div>
 
-                            {/* 🚨 パターン3: 法的削除要請（DMCA） */}
                             <div className="pt-6 mt-2 border-t border-[#1C1A38]">
                                 <p className="text-sm text-[#FF453A] font-bold mb-2 flex items-center gap-2">
                                     <ShieldAlert className="w-4 h-4" /> ▼ 無断転載への法的措置（DMCA / 送信防止措置）
@@ -483,40 +674,34 @@ export default function CertificatePage() {
                                 <p className="text-xs text-[#A8A0D8] mb-4">
                                     プラットフォーム（X, Google, 各種プロバイダ等）に対して、法的効力を持つ削除要請書（Takedown Notice）を即時生成します。
                                 </p>
-                                <button
+                                <motion.button
+                                    whileHover={{ y: -1, scale: 1.01 }}
+                                    whileTap={{ scale: 0.98 }}
                                     onClick={() => setTakedownOpen(true)}
                                     className="bg-[#FF453A]/10 hover:bg-[#FF453A]/20 border border-[#FF453A]/30 text-[#FF453A] px-5 py-3 rounded-xl font-bold transition-all flex items-center gap-2 text-sm"
+                                    style={{ boxShadow: '0 12px 32px -16px rgba(255,69,58,0.55)' }}
                                 >
                                     <Gavel className="w-4 h-4" />
                                     法的削除要請書 (PDF) を作成する
-                                </button>
+                                </motion.button>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* Chain of Evidence タイムライン */}
                 {bundle && (
-                    <div className="w-full max-w-5xl mt-12 print:hidden relative isolate">
+                    <div className="w-full max-w-5xl mt-12 print:hidden relative isolate z-10">
                         <div className="absolute inset-0 bg-gradient-to-b from-[#6C3EF4]/5 to-transparent blur-3xl -z-10 rounded-[3rem]"></div>
                         <ProofBundleTimelineCard bundle={bundle} />
                     </div>
                 )}
 
-                {/* ✨ Zero-Knowledge Web Verifier (ブラウザ内オフライン検証) ✨ */}
-                {/* 🚨 ID `verify-section` とスムーススクロール用の `scroll-mt-24` を追加 */}
-                <div id="verify-section" className="w-full max-w-5xl mt-24 print:hidden scroll-mt-24">
-                    <div className="bg-[#f5f5f7] rounded-[2.5rem] py-16 px-4 sm:px-12 shadow-[0_20px_80px_rgba(0,0,0,0.5)] border border-[#e5e5e7]/10 relative overflow-hidden transition-all hover:shadow-[0_20px_100px_rgba(0,212,170,0.15)]">
-                        {/* 上部に落ちる淡い光沢（ガラス表現） */}
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-12 bg-gradient-to-b from-white/80 to-transparent blur-xl pointer-events-none"></div>
-                        
-                        {/* Verifier 本体 */}
-                        <VerifyDropzone />
-                    </div>
+                {/* ═══════════ Verifier (optical scanner) ═══════════ */}
+                <div id="verify-section" className="w-full max-w-5xl mt-24 print:hidden scroll-mt-24 relative z-10">
+                    <VerifyDropzone />
                 </div>
 
-                {/* 🚨 通報導線 (Report Abuse) */}
-                <div className="mt-12 text-center pb-8 print:hidden">
+                <div className="mt-12 text-center pb-8 print:hidden relative z-10">
                     <button
                         onClick={handleReportAbuse}
                         className="text-xs text-gray-500 underline hover:text-gray-300 transition-colors flex items-center justify-center gap-1 mx-auto"
@@ -526,7 +711,6 @@ export default function CertificatePage() {
                     </button>
                 </div>
 
-                {/* 🚨 DMCA / Takedown Notice Modal */}
                 {isOwner && cert && (
                     <TakedownNoticeModal
                         open={isTakedownOpen}
@@ -552,72 +736,139 @@ export default function CertificatePage() {
     );
 }
 
-/* ─── Vault components (CertificatePage local) ─────────────── */
+/* ═══════════════════════════════════════════════
+ *   God-Mode: Breathing Badge
+ * ═══════════════════════════════════════════════ */
+function BreathingBadge({
+    color,
+    rgb,
+    icon,
+    label,
+    printClass = '',
+}: {
+    color: string;
+    rgb: string;
+    icon: React.ReactNode;
+    label: string;
+    printClass?: string;
+}) {
+    return (
+        <motion.div
+            className={`relative flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-black tracking-widest uppercase ${printClass}`}
+            style={{
+                background: `rgba(${rgb}, 0.10)`,
+                border: `1px solid rgba(${rgb}, 0.45)`,
+                color,
+            }}
+            animate={{
+                boxShadow: [
+                    `0 0 0 0 rgba(${rgb}, 0.45)`,
+                    `0 0 0 8px rgba(${rgb}, 0)`,
+                    `0 0 0 0 rgba(${rgb}, 0.45)`,
+                ],
+            }}
+            transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+        >
+            <motion.span
+                className="flex items-center"
+                animate={{ opacity: [1, 0.78, 1] }}
+                transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+            >
+                {icon}
+            </motion.span>
+            <span className="relative">{label}</span>
+        </motion.div>
+    );
+}
 
-const PurgedVaultFull = () => (
-  <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-950 p-8 text-center relative overflow-hidden border border-zinc-800/50 rounded-xl">
-    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,212,170,0.03)_0%,transparent_70%)] pointer-events-none" />
-    
-    <div className="relative z-10 flex flex-col items-center max-w-md">
-      <div className="w-20 h-20 rounded-full bg-zinc-900/80 border border-zinc-800 flex items-center justify-center mb-6 shadow-lg shadow-black/50 backdrop-blur-sm">
-        <svg className="w-10 h-10 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-        </svg>
-      </div>
-      
-      <h3 className="text-xl font-semibold text-zinc-200 mb-3 tracking-wide">
-        原本ストレージ期間終了
-      </h3>
-      
-      <p className="text-sm text-zinc-400 leading-relaxed mb-6">
-        Freeプランの保存期間（30日）が終了したため、表示用の原本ファイルはサーバーから完全に削除されました。
-      </p>
-      
-      <div className="bg-emerald-950/20 border border-emerald-900/30 rounded-lg p-5 w-full backdrop-blur-sm text-left">
-        <div className="flex items-start gap-3">
-          <svg className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-          </svg>
-          <div>
-            <p className="text-sm text-emerald-400 font-medium">暗号学的なハッシュ台帳は永久です</p>
-            <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-              お手元の原本ファイルを専用の検証エリア（Verify）にドロップすれば、いつでも改ざんされていないことの存在証明が可能です。
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-function TheVaultFull() {
+/* ═══════════════════════════════════════════════
+ *   God-Mode: SEALED Stamp (replaces old TheVaultFull)
+ * ═══════════════════════════════════════════════ */
+function SealedStampVault() {
     return (
         <Tooltip.Provider delayDuration={200}>
             <Tooltip.Root>
                 <Tooltip.Trigger asChild>
                     <div
-                        className="flex flex-col items-center justify-center w-full h-full cursor-default overflow-hidden"
+                        className="flex flex-col items-center justify-center w-full h-full cursor-default overflow-hidden relative"
                         style={{
-                            backgroundColor: '#0a0e27',
-                            backgroundImage: 'radial-gradient(circle at center, rgba(108,62,244,0.08) 0%, transparent 60%)',
+                            background:
+                                'radial-gradient(circle at center, rgba(240,187,56,0.12) 0%, rgba(108,62,244,0.05) 50%, transparent 80%), #050310',
                         }}
                     >
+                        {/* Vault grid texture */}
                         <div
-                            className="absolute inset-0 pointer-events-none"
+                            className="absolute inset-0 pointer-events-none opacity-40"
                             style={{
-                                backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px)',
+                                backgroundImage:
+                                    'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px)',
                                 mixBlendMode: 'overlay' as const,
                             }}
                         />
-                        <Lock className="w-10 h-10 text-[#6c3ef4]/50 mb-4" />
-                        <h4 className="font-bold tracking-wide text-[#f0f0fa] text-base mb-1.5 opacity-90">NDA Protected</h4>
-                        <p className="font-mono text-[10px] tracking-widest text-[#00d4aa] opacity-70">ZERO-KNOWLEDGE ENCRYPTION</p>
+
+                        {/* Ambient gold glow */}
+                        <motion.div
+                            className="absolute inset-0 pointer-events-none"
+                            style={{
+                                background:
+                                    'radial-gradient(circle at center, rgba(240,187,56,0.22) 0%, transparent 55%)',
+                            }}
+                            animate={{ opacity: [0.45, 0.85, 0.45] }}
+                            transition={{ duration: 4.2, repeat: Infinity, ease: 'easeInOut' }}
+                        />
+
+                        {/* SEALED Stamp ── SVG */}
+                        <motion.div
+                            initial={{ scale: 2.4, rotate: -22, opacity: 0 }}
+                            animate={{ scale: 1, rotate: -8, opacity: 1 }}
+                            transition={{ type: 'spring', stiffness: 280, damping: 14, mass: 0.9, delay: 0.15 }}
+                            className="relative"
+                            style={{
+                                filter:
+                                    'drop-shadow(0 0 24px rgba(240,187,56,0.45)) drop-shadow(0 14px 30px rgba(0,0,0,0.7))',
+                            }}
+                        >
+                            {/* impact rings */}
+                            <motion.span
+                                aria-hidden
+                                className="absolute inset-0 rounded-full"
+                                style={{ border: '2px solid rgba(240,187,56,0.5)' }}
+                                initial={{ scale: 1, opacity: 0.6 }}
+                                animate={{ scale: 1.8, opacity: 0 }}
+                                transition={{ duration: 0.9, delay: 0.35, ease: 'easeOut' }}
+                            />
+                            <motion.span
+                                aria-hidden
+                                className="absolute inset-0 rounded-full"
+                                style={{ border: '2px solid rgba(240,187,56,0.35)' }}
+                                initial={{ scale: 1, opacity: 0.4 }}
+                                animate={{ scale: 2.5, opacity: 0 }}
+                                transition={{ duration: 1.2, delay: 0.5, ease: 'easeOut' }}
+                            />
+
+                            <SealedStampSVG />
+                        </motion.div>
+
+                        {/* Caption */}
+                        <motion.div
+                            className="absolute bottom-5 left-0 right-0 text-center"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.9, duration: 0.6, ease: PM_EASE }}
+                        >
+                            <p className="font-mono text-[9.5px] tracking-[0.32em] text-[#F0BB38]/85 uppercase">
+                                Zero-Knowledge · NDA Sealed
+                            </p>
+                            <p className="font-mono text-[9px] tracking-[0.24em] text-[#A8A0D8]/60 mt-1">
+                                hash imprint · sha-256 · rfc 3161
+                            </p>
+                        </motion.div>
                     </div>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                     <Tooltip.Content
                         sideOffset={8}
-                        className="z-50 max-w-[280px] px-4 py-3 rounded-xl shadow-2xl text-xs leading-relaxed"
+                        className="z-50 max-w-[300px] px-4 py-3 rounded-xl shadow-2xl text-xs leading-relaxed"
                         style={{ backgroundColor: '#151d2f', border: '1px solid #2a2a4e', color: '#a0a0c0' }}
                     >
                         <motion.div
@@ -625,7 +876,7 @@ function TheVaultFull() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.2, ease: 'easeOut' }}
                         >
-                            この作品は機密保持契約（NDA）に基づき、高度な暗号化技術で保護されています。元の画像はクリエイターのローカル環境から一切送信されていません。
+                            この作品は機密保持契約（NDA）に基づき、ゼロ知識封印（Zero-Knowledge Seal）が施されています。原本はクリエイターのローカル環境から一切送信されておらず、暗号学的ハッシュのみがブロックチェーン級の改ざん耐性で保全されています。
                         </motion.div>
                         <Tooltip.Arrow className="fill-[#2a2a4e] w-3 h-1.5" />
                     </Tooltip.Content>
@@ -633,6 +884,195 @@ function TheVaultFull() {
             </Tooltip.Root>
         </Tooltip.Provider>
     );
+}
+
+/* The SEALED stamp itself: inline SVG, no external image */
+function SealedStampSVG() {
+    return (
+        <div className="relative w-[210px] h-[210px] sm:w-[230px] sm:h-[230px]">
+            {/* slow-rotating outer dashed ring */}
+            <div
+                aria-hidden
+                className="absolute inset-0 rounded-full"
+                style={{
+                    border: '1px dashed rgba(240,187,56,0.5)',
+                    animation: 'pm-seal-orbit 36s linear infinite',
+                }}
+            />
+            {/* counter-rotating inner accent ring */}
+            <div
+                aria-hidden
+                className="absolute inset-4 rounded-full"
+                style={{
+                    border: '1px dashed rgba(108,62,244,0.32)',
+                    animation: 'pm-seal-orbit-rev 48s linear infinite',
+                }}
+            />
+
+            <svg
+                viewBox="0 0 240 240"
+                width="100%"
+                height="100%"
+                className="relative"
+            >
+                <defs>
+                    <radialGradient id="pm-seal-bg" cx="50%" cy="35%" r="70%">
+                        <stop offset="0%" stopColor="#FFE39A" stopOpacity="0.95" />
+                        <stop offset="55%" stopColor="#F0BB38" stopOpacity="0.85" />
+                        <stop offset="100%" stopColor="#7A5512" stopOpacity="0.9" />
+                    </radialGradient>
+                    <linearGradient id="pm-seal-rim" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#FFE39A" />
+                        <stop offset="100%" stopColor="#A37512" />
+                    </linearGradient>
+                    <radialGradient id="pm-seal-highlight" cx="35%" cy="25%" r="40%">
+                        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.55" />
+                        <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+                    </radialGradient>
+                    <filter id="pm-seal-inner-shadow">
+                        <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" />
+                        <feOffset dy="2" />
+                        <feComposite in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1" result="shadowDiff" />
+                        <feColorMatrix in="shadowDiff" values="0 0 0 0 0   0 0 0 0 0   0 0 0 0 0   0 0 0 0.5 0" />
+                    </filter>
+                    <path
+                        id="pm-seal-arc-top"
+                        d="M 30,120 A 90,90 0 0 1 210,120"
+                        fill="none"
+                    />
+                    <path
+                        id="pm-seal-arc-bot"
+                        d="M 210,120 A 90,90 0 0 1 30,120"
+                        fill="none"
+                    />
+                </defs>
+
+                {/* Outer disc */}
+                <circle cx="120" cy="120" r="108" fill="url(#pm-seal-bg)" />
+                <circle cx="120" cy="120" r="108" fill="none" stroke="url(#pm-seal-rim)" strokeWidth="2.5" />
+                <circle cx="120" cy="120" r="108" fill="url(#pm-seal-highlight)" />
+
+                {/* notch ring */}
+                <circle cx="120" cy="120" r="98" fill="none" stroke="rgba(80,50,0,0.55)" strokeWidth="0.5" strokeDasharray="2 5" />
+
+                {/* Inner shield */}
+                <circle cx="120" cy="120" r="74" fill="rgba(60,30,0,0.18)" filter="url(#pm-seal-inner-shadow)" />
+                <circle cx="120" cy="120" r="74" fill="none" stroke="rgba(255,210,120,0.55)" strokeWidth="1" />
+
+                {/* Arc text */}
+                <text fill="rgba(40,20,0,0.85)" fontSize="11" fontWeight="900" letterSpacing="4">
+                    <textPath href="#pm-seal-arc-top" startOffset="50%" textAnchor="middle">
+                        ★ PROOFMARK ★ SEALED ★
+                    </textPath>
+                </text>
+                <text fill="rgba(40,20,0,0.7)" fontSize="9" fontWeight="700" letterSpacing="3.5">
+                    <textPath href="#pm-seal-arc-bot" startOffset="50%" textAnchor="middle">
+                        RFC 3161 · SHA-256 · ZERO-KNOWLEDGE
+                    </textPath>
+                </text>
+
+                {/* Central wax glyph: stylised PM monogram */}
+                <g transform="translate(120,124)">
+                    <circle r="36" fill="rgba(50,25,0,0.22)" />
+                    <circle r="36" fill="none" stroke="rgba(255,225,140,0.6)" strokeWidth="0.75" />
+                    {/* P */}
+                    <path
+                        d="M -16,-22 L -16,22 M -16,-22 L 4,-22 C 16,-22 16,-2 4,-2 L -16,-2"
+                        stroke="#3C1F00"
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        fill="none"
+                    />
+                    {/* M overlay tick */}
+                    <path
+                        d="M 6,22 L 6,-2 L 14,8 L 22,-2 L 22,22"
+                        stroke="#3C1F00"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        fill="none"
+                    />
+                    {/* tiny stars */}
+                    <g fill="#3C1F00" opacity="0.75">
+                        <polygon points="-26,0 -24,-2 -22,0 -24,2" />
+                        <polygon points="26,0 24,-2 22,0 24,2" />
+                    </g>
+                </g>
+
+                {/* SEALED banner */}
+                <g transform="translate(120,184)">
+                    <rect x="-44" y="-9" width="88" height="18" rx="3" fill="rgba(40,20,0,0.7)" />
+                    <text
+                        x="0"
+                        y="4"
+                        textAnchor="middle"
+                        fill="#FFE39A"
+                        fontSize="11"
+                        fontWeight="900"
+                        letterSpacing="5"
+                    >
+                        SEALED
+                    </text>
+                </g>
+            </svg>
+
+            {/* glow halo behind */}
+            <div
+                aria-hidden
+                className="absolute inset-0 rounded-full -z-10 blur-2xl"
+                style={{ background: 'radial-gradient(circle, rgba(240,187,56,0.35), transparent 65%)' }}
+            />
+        </div>
+    );
+}
+
+/* ─── Vault components (unchanged behaviour, refined visuals) ─────────────── */
+
+const PurgedVaultFull = () => (
+    <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-950 p-8 text-center relative overflow-hidden border border-zinc-800/50 rounded-xl">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,212,170,0.03)_0%,transparent_70%)] pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col items-center max-w-md">
+            <motion.div
+                className="w-20 h-20 rounded-full bg-zinc-900/80 border border-zinc-800 flex items-center justify-center mb-6 shadow-lg shadow-black/50 backdrop-blur-sm"
+                animate={{ boxShadow: ['0 0 20px rgba(0,212,170,0.08)', '0 0 40px rgba(0,212,170,0.18)', '0 0 20px rgba(0,212,170,0.08)'] }}
+                transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
+            >
+                <svg className="w-10 h-10 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+            </motion.div>
+
+            <h3 className="text-xl font-semibold text-zinc-200 mb-3 tracking-wide">
+                原本ストレージ期間終了
+            </h3>
+
+            <p className="text-sm text-zinc-400 leading-relaxed mb-6">
+                Freeプランの保存期間（30日）が終了したため、表示用の原本ファイルはサーバーから完全に削除されました。
+            </p>
+
+            <div className="bg-emerald-950/20 border border-emerald-900/30 rounded-lg p-5 w-full backdrop-blur-sm text-left">
+                <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <div>
+                        <p className="text-sm text-emerald-400 font-medium">暗号学的なハッシュ台帳は永久です</p>
+                        <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                            お手元の原本ファイルを専用の検証エリア（Verify）にドロップすれば、いつでも改ざんされていないことの存在証明が可能です。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+);
+
+/* Legacy TheVaultFull kept for backwards-compat but now delegates to SEALED Stamp.
+ * Logic and signatures unchanged. */
+function TheVaultFull() {
+    return <SealedStampVault />;
 }
 
 function TranslucentVaultFull({ imageUrl }: { imageUrl: string }) {
@@ -645,10 +1085,22 @@ function TranslucentVaultFull({ imageUrl }: { imageUrl: string }) {
                 className="w-full h-full object-cover"
                 style={{ filter: 'blur(16px) grayscale(100%) opacity(0.6)' }}
             />
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0e27]/40">
-                <Lock className="w-8 h-8 text-[#f0f0fa]/50 mb-3" />
-                <span className="font-bold text-xs tracking-wider text-[#f0f0fa]/70 uppercase">Owner Preview</span>
-                <span className="font-mono text-[10px] tracking-widest text-[#00d4aa]/50 uppercase mt-1">NDA Protected</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0e27]/40 backdrop-blur-[2px]">
+                <motion.div
+                    animate={{
+                        boxShadow: [
+                            '0 0 0 0 rgba(108,62,244,0.5)',
+                            '0 0 0 14px rgba(108,62,244,0)',
+                            '0 0 0 0 rgba(108,62,244,0.5)',
+                        ],
+                    }}
+                    transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+                    className="rounded-full p-3 mb-3"
+                >
+                    <Lock className="w-8 h-8 text-[#f0f0fa]/80" />
+                </motion.div>
+                <span className="font-bold text-xs tracking-wider text-[#f0f0fa]/85 uppercase">Owner Preview</span>
+                <span className="font-mono text-[10px] tracking-widest text-[#00d4aa]/60 uppercase mt-1">NDA Protected</span>
             </div>
         </div>
     );
@@ -657,7 +1109,7 @@ function TranslucentVaultFull({ imageUrl }: { imageUrl: string }) {
 function OwnerVaultFull() {
     return (
         <div
-            className="flex flex-col items-center justify-center w-full h-full cursor-default overflow-hidden"
+            className="flex flex-col items-center justify-center w-full h-full cursor-default overflow-hidden relative"
             style={{
                 backgroundColor: '#0a0e27',
                 backgroundImage: 'radial-gradient(circle at center, rgba(108,62,244,0.12) 0%, transparent 60%)',
@@ -670,9 +1122,21 @@ function OwnerVaultFull() {
                     mixBlendMode: 'overlay' as const,
                 }}
             />
-            <Lock className="w-10 h-10 text-[#6c3ef4] mb-4" />
+            <motion.div
+                animate={{
+                    boxShadow: [
+                        '0 0 0 0 rgba(108,62,244,0.55)',
+                        '0 0 0 16px rgba(108,62,244,0)',
+                        '0 0 0 0 rgba(108,62,244,0.55)',
+                    ],
+                }}
+                transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+                className="rounded-full p-3 mb-4"
+            >
+                <Lock className="w-10 h-10 text-[#6c3ef4]" />
+            </motion.div>
             <h4 className="font-bold tracking-wide text-[#f0f0fa] text-base mb-1 opacity-90">NDA Protected</h4>
-            <span className="font-mono text-[10px] tracking-widest text-[#6c3ef4] opacity-70 uppercase">Owner View</span>
+            <span className="font-mono text-[10px] tracking-widest text-[#6c3ef4] opacity-80 uppercase">Owner View</span>
         </div>
     );
 }
