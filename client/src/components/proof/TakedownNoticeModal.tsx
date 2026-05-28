@@ -1635,6 +1635,7 @@ function TakedownNoticeDocument({ data }: { data: TakedownNoticeInput }) {
 
             <Text style={pdfStyles.heading}>3. Information reasonably sufficient to permit the service provider to contact the complaining party.</Text>
             <View style={pdfStyles.indent}>
+              <Text style={pdfStyles.bodyText}>Email: {data.claimantEmail}</Text>
             </View>
 
             <Text style={pdfStyles.heading}>4. Cryptographic evidence of prior existence (independent third-party timestamp under IETF RFC 3161).</Text>
@@ -1718,9 +1719,6 @@ function TakedownNoticeDocument({ data }: { data: TakedownNoticeInput }) {
           </Text>
           <Text style={pdfStyles.metaText}>
             {data.language === 'en' ? `Date: ${dateStr}` : `署名日：${dateStr}`}
-          </Text>
-          <Text style={pdfStyles.metaText}>
-            {data.language === 'en' ? `Contact: ${data.claimantEmail}` : `連絡先：${data.claimantEmail}`}
           </Text>
           <Text style={pdfStyles.metaCert}>Certificate ID: {data.certificateId}</Text>
           <Text style={pdfStyles.metaProof}>RFC 3161 Timestamp · SHA-256 Cryptographic Proof</Text>
