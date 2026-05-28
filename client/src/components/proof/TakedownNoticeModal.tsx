@@ -152,6 +152,7 @@ export default function TakedownNoticeModal({
   const [signature, setSignature] = useState<string>(
     claimant.legalName || claimant.creatorDisplayName || ''
   );
+  const [contactEmail, setContactEmail] = useState<string>(claimant.email || '');
   const [language, setLanguage] = useState<'en' | 'ja'>(defaultLanguage);
 
   /* ── State machine ── */
@@ -172,6 +173,7 @@ export default function TakedownNoticeModal({
         setProgress(PROGRESS_STEPS[0]);
         setErrorMessage(null);
         setGeneratedBlob(null);
+        setContactEmail(claimant.email || '');
         if (lastObjectUrlRef.current) {
           URL.revokeObjectURL(lastObjectUrlRef.current);
           lastObjectUrlRef.current = null;
@@ -180,7 +182,7 @@ export default function TakedownNoticeModal({
       return () => window.clearTimeout(id);
     }
     return undefined;
-  }, [open]);
+  }, [open, claimant.email]);
 
   /* ── ESC で閉じる (生成中は閉じない) ── */
   useEffect(() => {
@@ -198,6 +200,7 @@ export default function TakedownNoticeModal({
   }, [signature]);
 
   const isValidSignature = useMemo<boolean>(() => signature.trim().length > 0, [signature]);
+  const isValidEmail = useMemo<boolean>(() => contactEmail.trim().length > 0, [contactEmail]);
 
   const isValidUrl = useMemo<boolean>(() => {
     const v = infringingUrl.trim();
@@ -212,7 +215,7 @@ export default function TakedownNoticeModal({
 
   /* ── Generation pipeline ── */
   const runGeneration = useCallback(async () => {
-    if (!isValidUrl || !isValidSignature) return;
+    if (!isValidUrl || !isValidSignature || !isValidEmail) return;
     setPhase('generating');
     setErrorMessage(null);
 
@@ -235,7 +238,7 @@ export default function TakedownNoticeModal({
         originalFileName: certificate.originalFileName,
         infringingUrl: infringingUrl.trim(),
         claimantName,
-        claimantEmail: claimant.email,
+        claimantEmail: contactEmail.trim(),
         language,
       };
 
@@ -268,6 +271,7 @@ export default function TakedownNoticeModal({
   }, [
     isValidUrl,
     isValidSignature,
+    isValidEmail,
     reduce,
     certificate.certificateId,
     certificate.timestampJst,
@@ -275,7 +279,7 @@ export default function TakedownNoticeModal({
     certificate.originalFileName,
     infringingUrl,
     claimantName,
-    claimant.email,
+    contactEmail,
     language,
     onComplete,
   ]);
@@ -424,7 +428,9 @@ export default function TakedownNoticeModal({
                     signature={signature}
                     onSignatureChange={setSignature}
                     isValidSignature={isValidSignature}
-                    claimantEmail={claimant.email}
+                    contactEmail={contactEmail}
+                    onContactEmailChange={setContactEmail}
+                    isValidEmail={isValidEmail}
                     onSubmit={runGeneration}
                   />
                 </motion.div>
@@ -496,7 +502,9 @@ interface IdleBodyProps {
   signature: string;
   onSignatureChange: (v: string) => void;
   isValidSignature: boolean;
-  claimantEmail: string;
+  contactEmail: string;
+  onContactEmailChange: (v: string) => void;
+  isValidEmail: boolean;
   onSubmit: () => void;
 }
 
@@ -509,7 +517,9 @@ function IdleBody({
   signature,
   onSignatureChange,
   isValidSignature,
-  claimantEmail,
+  contactEmail,
+  onContactEmailChange,
+  isValidEmail,
   onSubmit,
 }: IdleBodyProps): JSX.Element {
   return (
@@ -665,6 +675,58 @@ function IdleBody({
         )}
       </div>
 
+      {/* Contact Email */}
+      <div className="mt-5">
+        <label
+          htmlFor="contact-email"
+          className="block text-[10.5px] font-bold uppercase tracking-[0.22em]"
+          style={{ color: 'rgba(255,255,255,0.62)' }}
+        >
+          連絡先メールアドレス (Contact Email)
+          <span style={{ color: '#FF8B8B' }}> *</span>
+        </label>
+        <div
+          className="relative mt-2 flex items-center overflow-hidden rounded-xl border transition-colors"
+          style={{
+            background: '#07061A',
+            borderColor:
+              contactEmail.length === 0
+                ? 'rgba(255,255,255,0.10)'
+                : isValidEmail
+                  ? 'rgba(0,212,170,0.38)'
+                  : 'rgba(255,69,58,0.40)',
+          }}
+        >
+          <Mail
+            className="ml-3 h-4 w-4 shrink-0"
+            style={{
+              color:
+                contactEmail.length === 0
+                  ? 'rgba(255,255,255,0.35)'
+                  : '#00D4AA',
+            }}
+          />
+          <input
+            id="contact-email"
+            type="text"
+            autoComplete="off"
+            placeholder="your-email@example.com"
+            value={contactEmail}
+            onChange={(e) => onContactEmailChange(e.target.value)}
+            className="flex-1 bg-transparent px-3 py-3 text-[13px] text-white placeholder:text-white/30 focus:outline-none"
+          />
+        </div>
+        {contactEmail.length === 0 && (
+          <p
+            className="mt-1.5 flex items-center gap-1 text-[11px]"
+            style={{ color: '#FF8B8B' }}
+          >
+            <AlertTriangle className="h-3 w-3" />
+            連絡先メールアドレスは法的要件として必須です
+          </p>
+        )}
+      </div>
+
       {/* Language toggle */}
       <div className="mt-5">
         <div className="flex items-center justify-between">
@@ -735,14 +797,14 @@ function IdleBody({
         <Mail className="h-3 w-3" />
         <span className="text-[11px]">
           申告者の連絡先：
-          <span className="font-mono text-white/70">{claimantEmail}</span>
+          <span className="font-mono text-white/70">{contactEmail}</span>
         </span>
       </div>
 
       {/* Submit */}
       <button
         type="button"
-        disabled={!isValidUrl || !isValidSignature}
+        disabled={!isValidUrl || !isValidSignature || !isValidEmail}
         onClick={onSubmit}
         className="group mt-6 inline-flex w-full items-center justify-between gap-3 rounded-2xl px-5 py-4 font-bold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
         style={{
@@ -1331,29 +1393,23 @@ const pdfStyles = StyleSheet.create({
   },
   legalBanner: {
     backgroundColor: '#F5DCDC',
-    flexDirection: 'row',
-    height: 28,
+    flexDirection: 'column',
+    borderLeftWidth: 3,
+    borderLeftColor: '#C81E1E',
+    padding: 12,
     marginBottom: 22,
-    alignItems: 'center',
-  },
-  legalBannerBorder: {
-    width: 3,
-    height: '100%',
-    backgroundColor: '#C81E1E',
-  },
-  legalBannerContent: {
-    paddingLeft: 7,
-    justifyContent: 'center',
   },
   legalBannerTitle: {
     color: '#C81E1E',
     fontSize: 11,
     fontWeight: 'bold',
+    lineHeight: 1.4,
   },
   legalBannerSub: {
     color: '#3C3C50',
     fontSize: 8.5,
-    marginTop: 1,
+    marginTop: 4,
+    lineHeight: 1.5,
   },
   bodyText: {
     fontSize: 10,
@@ -1552,11 +1608,8 @@ function TakedownNoticeDocument({ data }: { data: TakedownNoticeInput }) {
         </View>
 
         <View style={pdfStyles.legalBanner} fixed>
-          <View style={pdfStyles.legalBannerBorder} />
-          <View style={pdfStyles.legalBannerContent}>
-            <Text style={pdfStyles.legalBannerTitle}>{bannerTitle}</Text>
-            <Text style={pdfStyles.legalBannerSub}>{bannerSub}</Text>
-          </View>
+          <Text style={pdfStyles.legalBannerTitle}>{bannerTitle}</Text>
+          <Text style={pdfStyles.legalBannerSub}>{bannerSub}</Text>
         </View>
 
         {data.language === 'en' ? (
