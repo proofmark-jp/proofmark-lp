@@ -789,18 +789,6 @@ function IdleBody({
         </div>
       </div>
 
-      {/* 連絡先メールの確認 */}
-      <div
-        className="mt-3 flex items-center gap-2 px-1"
-        style={{ color: 'rgba(255,255,255,0.45)' }}
-      >
-        <Mail className="h-3 w-3" />
-        <span className="text-[11px]">
-          申告者の連絡先：
-          <span className="font-mono text-white/70">{contactEmail}</span>
-        </span>
-      </div>
-
       {/* Submit */}
       <button
         type="button"
