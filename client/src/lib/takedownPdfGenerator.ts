@@ -332,7 +332,7 @@ export async function generateTakedownNoticePDF(
   const bannerSub =
     data.language === 'en'
       ? 'This is a formal legal notification. Failure to act may result in loss of safe harbor.'
-      : '本書面は法的拘束力を伴う通知です。受領後の不作為は安全港 (免責) 喪失リスクとなる場合があります。';
+      : '本書面は法的拘束力を伴う正式な通知です。正当な理由なく送信防止措置を講じない（不作為）場合、情報流通プラットフォーム対処法に基づく損害賠償責任の免責を受けられなくなる可能性があります。';
   doc.text(bannerSub, margin + 10, bannerY + 23);
 
   /* ─── 本文 ─── */
