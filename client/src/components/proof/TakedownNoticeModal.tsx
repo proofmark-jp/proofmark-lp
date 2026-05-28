@@ -67,6 +67,7 @@ import {
   Stop,
   pdf,
   Link,
+  Circle,
 } from '@react-pdf/renderer';
 
 Font.register({
@@ -191,8 +192,16 @@ export default function TakedownNoticeModal({
 
   /* ── Derived values ── */
   const claimantName = useMemo<string>(() => {
-    if (persona === 'legal' && claimant.legalName) return claimant.legalName;
-    return claimant.creatorDisplayName;
+    if (persona === 'legal' && claimant.legalName && claimant.legalName.trim() !== '') {
+      return claimant.legalName;
+    }
+    if (claimant.creatorDisplayName && claimant.creatorDisplayName.trim() !== '' && claimant.creatorDisplayName !== 'ProofMark Verified Creator') {
+      return claimant.creatorDisplayName;
+    }
+    if (claimant.legalName && claimant.legalName.trim() !== '') {
+      return claimant.legalName;
+    }
+    return '氏名未設定 (Unspecified)';
   }, [persona, claimant]);
 
   const isValidUrl = useMemo<boolean>(() => {
@@ -1447,21 +1456,40 @@ const pdfStyles = StyleSheet.create({
 
 function TrustBadge() {
   return (
-    <View style={pdfStyles.badgeContainer} wrap={false}>
-      <Svg viewBox="0 0 100 100" style={pdfStyles.badgeSvg}>
-        <Defs>
-          <LinearGradient id="pp32-ri" x1="15%" y1="0%" x2="85%" y2="100%">
-            <Stop offset="0%" stopColor="#5830CC" />
-            <Stop offset="100%" stopColor="#00B896" />
-          </LinearGradient>
-        </Defs>
-        <Rect width="100" height="100" rx="22" fill="#0D0B24" />
-        <Path d="M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 87,25 L 82,29 L 76,18 Z" fill="none" stroke="url(#pp32-ri)" strokeWidth="3.8" strokeLinejoin="round" strokeLinecap="round" opacity=".85" />
-        <Polygon points="17,46 27,47 39,62 79,22 83,28 36,70 23,58" fill="#00D4AA" />
+    <View style={[pdfStyles.badgeContainer, { width: 90, height: 90, justifyContent: 'center', alignItems: 'center' }]} wrap={false}>
+      <Svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', position: 'absolute' }}>
+        <Circle cx="50" cy="50" r="48" stroke="#6C3EF4" strokeWidth="1.5" fill="none" opacity="0.3" />
+        <Circle cx="50" cy="50" r="44" stroke="#6C3EF4" strokeWidth="0.5" fill="none" opacity="0.5" />
+        <Circle cx="50" cy="50" r="28" stroke="#00D4AA" strokeWidth="0.5" fill="none" opacity="0.3" />
       </Svg>
-      <Text style={pdfStyles.badgeText1}>PROOFMARK</Text>
-      <Text style={pdfStyles.badgeText2}>CRYPTOGRAPHIC SEAL</Text>
-      <Text style={pdfStyles.badgeText2}>RFC 3161 / SHA-256</Text>
+      
+      <View style={{ width: 44, height: 44, position: 'absolute', top: 23, left: 23 }}>
+        <Svg viewBox="0 0 100 100" width="100%" height="100%">
+          <Defs>
+            <LinearGradient id="official-grad" x1="15%" y1="0%" x2="85%" y2="100%">
+              <Stop offset="0%" stopColor="#5830CC" />
+              <Stop offset="100%" stopColor="#00B896" />
+            </LinearGradient>
+          </Defs>
+          <Path 
+            d="M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 88,26 L 84,28 L 78,20 Z" 
+            fill="none" 
+            stroke="url(#official-grad)" 
+            strokeWidth="4" 
+            strokeLinejoin="round" 
+            strokeLinecap="round" 
+            opacity="0.85" 
+          />
+          <Polygon 
+            points="18,46 28,46 40,60 78,22 82,27 37,69 24,57" 
+            fill="#00D4AA" 
+          />
+        </Svg>
+      </View>
+
+      <Text style={{ position: 'absolute', top: 8, fontSize: 6, fontWeight: 'bold', color: '#6C3EF4', letterSpacing: 1 }}>PROOFMARK</Text>
+      <Text style={{ position: 'absolute', bottom: 14, fontSize: 4.5, color: '#78788C', letterSpacing: 0.5 }}>CRYPTOGRAPHIC SEAL</Text>
+      <Text style={{ position: 'absolute', bottom: 7, fontSize: 4.5, color: '#78788C' }}>RFC 3161 / SHA-256</Text>
     </View>
   );
 }
@@ -1493,8 +1521,28 @@ function TakedownNoticeDocument({ data }: { data: TakedownNoticeInput }) {
         <View style={pdfStyles.headerContainer} fixed>
           <View>
             <View style={pdfStyles.logoGroup}>
-              <View style={pdfStyles.logoBox}>
-                <Text style={pdfStyles.logoCheck}>✓</Text>
+              <View style={{ width: 18, height: 18, marginRight: 6 }}>
+                <Svg viewBox="0 0 100 100" width="100%" height="100%">
+                  <Defs>
+                    <LinearGradient id="official-grad-head" x1="15%" y1="0%" x2="85%" y2="100%">
+                      <Stop offset="0%" stopColor="#5830CC" />
+                      <Stop offset="100%" stopColor="#00B896" />
+                    </LinearGradient>
+                  </Defs>
+                  <Path 
+                    d="M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 88,26 L 84,28 L 78,20 Z" 
+                    fill="none" 
+                    stroke="url(#official-grad-head)" 
+                    strokeWidth="4" 
+                    strokeLinejoin="round" 
+                    strokeLinecap="round" 
+                    opacity="0.85" 
+                  />
+                  <Polygon 
+                    points="18,46 28,46 40,60 78,22 82,27 37,69 24,57" 
+                    fill="#00D4AA" 
+                  />
+                </Svg>
               </View>
               <Text style={pdfStyles.logoText}>ProofMark</Text>
             </View>

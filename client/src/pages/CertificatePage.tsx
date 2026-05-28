@@ -717,7 +717,7 @@ export default function CertificatePage() {
                         onClose={() => setTakedownOpen(false)}
                         certificate={{
                             certificateId: cert.id,
-                            timestampJst: new Date(cert.certified_at || cert.created_at).toLocaleString('ja-JP'),
+                            timestampJst: new Date(cert.created_at).toLocaleString('ja-JP'),
                             verificationUrl: `${window.location.origin}/cert/${cert.id}`,
                             originalFileName: cert.original_filename || 'unknown_asset',
                         }}
