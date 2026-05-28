@@ -233,7 +233,7 @@ export default function Footer(): JSX.Element {
                 RFC3161 Compliant
               </span>
               <span className="px-3 py-1 rounded-full border border-[#1C1A38] bg-[#0D0B24]">
-                Independent Verifiable
+                INDEPENDENTLY VERIFIABLE
               </span>
             </div>
           </div>
@@ -277,26 +277,25 @@ export default function Footer(): JSX.Element {
           </p>
           <div className="flex gap-6 text-[#48456A] text-[10px] uppercase tracking-tighter flex-wrap justify-center">
             <span className="inline-flex items-center gap-1.5">
-              <ShieldCheck className="w-3 h-3 text-[#00D4AA]" /> Evidence Operations SaaS
+              <ShieldCheck className="w-3 h-3 text-[#00D4AA]" /> EVIDENCE & TRUST INFRASTRUCTURE
             </span>
             <span>RFC3161 + SHA-256</span>
-            <span>Independent Verifiable</span>
+            <span>INDEPENDENTLY VERIFIABLE</span>
           </div>
         </div>
 
         <div className="mt-8 p-4 rounded-xl bg-[#0D0B24] border border-[#1C1A38]/50 space-y-3">
           <p className="text-[#48456A] text-xs leading-relaxed text-center sm:text-left">
-            <span className="font-semibold text-[#8B88B1]">表現について:</span>{' '}
-            ProofMarkが生成するのは、RFC3161準拠のタイムスタンプ付き証拠データです。
-            証拠としての価値・採否は、利用文脈・TSA構成・法域により異なります。最新の運用構成は{' '}
+            <span className="font-semibold text-[#8B88B1]">【法的免責および証拠能力について】</span>{' '}
+              ProofMarkは、RFC 3161準拠の暗号タイムスタンプによる客観的な「存在証明」インフラを提供します。生成された証拠データの最終的な法的有効性や証拠能力は、提出先の国や地域、司法判断によって異なります。当社の最新のシステム構成およびトラストモデルの詳細は、{' '}
             <Link href="/trust-center#s4" className="text-[#00D4AA] hover:underline">
-              Trust Center
+              [Trust Center] 
             </Link>{' '}
-            に常時公開しています。
+            をご参照ください。。
           </p>
           <p className="text-[#48456A] text-xs leading-relaxed text-center sm:text-left">
-            <span className="font-semibold text-[#8B88B1]">商標について:</span>{' '}
-            本サイトに表示されるすべての製品名、ロゴ、ブランドは、それぞれの所有者の財産です。ProofMarkはこれらのツールとの公式な提携を主張するものではなく、互換性を示しています。
+            <span className="font-semibold text-[#8B88B1]">【商標について】</span>{' '}
+            本サイト上に記載されているプラットフォーム名、企業名、ロゴ等の商標は、各社の登録商標または財産です。当サービスにおける名称の引用は、対象先や技術的連携を示すための「参照目的」であり、各社との公式な提携や推薦を意味するものではありません。
           </p>
         </div>
       </div>

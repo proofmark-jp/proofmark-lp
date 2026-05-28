@@ -310,7 +310,7 @@ function buildVaultSlab(input: SlabInput): ReturnType<typeof html> {
           ">
             <div style="display:flex; color: ${PM.textWhisper}; font-size: 14px;
               letter-spacing: 0.24em; text-transform: uppercase; font-weight: 800;">
-              Independent verifiable
+              INDEPENDENTLY VERIFIABLE
             </div>
             <div style="display:flex; color: ${PM.textMain}; font-size: 22px;
               font-weight: 800; margin-top: 4px;">
@@ -375,7 +375,7 @@ function buildFallbackSlab(): ReturnType<typeof html> {
         border: 1px solid rgba(0,212,170,0.30);
         color: ${PM.success}; font-size: 20px; font-weight: 800;
         letter-spacing: 0.10em; text-transform: uppercase;
-      ">RFC3161 · SHA-256 · Independent Verifiable</div>
+      ">RFC3161 · SHA-256 · INDEPENDENTLY VERIFIABLE</div>
     </div>
   `);
 }

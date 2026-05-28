@@ -831,7 +831,7 @@ function CertPreview() {
         className="mt-auto pt-4 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.18em]"
         style={{ color: C.textSubtle }}
       >
-        <span>RFC 3161 · SHA-256 · Independent Verifiable</span>
+        <span>RFC 3161 · SHA-256 · INDEPENDENTLY VERIFIABLE</span>
         <span style={{ color: C.teal }}>✓ Bound</span>
       </div>
     </div>
