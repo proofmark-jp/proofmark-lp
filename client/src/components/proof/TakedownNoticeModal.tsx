@@ -49,9 +49,33 @@ import {
 
 import {
   buildTakedownFilename,
-  generateTakedownNoticePDF,
   type TakedownNoticeInput,
 } from '@/lib/takedownPdfGenerator';
+import {
+  Document,
+  Page,
+  Text,
+  View,
+  StyleSheet,
+  Font,
+  Svg,
+  Path,
+  Rect,
+  Polygon,
+  Defs,
+  LinearGradient,
+  Stop,
+  pdf,
+  Link,
+} from '@react-pdf/renderer';
+
+Font.register({
+  family: 'Noto Sans JP',
+  fonts: [
+    { src: '/fonts/NotoSansJP-Regular.ttf' },
+    { src: '/fonts/NotoSansJP-Bold.ttf', fontWeight: 'bold' }
+  ]
+});
 
 const PM_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
@@ -211,7 +235,7 @@ export default function TakedownNoticeModal({
         language,
       };
 
-      const blob = await generateTakedownNoticePDF(input);
+      const blob = await pdf(<TakedownNoticeDocument data={input} />).toBlob();
       await wait(reduce ? 60 : 320); // 進捗の余韻
 
       // ダウンロード起動
@@ -1227,4 +1251,388 @@ function ManifestRow({
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+/* ─────────────────────────────────────────────
+ *  PDF Document Component
+ * ───────────────────────────────────────────── */
+
+const pdfStyles = StyleSheet.create({
+  page: {
+    padding: 56,
+    fontFamily: 'Noto Sans JP',
+    backgroundColor: '#FFFFFF',
+    color: '#1A1A2E',
+  },
+  headerTopLine: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: '#6C3EF4',
+  },
+  headerRedLine: {
+    position: 'absolute',
+    top: 3,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: '#C81E1E',
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  logoGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoBox: {
+    width: 14,
+    height: 14,
+    borderRadius: 3,
+    backgroundColor: '#6C3EF4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  logoCheck: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  logoText: {
+    color: '#6C3EF4',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  logoDomain: {
+    color: '#78788C',
+    fontSize: 8,
+    marginTop: 2,
+    marginLeft: 20, // margin-left to align with logoText
+  },
+  dateText: {
+    color: '#3C3C50',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  legalBanner: {
+    backgroundColor: '#F5DCDC',
+    flexDirection: 'row',
+    height: 28,
+    marginBottom: 22,
+    alignItems: 'center',
+  },
+  legalBannerBorder: {
+    width: 3,
+    height: '100%',
+    backgroundColor: '#C81E1E',
+  },
+  legalBannerContent: {
+    paddingLeft: 7,
+    justifyContent: 'center',
+  },
+  legalBannerTitle: {
+    color: '#C81E1E',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  legalBannerSub: {
+    color: '#3C3C50',
+    fontSize: 8.5,
+    marginTop: 1,
+  },
+  bodyText: {
+    fontSize: 10,
+    lineHeight: 1.5,
+    marginBottom: 10,
+  },
+  bold: {
+    fontWeight: 'bold',
+  },
+  heading: {
+    fontSize: 10.5,
+    fontWeight: 'bold',
+    color: '#6C3EF4',
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  h1: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  link: {
+    color: '#6C3EF4',
+    textDecoration: 'none',
+  },
+  indent: {
+    paddingLeft: 12,
+    marginBottom: 8,
+  },
+  signatureLine: {
+    borderTopWidth: 0.5,
+    borderColor: '#DCDCE6',
+    marginTop: 20,
+    paddingTop: 8,
+  },
+  signatureLabel: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#78788C',
+    marginBottom: 12,
+  },
+  signatureName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  metaText: {
+    fontSize: 9.5,
+    color: '#3C3C50',
+    marginBottom: 4,
+  },
+  metaCert: {
+    fontSize: 8.5,
+    color: '#78788C',
+    marginTop: 12,
+    marginBottom: 2,
+  },
+  metaProof: {
+    fontSize: 8.5,
+    color: '#00D4AA',
+  },
+  badgeContainer: {
+    position: 'absolute',
+    right: 56,
+    bottom: 80,
+    alignItems: 'center',
+  },
+  badgeSvg: {
+    width: 60,
+    height: 60,
+  },
+  badgeText1: {
+    fontSize: 7,
+    fontWeight: 'bold',
+    color: '#6C3EF4',
+    marginTop: 6,
+  },
+  badgeText2: {
+    fontSize: 6,
+    color: '#78788C',
+    marginTop: 2,
+  },
+  footerLine: {
+    position: 'absolute',
+    bottom: 40,
+    left: 56,
+    right: 56,
+    borderTopWidth: 0.3,
+    borderColor: '#DCDCE6',
+  },
+  footerText: {
+    position: 'absolute',
+    bottom: 24,
+    left: 56,
+    right: 56,
+    fontSize: 6.5,
+    color: '#78788C',
+    textAlign: 'center',
+  },
+});
+
+function TrustBadge() {
+  return (
+    <View style={pdfStyles.badgeContainer} wrap={false}>
+      <Svg viewBox="0 0 100 100" style={pdfStyles.badgeSvg}>
+        <Defs>
+          <LinearGradient id="pp32-ri" x1="15%" y1="0%" x2="85%" y2="100%">
+            <Stop offset="0%" stopColor="#5830CC" />
+            <Stop offset="100%" stopColor="#00B896" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="100" height="100" rx="22" fill="#0D0B24" />
+        <Path d="M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 87,25 L 82,29 L 76,18 Z" fill="none" stroke="url(#pp32-ri)" strokeWidth="3.8" strokeLinejoin="round" strokeLinecap="round" opacity=".85" />
+        <Polygon points="17,46 27,47 39,62 79,22 83,28 36,70 23,58" fill="#00D4AA" />
+      </Svg>
+      <Text style={pdfStyles.badgeText1}>PROOFMARK</Text>
+      <Text style={pdfStyles.badgeText2}>CRYPTOGRAPHIC SEAL</Text>
+      <Text style={pdfStyles.badgeText2}>RFC 3161 / SHA-256</Text>
+    </View>
+  );
+}
+
+function TakedownNoticeDocument({ data }: { data: TakedownNoticeInput }) {
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  const bannerTitle = data.language === 'en'
+    ? 'LEGAL NOTICE — DMCA TAKEDOWN UNDER 17 U.S.C. § 512(c)(3)'
+    : 'LEGAL NOTICE — 送信防止措置依頼書 (情報流通プラットフォーム対処法)';
+  const bannerSub = data.language === 'en'
+    ? 'This is a formal legal notification. Failure to act may result in loss of safe harbor.'
+    : '本書面は法的拘束力を伴う通知です。受領後の不作為は安全港 (免責) 喪失リスクとなる場合があります。';
+
+  const footerEn = 'Generated by ProofMark. ProofMark provides neutral cryptographic timestamping infrastructure and does not adjudicate initial authorship. The claimant assumes all legal liability under penalty of perjury for the claims made herein. Independent verification: openssl ts -verify -in TIMESTAMP.tsr -data <file>';
+  const footerJa = 'ProofMarkにより生成。ProofMarkは中立的な暗号タイムスタンプインフラであり、著作権の初期正当性を認定するものではありません。本申告に関する一切の法的責任は申告者に帰属します。独立検証: openssl ts -verify -in TIMESTAMP.tsr -data <file>';
+
+  return (
+    <Document
+      title={data.language === 'en' ? 'DMCA Takedown Notice — ProofMark' : '送信防止措置依頼書 — ProofMark'}
+      author={data.claimantName}
+      creator="ProofMark.jp"
+    >
+      <Page size="A4" style={pdfStyles.page}>
+        <View style={pdfStyles.headerTopLine} fixed />
+        <View style={pdfStyles.headerRedLine} fixed />
+
+        <View style={pdfStyles.headerContainer} fixed>
+          <View>
+            <View style={pdfStyles.logoGroup}>
+              <View style={pdfStyles.logoBox}>
+                <Text style={pdfStyles.logoCheck}>✓</Text>
+              </View>
+              <Text style={pdfStyles.logoText}>ProofMark</Text>
+            </View>
+            <Text style={pdfStyles.logoDomain}>proofmark.jp</Text>
+          </View>
+          <View>
+            <Text style={pdfStyles.dateText}>Date: {dateStr}</Text>
+          </View>
+        </View>
+
+        <View style={pdfStyles.legalBanner} fixed>
+          <View style={pdfStyles.legalBannerBorder} />
+          <View style={pdfStyles.legalBannerContent}>
+            <Text style={pdfStyles.legalBannerTitle}>{bannerTitle}</Text>
+            <Text style={pdfStyles.legalBannerSub}>{bannerSub}</Text>
+          </View>
+        </View>
+
+        {data.language === 'en' ? (
+          <>
+            <Text style={pdfStyles.h1}>Re: NOTIFICATION OF CLAIMED INFRINGEMENT UNDER 17 U.S.C. § 512(c)(3)</Text>
+            
+            <Text style={pdfStyles.bodyText}>To Whom It May Concern at the Service Provider:</Text>
+            
+            <Text style={pdfStyles.bodyText}>
+              I am the copyright owner, or am authorized to act on behalf of the owner of an exclusive right that is allegedly infringed. I hereby submit this notice under the Digital Millennium Copyright Act (17 U.S.C. § 512) and demand the prompt removal or disabling of access to the material identified below.
+            </Text>
+
+            <Text style={pdfStyles.heading}>1. Identification of the copyrighted work claimed to have been infringed.</Text>
+            <View style={pdfStyles.indent}>
+              <Text style={pdfStyles.bodyText}>File name (original work): {data.originalFileName}</Text>
+              <Text style={pdfStyles.bodyText}>ProofMark Certificate ID: {data.certificateId}</Text>
+            </View>
+
+            <Text style={pdfStyles.heading}>2. Identification of the material that is claimed to be infringing and information reasonably sufficient to permit the service provider to locate the material.</Text>
+            <View style={pdfStyles.indent}>
+              <Text style={pdfStyles.bodyText}>Infringing URL: <Link src={data.infringingUrl} style={pdfStyles.link}>{data.infringingUrl}</Link></Text>
+            </View>
+
+            <Text style={pdfStyles.heading}>3. Information reasonably sufficient to permit the service provider to contact the complaining party.</Text>
+            <View style={pdfStyles.indent}>
+              <Text style={pdfStyles.bodyText}>Email: {data.claimantEmail}</Text>
+            </View>
+
+            <Text style={pdfStyles.heading}>4. Cryptographic evidence of prior existence (independent third-party timestamp under IETF RFC 3161).</Text>
+            <View style={pdfStyles.indent}>
+              <Text style={pdfStyles.bodyText}>The original work was cryptographically time-stamped at {data.timestampJst} by an RFC 3161 compliant Time Stamp Authority. The integrity and existence of the work at that moment can be independently verified by any third party using OpenSSL, without relying on ProofMark's infrastructure.</Text>
+              <Text style={pdfStyles.bodyText}>Independent Verification URL: <Link src={data.verificationUrl} style={pdfStyles.link}>{data.verificationUrl}</Link></Text>
+            </View>
+
+            <Text style={pdfStyles.heading}>5. Statement of good faith belief.</Text>
+            <View style={pdfStyles.indent}>
+              <Text style={pdfStyles.bodyText}>I have a good faith belief that use of the copyrighted materials described above as allegedly infringing is not authorized by the copyright owner, its agent, or the law.</Text>
+            </View>
+
+            <Text style={pdfStyles.heading}>6. Statement under penalty of perjury.</Text>
+            <View style={pdfStyles.indent}>
+              <Text style={[pdfStyles.bodyText, pdfStyles.bold]}>I swear, under penalty of perjury, that the information in this notification is accurate and that I am the copyright owner, or am authorized to act on behalf of the owner, of an exclusive right that is allegedly infringed.</Text>
+            </View>
+
+            <Text style={pdfStyles.bodyText}>
+              Pursuant to 17 U.S.C. § 512(c)(1)(C), failure to expeditiously remove or disable access to the infringing material upon receipt of this notice may result in the loss of safe harbor protection for your service.
+            </Text>
+            <Text style={pdfStyles.bodyText}>Respectfully submitted,</Text>
+          </>
+        ) : (
+          <>
+            <Text style={pdfStyles.h1}>件名：著作権侵害コンテンツに対する送信防止措置依頼書</Text>
+            
+            <Text style={pdfStyles.bodyText}>[サービス事業者] 御中</Text>
+            
+            <Text style={pdfStyles.bodyText}>
+              私は、下記に特定する著作物の著作権者、または著作権者から正当に権限を委任された代理人です。貴サービス上で当該著作物が無断で複製・公衆送信されていることを確認したため、特定電気通信役務提供者の損害賠償責任の制限等及び発信者情報の開示に関する法律（情報流通プラットフォーム対処法）および著作権法第21条（複製権）ならびに第23条（公衆送信権）に基づき、対象コンテンツへの送信防止措置（削除）を速やかに実施するよう要請いたします。
+            </Text>
+
+            <Text style={pdfStyles.heading}>1. 侵害されたとする著作物の特定</Text>
+            <View style={pdfStyles.indent}>
+              <Text style={pdfStyles.bodyText}>原本ファイル名：{data.originalFileName}</Text>
+              <Text style={pdfStyles.bodyText}>ProofMark 証明書 ID：{data.certificateId}</Text>
+            </View>
+
+            <Text style={pdfStyles.heading}>2. 侵害行為の特定（送信防止措置の対象）</Text>
+            <View style={pdfStyles.indent}>
+              <Text style={pdfStyles.bodyText}>侵害先 URL：<Link src={data.infringingUrl} style={pdfStyles.link}>{data.infringingUrl}</Link></Text>
+            </View>
+
+            <Text style={pdfStyles.heading}>3. 申告者の連絡先</Text>
+            <View style={pdfStyles.indent}>
+              <Text style={pdfStyles.bodyText}>Email：{data.claimantEmail}</Text>
+            </View>
+
+            <Text style={pdfStyles.heading}>4. 暗号学的存在証明（IETF 標準 RFC 3161 タイムスタンプ）</Text>
+            <View style={pdfStyles.indent}>
+              <Text style={pdfStyles.bodyText}>私は、上記 URL のコンテンツが私の著作権を侵害していると確信しています。証拠として、当該作品が {data.timestampJst} の時点で確実に存在したことを、IETF 標準である RFC 3161 に準拠した第三者タイムスタンプ機関の電子署名により暗号学的に証明します。</Text>
+              <Text style={pdfStyles.bodyText}>本タイムスタンプおよび作品の SHA-256 ハッシュは、ProofMark のインフラに依存することなく、OpenSSL 等の標準的暗号ツールにより何人でも独立して再検証することが可能です。</Text>
+              <Text style={pdfStyles.bodyText}>独立検証 URL：<Link src={data.verificationUrl} style={pdfStyles.link}>{data.verificationUrl}</Link></Text>
+            </View>
+
+            <Text style={pdfStyles.heading}>5. 誠実な信念に基づく宣言</Text>
+            <View style={pdfStyles.indent}>
+              <Text style={pdfStyles.bodyText}>私は、上記 URL に掲載されている対象コンテンツの利用が、著作権者、その代理人、または法律によって許諾されたものではないと、誠実な信念をもって申告いたします。</Text>
+            </View>
+
+            <Text style={pdfStyles.heading}>6. 申告内容の真実性に関する誓約</Text>
+            <View style={pdfStyles.indent}>
+              <Text style={[pdfStyles.bodyText, pdfStyles.bold]}>私は、本依頼書に記載した事項が真実であること、および私が当該著作物の著作権者または正当な代理人であることを、虚偽申告に伴う民事上の責任を承知の上で誓約いたします。</Text>
+            </View>
+
+            <Text style={pdfStyles.bodyText}>
+              貴サービスにおいて、本依頼書の受領後、速やかに送信防止措置が実施されない場合、情報流通プラットフォーム対処法および民法に基づく損害賠償責任を含む法的措置を検討する場合がございます。
+            </Text>
+            <Text style={pdfStyles.bodyText}>以上、ご対応のほどよろしくお願いいたします。</Text>
+          </>
+        )}
+
+        <View style={pdfStyles.signatureLine} wrap={false}>
+          <Text style={pdfStyles.signatureLabel}>
+            {data.language === 'en' ? 'ELECTRONIC SIGNATURE' : '電子署名 (Electronic Signature)'}
+          </Text>
+          <Text style={pdfStyles.signatureName}>/s/  {data.claimantName}</Text>
+          <Text style={pdfStyles.metaText}>
+            {data.language === 'en' ? `Signed by: ${data.claimantName}` : `署名者氏名：${data.claimantName}`}
+          </Text>
+          <Text style={pdfStyles.metaText}>
+            {data.language === 'en' ? `Date: ${dateStr}` : `署名日：${dateStr}`}
+          </Text>
+          <Text style={pdfStyles.metaText}>
+            {data.language === 'en' ? `Contact: ${data.claimantEmail}` : `連絡先：${data.claimantEmail}`}
+          </Text>
+          <Text style={pdfStyles.metaCert}>Certificate ID: {data.certificateId}</Text>
+          <Text style={pdfStyles.metaProof}>RFC 3161 Timestamp · SHA-256 Cryptographic Proof</Text>
+        </View>
+
+        <TrustBadge />
+
+        <View style={pdfStyles.footerLine} fixed />
+        <Text style={pdfStyles.footerText} fixed>{data.language === 'en' ? footerEn : footerJa}</Text>
+      </Page>
+    </Document>
+  );
 }
