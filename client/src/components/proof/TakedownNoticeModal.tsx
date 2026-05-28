@@ -1521,29 +1521,20 @@ function TakedownNoticeDocument({ data }: { data: TakedownNoticeInput }) {
           <View>
             <View style={pdfStyles.logoGroup}>
               <View style={{ width: 18, height: 18, marginRight: 6 }}>
+                {/* ▽▽ ここから公式ロゴ ▽▽ */}
                 <Svg viewBox="0 0 100 100" width="100%" height="100%">
                   <Defs>
-                    <LinearGradient id="official-grad-head" x1="15%" y1="0%" x2="85%" y2="100%">
+                    <LinearGradient id="header-grad" x1="15%" y1="0%" x2="85%" y2="100%">
                       <Stop offset="0%" stopColor="#5830CC" />
                       <Stop offset="100%" stopColor="#00B896" />
                     </LinearGradient>
                   </Defs>
-                  <Path 
-                    d="M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 88,26 L 84,28 L 78,20 Z" 
-                    fill="none" 
-                    stroke="url(#official-grad-head)" 
-                    strokeWidth="4" 
-                    strokeLinejoin="round" 
-                    strokeLinecap="round" 
-                    opacity="0.85" 
-                  />
-                  <Polygon 
-                    points="18,46 28,46 40,60 78,22 82,27 37,69 24,57" 
-                    fill="#00D4AA" 
-                  />
+                  <Path d="M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 88,26 L 84,28 L 78,20 Z" fill="none" stroke="url(#header-grad)" strokeWidth={4} strokeLinejoin="round" strokeLinecap="round" opacity={0.85} />
+                  <Polygon points="18,46 28,46 40,60 78,22 82,27 37,69 24,57" fill="#00D4AA" />
                 </Svg>
+                {/* △△ ここまで △△ */}
               </View>
-              <Text style={pdfStyles.logoText}>ProofMark</Text>
+              <Text style={pdfStyles.logoText}>PROOFMARK</Text>
             </View>
             <Text style={pdfStyles.logoDomain}>proofmark.jp</Text>
           </View>
