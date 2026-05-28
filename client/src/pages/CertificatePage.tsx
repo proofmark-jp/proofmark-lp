@@ -206,7 +206,7 @@ export default function CertificatePage() {
         ? `/api/delivery?url=${encodeURIComponent(cert.public_image_url)}`
         : undefined;
 
-    const templateFormal = `納品データ一式をお送りいたします。本作品は、AI生成ベースに当方で独自の加筆修正を施したオリジナル作品です。『ProofMark』にて制作日時と元データを暗号化・保全し、正当な制作プロセスを証明しております。\n証明書URL: ${verifyUrl}`;
+    const templateFormal = `納品データ一式をお送りいたします。本作品は当方が制作したオリジナル作品です。制作日時および元データの同一性を担保するため、『ProofMark』にて存在証明を取得・保全しております。\n証明書URL: ${verifyUrl}`;
     const templateSNS = `本作品の制作日時とオリジナルデータは『ProofMark』にて改ざん不能な状態で証明・保全されています。無断転載や自作発言等の不正利用はお控えください。\n証明書URL: ${verifyUrl}`;
 
     const getDisplayTitle = () => {
@@ -672,7 +672,7 @@ export default function CertificatePage() {
                                     <ShieldAlert className="w-4 h-4" /> ▼ 無断転載への法的措置（DMCA / 送信防止措置）
                                 </p>
                                 <p className="text-xs text-[#A8A0D8] mb-4">
-                                    プラットフォーム（X, Google, 各種プロバイダ等）に対して、法的効力を持つ削除要請書（Takedown Notice）を即時生成します。
+                                    プラットフォーム（X, Google等）に対して、送信防止措置（DMCA等）の『法的要件を満たした』削除要請書を即時生成します。
                                 </p>
                                 <motion.button
                                     whileHover={{ y: -1, scale: 1.01 }}

@@ -218,11 +218,11 @@ export default function Footer(): JSX.Element {
             </Link>
             <p className="text-[#A8A0D8] text-sm leading-relaxed max-w-md">
               {PROOFMARK_COPY.brandLong}
-              SHA-256ハッシュとRFC3161タイムスタンプによる「制作事実の客観証拠」を、
-              Evidence Pack として納品できる SaaS。著作権を保証する代わりに、
+              クリエイターの作品と権利を、暗号学的な『客観証拠』で守り抜くトラスト・インフラ。
+              RFC3161とSHA-256による強固な存在証明から、無断転載に対する法的削除要請（DMCA）まで。
               <span className="text-[#F0EFF8]">
                 {' '}
-                あなたの制作と納品を「客観証拠つき」で運用できる状態にします。
+                あなたのすべてのクリエイティブ活動に、揺るぎない証明と強力な防具を提供します。
               </span>
             </p>
             <div className="flex flex-wrap gap-3 text-[10px] uppercase tracking-[0.2em] text-[#48456A]">

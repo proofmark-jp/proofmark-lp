@@ -153,8 +153,8 @@ export function ContentCredentialsSection({ manifest, compact = false }: Props) 
               Content Credentials
             </h2>
             <p className="mt-1.5 text-[12.5px] leading-relaxed text-[#A8A0D8] max-w-2xl">
-              外部の RFC3161 タイムスタンプと並行する、画像内部の暗号学的由来情報です。
-              署名が壊れていても RFC3161 フローは継続し、ここではその状態のみを開示します。
+              画像ファイルそのものに埋め込まれる、来歴や編集履歴の標準規格（C2PA）です。
+              ProofMarkによる外部からの存在証明とは独立して、ファイル内部のメタデータ状態をありのままに開示します。
             </p>
           </div>
         </div>
@@ -334,10 +334,10 @@ export function ContentCredentialsSection({ manifest, compact = false }: Props) 
             </div>
           </>
         ) : (
-          <ConsoleCard icon={<Fingerprint className="h-3.5 w-3.5" />} title="VAULT EMPTY">
+          <ConsoleCard icon={<Fingerprint className="h-3.5 w-3.5" />} title="NO C2PA METADATA">
             <p className="text-[12px] leading-relaxed text-[#A8A0D8] font-mono">
-              この作品には Content Credentials は埋め込まれていません。ProofMark は RFC3161 タイムスタンプによる外部証明を維持しつつ、
-              C2PA が存在する場合のみ内部由来情報を静かに統合します。
+              このファイルには Content Credentials (C2PA) の履歴データは含まれていません。通常のデジタルファイルと同様ですが、
+              ProofMarkによる『外部からの存在証明（RFC 3161）』は完全に有効です。
             </p>
           </ConsoleCard>
         )}
