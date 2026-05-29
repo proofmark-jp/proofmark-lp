@@ -142,6 +142,7 @@ export default function EvidencePackExplorer(): JSX.Element {
     isDownloading: false,
   });
   const [toast, setToast] = useState<string | null>(null);
+  const [dlProgress, setDlProgress] = useState<{ step: string; ratio: number } | null>(null);
   const [confettiKey, setConfettiKey] = useState(0);
   const successResetRef = useRef<number | null>(null);
 
@@ -164,14 +165,71 @@ export default function EvidencePackExplorer(): JSX.Element {
     setState((s) => ({ ...s, activeFileId: id }));
   }, []);
 
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
+    if (state.isDownloading) return;
     setState((s) => ({ ...s, isDownloading: true }));
-    window.setTimeout(() => {
+    setDlProgress({ step: 'Initializing Engine...', ratio: 0 });
+
+    try {
+      // 防衛的 Dynamic Import (ChunkLoadError対策)
+      let zipModule;
+      try {
+        zipModule = await import('../lib/pdf/zipIntegration.example');
+      } catch (importError) {
+        console.error('Engine Load Failed:', importError);
+        throw new Error('NETWORK_OR_CHUNK_ERROR');
+      }
+
+      const { buildEvidenceZip } = zipModule;
+
+      // Zero-Knowledgeでの本物ZIP生成
+      const blob = await buildEvidenceZip({
+        certificate: {
+          certificateId: 'A3F7-9E28-4CB1', 
+          creatorDisplayName: 'ProofMark Verified Creator',
+          fileName: 'Verified_Digital_Artwork.png',
+          fileSize: '4.2 MB',
+          sha256: '4f3c8b1e2a9d7f6e5c4b3a2918e7d6c5b4a3928176f5e4d3c2b1a09876f5e4d3',
+          timestampJst: '2026/05/29 14:32:08 JST',
+          verificationUrl: 'https://proofmark.jp/cert/A3F7-9E28-4CB1',
+        },
+        tsrBytes: new Uint8Array([0x30, 0x82, 0x0c, 0xa1, 0x06, 0x09]), 
+        onProgress: (step: string, ratio: number) => {
+          setDlProgress({ step, ratio });
+        }
+      });
+
+      // メモリセーフなダウンロード発火
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ProofMark_Evidence_Pack.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+      // アプリ内ブラウザ（In-App Browser）の簡易判定
+      const ua = navigator.userAgent || navigator.vendor || (window as any).opera;
+      const isInAppBrowser = (ua.indexOf("FBAN") > -1) || (ua.indexOf("FBAV") > -1) || (ua.indexOf("Twitter") > -1) || (ua.indexOf("Line") > -1) || (ua.indexOf("Instagram") > -1);
+
+      if (isInAppBrowser) {
+        setToast('保存を開始しました。ダウンロードされない場合は「Safari/Chromeで開く」をお試しください。');
+      } else {
+        setToast('Evidence Pack を生成・保存しました');
+      }
+    } catch (err: any) {
+      if (err.message === 'NETWORK_OR_CHUNK_ERROR') {
+        setToast('エンジンの読み込みに失敗しました。ページを再読込してください。');
+      } else {
+        setToast('ZIP生成に失敗しました');
+      }
+    } finally {
       setState((s) => ({ ...s, isDownloading: false }));
-      setToast('保存しました');
-      window.setTimeout(() => setToast(null), 2400);
-    }, 1000);
-  }, []);
+      setDlProgress(null);
+      setTimeout(() => setToast(null), 3000);
+    }
+  }, [state.isDownloading]);
 
   const handleDeliver = useCallback(() => {
     setConfettiKey((k) => k + 1);
@@ -200,6 +258,7 @@ export default function EvidencePackExplorer(): JSX.Element {
             onDownload={handleDownload}
             onDeliver={handleDeliver}
             reduce={reduce}
+            dlProgress={dlProgress}
           />
         )}
       </AnimatePresence>
@@ -407,6 +466,7 @@ function ExplorerView({
   onDownload,
   onDeliver,
   reduce,
+  dlProgress,
 }: {
   state: ExplorerState;
   active: ZipEntry;
@@ -414,6 +474,7 @@ function ExplorerView({
   onDownload: () => void;
   onDeliver: () => void;
   reduce: boolean;
+  dlProgress: { step: string; ratio: number } | null;
 }) {
   const listStagger: Transition = reduce
     ? { duration: 0 }
@@ -661,19 +722,25 @@ function ExplorerView({
               type="button"
               onClick={onDownload}
               disabled={state.isDownloading || state.phase === 'SUCCESS'}
-              className="inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium disabled:opacity-50 transition-all"
               style={{
                 background: 'transparent',
-                border: `1px solid ${C.borderHi}`,
-                color: C.textMain,
+                border: `1px solid ${state.isDownloading ? C.tealSoft : C.borderHi}`,
+                color: state.isDownloading ? C.teal : C.textMain,
+                minWidth: '220px',
               }}
             >
               {state.isDownloading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {dlProgress ? dlProgress.step : '生成中...'}
+                </>
               ) : (
-                <Download className="h-4 w-4" />
+                <>
+                  <Download className="h-4 w-4" />
+                  ダウンロード
+                </>
               )}
-              ダウンロード
             </button>
 
             <motion.button
