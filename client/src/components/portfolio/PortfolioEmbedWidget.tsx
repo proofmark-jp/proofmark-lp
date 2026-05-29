@@ -12,7 +12,7 @@
  * ----------------------------------------------------------------------------
  */
 
-import { useMemo, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, useState, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import {
   AnimatePresence,
   LayoutGroup,
@@ -165,6 +165,31 @@ function buildTheme(isLight: boolean): ThemeTokens {
 }
 
 /* ───────────────── Helpers ───────────────── */
+
+function getSafeUrl(url: string | null | undefined): string {
+  if (!url) return '#';
+  if (url.startsWith('/') || url.startsWith('#')) return url;
+  try {
+    const parsed = new URL(url);
+    if (['http:', 'https:'].includes(parsed.protocol)) {
+      return parsed.toString();
+    }
+  } catch {
+    // Ignore
+  }
+  return '#';
+}
+
+function getOptimizedImageUrl(url: string | null | undefined, width = 800): string | undefined {
+  if (!url) return undefined;
+  const safeUrl = getSafeUrl(url);
+  if (safeUrl === '#') return undefined;
+  
+  if (!safeUrl.includes('?')) {
+    return `${safeUrl}?w=${width}&q=80&auto=format`;
+  }
+  return safeUrl;
+}
 
 const dateFormatter = new Intl.DateTimeFormat('ja-JP', {
   year: 'numeric',
@@ -346,18 +371,20 @@ function BreathingBadge({
 /* ───────────────── Avatar (with breathing dot) ───────────────── */
 
 function Avatar({
-  username,
+  username = 'Unknown',
   avatarUrl,
-  showBadge,
-  isFounder,
-  reduce,
+  showBadge = false,
+  isFounder = false,
+  reduce = false,
 }: {
-  username: string;
-  avatarUrl: string | null;
-  showBadge: boolean;
-  isFounder: boolean;
-  reduce: boolean;
+  username?: string;
+  avatarUrl?: string | null;
+  showBadge?: boolean;
+  isFounder?: boolean;
+  reduce?: boolean;
 }) {
+  const [imgError, setImgError] = useState(false);
+
   return (
     <div className="relative shrink-0">
       <div
@@ -369,12 +396,14 @@ function Avatar({
           boxShadow: '0 18px 50px -10px rgba(108,62,244,0.45)',
         }}
       >
-        {avatarUrl ? (
+        {avatarUrl && !imgError ? (
           <img
-            src={avatarUrl}
+            src={getOptimizedImageUrl(avatarUrl, 128)}
             alt={`${username} avatar`}
             className="h-full w-full object-cover"
             loading="lazy"
+            decoding="async"
+            onError={() => setImgError(true)}
           />
         ) : (
           <div
@@ -422,13 +451,13 @@ function Avatar({
 /* ───────────────── Stat Card ───────────────── */
 
 function StatCard({
-  label,
-  value,
+  label = 'Stat',
+  value = '0',
   accent,
   theme,
 }: {
-  label: string;
-  value: string;
+  label?: string;
+  value?: string;
   accent?: 'green' | 'purple' | 'gold';
   theme: ThemeTokens;
 }) {
@@ -655,18 +684,19 @@ function CertificateCard({
   item,
   settings,
   theme,
-  priority,
-  index,
-  reduce,
+  priority = false,
+  index = 0,
+  reduce = false,
 }: {
   item: WidgetCertificate;
   settings: PortfolioWidgetSettings;
   theme: ThemeTokens;
   priority?: boolean;
-  index: number;
-  reduce: boolean;
+  index?: number;
+  reduce?: boolean;
 }) {
-  const title = item.title || 'Untitled proof';
+  const [imgError, setImgError] = useState(false);
+  const title = item?.title || 'Untitled proof';
 
   const variants: Variants = reduce
     ? {
@@ -727,12 +757,12 @@ function CertificateCard({
 
       <div className="relative p-3">
         <a
-          href={item.verifyPath}
+          href={getSafeUrl(item?.verifyPath)}
           target="_blank"
           rel="noreferrer noopener"
           className="block focus:outline-none"
         >
-          {item.imageUrl ? (
+          {item?.imageUrl && !imgError ? (
             <div
               className="overflow-hidden rounded-[1.25rem]"
               style={{
@@ -741,15 +771,17 @@ function CertificateCard({
               }}
             >
               <img
-                src={item.imageUrl}
+                src={getOptimizedImageUrl(item.imageUrl, 800)}
                 alt={`${title} preview`}
                 loading={priority ? 'eager' : 'lazy'}
+                decoding="async"
                 fetchPriority={priority ? 'high' : 'auto'}
+                onError={() => setImgError(true)}
                 className="aspect-[4/3] h-auto w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
               />
             </div>
           ) : (
-            <HashFingerprint hash={item.hash} theme={theme} />
+            <HashFingerprint hash={item?.hash || 'proofmark'} theme={theme} />
           )}
         </a>
 
@@ -779,11 +811,11 @@ function CertificateCard({
               className="mt-1 text-[12.5px] font-mono uppercase tracking-[0.18em]"
               style={{ color: theme.textSubtle }}
             >
-              {formatDate(item.issuedAt)}
+              {formatDate(item?.issuedAt)}
             </p>
           </div>
           <a
-            href={item.verifyPath}
+            href={getSafeUrl(item?.verifyPath)}
             target="_blank"
             rel="noreferrer noopener"
             aria-label={`${title} の証明ページを開く`}
@@ -825,16 +857,16 @@ function CertificateCard({
 function BundleCard({
   bundle,
   theme,
-  reduce,
+  reduce = false,
 }: {
   bundle: WidgetBundle;
   theme: ThemeTokens;
-  reduce: boolean;
+  reduce?: boolean;
 }) {
-  const orderedSteps = [...bundle.steps]
-    .sort((a, b) => a.stepIndex - b.stepIndex)
+  const orderedSteps = [...(bundle?.steps || [])]
+    .sort((a, b) => (a?.stepIndex || 0) - (b?.stepIndex || 0))
     .slice(0, 4);
-  const valid = bundle.chainSummary?.valid !== false;
+  const valid = bundle?.chainSummary?.valid !== false;
   const accent = valid ? ACCENT.teal : ACCENT.gold;
 
   return (
@@ -887,9 +919,9 @@ function BundleCard({
             className="mt-3 text-[17px] font-bold tracking-tight"
             style={{ color: theme.textMain }}
           >
-            {bundle.title}
+            {bundle?.title || 'Untitled Chain'}
           </h3>
-          {bundle.description ? (
+          {bundle?.description ? (
             <p
               className="mt-2 text-[13px] leading-6"
               style={{ color: theme.textMuted }}
@@ -937,19 +969,19 @@ function BundleCard({
         <div className="grid gap-2.5">
           <StatCard
             label="Linked steps"
-            value={String(bundle.chainDepth || bundle.steps.length)}
+            value={String(bundle?.chainDepth || bundle?.steps?.length || 0)}
             accent="purple"
             theme={theme}
           />
           <StatCard
             label="Head hash"
-            value={shortHash(bundle.headHash || '', 8, 6)}
+            value={shortHash(bundle?.headHash || '', 8, 6)}
             accent="green"
             theme={theme}
           />
           <StatCard
             label="Updated"
-            value={formatDate(bundle.createdAt)}
+            value={formatDate(bundle?.createdAt || null)}
             accent="gold"
             theme={theme}
           />
@@ -966,9 +998,10 @@ function BundleStepTile({
   step: WidgetBundleStep;
   theme: ThemeTokens;
 }) {
+  const [imgError, setImgError] = useState(false);
   const fallbackArt = useMemo(
-    () => deriveGenerativeArt(step.id + step.stepType),
-    [step.id, step.stepType],
+    () => deriveGenerativeArt((step?.id || '') + (step?.stepType || '')),
+    [step?.id, step?.stepType],
   );
 
   return (
@@ -979,11 +1012,13 @@ function BundleStepTile({
         border: `1px solid ${theme.innerBorder}`,
       }}
     >
-      {step.previewUrl ? (
+      {step?.previewUrl && !imgError ? (
         <img
-          src={step.previewUrl}
-          alt={`${step.title} preview`}
+          src={getOptimizedImageUrl(step.previewUrl, 400)}
+          alt={`${step?.title || 'Step'} preview`}
           loading="lazy"
+          decoding="async"
+          onError={() => setImgError(true)}
           className="aspect-square w-full object-cover"
         />
       ) : (
@@ -1030,13 +1065,13 @@ function BundleStepTile({
           className="line-clamp-1 text-[11.5px] font-semibold"
           style={{ color: theme.textMain }}
         >
-          {step.title}
+          {step?.title || 'Unknown step'}
         </div>
         <div
           className="mt-1 text-[9.5px] font-mono uppercase tracking-[0.2em]"
           style={{ color: theme.textSubtle }}
         >
-          Step {step.stepIndex + 1}
+          Step {(step?.stepIndex || 0) + 1}
         </div>
       </div>
     </div>
@@ -1046,18 +1081,53 @@ function BundleStepTile({
 /* ═══════════════════════ Main ═══════════════════════ */
 
 export default function PortfolioEmbedWidget({
-  payload,
-  settings,
+  payload: rawPayload,
+  settings: rawSettings,
 }: {
-  payload: PortfolioWidgetPayload;
-  settings: PortfolioWidgetSettings;
+  payload?: PortfolioWidgetPayload;
+  settings?: PortfolioWidgetSettings;
 }) {
   const reduce = useReducedMotion() ?? false;
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Defensive defaults
+  const settings: PortfolioWidgetSettings = {
+    theme: rawSettings?.theme || 'dark',
+    layout: rawSettings?.layout || 'grid',
+    showBadges: rawSettings?.showBadges ?? true,
+    showBundles: rawSettings?.showBundles ?? true,
+    maxItems: rawSettings?.maxItems || 6,
+    bundleLimit: rawSettings?.bundleLimit || 2,
+  };
+
+  const payload: PortfolioWidgetPayload = {
+    profile: rawPayload?.profile || { username: 'creator', avatarUrl: null, bio: null, isFounder: false },
+    headline: rawPayload?.headline || '',
+    stats: rawPayload?.stats || { certificateCount: 0, bundleCount: 0, verifiedChainCount: 0, latestIssuedAt: null },
+    certificates: rawPayload?.certificates || [],
+    bundles: rawPayload?.bundles || [],
+  };
+
   const certificates = payload.certificates.slice(0, settings.maxItems);
   const bundles = settings.showBundles
     ? payload.bundles.slice(0, settings.bundleLimit)
     : [];
   const theme = buildTheme(settings.theme === 'light');
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height = entry.target.getBoundingClientRect().height;
+        window.parent?.postMessage(
+          { type: 'PROOFMARK_EMBED_RESIZE', height },
+          '*'
+        );
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   /* Iframe-safe outer padding so hover glow / -2px lift never clips */
   const outerPadding: CSSProperties = {
@@ -1065,7 +1135,7 @@ export default function PortfolioEmbedWidget({
   };
 
   return (
-    <div className="proofmark-widget-outer relative" style={outerPadding}>
+    <div ref={containerRef} className="proofmark-widget-outer relative" style={outerPadding}>
       <main
         className="proofmark-widget-shell proofmark-widget-grid relative overflow-hidden rounded-[2rem] px-4 py-5 sm:px-6 sm:py-6 lg:px-7 lg:py-7"
         style={{
@@ -1193,7 +1263,7 @@ export default function PortfolioEmbedWidget({
             </div>
 
             <a
-              href={`/u/${payload.profile.username}`}
+              href={getSafeUrl(`/u/${payload.profile.username}`)}
               target="_blank"
               rel="noreferrer noopener"
               className="inline-flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold transition-colors hover:text-[#00D4AA]"
@@ -1359,7 +1429,7 @@ export default function PortfolioEmbedWidget({
             Powered by ProofMark · creator-first verification
           </span>
           <a
-            href="https://www.proofmark.jp/what-it-proves"
+            href={getSafeUrl("https://www.proofmark.jp/what-it-proves")}
             target="_blank"
             rel="noreferrer noopener"
             className="inline-flex items-center gap-2 font-semibold transition-colors hover:text-[#00D4AA]"
