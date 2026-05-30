@@ -77,42 +77,33 @@ function deriveGenerativeArt(hash: string): GenerativeArt {
   const seed = (hash || 'proofmark').padEnd(64, '0');
   const codeAt = (i: number) => seed.charCodeAt(i % seed.length);
 
-  const hueA = codeAt(2) % 360;
-  const hueB = (codeAt(11) + codeAt(17)) % 360;
-  const hueC = (codeAt(23) * 7) % 360;
+  // Clamp hues to ProofMark brand: Teal (~160–180) or Purple (~250–270)
+  const useTeal = codeAt(2) % 2 === 0;
+  const hueA = useTeal ? 160 + (codeAt(2) % 22) : 252 + (codeAt(2) % 18);
+  const hueB = useTeal ? 250 + (codeAt(11) % 18) : 160 + (codeAt(11) % 22);
+  const hueC = 220 + (codeAt(23) % 20); // always cool blue-indigo
 
   const xA = 10 + (codeAt(5) % 70);
   const yA = 10 + (codeAt(7) % 70);
-  const xB = 10 + (codeAt(13) % 70);
-  const yB = 10 + (codeAt(19) % 70);
-  const xC = 10 + (codeAt(29) % 80);
-  const yC = 10 + (codeAt(31) % 80);
+  const xB = 20 + (codeAt(13) % 60);
+  const yB = 20 + (codeAt(19) % 60);
 
-  const conicAngle = codeAt(3) % 360;
   const stripeAngle = codeAt(37) % 180;
-  const stripeGap = 6 + (codeAt(41) % 10);
+  const dotGap = 18 + (codeAt(41) % 8);
 
-  const satA = 70 + (codeAt(9) % 20);
-  const satB = 60 + (codeAt(15) % 25);
-  const lightA = 45 + (codeAt(21) % 15);
-  const lightB = 35 + (codeAt(27) % 15);
-
+  // Deep void base — never bright, saturation crushed
   const background = `
-    radial-gradient(ellipse 80% 60% at ${xA}% ${yA}%, hsl(${hueA}, ${satA}%, ${lightA}%) 0%, transparent 55%),
-    radial-gradient(ellipse 65% 55% at ${xB}% ${yB}%, hsl(${hueB}, ${satB}%, ${lightB}%) 0%, transparent 55%),
-    radial-gradient(circle at ${xC}% ${yC}%, hsl(${hueC}, 80%, 50%) 0%, transparent 45%),
-    conic-gradient(from ${conicAngle}deg at 50% 50%,
-      hsl(${hueA}, 60%, 12%) 0deg,
-      hsl(${hueB}, 70%, 20%) 120deg,
-      hsl(${hueC}, 70%, 16%) 240deg,
-      hsl(${hueA}, 60%, 12%) 360deg)
+    radial-gradient(ellipse 60% 45% at ${xA}% ${yA}%, hsl(${hueA}, 55%, 14%) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at ${xB}% ${yB}%, hsl(${hueB}, 45%, 10%) 0%, transparent 60%),
+    linear-gradient(135deg, #07061A 0%, #0E0B22 55%, #07061A 100%)
   `;
 
+  // Subtle scan-line overlay for cryptographic cold feel
   const overlay = `repeating-linear-gradient(${stripeAngle}deg,
-    rgba(255,255,255,0.05) 0px,
-    rgba(255,255,255,0.05) 1px,
+    rgba(255,255,255,0.025) 0px,
+    rgba(255,255,255,0.025) 1px,
     transparent 1px,
-    transparent ${stripeGap}px)`;
+    transparent ${dotGap}px)`;
 
   return { background, overlay, hueA, hueB, hueC };
 }
@@ -132,61 +123,95 @@ function HashFingerprint({
 }) {
   const art = useMemo(() => deriveGenerativeArt(hash), [hash]);
 
+  // Pre-build a clipped hash string for the cryptographic text grid
+  const hashDisplay = (hash || '').padEnd(64, '0');
+
   return (
     <div
       className={`relative h-full w-full overflow-hidden ${className}`}
       style={{ background: art.background }}
     >
-      {/* striped overlay — flat composite */}
+      {/* Scan-line overlay */}
       <div
         aria-hidden
         className="absolute inset-0"
-        style={{ background: art.overlay, opacity: 0.15 }}
+        style={{ background: art.overlay, opacity: 0.18 }}
       />
 
-      {/* fine grain — flat composite */}
+      {/* Dot-grid — cryptographic cold texture */}
       <div
         aria-hidden
         className="absolute inset-0"
         style={{
           backgroundImage:
-            'radial-gradient(circle at 20% 30%, rgba(255,255,255,0.55) 1px, transparent 1px), radial-gradient(circle at 70% 80%, rgba(255,255,255,0.45) 1px, transparent 1px)',
-          backgroundSize: '6px 6px, 9px 9px',
-          opacity: 0.15,
+            'radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1px)',
+          backgroundSize: '22px 22px',
+          opacity: 0.09,
         }}
       />
 
-      {/* vignette */}
+      {/* Hash text grid — hash chars tiled very faintly */}
+      <div
+        aria-hidden
+        className="absolute inset-0 flex flex-wrap content-start overflow-hidden select-none pointer-events-none"
+        style={{ opacity: 0.055, lineHeight: '1.6', padding: '6px' }}
+      >
+        {Array.from({ length: 120 }).map((_, i) => (
+          <span
+            key={i}
+            className="font-mono text-[8px] text-white"
+            style={{ letterSpacing: '0.05em' }}
+          >
+            {hashDisplay[(i * 2) % hashDisplay.length]}
+            {hashDisplay[(i * 2 + 1) % hashDisplay.length]}{' '}
+          </span>
+        ))}
+      </div>
+
+      {/* Edge vignette */}
       <div
         aria-hidden
         className="absolute inset-0"
         style={{
           background:
-            'radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(0,0,0,0.45) 100%)',
+            'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.6) 100%)',
         }}
       />
 
-      {/* center lock + hash */}
+      {/* Brand accent hairline — top */}
+      <div
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-[1px]"
+        style={{
+          background: `linear-gradient(90deg, transparent, hsl(${art.hueA}, 55%, 38%), transparent)`,
+          opacity: 0.5,
+        }}
+      />
+
+      {/* Center lock + hash */}
       {showLabel && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4">
           <div
-            className="flex h-11 w-11 items-center justify-center rounded-full"
+            className="flex h-10 w-10 items-center justify-center rounded-full"
             style={{
-              background: 'rgba(0,0,0,0.5)',
-              border: '1px solid rgba(0,212,170,0.45)',
-              backdropFilter: 'blur(6px)',
-              boxShadow: '0 0 22px rgba(0,212,170,0.4)',
+              background: 'rgba(7,6,26,0.72)',
+              border: `1px solid hsl(${art.hueA}, 55%, 35%)`,
+              backdropFilter: 'blur(8px)',
+              boxShadow: `0 0 18px hsl(${art.hueA}, 55%, 25%)`,
             }}
           >
-            <Lock className="h-5 w-5 text-[#00D4AA]" strokeWidth={1.6} />
+            <Lock className="h-4 w-4" style={{ color: `hsl(${art.hueA}, 65%, 62%)` }} strokeWidth={1.8} />
           </div>
           <div className="text-center">
-            <p className="text-[9.5px] font-mono uppercase tracking-[0.28em] text-white/85">
-              Confidential Proof
+            <p
+              className="text-[9px] font-mono uppercase tracking-[0.32em]"
+              style={{ color: `hsl(${art.hueA}, 50%, 65%)` }}
+            >
+              Cryptographic Proof
             </p>
             <p
-              className="mt-1 font-mono text-[10px] text-white/55 tracking-[0.18em]"
-              style={{ textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}
+              className="mt-1 font-mono text-[9.5px] tracking-[0.15em]"
+              style={{ color: 'rgba(255,255,255,0.38)', textShadow: '0 1px 4px rgba(0,0,0,0.8)' }}
             >
               {hash ? `${hash.slice(0, 8)}…${hash.slice(-6)}` : '—'}
             </p>
@@ -194,33 +219,30 @@ function HashFingerprint({
         </div>
       )}
 
-      {/* hue chips */}
+      {/* PM mark */}
+      <div
+        aria-hidden
+        className="absolute top-2 left-2 font-mono text-[7.5px] tracking-[0.32em]"
+        style={{ color: 'rgba(255,255,255,0.22)' }}
+      >
+        ✦ PM
+      </div>
+
+      {/* Hue accent chips */}
       <div
         aria-hidden
         className="absolute bottom-2 right-2 flex gap-1 pointer-events-none"
       >
-        {[art.hueA, art.hueB, art.hueC].map((h, i) => (
+        {[art.hueA, art.hueB].map((h, i) => (
           <span
             key={i}
-            className="block h-1.5 w-1.5 rounded-full"
+            className="block h-1 w-1 rounded-full"
             style={{
-              background: `hsl(${h}, 80%, 60%)`,
-              boxShadow: `0 0 6px hsl(${h}, 80%, 60%)`,
+              background: `hsl(${h}, 55%, 50%)`,
+              boxShadow: `0 0 4px hsl(${h}, 55%, 40%)`,
             }}
           />
         ))}
-      </div>
-
-      {/* PM signature mark */}
-      <div
-        aria-hidden
-        className="absolute top-2 left-2 font-mono text-[8px] tracking-[0.3em]"
-        style={{
-          color: 'rgba(255,255,255,0.5)',
-          textShadow: '0 1px 2px rgba(0,0,0,0.6)',
-        }}
-      >
-        ✦ PM
       </div>
     </div>
   );
@@ -408,16 +430,10 @@ const getSafeUrl = (url?: string | null): string => {
 };
 
 const getOptimizedImageUrl = (url: string | null): string | undefined => {
+  // Return the raw URL unchanged — Supabase Storage rejects unknown query params.
+  // Lazy-load and decoding="async" on the <img> handle performance instead.
   if (!url) return undefined;
-  try {
-    const parsed = new URL(url);
-    if (!parsed.searchParams.has('width')) parsed.searchParams.append('width', '800');
-    if (!parsed.searchParams.has('format')) parsed.searchParams.append('format', 'webp');
-    if (!parsed.searchParams.has('quality')) parsed.searchParams.append('quality', '80');
-    return parsed.toString();
-  } catch {
-    return url;
-  }
+  return url;
 };
 
 /* ════════════════════════════════════════════════════════════════
@@ -910,26 +926,21 @@ export default function PublicProfile() {
           <div className="flex flex-wrap gap-2 mt-3 lg:mt-0">
             {STOREFRONT_AI_FILTERS.map(f => {
               const displayLabel =
-                f.value === 'not-generated' ? 'Human-first (暗号証明済)' : f.label;
+                f.value === 'not-generated' ? '👤 Human Created'
+                : f.value === 'ai-generated'  ? '🤖 AI Assisted'
+                : 'All Provenance';
               const isActive = aiFilter === f.value;
               return (
                 <button
                   key={f.value}
                   onClick={() => setAiFilter(f.value)}
                   className={[
-                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold tracking-wider uppercase transition-all duration-200',
+                    'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11.5px] font-semibold transition-all duration-200 whitespace-nowrap',
                     isActive
-                      ? 'bg-[#6C3EF4]/20 border border-[#6C3EF4]/60 text-[#BC78FF] shadow-[0_0_10px_rgba(108,62,244,0.35)]'
-                      : 'bg-[#111] border border-[#333] text-[#666] hover:border-[#555] hover:text-[#aaa]',
+                      ? 'bg-[#6C3EF4]/18 border border-[#6C3EF4]/55 text-[#C4A0FF] shadow-[0_0_12px_rgba(108,62,244,0.28)]'
+                      : 'bg-transparent border border-[#2a2a3e] text-[#55556a] hover:border-[#44445a] hover:text-[#9999b5]',
                   ].join(' ')}
-                  title={
-                    f.value === 'not-generated'
-                      ? 'C2PA Content Credentialsによって「AI生成でない」ことが暗号的に証明された作品のみ表示します'
-                      : undefined
-                  }
                 >
-                  {f.value === 'ai-generated' && <span aria-hidden>✦</span>}
-                  {f.value === 'not-generated' && <span aria-hidden>🔒</span>}
                   {displayLabel}
                 </button>
               );
