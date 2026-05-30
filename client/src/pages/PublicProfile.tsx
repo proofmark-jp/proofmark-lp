@@ -16,11 +16,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import Navbar from '../components/Navbar';
 import FounderBadge from '../components/FounderBadge';
-import {
-  STOREFRONT_AI_FILTERS,
-  matchesAiFilter,
-  type StorefrontAiFilter,
-} from '../lib/proofmark-storefront';
+
 
 interface CertRecord {
   id: string;
@@ -528,7 +524,6 @@ export default function PublicProfile() {
 
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [aiFilter, setAiFilter] = useState<StorefrontAiFilter>('all');
 
   useEffect(() => {
     let active = true;
@@ -603,27 +598,14 @@ export default function PublicProfile() {
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase();
       result = result.filter(c => {
-        const title = ((c.metadata?.title as string) || formatFilename(c)).toLowerCase();
-        const hash = c.file_hash.toLowerCase();
+        const title = ((c.metadata?.title as string) || formatFilename(c) || '').toLowerCase();
+        const hash = (c.file_hash || '').toLowerCase();
         return title.includes(q) || hash.includes(q);
       });
     }
 
-    if (aiFilter !== 'all') {
-      result = result.filter(c => {
-        const raw = (c as any).c2pa_manifest ?? {
-          present: (c as any).c2pa_present,
-          validity: (c as any).c2pa_valid === true ? 'valid' : (c as any).c2pa_valid === false ? 'invalid' : (c as any).c2pa_present ? 'unknown' : undefined,
-          ai_used: (c as any).c2pa_ai_used ?? null,
-          ai_provider: (c as any).c2pa_ai_provider ?? null,
-          issuer: (c as any).c2pa_issuer ?? null,
-        };
-        return matchesAiFilter(raw, aiFilter);
-      });
-    }
-
     return result;
-  }, [certs, activeCategory, searchQuery, aiFilter]);
+  }, [certs, activeCategory, searchQuery]);
 
   const featuredCerts = filteredCerts.filter(c => c.is_starred || c.metadata?.is_starred);
   const standardCerts = filteredCerts.filter(c => !c.is_starred && !c.metadata?.is_starred);
@@ -892,7 +874,9 @@ export default function PublicProfile() {
                     onClick={() => setActiveCategory(cat)}
                     className={`text-[10px] sm:text-xs md:text-sm tracking-[0.15em] uppercase font-medium transition-colors duration-300 relative px-2 py-1 ${activeCategory === cat ? 'text-white' : 'text-[#555] hover:text-[#999]'}`}
                   >
-                    {cat}
+                    {cat === 'ALL' ? 'All Proofs' :
+                     cat === 'VISUAL' ? '🖼️ Public Works' :
+                     cat === 'CONFIDENTIAL' ? '🔒 Sealed Proofs' : cat}
                     {activeCategory === cat && (
                       <motion.div
                         layoutId="categoryIndicator"
@@ -923,29 +907,6 @@ export default function PublicProfile() {
             />
           </div>
 
-          <div className="flex flex-wrap gap-2 mt-3 lg:mt-0">
-            {STOREFRONT_AI_FILTERS.map(f => {
-              const displayLabel =
-                f.value === 'not-generated' ? '👤 Human Created'
-                : f.value === 'ai-generated'  ? '🤖 AI Assisted'
-                : 'All Provenance';
-              const isActive = aiFilter === f.value;
-              return (
-                <button
-                  key={f.value}
-                  onClick={() => setAiFilter(f.value)}
-                  className={[
-                    'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11.5px] font-semibold transition-all duration-200 whitespace-nowrap',
-                    isActive
-                      ? 'bg-[#6C3EF4]/18 border border-[#6C3EF4]/55 text-[#C4A0FF] shadow-[0_0_12px_rgba(108,62,244,0.28)]'
-                      : 'bg-transparent border border-[#2a2a3e] text-[#55556a] hover:border-[#44445a] hover:text-[#9999b5]',
-                  ].join(' ')}
-                >
-                  {displayLabel}
-                </button>
-              );
-            })}
-          </div>
         </div>
 
         {/* ═══════════════ Gallery ═══════════════ */}
