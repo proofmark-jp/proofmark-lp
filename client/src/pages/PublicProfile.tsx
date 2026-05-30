@@ -402,6 +402,24 @@ const formatFilename = (c: CertRecord) => {
   return 'Verified_Digital_Artwork';
 };
 
+const getSafeUrl = (url?: string | null): string => {
+  if (!url) return '#';
+  return url.startsWith('http://') || url.startsWith('https://') ? url : '#';
+};
+
+const getOptimizedImageUrl = (url: string | null): string | undefined => {
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url);
+    if (!parsed.searchParams.has('width')) parsed.searchParams.append('width', '800');
+    if (!parsed.searchParams.has('format')) parsed.searchParams.append('format', 'webp');
+    if (!parsed.searchParams.has('quality')) parsed.searchParams.append('quality', '80');
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+};
+
 /* ════════════════════════════════════════════════════════════════
  *  Not Found Screen (refined with aura)
  * ════════════════════════════════════════════════════════════════ */
@@ -469,7 +487,7 @@ const SocialLink = ({ href, icon: Icon, label, colorClass = "hover:border-[#6C3E
     <motion.a
       whileHover={{ y: -3, scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
-      href={href} target="_blank" rel="noopener noreferrer"
+      href={getSafeUrl(href)} target="_blank" rel="noopener noreferrer"
       className={`flex items-center justify-center gap-2 bg-[#151D2F]/50 border border-[#2a2a4e] ${colorClass} px-3 py-2 rounded-xl transition-colors backdrop-blur-md text-xs font-bold ${textClass} shadow-[0_4px_15px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_25px_rgba(108,62,244,0.3)]`}
     >
       <Icon className="w-4 h-4" /> {label}
@@ -521,7 +539,8 @@ export default function PublicProfile() {
           .select('*')
           .eq('user_id', profile.id)
           .eq('visibility', 'public')
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(100);
 
         if (userCerts) {
           const galleryCerts = userCerts.filter((c: any) => {
@@ -1083,9 +1102,10 @@ function GalleryItem({
                 <motion.img
                   whileHover={reduce ? undefined : { scale: 1.04 }}
                   transition={{ duration: 1.5, ease: 'easeOut' }}
-                  src={typeof cert.public_image_url === 'string' ? cert.public_image_url : ''}
+                  src={getOptimizedImageUrl(typeof cert.public_image_url === 'string' ? cert.public_image_url : '')}
                   alt={title}
                   loading="lazy"
+                  decoding="async"
                   onError={() => setImgError(true)}
                   className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-700"
                 />
