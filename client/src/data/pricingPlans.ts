@@ -89,7 +89,6 @@ export const PRICING_PLANS: PricingPlan[] = [
       { label: 'ペルソナ切替 (法的本名 / 公開名義)', state: 'include' },
       { label: 'Shareable Proof (永続的な公開検証ページ)', state: 'include' },
       { label: 'AIプロンプト・シード値の証拠封入', state: 'planned', highlight: 'gold' },
-      { label: '優先カスタマーサポート', state: 'include' }
     ],
     ctaLabel: { guest: '先行特典を予約する', authed: 'プランをアップグレード' },
     ctaHref: { guest: '/auth?mode=signup', authed: '/settings/billing' },
