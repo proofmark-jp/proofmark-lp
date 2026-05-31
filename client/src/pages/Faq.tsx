@@ -42,6 +42,14 @@ const faqData: FAQItem[] = [
             <strong>Spot（{getPrice('spot')}）</strong>: 1案件ごとのEvidence Pack発行（登録不要）
           </li>
           <li>
+            {/* ▼ 一括証明(予定) を追加 */}
+            <strong>Creator（{getPrice('creator')}）</strong>: PDF・Evidence Pack（月30件）・Chain of Evidence・一括証明(予定)・AIプロンプト封入(予定)
+          </li>
+          <li>
+            {/* ▼ 一括証明(予定) を追加 */}
+            <strong>Studio（{getPrice('studio')}）</strong>: PDF・Evidence Pack（月150件）・チーム管理・WORM監査ログ・一括証明(予定)・ホワイトラベル(予定)
+          </li>
+          <li>
             <strong>Creator（{getPrice('creator')}）</strong>: PDF・Evidence Pack（月30件）・Chain of Evidence・AIプロンプト封入(予定)
           </li>
           <li>
