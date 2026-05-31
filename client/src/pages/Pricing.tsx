@@ -280,7 +280,8 @@ const ROI_NAV: RoiNavItem[] = [
     label: '月3件以上発行する',
     plan: 'Creator',
     planId: 'creator',
-    micro: 'Spot約3件分の価格で月30件の完全証明',
+    // ▼ Chain of Evidence が手に入ることを強烈にアピール
+    micro: '月30件の証明 ＋ 制作工程の連鎖証明',
     accent: '#BC78FF',
     recommended: true,
   },
@@ -585,7 +586,7 @@ export default function Pricing() {
                 Q. なぜ Creator は ¥1,480 ですか？
               </p>
               <p className="text-sm text-[#A8A0D8] leading-relaxed">
-                ProofMarkは単なる「節約ツール」ではなく、プロフェッショナルのための「信頼担保インフラ」だからです。重要な証拠基盤を安売りすることは、逆に「実務で使って大丈夫か」という取引先の不信を招きます。本プランは、クライアントへそのまま提出できる『Evidence Pack（PDF証明書＋証拠データ）』の発行に加え、作品が絶対に消えない『Evidence Vault（永久不変ストレージ）』を提供します。プロが信用を丸ごと納品し、ツールではなく、あなたの作品を守る「信頼の証」としての価値を価格に反映しています。
+                ProofMarkは単なる「節約ツール」ではなく、プロフェッショナルのための「信頼担保インフラ」だからです。重要な証拠基盤を安売りすることは、逆に「実務で使って大丈夫か」という取引先の不信を招きます。本プランは、クライアントへそのまま提出できる『Evidence Pack』の発行に加え、ラフから完成までの制作工程すべてを証明する『Chain of Evidence』を提供します。プロが信用を丸ごと納品し、ツールではなくあなたの作品を守る「信頼の証」としての価値を価格に反映しています。
               </p>
             </div>
             <div className="rounded-xl border border-[#1C1A38] bg-[#0D0B24]/70 p-5">

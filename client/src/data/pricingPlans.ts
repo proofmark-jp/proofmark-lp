@@ -81,6 +81,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     tagline: '毎月納品するプロフェッショナルの月額保険',
     features: [
       { label: '納品用 Evidence Pack (月30件)', state: 'include' },
+      { label: 'Chain of Evidence (制作工程の連鎖証明)', state: 'include', highlight: 'primary' }, // 👑 ここに最強の武器を投下
       { label: 'NDA案件の「漆黒の金庫」モード (無制限)', state: 'include', vaultIcon: true },
       { label: 'ペルソナ切替 (法的本名 / 公開名義)', state: 'include' },
       { label: 'Shareable Proof (永続的な公開検証ページ)', state: 'include' },
@@ -101,10 +102,10 @@ export const PRICING_PLANS: PricingPlan[] = [
     tagline: '法人取引・複数案件を一元管理したいチーム向け',
     features: [
       { label: '納品用 Evidence Pack (月150件)', state: 'include' },
-      { label: '検証ページのホワイトラベル化 (自社ロゴ)', state: 'planned', highlight: 'gold' },
-      { label: '複数人でのチーム管理・案件共有', state: 'include' },
-      { label: 'Chain of Evidence (制作工程の連鎖証明)', state: 'include' },
-      { label: 'WORM監査ログ・改ざん検知', state: 'include' }
+      { label: '複数人でのチーム管理・案件台帳', state: 'include' }, // 🏢 B2Bの目玉1
+      { label: 'チーム共有の Evidence Vault (証拠一元管理)', state: 'include', vaultIcon: true }, // 🏢 B2Bの目玉2
+      { label: 'WORM監査ログ・証跡管理', state: 'include' }, // 🏢 B2Bの目玉3
+      { label: '検証ページのホワイトラベル化 (自社ロゴ)', state: 'planned', highlight: 'gold' } // 🏢 B2Bの目玉4
     ],
     ctaLabel: { authed: 'Studioに切り替える', guest: 'Studioを予約する' },
     ctaHref: { authed: '/settings#plan', guest: '/auth?mode=signup&plan=studio' },

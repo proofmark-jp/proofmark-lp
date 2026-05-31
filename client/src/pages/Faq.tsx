@@ -30,7 +30,7 @@ const faqData: FAQItem[] = [
   {
     id: 'pricing',
     question: '料金プランについて教えてください',
-    schemaText: `ProofMarkはFree(${getPrice('free')}、月30件/Web証明のみ)、Spot(${getPrice('spot')}、1案件ごとのEvidence Pack発行)、Creator(${getPrice('creator')}、月30件までのPDF・Evidence Pack発行)、Studio(${getPrice('studio')}、月150件までの完全版機能)、Business/API(要問い合わせ)の5階層です。商用TSAの維持コストに基づいたFair Use枠を設けています。`,
+    schemaText: `ProofMarkはFree(${getPrice('free')}、月30件/Web証明のみ)、Spot(${getPrice('spot')}、1案件ごとの即発行)、Creator(${getPrice('creator')}、月30件までのEvidence Pack発行と制作工程の連鎖証明)、Studio(${getPrice('studio')}、月150件までのチーム管理・監査ログ)、Business/API(要問い合わせ)の5階層です。商用TSAの維持コストに基づいたFair Use枠を設けています。`,
     answer: (
       <>
         <p>ProofMarkは「証明回数」ではなく「納品信頼の運用」に基づいた料金体系です。</p>
@@ -42,10 +42,10 @@ const faqData: FAQItem[] = [
             <strong>Spot（{getPrice('spot')}）</strong>: 1案件ごとのEvidence Pack発行（登録不要）
           </li>
           <li>
-            <strong>Creator（{getPrice('creator')}）</strong>: PDF・Evidence Pack（月30件まで）・AIプロンプト封入(予定)・C2PA
+            <strong>Creator（{getPrice('creator')}）</strong>: PDF・Evidence Pack（月30件）・Chain of Evidence・AIプロンプト封入(予定)
           </li>
           <li>
-            <strong>Studio（{getPrice('studio')}）</strong>: PDF・Evidence Pack（月150件まで）・ホワイトラベル(予定)・チーム管理
+            <strong>Studio（{getPrice('studio')}）</strong>: PDF・Evidence Pack（月150件）・チーム管理・WORM監査ログ・ホワイトラベル(予定)
           </li>
           <li>
             <strong>Business / API</strong>: API・SLA・商用TSA対応・個別DPA。要問い合わせ
