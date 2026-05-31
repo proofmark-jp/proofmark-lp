@@ -1,28 +1,14 @@
 /**
- * Dashboard.studio.tsx — Phase Studio Repair (Stripe / Vercel-grade Console)
+ * Dashboard.studio.tsx — God Mode (PLG-grade Visual Console)
  *
- * 設計責任:
- *   1. Hero (上段): SlimUploadDock を常設マウント。画面を占有しない、
- *      Vercel "New Project" / Stripe "Quick Action" のような細い帯。
- *      展開時のみ既存 CertificateUpload.c2pa-patch.tsx をフルロードする。
- *   2. KPI (中段): 「管理中の証明数 / Trusted TSA / 要対応 / 直近発行」。
- *      "0/34件が証明済み" のような誤読されやすい文言を完全に廃止。
- *   3. Management (下段): 既存の強力な機能を温存・強化。
- *        - ProjectRail (案件チップ + 件数 + Trusted カウント)
- *        - Toolbar (検索 / 信頼 Tab / ソート / Grid・List 切替 / アーカイブ表示)
- *        - Studio plan のみ AttentionTray + StatusMenu + ProjectComposer + AuditDrawer
- *        - Free / Creator は CreatorDashboard に委譲することなく、ここで一括描画
+ * 5つの絶対アーキテクチャ防衛線:
+ *   1. Visual DNA Sync — deriveGenerativeArt / HashFingerprint / BreathingBadge を移植
+ *   2. Bento Grid + Egress Defense — getOptimizedImageUrl + lazy/async decode
+ *   3. The Inspector + Deep Link — chainCert modal を廃止し、右側ドロワー + URL同期
+ *   4. Process Builder Trial Value — ProcessBundleComposer をそのままマウント + 美しいペイウォール
+ *   5. Silent Processing — Pending を breathing ring に置換、10秒超で warning へ
  *
- * 厳守事項:
- *   - 既存型 (proofmark-types.ts) と pm.* デザイントークンを 1mm も壊さない。
- *   - any キャストは構造起因の境界 1 箇所のみに局所化し、残りは厳密推論。
- *   - useStudioOps / useC2pa / useAuth / supabase 直接呼び出しのロジックは温存。
- *   - 削除しない: 検索 / ソート / view モード / アーカイブ / 信頼バッジ / ProjectRail。
- *
- * 参考実装:
- *   - 既存 Dashboard.tsx の deriveTrustTier / TrustBadge / ProjectChip / Toolbar
- *   - 旧 Dashboard.studio.tsx の AttentionTray / StatusMenu / AuditDrawer / ProjectComposer
- *   - 新規 SlimUploadDock (Hero 部の slim shell)
+ * 既存ロジック (Supabase / SlimUploadDock / ProjectRail / useStudioOps) は1mmも変更しない。
  */
 
 import {
@@ -36,7 +22,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useLocation } from 'wouter';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion, type Variants } from 'framer-motion';
 import {
   Archive,
   ArchiveRestore,
@@ -53,6 +39,7 @@ import {
   Info,
   LayoutGrid,
   Link as LinkIcon,
+  Lock,
   Plus,
   Rows3,
   Search,
@@ -60,6 +47,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -82,16 +70,347 @@ import { AuditDrawer } from '../components/ops/AuditDrawer';
 import { SlimUploadDock } from '../components/dashboard/SlimUploadDock';
 import VisibilityToggle from '../components/VisibilityToggle';
 
-// Process Bundle Composer (Chain of Evidence) は Studio で開く可能性あり。Lazy load。
+// Chain of Evidence builder (Inspector 内に常設マウント)
 const ProcessBundleComposer = lazy(() =>
   import('../components/proof/ProcessBundleComposer').then((m) => ({
     default: m.ProcessBundleComposer,
   })),
 );
 
-/* ──────────────────────────────────────────────────────────────────────────
-   Types — 既存テーブル列のスーパーセット (壊さない)
-────────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════
+ *  GOD MODE PORT — PublicProfile.tsx の Visual DNA を移植
+ *    - PM_EASE
+ *    - deriveGenerativeArt(hash)
+ *    - HashFingerprint  (mix-blend-mode 廃止 / opacity 0.15 のフラット合成)
+ *    - BreathingBadge   (reduce-motion対応, mini/normal/large)
+ *  これらは PublicProfile と完全に同じ DNA を共有する。
+ * ══════════════════════════════════════════════════════════════ */
+
+const PM_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
+const ACCENT = {
+  teal: { hex: '#00D4AA', rgb: '0,212,170' },
+  purple: { hex: '#6C3EF4', rgb: '108,62,244' },
+  gold: { hex: '#F0BB38', rgb: '240,187,56' },
+} as const;
+
+interface GenerativeArt {
+  background: string;
+  overlay: string;
+  hueA: number;
+  hueB: number;
+  hueC: number;
+}
+
+function deriveGenerativeArt(hash: string): GenerativeArt {
+  const seed = (hash || 'proofmark').padEnd(64, '0');
+  const codeAt = (i: number) => seed.charCodeAt(i % seed.length);
+
+  const hueA = codeAt(2) % 360;
+  const hueB = (codeAt(11) + codeAt(17)) % 360;
+  const hueC = (codeAt(23) * 7) % 360;
+
+  const xA = 10 + (codeAt(5) % 70);
+  const yA = 10 + (codeAt(7) % 70);
+  const xB = 10 + (codeAt(13) % 70);
+  const yB = 10 + (codeAt(19) % 70);
+  const xC = 10 + (codeAt(29) % 80);
+  const yC = 10 + (codeAt(31) % 80);
+
+  const conicAngle = codeAt(3) % 360;
+  const stripeAngle = codeAt(37) % 180;
+  const stripeGap = 6 + (codeAt(41) % 10);
+
+  const satA = 70 + (codeAt(9) % 20);
+  const satB = 60 + (codeAt(15) % 25);
+  const lightA = 45 + (codeAt(21) % 15);
+  const lightB = 35 + (codeAt(27) % 15);
+
+  const background = `
+    radial-gradient(ellipse 80% 60% at ${xA}% ${yA}%, hsl(${hueA}, ${satA}%, ${lightA}%) 0%, transparent 55%),
+    radial-gradient(ellipse 65% 55% at ${xB}% ${yB}%, hsl(${hueB}, ${satB}%, ${lightB}%) 0%, transparent 55%),
+    radial-gradient(circle at ${xC}% ${yC}%, hsl(${hueC}, 80%, 50%) 0%, transparent 45%),
+    conic-gradient(from ${conicAngle}deg at 50% 50%,
+      hsl(${hueA}, 60%, 12%) 0deg,
+      hsl(${hueB}, 70%, 20%) 120deg,
+      hsl(${hueC}, 70%, 16%) 240deg,
+      hsl(${hueA}, 60%, 12%) 360deg)
+  `;
+
+  const overlay = `repeating-linear-gradient(${stripeAngle}deg,
+    rgba(255,255,255,0.05) 0px,
+    rgba(255,255,255,0.05) 1px,
+    transparent 1px,
+    transparent ${stripeGap}px)`;
+
+  return { background, overlay, hueA, hueB, hueC };
+}
+
+function HashFingerprint({
+  hash,
+  className = '',
+  showLabel = true,
+}: {
+  hash: string;
+  className?: string;
+  showLabel?: boolean;
+}) {
+  const art = useMemo(() => deriveGenerativeArt(hash), [hash]);
+
+  return (
+    <div
+      className={`relative h-full w-full overflow-hidden ${className}`}
+      style={{ background: art.background }}
+    >
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{ background: art.overlay, opacity: 0.15 }}
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 20% 30%, rgba(255,255,255,0.55) 1px, transparent 1px), radial-gradient(circle at 70% 80%, rgba(255,255,255,0.45) 1px, transparent 1px)',
+          backgroundSize: '6px 6px, 9px 9px',
+          opacity: 0.15,
+        }}
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(0,0,0,0.45) 100%)',
+        }}
+      />
+
+      {showLabel && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4">
+          <div
+            className="flex h-11 w-11 items-center justify-center rounded-full"
+            style={{
+              background: 'rgba(0,0,0,0.5)',
+              border: '1px solid rgba(0,212,170,0.45)',
+              backdropFilter: 'blur(6px)',
+              boxShadow: '0 0 22px rgba(0,212,170,0.4)',
+            }}
+          >
+            <Lock className="h-5 w-5 text-[#00D4AA]" strokeWidth={1.6} />
+          </div>
+          <div className="text-center">
+            <p className="text-[9.5px] font-mono uppercase tracking-[0.28em] text-white/85">
+              Confidential Proof
+            </p>
+            <p
+              className="mt-1 font-mono text-[10px] text-white/55 tracking-[0.18em]"
+              style={{ textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}
+            >
+              {hash ? `${hash.slice(0, 8)}…${hash.slice(-6)}` : '—'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div
+        aria-hidden
+        className="absolute bottom-2 right-2 flex gap-1 pointer-events-none"
+      >
+        {[art.hueA, art.hueB, art.hueC].map((h, i) => (
+          <span
+            key={i}
+            className="block h-1.5 w-1.5 rounded-full"
+            style={{
+              background: `hsl(${h}, 80%, 60%)`,
+              boxShadow: `0 0 6px hsl(${h}, 80%, 60%)`,
+            }}
+          />
+        ))}
+      </div>
+
+      <div
+        aria-hidden
+        className="absolute top-2 left-2 font-mono text-[8px] tracking-[0.3em]"
+        style={{
+          color: 'rgba(255,255,255,0.5)',
+          textShadow: '0 1px 2px rgba(0,0,0,0.6)',
+        }}
+      >
+        ✦ PM
+      </div>
+    </div>
+  );
+}
+
+function BreathingBadge({
+  reduce,
+  size = 'normal',
+  tone = 'teal',
+  label,
+  icon,
+  sublabel,
+}: {
+  reduce: boolean;
+  size?: 'mini' | 'normal' | 'large';
+  tone?: 'teal' | 'gold' | 'purple';
+  label: string;
+  icon?: ReactNode;
+  sublabel?: string;
+}) {
+  const accent = ACCENT[tone];
+  const Icon = icon ?? <ShieldCheck className="h-3 w-3" />;
+
+  if (size === 'mini') {
+    return (
+      <motion.span
+        animate={
+          reduce
+            ? undefined
+            : {
+                boxShadow: [
+                  `0 0 0 0 rgba(${accent.rgb}, 0.55)`,
+                  `0 0 0 6px rgba(${accent.rgb}, 0)`,
+                  `0 0 0 0 rgba(${accent.rgb}, 0.55)`,
+                ],
+              }
+        }
+        transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-mono uppercase tracking-[0.2em] whitespace-nowrap"
+        style={{
+          background: `rgba(${accent.rgb}, 0.14)`,
+          border: `1px solid rgba(${accent.rgb}, 0.5)`,
+          color: accent.hex,
+        }}
+      >
+        {Icon}
+        {label}
+      </motion.span>
+    );
+  }
+
+  if (size === 'large') {
+    return (
+      <motion.div
+        className="relative inline-flex items-center gap-2 rounded-full pl-2 pr-3.5 py-1.5"
+        style={{
+          background: 'rgba(7,6,26,0.78)',
+          border: `1px solid rgba(${accent.rgb}, 0.55)`,
+          backdropFilter: 'blur(10px)',
+        }}
+        animate={
+          reduce
+            ? undefined
+            : {
+                boxShadow: [
+                  `0 4px 18px rgba(0,0,0,0.35), 0 0 0 0 rgba(${accent.rgb}, 0.55)`,
+                  `0 4px 18px rgba(0,0,0,0.35), 0 0 0 8px rgba(${accent.rgb}, 0)`,
+                  `0 4px 18px rgba(0,0,0,0.35), 0 0 0 0 rgba(${accent.rgb}, 0.55)`,
+                ],
+              }
+        }
+        transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <motion.span
+          className="flex h-5 w-5 items-center justify-center rounded-full"
+          style={{
+            background: accent.hex,
+            boxShadow: `0 0 10px rgba(${accent.rgb}, 0.7)`,
+          }}
+          animate={reduce ? undefined : { opacity: [1, 0.78, 1] }}
+          transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          <Check
+            className="h-3 w-3"
+            color={tone === 'gold' ? '#07061A' : '#FFFFFF'}
+            strokeWidth={4}
+          />
+        </motion.span>
+        <span
+          className="text-[10.5px] font-mono uppercase tracking-[0.24em]"
+          style={{ color: '#FFFFFF' }}
+        >
+          {label}
+          {sublabel && (
+            <span className="opacity-65 font-normal normal-case ml-1.5">· {sublabel}</span>
+          )}
+        </span>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      className="relative inline-flex items-center gap-1.5 rounded-full pl-1.5 pr-2.5 py-1 whitespace-nowrap"
+      style={{
+        background: `rgba(${accent.rgb}, 0.10)`,
+        border: `1px solid rgba(${accent.rgb}, 0.45)`,
+        color: accent.hex,
+        backdropFilter: 'blur(8px)',
+      }}
+      animate={
+        reduce
+          ? undefined
+          : {
+              boxShadow: [
+                `0 0 0 0 rgba(${accent.rgb}, 0.45)`,
+                `0 0 0 6px rgba(${accent.rgb}, 0)`,
+                `0 0 0 0 rgba(${accent.rgb}, 0.45)`,
+              ],
+            }
+      }
+      transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+    >
+      <motion.span
+        className="flex items-center justify-center"
+        style={{ color: accent.hex }}
+        animate={reduce ? undefined : { opacity: [1, 0.78, 1] }}
+        transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        {Icon}
+      </motion.span>
+      <span
+        className="text-[10px] font-mono uppercase tracking-[0.22em]"
+        style={{ color: accent.hex }}
+      >
+        {label}
+        {sublabel && (
+          <span className="opacity-65 font-normal normal-case ml-1">· {sublabel}</span>
+        )}
+      </span>
+    </motion.div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+ *  Egress Defense — 画像URL最適化ヘルパー
+ *    Supabase Storage Image Transformation を尊重しつつ、
+ *    既にクエリがある場合は破壊しない。
+ * ══════════════════════════════════════════════════════════════ */
+
+function getOptimizedImageUrl(
+  url: string | null | undefined,
+  opts: { width?: number; quality?: number } = {},
+): string {
+  if (!url || typeof url !== 'string') return '';
+  const { width = 400, quality = 70 } = opts;
+  try {
+    const u = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'https://proofmark.jp');
+    // Supabase render endpoint 互換のクエリパラメータを付与
+    if (!u.searchParams.has('width')) u.searchParams.set('width', String(width));
+    if (!u.searchParams.has('quality')) u.searchParams.set('quality', String(quality));
+    if (!u.searchParams.has('format')) u.searchParams.set('format', 'webp');
+    return u.toString();
+  } catch {
+    // URL 解析失敗時はそのまま返す (壊さない)
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}width=${width}&quality=${quality}&format=webp`;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+ *  Types
+ * ══════════════════════════════════════════════════════════════ */
 
 type TrustTier = 'beta' | 'trusted' | 'cross' | 'pending';
 
@@ -114,7 +433,6 @@ interface CertRow {
   cross_anchors?: Array<{ provider: string; certified_at: string }> | null;
   is_archived?: boolean | null;
   client_project?: string | null;
-  /** Sprint 3 — Studio fields */
   project_id?: string | null;
   delivery_status?: DeliveryStatus | null;
   team_id?: string | null;
@@ -141,6 +459,9 @@ const TRUSTED_PROVIDERS: ReadonlySet<string> = new Set([
 ]);
 const ALL_PROJECTS_ID = '__all__';
 const UNASSIGNED_ID = '__unassigned__';
+
+/* ペイウォール閾値 (10秒) */
+const PENDING_WARN_THRESHOLD_MS = 10_000;
 
 function deriveTrustTier(c: CertRow): TrustDescriptor {
   const provider = (c.tsa_provider || '').toLowerCase();
@@ -195,16 +516,15 @@ function deriveTrustTier(c: CertRow): TrustDescriptor {
   };
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
-   Component — Single page, dual capability (Creator + Studio)
-────────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════
+ *  Wrapper
+ * ══════════════════════════════════════════════════════════════ */
 
 export default function DashboardStudioWrapper() {
   const { user, loading: authLoading, signOut } = useAuth();
   const ops = useStudioOps();
   const [, navigate] = useLocation();
 
-  // 認証ガード
   useEffect(() => {
     if (!authLoading && !user) navigate('/auth?redirect=/dashboard');
   }, [authLoading, user, navigate]);
@@ -212,19 +532,19 @@ export default function DashboardStudioWrapper() {
   if (authLoading || ops.loading) return <MinimalSpinner />;
   if (!user) return null;
 
-  const isStudio = ops.isStudio;
-
   return (
     <StudioCanvas
       user={user}
       signOut={signOut}
       ops={ops}
-      isStudio={isStudio}
+      isStudio={ops.isStudio}
     />
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════
+ *  Studio Canvas
+ * ══════════════════════════════════════════════════════════════ */
 
 interface StudioCanvasProps {
   user: ReturnType<typeof useAuth>['user'];
@@ -234,25 +554,85 @@ interface StudioCanvasProps {
 }
 
 function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
+  const reduce = useReducedMotion() ?? false;
   const [certs, setCerts] = useState<CertRow[]>([]);
   const [loadingCerts, setLoadingCerts] = useState(true);
 
-  // フィルタ / ソート / 表示モード — Dashboard.tsx と完全互換
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'starred' | 'trust'>('newest');
-  const [view, setView] = useState<'grid' | 'list'>('list');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
   const [activeProjectId, setActiveProjectId] = useState<string>(ALL_PROJECTS_ID);
   const [showArchived, setShowArchived] = useState(false);
   const [trustFilter, setTrustFilter] = useState<TrustTier | 'all'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Studio 専用ドロワー
   const [composerOpen, setComposerOpen] = useState(false);
   const [auditCertId, setAuditCertId] = useState<string | null>(null);
   const [auditCertTitle, setAuditCertTitle] = useState<string | null>(null);
-  const [chainCert, setChainCert] = useState<CertificateRecord | null>(null);
 
-  /* ── データ取得 (Studio: 自分 + チーム / Creator: 自分のみ) ── */
+  /* ━━━━━━━━━━━━━━━━ The Inspector (deep-link enabled) ━━━━━━━━━━━━━━━━ */
+  const [inspectorCertId, setInspectorCertId] = useState<string | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<'overview' | 'chain'>('overview');
+
+  // ── URL → state (初回マウント & popstate)
+  useEffect(() => {
+    const sync = () => {
+      const params = new URLSearchParams(window.location.search);
+      const asset = params.get('asset');
+      const tab = params.get('tab');
+      setInspectorCertId(asset || null);
+      if (tab === 'chain' || tab === 'overview') setInspectorTab(tab);
+    };
+    sync();
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
+
+  // ── state → URL (history push/replace)
+  const syncInspectorToUrl = useCallback((id: string | null, tab: 'overview' | 'chain' = 'overview', replace = false) => {
+    const params = new URLSearchParams(window.location.search);
+    if (id) {
+      params.set('asset', id);
+      params.set('tab', tab);
+    } else {
+      params.delete('asset');
+      params.delete('tab');
+    }
+    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}`;
+    if (replace) {
+      window.history.replaceState(null, '', next);
+    } else {
+      window.history.pushState(null, '', next);
+    }
+  }, []);
+
+  const openInspector = useCallback(
+    (cert: CertRow, tab: 'overview' | 'chain' = 'overview') => {
+      setInspectorCertId(cert.id);
+      setInspectorTab(tab);
+      // 開く時は pushState で履歴に追加（ブラウザバック対応）
+      syncInspectorToUrl(cert.id, tab, false);
+    },
+    [syncInspectorToUrl],
+  );
+
+  const closeInspector = useCallback(() => {
+    setInspectorCertId(null);
+    setInspectorTab('overview');
+    // 閉じる時は replace で URL を戻す（あるいは history.back() でも可）
+    syncInspectorToUrl(null, 'overview', true);
+  }, [syncInspectorToUrl]);
+
+  const setInspectorTabAndUrl = useCallback(
+    (tab: 'overview' | 'chain') => {
+      setInspectorTab(tab);
+      // タブ切替は replace (履歴を汚さない)
+      if (inspectorCertId) syncInspectorToUrl(inspectorCertId, tab, true);
+    },
+    [inspectorCertId, syncInspectorToUrl],
+  );
+
+  /* ━━━━━━━━━━━━━━━━ Data fetch ━━━━━━━━━━━━━━━━ */
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -281,7 +661,6 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     };
   }, [user, isStudio, showArchived]);
 
-  /* ── 派生: フィルタ済み + 案件適用 ── */
   const visibleCerts = useMemo(
     () => (showArchived ? certs : certs.filter((c) => !c.is_archived)),
     [certs, showArchived],
@@ -290,18 +669,16 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const filteredSortedCerts = useMemo(() => {
     let r = [...visibleCerts];
 
-    // 検索 (Studio時のプロジェクト名検索漏れを修正)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      // Studio用にプロジェクトIDから名前を引けるMapを事前作成
-      const projectMap = isStudio ? new Map(ops.projects.map((p) => [p.id, p.name.toLowerCase()])) : new Map();
-      
+      const projectMap = isStudio
+        ? new Map(ops.projects.map((p) => [p.id, p.name.toLowerCase()]))
+        : new Map();
       r = r.filter((c) => {
-        // StudioならMapから名前を取得、Creatorならclient_projectを直接使用
-        const projectName = isStudio && c.project_id 
-          ? projectMap.get(c.project_id) || '' 
-          : (c.client_project || '').toLowerCase();
-
+        const projectName =
+          isStudio && c.project_id
+            ? projectMap.get(c.project_id) || ''
+            : (c.client_project || '').toLowerCase();
         return (
           (c.title ?? '').toLowerCase().includes(q) ||
           (c.file_name ?? '').toLowerCase().includes(q) ||
@@ -311,7 +688,6 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
       });
     }
 
-    // 案件フィルタ — Studio は project_id, Creator は client_project
     if (activeProjectId !== ALL_PROJECTS_ID) {
       if (isStudio) {
         r = r.filter((c) => (c.project_id || UNASSIGNED_ID) === activeProjectId);
@@ -323,40 +699,37 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
       }
     }
 
-    // 信頼フィルタ
     if (trustFilter !== 'all') {
       r = r.filter((c) => deriveTrustTier(c).tier === trustFilter);
     }
 
-    // ソート (パフォーマンスチューニング: Dateパースを最小限に)
     const rank: Record<TrustTier, number> = { cross: 0, trusted: 1, beta: 2, pending: 3 };
-    
-    // 事前にタイムスタンプを計算してキャッシュ (Schwartzian transform的アプローチ)
-    const sorted = r.map(c => ({
-      cert: c,
-      time: new Date(c.created_at).getTime() || 0,
-      trustRank: rank[deriveTrustTier(c).tier]
-    })).sort((a, b) => {
-      if (sortBy === 'starred') {
-        const av = a.cert.is_starred ? 1 : 0;
-        const bv = b.cert.is_starred ? 1 : 0;
-        if (av !== bv) return bv - av;
-      }
-      if (sortBy === 'trust') {
-        const d = a.trustRank - b.trustRank;
-        if (d !== 0) return d;
-      }
-      if (isStudio) {
-        const diff = compareByAttention(a.cert.delivery_status ?? null, b.cert.delivery_status ?? null);
-        if (diff !== 0) return diff;
-      }
-      return b.time - a.time;
-    });
+    const sorted = r
+      .map((c) => ({
+        cert: c,
+        time: new Date(c.created_at).getTime() || 0,
+        trustRank: rank[deriveTrustTier(c).tier],
+      }))
+      .sort((a, b) => {
+        if (sortBy === 'starred') {
+          const av = a.cert.is_starred ? 1 : 0;
+          const bv = b.cert.is_starred ? 1 : 0;
+          if (av !== bv) return bv - av;
+        }
+        if (sortBy === 'trust') {
+          const d = a.trustRank - b.trustRank;
+          if (d !== 0) return d;
+        }
+        if (isStudio) {
+          const diff = compareByAttention(a.cert.delivery_status ?? null, b.cert.delivery_status ?? null);
+          if (diff !== 0) return diff;
+        }
+        return b.time - a.time;
+      });
 
-    return sorted.map(item => item.cert);
+    return sorted.map((item) => item.cert);
   }, [visibleCerts, activeProjectId, searchQuery, trustFilter, sortBy, isStudio, ops.projects]);
 
-  /* ── 派生: ProjectRail の chips ── */
   const projectChips: ProjectChipModel[] = useMemo(() => {
     const chips = new Map<string, ProjectChipModel>();
     chips.set(ALL_PROJECTS_ID, {
@@ -405,7 +778,6 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
         chips.set(id, existing);
       }
     } else {
-      // Creator: client_project 文字列でグルーピング
       for (const c of visibleCerts) {
         const key = c.client_project?.trim() || UNASSIGNED_ID;
         const existing =
@@ -427,7 +799,6 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     return Array.from(chips.values());
   }, [visibleCerts, ops.projects, isStudio]);
 
-  /* ── 派生: KPI (ロード時のチラつき防止) ── */
   const kpi = useMemo(() => {
     if (loadingCerts) {
       return { total: '-', trusted: '-', beta: '-', pending: '-', review: '-', ready: '-', last: null };
@@ -453,7 +824,6 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     };
   }, [visibleCerts, loadingCerts]);
 
-  /* ── 派生: AttentionTray (Studio only) ── */
   const attentionItems = useMemo(() => {
     if (!isStudio) return [];
     const projectMap = new Map(ops.projects.map((p) => [p.id, p]));
@@ -470,7 +840,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     }));
   }, [visibleCerts, ops.projects, isStudio]);
 
-  /* ── handlers ── */
+  /* ━━━━━━━━━━━━━━━━ Handlers ━━━━━━━━━━━━━━━━ */
   const handleToggleStar = useCallback(async (certId: string, current: boolean) => {
     setCerts((prev) =>
       prev.map((c) => (c.id === certId ? { ...c, is_starred: !current } : c)),
@@ -627,25 +997,59 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     }
   }, []);
 
-  /* ───────────────── Render ───────────────── */
+  // 現在の Inspector 対象
+  const inspectorCert = useMemo(
+    () => (inspectorCertId ? certs.find((c) => c.id === inspectorCertId) ?? null : null),
+    [inspectorCertId, certs],
+  );
+
+  // PLG 権限フラグ — ops の privileges を尊重し、足りない場合は plan tier で fallback
+  const canExportEvidencePack = useMemo<boolean>(() => {
+    const priv = (ops as any).userPrivileges as
+      | { can_export_evidence_pack?: boolean }
+      | undefined;
+    if (priv && typeof priv.can_export_evidence_pack === 'boolean') {
+      return priv.can_export_evidence_pack;
+    }
+    const tier = (ops.planTier ?? '').toLowerCase();
+    return ['creator', 'studio', 'admin'].includes(tier);
+  }, [ops]);
+
+  /* ━━━━━━━━━━━━━━━━ Render ━━━━━━━━━━━━━━━━ */
 
   return (
     <div
-      className="min-h-screen text-white"
+      className="min-h-screen text-white relative"
       style={{
         background:
           'radial-gradient(1200px 600px at 50% -10%, rgba(108,62,244,0.06), transparent 60%), linear-gradient(180deg, #07061A 0%, #0a0a16 100%)',
       }}
     >
+      {/* Global ambient aura — God Mode */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-0 overflow-hidden">
+        <motion.div
+          className="absolute -top-40 -left-40 w-[700px] h-[700px] rounded-full bg-[#6C3EF4] opacity-[0.08] blur-[160px]"
+          style={{ willChange: 'opacity' }}
+          animate={reduce ? undefined : { opacity: [0.05, 0.11, 0.05] }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <motion.div
+          className="absolute -bottom-40 -right-40 w-[700px] h-[700px] rounded-full bg-[#00D4AA] opacity-[0.08] blur-[160px]"
+          style={{ willChange: 'opacity' }}
+          animate={reduce ? undefined : { opacity: [0.05, 0.11, 0.05] }}
+          transition={{ duration: 9, delay: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      </div>
+
       <Navbar user={user} signOut={signOut} />
 
-      <main className="max-w-[1240px] mx-auto px-4 sm:px-6 pb-24">
-        {/* ───────── Hero: Slim Upload Dock + Title ───────── */}
+      <main className="relative z-10 max-w-[1240px] mx-auto px-4 sm:px-6 pb-24">
+        {/* ───────── Hero ───────── */}
         <section className="pt-8 pb-4">
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.5, ease: PM_EASE }}
             className="mb-5 flex items-baseline justify-between gap-3"
           >
             <div className="min-w-0">
@@ -655,16 +1059,18 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
               >
                 {isStudio ? 'Evidence Operations · Studio' : 'Evidence Console'}
               </p>
-              <h1 className="text-[26px] sm:text-[28px] font-black tracking-tight mt-1">
+              <h1
+                className="text-[26px] sm:text-[28px] font-black tracking-tight mt-1"
+                style={{ fontFamily: '"Poppins", "Inter", sans-serif' }}
+              >
                 {user?.user_metadata?.username ? `@${user.user_metadata.username}` : 'Dashboard'}
               </h1>
             </div>
-            <span className="hidden md:inline text-[11px] text-white/40">
+            <span className="hidden md:inline text-[11px] text-white/40 font-mono uppercase tracking-[0.2em]">
               {ops.planTier ? `${ops.planTier.toUpperCase()} プラン` : ''}
             </span>
           </motion.div>
 
-          {/* Slim Upload Dock — 既存 CertificateUpload を温存しつつ薄い帯で配置 */}
           <SlimUploadDock isPaidPlan={isStudio} />
         </section>
 
@@ -728,7 +1134,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
           />
         </section>
 
-        {/* ───────── Attention Tray (Studio only) ───────── */}
+        {/* ───────── Attention Tray ───────── */}
         {isStudio && attentionItems.length > 0 && (
           <section className="mt-5">
             <AttentionTray items={attentionItems} onFocus={focusCertById} />
@@ -753,10 +1159,10 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
               value={trustFilter}
               onChange={setTrustFilter}
               counts={{
-                beta: kpi.beta,
+                beta: typeof kpi.beta === 'number' ? kpi.beta : 0,
                 trusted: visibleCerts.filter((c) => deriveTrustTier(c).tier === 'trusted').length,
                 cross: visibleCerts.filter((c) => deriveTrustTier(c).tier === 'cross').length,
-                pending: kpi.pending,
+                pending: typeof kpi.pending === 'number' ? kpi.pending : 0,
               }}
             />
 
@@ -776,11 +1182,11 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
             </SegGroup>
 
             <SegGroup ariaLabel="表示モード">
-              <SegBtn active={view === 'list'} onClick={() => setView('list')} title="テーブル表示">
-                <Rows3 className="w-3.5 h-3.5" />
-              </SegBtn>
-              <SegBtn active={view === 'grid'} onClick={() => setView('grid')} title="カード表示">
+              <SegBtn active={view === 'grid'} onClick={() => setView('grid')} title="Bentoカード">
                 <LayoutGrid className="w-3.5 h-3.5" />
+              </SegBtn>
+              <SegBtn active={view === 'list'} onClick={() => setView('list')} title="テーブル">
+                <Rows3 className="w-3.5 h-3.5" />
               </SegBtn>
             </SegGroup>
 
@@ -818,7 +1224,8 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
               ops={ops}
               copiedId={copiedId}
               onCopyLink={handleCopyLink}
-              onEvidence={handleEvidence}
+              // ▼ 権限がない場合は、エラーではなく InspectorのChainタブ（ペイウォール）を開いて課金誘導する
+              onEvidence={(cert) => canExportEvidencePack ? handleEvidence(cert) : openInspector(cert, 'chain')}
               onArchive={handleArchive}
               onToggleStar={handleToggleStar}
               onAssignClientProject={handleAssignClientProject}
@@ -836,18 +1243,23 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
                 setAuditCertId(cert.id);
                 setAuditCertTitle(cert.title ?? cert.file_name ?? null);
               }}
-              onOpenChain={(cert) => setChainCert(toCertificateRecord(cert))}
+              onOpenInspector={(cert) => openInspector(cert, 'overview')}
+              onOpenChain={(cert) => openInspector(cert, 'chain')}
+              reduce={reduce}
             />
           ) : (
             <CertGridView
               certs={filteredSortedCerts}
               copiedId={copiedId}
               onCopyLink={handleCopyLink}
-              onEvidence={handleEvidence}
+              // ▼ 権限ガードを適用
+              onEvidence={(cert) => canExportEvidencePack ? handleEvidence(cert) : openInspector(cert, 'chain')}
               onArchive={handleArchive}
               onToggleStar={handleToggleStar}
               onAssignClientProject={handleAssignClientProject}
-              onOpenChain={(cert) => setChainCert(toCertificateRecord(cert))}
+              onOpenInspector={(cert) => openInspector(cert, 'overview')}
+              onOpenChain={(cert) => openInspector(cert, 'chain')}
+              reduce={reduce}
             />
           )}
         </section>
@@ -877,35 +1289,22 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
         </>
       )}
 
-      {/* ── Chain of Evidence modal ── */}
-      {chainCert && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8 px-4"
-          style={{ background: 'rgba(7,6,26,0.92)', backdropFilter: 'blur(8px)' }}
-        >
-          <div className="w-full max-w-4xl">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-xs uppercase tracking-widest text-[#A8A0D8] mb-1">
-                  Chain of Evidence Studio
-                </p>
-                <h2 className="text-lg font-bold text-white">
-                  {chainCert.title ?? chainCert.file_name ?? chainCert.id}
-                </h2>
-              </div>
-              <button
-                onClick={() => setChainCert(null)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-[#A8A0D8] hover:text-white border border-[#1C1A38] hover:border-[#6C3EF4]/40 rounded-xl transition-colors"
-              >
-                ✕ 閉じる
-              </button>
-            </div>
-            <Suspense fallback={<MinimalSpinner />}>
-              <ProcessBundleComposer certificate={chainCert} />
-            </Suspense>
-          </div>
-        </div>
-      )}
+      {/* ─────────── THE INSPECTOR (right slide-in drawer) ─────────── */}
+      <Inspector
+        open={!!inspectorCert}
+        cert={inspectorCert}
+        tab={inspectorTab}
+        onTabChange={setInspectorTabAndUrl}
+        onClose={closeInspector}
+        onCopyLink={handleCopyLink}
+        // ▼ 権限ガードを適用し、なければChainタブ（ペイウォール）へ美しいアニメーションと共に遷移させる
+        onEvidence={(cert) => canExportEvidencePack ? handleEvidence(cert) : setInspectorTabAndUrl('chain')}
+        onArchive={handleArchive}
+        onToggleStar={handleToggleStar}
+        copiedId={copiedId}
+        canExportEvidencePack={canExportEvidencePack}
+        reduce={reduce}
+      />
 
       <style>{`
         .pm-focus-pulse { animation: pm-focus-pulse 1.4s ease-out 1; }
@@ -924,9 +1323,9 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
-   Subcomponents
-────────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════
+ *  KPI / Toolbar primitives
+ * ══════════════════════════════════════════════════════════════ */
 
 function KPI({
   label,
@@ -1041,12 +1440,34 @@ function TrustFilterTabs({
   );
 }
 
-function TrustBadge({ cert, size = 'md' }: { cert: CertRow; size?: 'sm' | 'md' }) {
+/* ══════════════════════════════════════════════════════════════
+ *  Trust Badge — BreathingBadge inspired
+ * ══════════════════════════════════════════════════════════════ */
+
+function TrustBadgeMotion({
+  cert,
+  size = 'md',
+  reduce,
+}: {
+  cert: CertRow;
+  size?: 'sm' | 'md';
+  reduce: boolean;
+}) {
   const t = deriveTrustTier(cert);
   const Icon = t.icon;
   const dims = size === 'sm' ? { pad: '2px 8px', fs: 10, ic: 11 } : { pad: '4px 10px', fs: 11, ic: 14 };
+
+  // RGB抽出 (ペリメータグロー用)
+  const rgb = useMemo(() => {
+    const hex = t.color.replace('#', '');
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return `${r},${g},${b}`;
+  }, [t.color]);
+
   return (
-    <span
+    <motion.span
       title={t.description}
       className="inline-flex items-center gap-1.5 rounded-full font-bold uppercase tracking-wider whitespace-nowrap"
       style={{
@@ -1056,17 +1477,128 @@ function TrustBadge({ cert, size = 'md' }: { cert: CertRow; size?: 'sm' | 'md' }
         color: t.color,
         fontSize: dims.fs,
       }}
+      animate={
+        reduce
+          ? undefined
+          : {
+              boxShadow: [
+                `0 0 0 0 rgba(${rgb}, 0.45)`,
+                `0 0 0 4px rgba(${rgb}, 0)`,
+                `0 0 0 0 rgba(${rgb}, 0.45)`,
+              ],
+            }
+      }
+      transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
     >
-      <Icon style={{ width: dims.ic, height: dims.ic }} />
+      <motion.span
+        className="flex items-center"
+        animate={reduce ? undefined : { opacity: [1, 0.8, 1] }}
+        transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <Icon style={{ width: dims.ic, height: dims.ic }} />
+      </motion.span>
       {t.label}
       <span className="opacity-70 font-normal normal-case">· {t.sublabel}</span>
-    </span>
+    </motion.span>
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────── */
-/*   List view (table) — Studio で StatusMenu / Audit を露出                 */
-/* ──────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════
+ *  Pending Ring — Silent Processing
+ * ══════════════════════════════════════════════════════════════ */
+
+function PendingRing({ cert, reduce }: { cert: CertRow; reduce: boolean }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 1500);
+    return () => window.clearInterval(t);
+  }, []);
+
+  const elapsed = useMemo(() => {
+    const start = new Date(cert.created_at).getTime();
+    return Number.isNaN(start) ? 0 : now - start;
+  }, [cert.created_at, now]);
+
+  const isWarn = elapsed >= PENDING_WARN_THRESHOLD_MS;
+  const accent = isWarn ? '#F0BB38' : '#00D4AA';
+  const rgb = isWarn ? '240,187,56' : '0,212,170';
+  const tooltip = isWarn
+    ? 'TSA発行混雑中 — 通常より時間がかかっています'
+    : 'タイムスタンプを発行中…';
+
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center pointer-events-none"
+      style={{
+        background:
+          'radial-gradient(circle at 50% 50%, rgba(7,6,26,0.45) 0%, rgba(7,6,26,0.25) 60%, transparent 100%)',
+        backdropFilter: 'blur(1px)',
+      }}
+      title={tooltip}
+      aria-label={tooltip}
+    >
+      <motion.div
+        className="relative h-14 w-14 rounded-full flex items-center justify-center"
+        style={{
+          background: 'rgba(7,6,26,0.65)',
+          border: `1px solid rgba(${rgb}, 0.55)`,
+          backdropFilter: 'blur(6px)',
+        }}
+        animate={
+          reduce
+            ? undefined
+            : {
+                boxShadow: [
+                  `0 0 0 0 rgba(${rgb}, 0.45)`,
+                  `0 0 0 10px rgba(${rgb}, 0)`,
+                  `0 0 0 0 rgba(${rgb}, 0.45)`,
+                ],
+              }
+        }
+        transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        {/* spinning ring */}
+        <motion.span
+          aria-hidden
+          className="absolute inset-0 rounded-full"
+          style={{
+            border: `2px solid transparent`,
+            borderTopColor: accent,
+            borderRightColor: `rgba(${rgb}, 0.4)`,
+          }}
+          animate={reduce ? undefined : { rotate: 360 }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: 'linear' }}
+        />
+        {/* breathing dot */}
+        <motion.span
+          className="block h-2 w-2 rounded-full"
+          style={{ background: accent, boxShadow: `0 0 12px ${accent}` }}
+          animate={reduce ? undefined : { opacity: [1, 0.4, 1] }}
+          transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      </motion.div>
+
+      {isWarn && (
+        <span
+          className="absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.2em] whitespace-nowrap"
+          style={{
+            background: 'rgba(240,187,56,0.14)',
+            border: '1px solid rgba(240,187,56,0.45)',
+            color: '#F0BB38',
+            backdropFilter: 'blur(6px)',
+          }}
+        >
+          TSA混雑中
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+ *  List View
+ * ══════════════════════════════════════════════════════════════ */
 
 interface ListViewProps {
   certs: CertRow[];
@@ -1081,7 +1613,9 @@ interface ListViewProps {
   onAssignProjectId: (cert: CertRow, projectId: string | null) => void;
   onStatusChange: (cert: CertRow, next: DeliveryStatus | null) => void;
   onOpenAudit: (cert: CertRow) => void;
+  onOpenInspector: (cert: CertRow) => void;
   onOpenChain: (cert: CertRow) => void;
+  reduce: boolean;
 }
 
 function CertListTable(props: ListViewProps) {
@@ -1098,7 +1632,9 @@ function CertListTable(props: ListViewProps) {
     onAssignProjectId,
     onStatusChange,
     onOpenAudit,
+    onOpenInspector,
     onOpenChain,
+    reduce,
   } = props;
 
   const cols = isStudio
@@ -1131,15 +1667,21 @@ function CertListTable(props: ListViewProps) {
               key={cert.id}
               id={`cert-row-${cert.id}`}
               role="row"
-              className="grid gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 hover:bg-white/[0.02] transition-colors"
+              className="grid gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 hover:bg-white/[0.02] transition-colors cursor-pointer"
               style={{ gridTemplateColumns: cols }}
+              onClick={(e) => {
+                // 行クリックで Inspector を開く (内側のボタンクリックは伝播停止される)
+                onOpenInspector(cert);
+              }}
             >
-              {/* タイトル + ハッシュ */}
               <div role="cell" className="min-w-0">
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => onToggleStar(cert.id, !!cert.is_starred)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleStar(cert.id, !!cert.is_starred);
+                    }}
                     className="shrink-0 text-white/35 hover:text-[#F0BB38] transition-colors"
                     title={cert.is_starred ? '保護を解除' : '保護'}
                   >
@@ -1151,7 +1693,7 @@ function CertListTable(props: ListViewProps) {
                   <p className="text-[13px] font-semibold text-white truncate">
                     {cert.title || cert.file_name || 'Untitled'}
                   </p>
-                  {!isStudio && <TrustBadge cert={cert} size="sm" />}
+                  {!isStudio && <TrustBadgeMotion cert={cert} size="sm" reduce={reduce} />}
                 </div>
                 <p className="text-[10.5px] text-white/40 font-mono truncate mt-0.5 ml-5">
                   <Hash className="inline w-2.5 h-2.5 mr-1" />
@@ -1159,20 +1701,18 @@ function CertListTable(props: ListViewProps) {
                 </p>
               </div>
 
-              {/* ステータス or 信頼バッジ */}
-              <div role="cell" className="self-center">
+              <div role="cell" className="self-center" onClick={(e) => e.stopPropagation()}>
                 {isStudio ? (
                   <StatusMenu
                     current={cert.delivery_status ?? null}
                     onChange={(next) => onStatusChange(cert, next)}
                   />
                 ) : (
-                  <TrustBadge cert={cert} size="sm" />
+                  <TrustBadgeMotion cert={cert} size="sm" reduce={reduce} />
                 )}
               </div>
 
-              {/* 案件 (Studio: project_id, Creator: client_project) */}
-              <div role="cell" className="self-center">
+              <div role="cell" className="self-center" onClick={(e) => e.stopPropagation()}>
                 {isStudio ? (
                   <ProjectAssignButton
                     currentProjectId={cert.project_id ?? null}
@@ -1194,7 +1734,6 @@ function CertListTable(props: ListViewProps) {
                 )}
               </div>
 
-              {/* 発行 */}
               <div role="cell" className="self-center text-[11px] text-white/55 tabular-nums">
                 {cert.certified_at
                   ? formatDate(cert.certified_at)
@@ -1203,8 +1742,7 @@ function CertListTable(props: ListViewProps) {
                     : '—'}
               </div>
 
-              {/* 操作 (アクション) */}
-              <div role="cell" className="flex items-center justify-end gap-1">
+              <div role="cell" className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                 <div className="mr-2">
                   <VisibilityToggle assetId={cert.id} initialVisibility={(cert.visibility as 'public' | 'private') || 'public'} />
                 </div>
@@ -1242,6 +1780,7 @@ function CertListTable(props: ListViewProps) {
                 <a
                   href={`/cert/${cert.id}`}
                   title="証明書を開く"
+                  onClick={(e) => e.stopPropagation()}
                   className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white/80 border border-white/10 hover:bg-white/5 transition-colors inline-flex items-center gap-1"
                 >
                   <ExternalLink className="w-3 h-3" />
@@ -1268,7 +1807,10 @@ function IconBtn({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       title={title}
       aria-label={title}
       className="p-1.5 rounded-lg text-white/55 hover:text-white hover:bg-white/[0.05] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4AA]"
@@ -1278,9 +1820,9 @@ function IconBtn({
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────── */
-/*   Grid view — 軽量なカード                                                */
-/* ──────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════
+ *  Visual-First Bento Grid View
+ * ══════════════════════════════════════════════════════════════ */
 
 interface GridViewProps {
   certs: CertRow[];
@@ -1290,7 +1832,9 @@ interface GridViewProps {
   onArchive: (cert: CertRow, next: boolean) => void;
   onToggleStar: (id: string, current: boolean) => void;
   onAssignClientProject: (cert: CertRow) => void;
+  onOpenInspector: (cert: CertRow) => void;
   onOpenChain: (cert: CertRow) => void;
+  reduce: boolean;
 }
 
 function CertGridView(props: GridViewProps) {
@@ -1302,159 +1846,840 @@ function CertGridView(props: GridViewProps) {
     onArchive,
     onToggleStar,
     onAssignClientProject,
+    onOpenInspector,
     onOpenChain,
+    reduce,
   } = props;
+
   return (
     <div
-      className="grid gap-4"
+      className="grid gap-4 sm:gap-5"
       style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
     >
-      {certs.map((cert) => (
-        <article
+      {certs.map((cert, index) => (
+        <BentoCard
           key={cert.id}
-          id={`cert-row-${cert.id}`}
-          className="group rounded-2xl border border-white/[0.07] bg-white/[0.02] backdrop-blur-md overflow-hidden hover:border-[#6C3EF4]/40 transition-colors"
-        >
-          <div
-            className="relative aspect-[4/3]"
-            style={{ background: 'linear-gradient(135deg, rgba(108,62,244,0.08), rgba(0,212,170,0.05))' }}
-          >
-            {cert.proof_mode === 'shareable' && cert.public_image_url ? (
-              <img
-                src={cert.public_image_url}
-                alt={cert.original_filename || cert.file_name || 'Artwork'}
-                loading="lazy"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <ShieldCheck className="w-10 h-10 text-white/20" />
-              </div>
-            )}
-            <div className="absolute top-2 left-2">
-              <TrustBadge cert={cert} size="sm" />
-            </div>
-            <button
-              type="button"
-              onClick={() => onToggleStar(cert.id, !!cert.is_starred)}
-              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 backdrop-blur flex items-center justify-center text-white/70 hover:text-[#F0BB38] transition-colors"
-              title={cert.is_starred ? '保護解除' : '保護'}
-            >
-              <Star className="w-3.5 h-3.5" fill={cert.is_starred ? '#F0BB38' : 'transparent'} />
-            </button>
-            {cert.is_archived && (
-              <div className="absolute bottom-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 text-[9px] font-bold uppercase text-white/70">
-                <Archive className="w-2.5 h-2.5" />
-                Archived
-              </div>
-            )}
-          </div>
-
-          <div className="p-3.5 space-y-2.5">
-            <div className="flex items-baseline justify-between gap-2 min-w-0">
-              <p className="text-[13px] font-semibold text-white truncate">
-                {cert.title || cert.original_filename || cert.file_name || 'Untitled'}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => onAssignClientProject(cert)}
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] text-[10.5px] text-white/65 transition-colors max-w-full"
-              title="案件を編集"
-            >
-              <FolderKanban className="w-3 h-3 opacity-60" />
-              <span className="truncate">{cert.client_project || '未分類'}</span>
-            </button>
-
-            <div className="flex items-center justify-between text-[10.5px] text-white/50 font-mono">
-              <span className="inline-flex items-center gap-1">
-                <Hash className="w-2.5 h-2.5" />
-                {(cert.sha256 || cert.file_hash || '').slice(0, 12)}…
-              </span>
-              <span className="tabular-nums inline-flex items-center gap-1">
-                <Clock3 className="w-2.5 h-2.5" />
-                {cert.certified_at
-                  ? formatDate(cert.certified_at)
-                  : cert.created_at
-                    ? formatDate(cert.created_at)
-                    : '—'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-1.5 pt-1.5">
-              <button
-                type="button"
-                onClick={() => onCopyLink(cert)}
-                className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-white/80 border border-white/10 hover:bg-white/[0.04] transition-colors"
-              >
-                {copiedId === cert.id ? (
-                  <>
-                    <Check className="w-3 h-3" /> コピー済
-                  </>
-                ) : (
-                  <>
-                    <LinkIcon className="w-3 h-3" /> URL
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => onEvidence(cert)}
-                className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-[#07061A] bg-gradient-to-r from-[#6C3EF4] to-[#00D4AA] hover:opacity-95 transition-opacity"
-              >
-                <FileDown className="w-3 h-3" />
-                Evidence
-              </button>
-            </div>
-            <div className="flex items-center justify-between pt-1">
-              <div className="scale-90 origin-left">
-                <VisibilityToggle assetId={cert.id} initialVisibility={(cert.visibility as 'public' | 'private') || 'public'} />
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => onOpenChain(cert)}
-                  className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
-                  title="Chain of Evidence"
-                >
-                  <LinkIcon className="w-2.5 h-2.5" />
-                  Chain
-                </button>
-              <button
-                type="button"
-                onClick={() => onArchive(cert, !cert.is_archived)}
-                className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
-                title={cert.is_archived ? '戻す' : 'アーカイブ'}
-              >
-                {cert.is_archived ? (
-                  <>
-                    <ArchiveRestore className="w-2.5 h-2.5" /> 戻す
-                  </>
-                ) : (
-                  <>
-                    <Archive className="w-2.5 h-2.5" /> アーカイブ
-                  </>
-                )}
-              </button>
-              <a
-                href={`/cert/${cert.id}`}
-                className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
-              >
-                <ExternalLink className="w-2.5 h-2.5" /> 開く
-              </a>
-              </div>
-            </div>
-          </div>
-        </article>
+          cert={cert}
+          index={index}
+          copiedId={copiedId}
+          onCopyLink={onCopyLink}
+          onEvidence={onEvidence}
+          onArchive={onArchive}
+          onToggleStar={onToggleStar}
+          onAssignClientProject={onAssignClientProject}
+          onOpenInspector={onOpenInspector}
+          onOpenChain={onOpenChain}
+          reduce={reduce}
+        />
       ))}
     </div>
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────── */
-/*   Project Assign popover (Studio)                                         */
-/* ──────────────────────────────────────────────────────────────────────── */
+function BentoCard({
+  cert,
+  index,
+  copiedId,
+  onCopyLink,
+  onEvidence,
+  onArchive,
+  onToggleStar,
+  onAssignClientProject,
+  onOpenInspector,
+  onOpenChain,
+  reduce,
+}: {
+  cert: CertRow;
+  index: number;
+  copiedId: string | null;
+  onCopyLink: (cert: CertRow) => void;
+  onEvidence: (cert: CertRow) => void;
+  onArchive: (cert: CertRow, next: boolean) => void;
+  onToggleStar: (id: string, current: boolean) => void;
+  onAssignClientProject: (cert: CertRow) => void;
+  onOpenInspector: (cert: CertRow) => void;
+  onOpenChain: (cert: CertRow) => void;
+  reduce: boolean;
+}) {
+  const [imgError, setImgError] = useState(false);
+  const trust = useMemo(() => deriveTrustTier(cert), [cert]);
+  const isPending = trust.tier === 'pending' || cert.delivery_status === 'in_progress';
+  const hasRealImage =
+    cert.proof_mode === 'shareable' &&
+    typeof cert.public_image_url === 'string' &&
+    cert.public_image_url !== '' &&
+    !imgError;
+
+  const optimizedSrc = useMemo(
+    () => (hasRealImage ? getOptimizedImageUrl(cert.public_image_url, { width: 600, quality: 75 }) : ''),
+    [hasRealImage, cert.public_image_url],
+  );
+
+  const variants: Variants = reduce
+    ? { hidden: { opacity: 1 }, visible: { opacity: 1 }, exit: { opacity: 0 } }
+    : {
+        hidden: { opacity: 0, y: 14, scale: 0.985 },
+        visible: {
+          opacity: 1,
+          y: 0,
+          scale: 1,
+          transition: { duration: 0.5, ease: PM_EASE, delay: Math.min(index * 0.04, 0.32) },
+        },
+        exit: { opacity: 0, y: -6, transition: { duration: 0.25 } },
+      };
+
+  return (
+    <motion.article
+      layout
+      variants={variants}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      id={`cert-row-${cert.id}`}
+      onClick={() => onOpenInspector(cert)}
+      whileHover={reduce ? undefined : { y: -3 }}
+      transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+      className="group relative rounded-2xl border border-white/[0.07] bg-white/[0.02] backdrop-blur-md overflow-hidden hover:border-[#6C3EF4]/40 transition-colors cursor-pointer"
+    >
+      {/* under-card glow (real images only) */}
+      {hasRealImage && (
+        <div
+          aria-hidden
+          className="absolute -inset-3 rounded-[24px] blur-3xl pointer-events-none opacity-0 group-hover:opacity-100 -z-10"
+          style={{
+            background:
+              'radial-gradient(ellipse at 50% 80%, rgba(0,212,170,0.32), transparent 55%), radial-gradient(ellipse at 50% 20%, rgba(108,62,244,0.26), transparent 55%)',
+            transition: 'opacity 500ms',
+          }}
+        />
+      )}
+
+      <div className="relative aspect-[4/3] overflow-hidden">
+        {hasRealImage ? (
+          <img
+            src={optimizedSrc}
+            alt={cert.original_filename || cert.file_name || 'Artwork'}
+            loading="lazy"
+            decoding="async"
+            onError={() => setImgError(true)}
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+          />
+        ) : (
+          <HashFingerprint
+            hash={cert.sha256 || cert.file_hash || cert.id}
+            className="absolute inset-0"
+          />
+        )}
+
+        {/* Silent Processing — Pending Ring */}
+        {isPending && <PendingRing cert={cert} reduce={reduce} />}
+
+        {/* trust badge — breathing */}
+        <div className="absolute top-2 left-2 z-10">
+          <TrustBadgeMotion cert={cert} size="sm" reduce={reduce} />
+        </div>
+
+        {/* star toggle */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleStar(cert.id, !!cert.is_starred);
+          }}
+          className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/45 backdrop-blur flex items-center justify-center text-white/70 hover:text-[#F0BB38] transition-colors"
+          title={cert.is_starred ? '保護解除' : '保護'}
+        >
+          <Star className="w-3.5 h-3.5" fill={cert.is_starred ? '#F0BB38' : 'transparent'} />
+        </button>
+
+        {cert.is_archived && (
+          <div className="absolute bottom-2 right-2 z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 text-[9px] font-bold uppercase text-white/70">
+            <Archive className="w-2.5 h-2.5" />
+            Archived
+          </div>
+        )}
+
+        {/* Visual-first hover veil with title */}
+        {hasRealImage && (
+          <div
+            aria-hidden
+            className="absolute inset-x-0 bottom-0 h-2/5 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+            style={{
+              background:
+                'linear-gradient(180deg, transparent 0%, rgba(7,6,26,0.78) 70%, rgba(7,6,26,0.92) 100%)',
+            }}
+          />
+        )}
+      </div>
+
+      <div className="p-3.5 space-y-2.5">
+        <div className="flex items-baseline justify-between gap-2 min-w-0">
+          <p className="text-[13px] font-semibold text-white truncate">
+            {cert.title || cert.original_filename || cert.file_name || 'Untitled'}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onAssignClientProject(cert);
+          }}
+          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] text-[10.5px] text-white/65 transition-colors max-w-full"
+          title="案件を編集"
+        >
+          <FolderKanban className="w-3 h-3 opacity-60" />
+          <span className="truncate">{cert.client_project || '未分類'}</span>
+        </button>
+
+        <div className="flex items-center justify-between text-[10.5px] text-white/50 font-mono">
+          <span className="inline-flex items-center gap-1">
+            <Hash className="w-2.5 h-2.5" />
+            {(cert.sha256 || cert.file_hash || '').slice(0, 12)}…
+          </span>
+          <span className="tabular-nums inline-flex items-center gap-1">
+            <Clock3 className="w-2.5 h-2.5" />
+            {cert.certified_at
+              ? formatDate(cert.certified_at)
+              : cert.created_at
+                ? formatDate(cert.created_at)
+                : '—'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-1.5 pt-1.5" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => onCopyLink(cert)}
+            className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-white/80 border border-white/10 hover:bg-white/[0.04] transition-colors"
+          >
+            {copiedId === cert.id ? (
+              <>
+                <Check className="w-3 h-3" /> コピー済
+              </>
+            ) : (
+              <>
+                <LinkIcon className="w-3 h-3" /> URL
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => onEvidence(cert)}
+            className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-[#07061A] bg-gradient-to-r from-[#6C3EF4] to-[#00D4AA] hover:opacity-95 transition-opacity"
+          >
+            <FileDown className="w-3 h-3" />
+            Evidence
+          </button>
+        </div>
+        <div className="flex items-center justify-between pt-1" onClick={(e) => e.stopPropagation()}>
+          <div className="scale-90 origin-left">
+            <VisibilityToggle assetId={cert.id} initialVisibility={(cert.visibility as 'public' | 'private') || 'public'} />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onOpenChain(cert)}
+              className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
+              title="Chain of Evidence"
+            >
+              <LinkIcon className="w-2.5 h-2.5" />
+              Chain
+            </button>
+            <button
+              type="button"
+              onClick={() => onArchive(cert, !cert.is_archived)}
+              className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
+              title={cert.is_archived ? '戻す' : 'アーカイブ'}
+            >
+              {cert.is_archived ? (
+                <>
+                  <ArchiveRestore className="w-2.5 h-2.5" /> 戻す
+                </>
+              ) : (
+                <>
+                  <Archive className="w-2.5 h-2.5" /> アーカイブ
+                </>
+              )}
+            </button>
+            <a
+              href={`/cert/${cert.id}`}
+              className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
+            >
+              <ExternalLink className="w-2.5 h-2.5" /> 開く
+            </a>
+          </div>
+        </div>
+      </div>
+    </motion.article>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+ *  THE INSPECTOR (right slide-in drawer)
+ * ══════════════════════════════════════════════════════════════ */
+
+interface InspectorProps {
+  open: boolean;
+  cert: CertRow | null;
+  tab: 'overview' | 'chain';
+  onTabChange: (t: 'overview' | 'chain') => void;
+  onClose: () => void;
+  onCopyLink: (cert: CertRow) => void;
+  onEvidence: (cert: CertRow) => void;
+  onArchive: (cert: CertRow, next: boolean) => void;
+  onToggleStar: (id: string, current: boolean) => void;
+  copiedId: string | null;
+  canExportEvidencePack: boolean;
+  reduce: boolean;
+}
+
+function Inspector({
+  open,
+  cert,
+  tab,
+  onTabChange,
+  onClose,
+  onCopyLink,
+  onEvidence,
+  onArchive,
+  onToggleStar,
+  copiedId,
+  canExportEvidencePack,
+  reduce,
+}: InspectorProps) {
+  // ESC で閉じる
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  return (
+    <AnimatePresence>
+      {open && cert && (
+        <>
+          {/* scrim */}
+          <motion.div
+            key="scrim"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="fixed inset-0 z-40"
+            style={{
+              background: 'rgba(7,6,26,0.62)',
+              backdropFilter: 'blur(8px)',
+            }}
+            onClick={onClose}
+            aria-hidden
+          />
+
+          {/* drawer */}
+          <motion.aside
+            key="drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Inspector — ${cert.title ?? cert.file_name ?? cert.id}`}
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', stiffness: 300, damping: 36, mass: 0.9 }}
+            className="fixed top-0 right-0 bottom-0 z-50 w-full max-w-[860px] flex flex-col"
+            style={{
+              background:
+                'linear-gradient(165deg, rgba(15,12,32,0.96) 0%, rgba(7,6,26,0.94) 60%, rgba(7,6,26,0.98) 100%)',
+              borderLeft: '1px solid rgba(255,255,255,0.08)',
+              boxShadow: '-40px 0 80px -20px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.03) inset',
+              backdropFilter: 'blur(24px)',
+            }}
+          >
+            {/* top hairline */}
+            <div
+              aria-hidden
+              className="absolute inset-x-0 top-0 h-px"
+              style={{
+                background:
+                  'linear-gradient(90deg, transparent, rgba(108,62,244,0.7), rgba(0,212,170,0.7), transparent)',
+              }}
+            />
+
+            {/* ambient aura */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -top-32 -right-32 w-[420px] h-[420px] rounded-full bg-[#6C3EF4] opacity-[0.10] blur-[120px]"
+            />
+
+            {/* header */}
+            <header className="relative px-6 py-4 border-b border-white/[0.06] flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-[#A8A0D8] mb-1.5">
+                  Inspector · {cert.id.slice(0, 8)}…
+                </p>
+                <h2 className="text-[18px] sm:text-[20px] font-bold text-white truncate">
+                  {cert.title ?? cert.file_name ?? 'Untitled'}
+                </h2>
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <TrustBadgeMotion cert={cert} size="sm" reduce={reduce} />
+                  {cert.proof_mode === 'shareable' ? (
+                    <BreathingBadge reduce={reduce} size="mini" tone="teal" label="Visual" />
+                  ) : (
+                    <BreathingBadge reduce={reduce} size="mini" tone="purple" label="Private" />
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onToggleStar(cert.id, !!cert.is_starred)}
+                className="shrink-0 p-2 rounded-lg text-white/55 hover:text-[#F0BB38] hover:bg-white/[0.04] transition-colors"
+                title={cert.is_starred ? '保護を解除' : '保護'}
+              >
+                <Star className="w-4 h-4" fill={cert.is_starred ? '#F0BB38' : 'transparent'} />
+              </button>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="shrink-0 p-2 rounded-lg text-white/55 hover:text-white hover:bg-white/[0.04] transition-colors"
+                aria-label="閉じる"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </header>
+
+            {/* tabs */}
+            <div className="relative px-6 pt-3 border-b border-white/[0.06]">
+              <div role="tablist" className="inline-flex items-center gap-1">
+                <InspectorTab
+                  active={tab === 'overview'}
+                  onClick={() => onTabChange('overview')}
+                  label="Overview"
+                />
+                <InspectorTab
+                  active={tab === 'chain'}
+                  onClick={() => onTabChange('chain')}
+                  label="Chain of Evidence"
+                  badge={canExportEvidencePack ? undefined : 'PRO'}
+                />
+              </div>
+            </div>
+
+            {/* body */}
+            <div className="relative flex-1 overflow-y-auto">
+              {tab === 'overview' && (
+                <InspectorOverview
+                  cert={cert}
+                  copiedId={copiedId}
+                  onCopyLink={onCopyLink}
+                  onEvidence={onEvidence}
+                  onArchive={onArchive}
+                  canExportEvidencePack={canExportEvidencePack}
+                  reduce={reduce}
+                />
+              )}
+
+              {tab === 'chain' && (
+                <InspectorChain
+                  cert={cert}
+                  canExportEvidencePack={canExportEvidencePack}
+                  reduce={reduce}
+                />
+              )}
+            </div>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function InspectorTab({
+  active,
+  onClick,
+  label,
+  badge,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  badge?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={[
+        'relative inline-flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-semibold tracking-wide rounded-t-lg transition-colors',
+        active ? 'text-white' : 'text-white/55 hover:text-white/85',
+      ].join(' ')}
+    >
+      {label}
+      {badge && (
+        <span
+          className="px-1.5 py-0.5 rounded text-[8.5px] font-mono uppercase tracking-[0.18em]"
+          style={{
+            background: 'linear-gradient(135deg, rgba(108,62,244,0.18), rgba(0,212,170,0.18))',
+            border: '1px solid rgba(108,62,244,0.45)',
+            color: '#BC78FF',
+          }}
+        >
+          {badge}
+        </span>
+      )}
+      {active && (
+        <motion.span
+          layoutId="inspector-tab-underline"
+          className="absolute -bottom-px left-0 right-0 h-[2px]"
+          style={{
+            background: 'linear-gradient(90deg, #6C3EF4, #00D4AA)',
+            boxShadow: '0 0 10px rgba(0,212,170,0.55)',
+          }}
+          transition={{ type: 'spring', stiffness: 460, damping: 32 }}
+        />
+      )}
+    </button>
+  );
+}
+
+/* ── Overview tab body ── */
+function InspectorOverview({
+  cert,
+  copiedId,
+  onCopyLink,
+  onEvidence,
+  onArchive,
+  canExportEvidencePack,
+  reduce,
+}: {
+  cert: CertRow;
+  copiedId: string | null;
+  onCopyLink: (cert: CertRow) => void;
+  onEvidence: (cert: CertRow) => void;
+  onArchive: (cert: CertRow, next: boolean) => void;
+  canExportEvidencePack: boolean;
+  reduce: boolean;
+}) {
+  const [imgError, setImgError] = useState(false);
+  const hasRealImage =
+    cert.proof_mode === 'shareable' &&
+    typeof cert.public_image_url === 'string' &&
+    cert.public_image_url !== '' &&
+    !imgError;
+  const optimizedSrc = useMemo(
+    () => (hasRealImage ? getOptimizedImageUrl(cert.public_image_url, { width: 1000, quality: 80 }) : ''),
+    [hasRealImage, cert.public_image_url],
+  );
+
+  return (
+    <div className="px-6 py-5 space-y-5">
+      {/* Hero asset */}
+      <div
+        className="relative overflow-hidden rounded-2xl"
+        style={{
+          aspectRatio: '4 / 3',
+          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 24px 60px -20px rgba(0,0,0,0.6)',
+        }}
+      >
+        {hasRealImage ? (
+          <img
+            src={optimizedSrc}
+            alt={cert.title ?? cert.file_name ?? 'Artwork'}
+            loading="lazy"
+            decoding="async"
+            onError={() => setImgError(true)}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <HashFingerprint
+            hash={cert.sha256 || cert.file_hash || cert.id}
+            className="absolute inset-0"
+          />
+        )}
+        {(deriveTrustTier(cert).tier === 'pending') && (
+          <PendingRing cert={cert} reduce={reduce} />
+        )}
+      </div>
+
+      {/* Metadata grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <MetaRow label="Certificate ID" mono value={cert.id} />
+        <MetaRow
+          label="SHA-256"
+          mono
+          value={
+            <span className="break-all">
+              {(cert.sha256 || cert.file_hash || '—').slice(0, 32)}…{(cert.sha256 || cert.file_hash || '').slice(-8)}
+            </span>
+          }
+        />
+        <MetaRow label="Proof Mode" value={cert.proof_mode ?? '—'} />
+        <MetaRow label="Visibility" value={cert.visibility ?? '—'} />
+        <MetaRow
+          label="TSA Provider"
+          value={cert.tsa_provider ? cert.tsa_provider.toUpperCase() : '—'}
+        />
+        <MetaRow
+          label="Certified"
+          value={cert.certified_at ? formatDate(cert.certified_at) : '—'}
+        />
+        <MetaRow label="Created" value={formatDate(cert.created_at)} />
+        <MetaRow label="案件" value={cert.client_project || '未分類'} />
+      </div>
+
+      {/* Actions */}
+      <div className="flex flex-wrap gap-2 pt-2">
+        <button
+          type="button"
+          onClick={() => onCopyLink(cert)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-white border border-white/10 hover:bg-white/[0.05] transition-colors"
+        >
+          {copiedId === cert.id ? (
+            <>
+              <Check className="w-3.5 h-3.5" /> コピー済
+            </>
+          ) : (
+            <>
+              <Copy className="w-3.5 h-3.5" /> 検証URL
+            </>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => onEvidence(cert)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-[#07061A] bg-gradient-to-r from-[#6C3EF4] to-[#00D4AA] hover:opacity-95 transition-opacity"
+          title="Evidence Pack をダウンロード"
+        >
+          <FileDown className="w-3.5 h-3.5" />
+          Evidence Pack
+        </button>
+        <button
+          type="button"
+          onClick={() => onArchive(cert, !cert.is_archived)}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-white/80 border border-white/10 hover:bg-white/[0.05] transition-colors"
+        >
+          {cert.is_archived ? (
+            <>
+              <ArchiveRestore className="w-3.5 h-3.5" /> 戻す
+            </>
+          ) : (
+            <>
+              <Archive className="w-3.5 h-3.5" /> アーカイブ
+            </>
+          )}
+        </button>
+        <a
+          href={`/cert/${cert.id}`}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-white/80 border border-white/10 hover:bg-white/[0.05] transition-colors ml-auto"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          証明書を開く
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function MetaRow({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <div
+      className="rounded-xl px-3.5 py-2.5"
+      style={{
+        background: 'rgba(255,255,255,0.025)',
+        border: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      <p className="text-[9.5px] font-mono uppercase tracking-[0.22em] text-white/45">
+        {label}
+      </p>
+      <p
+        className={[
+          'mt-1 text-[12px] text-white/90',
+          mono ? 'font-mono break-all text-[11.5px]' : '',
+        ].join(' ')}
+        style={{ fontVariantNumeric: 'tabular-nums' }}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+/* ── Chain tab body ── */
+function InspectorChain({
+  cert,
+  canExportEvidencePack,
+  reduce,
+}: {
+  cert: CertRow;
+  canExportEvidencePack: boolean;
+  reduce: boolean;
+}) {
+  const record = useMemo(() => toCertificateRecord(cert), [cert]);
+
+  return (
+    <div className="relative px-6 py-5 flex flex-col h-full">
+      {/* Header copy */}
+      <div className="mb-4 shrink-0">
+        <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-[#A8A0D8] mb-1.5">
+          Chain of Evidence Studio
+        </p>
+        <h3 className="text-[16px] font-bold text-white">
+          制作プロセスの暗号証明を組み立てる
+        </h3>
+        <p className="mt-1.5 text-[12.5px] text-white/55 leading-relaxed max-w-2xl">
+          ラフ → 線画 → 着色 → 完成 まで、各工程のSHA-256ハッシュをチェーンして単一の不可逆な存在証明を構築します。
+        </p>
+      </div>
+
+      {/* The composer & Shield */}
+      <div className="relative flex-1 min-h-[500px]">
+        <Suspense fallback={<MinimalSpinner />}>
+          <ProcessBundleComposer certificate={record} />
+        </Suspense>
+
+        {/* 🚨 THE ABSOLUTE SHIELD: 漆黒のグラデーションで本来のボタンを物理的に封殺する */}
+        {!canExportEvidencePack && (
+          <div
+            className="absolute bottom-0 left-0 right-0 z-20 flex flex-col justify-end pt-40 pb-4 pointer-events-none"
+            style={{
+              background: 'linear-gradient(to bottom, rgba(7,6,26,0) 0%, rgba(7,6,26,0.85) 40%, rgba(7,6,26,1) 100%)',
+              margin: '0 -24px', // px-6の余白を打ち消して画面幅いっぱいにシールドを張る
+              paddingLeft: '24px',
+              paddingRight: '24px',
+            }}
+          >
+            {/* この中身だけはクリック可能（pointer-events-auto）にする */}
+            <div className="pointer-events-auto w-full">
+              <PaywallTrialValue reduce={reduce} />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+ *  Paywall — Trial Value (体験先導型)
+ * ══════════════════════════════════════════════════════════════ */
+
+function PaywallTrialValue({ reduce }: { reduce: boolean }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: PM_EASE, delay: 0.15 }}
+      className="relative z-10 w-full max-w-3xl mx-auto"
+    >
+      <div
+        className="relative overflow-hidden rounded-2xl p-5 sm:p-6"
+        style={{
+          background:
+            'linear-gradient(165deg, rgba(108,62,244,0.16) 0%, rgba(0,212,170,0.10) 50%, rgba(7,6,26,0.92) 100%)',
+          border: '1px solid rgba(108,62,244,0.45)',
+          boxShadow: '0 20px 60px -20px rgba(108,62,244,0.55), inset 0 0 0 1px rgba(255,255,255,0.04)',
+          backdropFilter: 'blur(18px)',
+        }}
+      >
+        {/* top hairline */}
+        <div
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px"
+          style={{
+            background:
+              'linear-gradient(90deg, transparent, rgba(108,62,244,0.85), rgba(0,212,170,0.85), transparent)',
+          }}
+        />
+
+        <div className="flex items-start gap-4">
+          {/* Locked gradient icon */}
+          <motion.div
+            className="relative shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center"
+            style={{
+              background: 'linear-gradient(135deg, #6C3EF4 0%, #00D4AA 100%)',
+              boxShadow: '0 12px 30px -8px rgba(108,62,244,0.65)',
+            }}
+            animate={
+              reduce
+                ? undefined
+                : {
+                    boxShadow: [
+                      '0 12px 30px -8px rgba(108,62,244,0.65), 0 0 0 0 rgba(0,212,170,0.55)',
+                      '0 12px 30px -8px rgba(108,62,244,0.65), 0 0 0 12px rgba(0,212,170,0)',
+                      '0 12px 30px -8px rgba(108,62,244,0.65), 0 0 0 0 rgba(0,212,170,0.55)',
+                    ],
+                  }
+            }
+            transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            <Lock className="w-6 h-6 text-white" strokeWidth={2} />
+          </motion.div>
+
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-[#BC78FF]">
+              Trial Value · 体験できています
+            </p>
+            <h4 className="mt-1 text-[16px] sm:text-[17px] font-bold text-white leading-snug">
+              過程の暗号証明 (Evidence Pack エクスポート) は
+              <span
+                className="bg-clip-text text-transparent ml-1.5"
+                style={{ backgroundImage: 'linear-gradient(90deg, #BC78FF, #00D4AA)' }}
+              >
+                Creator プラン
+              </span>
+              限定です。
+            </h4>
+            <p className="mt-2 text-[12.5px] text-white/65 leading-relaxed">
+              チェーンの組み立てはご自由にお試しください。発行可能になると、ラフ→完成の全工程が
+              <strong className="text-white"> RFC3161 タイムスタンプ </strong>
+              で封印され、ZIP一発で納品できるようになります。
+            </p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <a
+                href="/pricing#creator"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[12.5px] font-bold text-white"
+                style={{
+                  background: 'linear-gradient(135deg, #6C3EF4 0%, #8B61FF 100%)',
+                  boxShadow: '0 14px 32px -10px rgba(108,62,244,0.7)',
+                }}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Creatorプランで解放する
+              </a>
+              <a
+                href="/what-it-proves#chain"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white/75 hover:text-white border border-white/10 hover:bg-white/[0.05] transition-colors"
+              >
+                チェーン証明の仕組みを見る
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+ *  Project Assign popover
+ * ══════════════════════════════════════════════════════════════ */
 
 interface ProjectAssignButtonProps {
   currentProjectId: string | null;
@@ -1554,9 +2779,9 @@ function ProjectAssignButton({
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────── */
-/*   States                                                                  */
-/* ──────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════
+ *  States
+ * ══════════════════════════════════════════════════════════════ */
 
 function MinimalSpinner() {
   return (
@@ -1571,12 +2796,23 @@ function MinimalSpinner() {
 
 function SkeletonGrid() {
   return (
-    <div className="space-y-2 mt-2" role="status" aria-label="読み込み中">
-      {[0, 1, 2, 3].map((i) => (
+    <div
+      className="grid gap-4 mt-2"
+      style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
+      role="status"
+      aria-label="読み込み中"
+    >
+      {[0, 1, 2, 3, 4, 5].map((i) => (
         <div
           key={i}
-          className="rounded-xl border border-white/5 bg-white/[0.02] h-14 animate-pulse"
-        />
+          className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden"
+        >
+          <div className="aspect-[4/3] bg-white/[0.03] animate-pulse" />
+          <div className="p-3.5 space-y-2">
+            <div className="h-3 w-2/3 rounded bg-white/[0.04] animate-pulse" />
+            <div className="h-2.5 w-1/2 rounded bg-white/[0.03] animate-pulse" />
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -1615,9 +2851,9 @@ function NoMatch({ onReset }: { onReset: () => void }) {
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────── */
-/*   Helpers                                                                 */
-/* ──────────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════
+ *  Helpers
+ * ══════════════════════════════════════════════════════════════ */
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -1631,17 +2867,12 @@ function formatDate(iso: string): string {
   });
 }
 
-/**
- * CertRow を CertificateRecord 互換のオブジェクトに射影する。
- * ProcessBundleComposer が要求するフィールドのみを満たすようマップし、
- * 必須でないものは null/既定値で埋める。`any` キャストは構造起因の境界 1 箇所に局所化。
- */
 function toCertificateRecord(cert: CertRow): CertificateRecord {
   return {
     id: cert.id,
     title: cert.title ?? null,
     sha256: cert.sha256 ?? cert.file_hash ?? '',
-    proof_mode: (cert.proof_mode === 'shareable' ? 'shareable' : 'private'),
+    proof_mode: cert.proof_mode === 'shareable' ? 'shareable' : 'private',
     visibility:
       cert.visibility === 'public' || cert.visibility === 'unlisted'
         ? cert.visibility
