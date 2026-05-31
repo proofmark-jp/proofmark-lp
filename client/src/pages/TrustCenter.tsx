@@ -443,7 +443,7 @@ export default function TrustCenter() {
               <div className="rounded-xl border border-[#1C1A38] bg-[#0D0B24] p-5">
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#A8A0D8] mb-1">Current Production TSA</p>
                 <p className="text-lg font-black text-white">FreeTSA.org</p>
-                <p className="text-xs text-[#A8A0D8] mt-2 leading-relaxed">Beta 公開用。RFC3161として暗号的に有効ですが、主要トラストストア未収録・SLAなし。</p>
+                <p className="text-xs text-[#A8A0D8] mt-2 leading-relaxed">Beta公開用（Freeプラン固定）。RFC3161として暗号的に有効ですが、主要トラストストア未収録・SLAなし。</p>
               </div>
               <div className="rounded-xl border border-[#00D4AA]/30 bg-[#00D4AA]/5 p-5">
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#00D4AA] mb-1">Next — Trusted TSA</p>
@@ -472,7 +472,7 @@ export default function TrustCenter() {
             </ul>
 
             <Callout type="warning">
-              <strong className="text-white font-bold">⚠ 正直な評価：</strong> FreeTSA.org の TST は RFC3161として暗号的に有効ですが、次の3点の制約があります。(1) 正式なSLAが提供されない、(2) ルートCAが Windows / macOS / Mozilla の主要トラストストアに収録されていない、(3) 正式な紛争において証拠採用されるか・どの程度の証拠価値を持つかは事案と法域、裁判所の裁量に依存する。これらの理由から、<strong>Beta公開期間中の検証用にのみ適しており、Studio / Business プランでの本番運用には用いません。</strong>
+              <strong className="text-white font-bold">⚠ 正直な評価：</strong> FreeTSA.org の TST は RFC3161として暗号的に有効ですが、次の3点の制約があります。(1) 正式なSLAが提供されない、(2) ルートCAが Windows / macOS / Mozilla の主要トラストストアに収録されていない、(3) 正式な紛争において証拠採用されるか・どの程度の証らし価値を持つかは事案と法域、裁判所の裁量に依存する。これらの理由から、<strong>FreeプランおよびBeta公開期間中の技術検証用にのみ適しており、Creator / Studio 以上のプランでの本番運用には用いません。</strong>
             </Callout>
 
             <h3 className="flex items-center gap-2 text-[#00D4AA] font-bold text-lg mb-4 mt-8">
@@ -546,14 +546,14 @@ export default function TrustCenter() {
               <div className="w-1 h-5 bg-[#00D4AA] rounded-full" /> 4.3 移行のトリガ条件（Go / No-Go）
             </h3>
             <p className="text-[#A8A0D8] leading-relaxed mb-4 text-sm">
-              商用TSA（DigiCert等）との本契約プロセスおよびインフラ移行は、Creatorプラン以上の有償顧客が「30名」に達した時点を公式なトリガーとして開始します。Beta期間中はFreeTSA.orgを運用しますが、トリガー達成後はProofMarkのシステム全体（API環境変数）が商用TSAへと一斉にアップグレードされます。移行後に新たに「TSA付与」を実行した場合、Evidence Packには自動的に商用TSAのトークンが同梱されるようになります。
+              商用TSA（DigiCert等）との本契約プロセスおよびインフラ移行は、Creatorプラン以上の有償顧客が「30名」に達した時点を公式なトリガーとして開始します。Beta期間中は全プランでFreeTSA.orgを運用しますが、トリガー達成後は<strong>Creatorプラン以上の有償アカウントに対する発行インフラが商用TSAへとアップグレードされます。Freeプランでの発行は、その後も継続してFreeTSA.org（Beta TSA）を使用します。</strong>移行後に有償プランで「TSA付与」を実行した場合、Evidence Packには自動的に商用TSAのトークンが同梱されます。
             </p>
             <p className="text-[#A8A0D8] leading-relaxed mb-4 text-sm">
               「いつ商用TSAに切り替えるか」を曖昧にしないために、以下の <strong>5つの条件をすべて満たしたタイミング</strong> を、公式な切替日とします。一つでも満たさない場合は、Beta のまま据え置きます。
             </p>
             <ol className="list-decimal pl-5 space-y-2 text-sm text-[#E8E6FF] leading-relaxed mb-6">
               <li><strong>商用TSAとの契約締結：</strong>DigiCert または GlobalSign の SaaS 契約を締結し、本番用 TSA URL / API キー / ルートCAチェーンを取得していること。</li>
-              <li><strong>段階切替フラグの実装：</strong>サーバー環境変数 <code className="text-[#00D4AA] bg-white/5 px-1.5 py-0.5 rounded font-mono text-xs">TSA_PROVIDER</code> / <code className="text-[#00D4AA] bg-white/5 px-1.5 py-0.5 rounded font-mono text-xs">TSA_URL</code> により、ゼロダウンタイムでTSAを切り替え可能であること。</li>
+              <li><strong>プラン別動的ルーティングの実装：</strong>APIバックエンドにおいて、ユーザーのプラン権限（<code className="text-[#00D4AA] bg-white/5 px-1.5 py-0.5 rounded font-mono text-xs">can_use_trusted_tsa</code>）に応じ、FreeはBeta TSAへ、有償は商用TSAへとトラフィックを安全に分岐・隔離できるシステムがデプロイされていること。</li>
               <li><strong>検証スクリプトの互換確認：</strong>既存の <a href="https://github.com/proofmark-jp/verify" target="_blank" rel="noopener noreferrer" className="text-[#00D4AA] hover:underline">verify リポジトリ</a>が、新TSAのルート証明書バンドルで OpenSSL 検証をパスすること（CIで自動確認）。</li>
               <li><strong>旧TSTの永続有効性：</strong>Beta 期間中に発行された TST が、TSAの CA 証明書アーカイブにより、切替後も独立検証できることを確認済であること（LTV対応またはアーカイブTSA運用）。</li>
               <li><strong>Trust Center / Security / Dashboard の3点同期：</strong>本ページ §4.2、<a href="/security" className="text-[#00D4AA] hover:underline">/security</a>、および Dashboard の信頼バッジ表示が、切替と同一コミットで更新されること。</li>
