@@ -49,7 +49,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       { label: 'Webタイムスタンプ証明 (月3件)', state: 'include' },
       { label: 'Zero-Knowledge 原本非送信', state: 'include' },
       { label: '30日間のポートフォリオ公開', state: 'include' },
-      { label: '※PDF・Evidence Pack発行不可', state: 'exclude' }
+      { label: '※PDF・Evidence Pack発行不可', state: 'exclude' },
       { label: '※商用TSA (SLA付) での発行', state: 'exclude' }, // 👑 追加
     ],
     ctaLabel: { guest: '無料で始める', authed: '現在のプラン' },
