@@ -123,26 +123,21 @@ function HeroSection(): JSX.Element {
         <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
           <motion.div {...fadeInProps()}>
             <span className="pm-label inline-block">
-              PROOFMARK — DIGITAL EXISTENCE
+              PROOFMARK — THE DELIVERY TRUST INFRASTRUCTURE
             </span>
             <h1
               id="hero-title"
               className="pm-display mt-5"
               style={{ letterSpacing: '-0.025em' }}
             >
-              AIで作った作品を、
-              <br />
-              クライアントに
-              <br />
-              <span className="pm-accent-text">「本物だ」</span>と<br />
-              言わせたい。
+              プロの「納品」には、<br />
+              反論不能な<br />
+              <span className="pm-accent-text">証拠（エビデンス）</span>を添える。
             </h1>
             <p className="pm-body mt-6 max-w-xl">
-              ファイルをドロップするだけ。30秒後には、
-              <br className="hidden sm:inline" />
-              クライアントに渡せる証明書ZIPが完成します。
-              <br className="hidden sm:inline" />
-              原本はどこにも送りません。
+              AI時代のクリエイティブに、もはや言い訳は不要です。<br className="hidden sm:inline" />
+              ファイルを落とすだけで、あなたのプロンプトと試行錯誤のプロセスを、<br className="hidden sm:inline" />
+              クライアントを圧倒する「暗号学的な証明書（ZIP）」へと変換します。
             </p>
 
             {/* CTAs */}
@@ -245,17 +240,19 @@ function WhatYouGetSection(): JSX.Element {
     >
       <div className="pm-container">
         <motion.div className="mb-10 max-w-3xl" {...fadeInProps()}>
-          <Eyebrow>EVIDENCE PACK</Eyebrow>
+          <Eyebrow>THE FINAL DELIVERABLE</Eyebrow>
           <h2
             id="evidence-title"
             className="pm-h2 mt-4"
             style={{ letterSpacing: '-0.02em' }}
           >
-            ZIPを1つ。
-            <br className="hidden sm:inline" />
-            その中に、
-            <span className="pm-accent-text">全部入っています。</span>
+            クライアントに渡すのは、<br className="hidden sm:inline" />
+            このZIPファイル<span className="pm-accent-text">1つだけ。</span>
           </h2>
+          <p className="pm-body mt-4 max-w-2xl">
+            専用のPDF証明書、タイムスタンプ原本、検証用スクリプト。<br />
+            プロの仕事として「疑う余地のない証拠一式」を、そのまま納品データに同梱できます。
+          </p>
         </motion.div>
 
         <Suspense fallback={<LoadingFallback variant="inline" label="zip" />}>
@@ -621,15 +618,14 @@ function FinalCtaSection(): JSX.Element {
       />
       <div className="pm-container relative z-10 text-center">
         <motion.div {...fadeInProps()}>
-          <Eyebrow>READY</Eyebrow>
+          <Eyebrow>READY TO DELIVER</Eyebrow>
           <h2
             id="final-title"
             className="pm-h2 mt-4"
             style={{ letterSpacing: '-0.02em' }}
           >
-            30秒で、あなたの作品の
-            <br className="hidden md:inline" />
-            <span className="pm-accent-text">証明書を作る。</span>
+            あなたのクリエイティブを、<br className="hidden md:inline" />
+            <span className="pm-accent-text">暗号と数学で守り抜く。</span>
           </h2>
 
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
