@@ -82,7 +82,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     tagline: '毎月納品するプロフェッショナルの月額保険',
     features: [
       { label: '納品用 Evidence Pack (月30件)', state: 'include' },
-      { label: 'Chain of Evidence (制作工程の連鎖証明)', state: 'include', highlight: 'primary' }, // 👑 ここに最強の武器を投下
+      { label: 'Chain of Evidence (制作工程の連鎖証明)', state: 'include', highlight: 'gold' }, // 👑 ここに最強の武器を投下
       { label: '商用TSAへの自動移行 (初期目標30名で解禁)', state: 'planned', highlight: 'gold' },
       { label: '複数ファイルの並列一括証明 (Batch処理)', state: 'planned', highlight: 'gold' }, // 👑 追加: 時短の魔法（予定）
       { label: 'ペルソナ切替 (法的本名 / 公開名義)', state: 'include' },
@@ -106,7 +106,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       { label: '商用TSAへの自動移行 (初期目標30名で解禁)', state: 'planned', highlight: 'gold' },
       { label: '複数ファイルの並列一括証明 (Batch処理)', state: 'planned', highlight: 'gold' }, // 🏢 追加: 法人の大量処理用（予定）
       { label: '複数人でのチーム管理・案件台帳', state: 'include' }, // 🏢 B2Bの目玉1
-      { label: 'チーム共有の Evidence Vault (証拠一元管理)', state: 'include', vaultIcon: true }, // 🏢 B2Bの目玉2
+      { label: 'チーム共有の Evidence Vault (証拠一元管理)', state: 'include'}, // 🏢 B2Bの目玉2
       { label: 'WORM監査ログ・証跡管理', state: 'include' }, // 🏢 B2Bの目玉3
       { label: '検証ページのホワイトラベル化 (自社ロゴ)', state: 'planned', highlight: 'gold' } // 🏢 B2Bの目玉4
     ],
