@@ -85,7 +85,6 @@ export const PRICING_PLANS: PricingPlan[] = [
       { label: 'Chain of Evidence (制作工程の連鎖証明)', state: 'include', highlight: 'primary' }, // 👑 ここに最強の武器を投下
       { label: '商用TSAへの自動移行 (初期目標30名で解禁)', state: 'planned', highlight: 'gold' },
       { label: '複数ファイルの並列一括証明 (Batch処理)', state: 'planned', highlight: 'gold' }, // 👑 追加: 時短の魔法（予定）
-      { label: 'NDA案件の「漆黒の金庫」モード (無制限)', state: 'include', vaultIcon: true },
       { label: 'ペルソナ切替 (法的本名 / 公開名義)', state: 'include' },
       { label: 'Shareable Proof (永続的な公開検証ページ)', state: 'include' },
       { label: 'AIプロンプト・シード値の証拠封入', state: 'planned', highlight: 'gold' },
