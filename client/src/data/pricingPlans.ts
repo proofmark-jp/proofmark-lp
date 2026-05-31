@@ -81,12 +81,12 @@ export const PRICING_PLANS: PricingPlan[] = [
     audience: '受注クリエイター・有償案件を持つ個人',
     tagline: '毎月納品するプロフェッショナルの月額保険',
     features: [
-      { label: '納品用 Evidence Pack (月30件)', state: 'include' },
+      { label: '納品用 Evidence Pack (月30件)', state: 'include', highlight: 'gold'  },
       { label: 'Chain of Evidence (制作工程の連鎖証明)', state: 'include', highlight: 'gold' }, // 👑 ここに最強の武器を投下
       { label: '商用TSAへの自動移行 (初期目標30名で解禁)', state: 'planned', highlight: 'gold' },
       { label: '複数ファイルの並列一括証明 (Batch処理)', state: 'planned', highlight: 'gold' }, // 👑 追加: 時短の魔法（予定）
-      { label: 'ペルソナ切替 (法的本名 / 公開名義)', state: 'include' },
-      { label: 'Shareable Proof (永続的な公開検証ページ)', state: 'include' },
+      { label: 'ペルソナ切替 (法的本名 / 公開名義)', state: 'include', highlight: 'gold'  },
+      { label: 'Shareable Proof (永続的な公開検証ページ)', state: 'include', highlight: 'gold'  },
       { label: 'AIプロンプト・シード値の証拠封入', state: 'planned', highlight: 'gold' },
     ],
     ctaLabel: { guest: '先行特典を予約する', authed: 'プランをアップグレード' },
@@ -102,12 +102,12 @@ export const PRICING_PLANS: PricingPlan[] = [
     audience: '小規模制作会社・チーム',
     tagline: '法人取引・複数案件を一元管理したいチーム向け',
     features: [
-      { label: '納品用 Evidence Pack (月150件)', state: 'include' },
+      { label: '納品用 Evidence Pack (月150件)', state: 'include', highlight: 'gold'  },
       { label: '商用TSAへの自動移行 (初期目標30名で解禁)', state: 'planned', highlight: 'gold' },
       { label: '複数ファイルの並列一括証明 (Batch処理)', state: 'planned', highlight: 'gold' }, // 🏢 追加: 法人の大量処理用（予定）
-      { label: '複数人でのチーム管理・案件台帳', state: 'include' }, // 🏢 B2Bの目玉1
-      { label: 'チーム共有の Evidence Vault (証拠一元管理)', state: 'include'}, // 🏢 B2Bの目玉2
-      { label: 'WORM監査ログ・証跡管理', state: 'include' }, // 🏢 B2Bの目玉3
+      { label: '複数人でのチーム管理・案件台帳', state: 'include', highlight: 'gold'  }, // 🏢 B2Bの目玉1
+      { label: 'チーム共有の Evidence Vault (証拠一元管理)', state: 'include', highlight: 'gold'}, // 🏢 B2Bの目玉2
+      { label: 'WORM監査ログ・証跡管理', state: 'include', highlight: 'gold' }, // 🏢 B2Bの目玉3
       { label: '検証ページのホワイトラベル化 (自社ロゴ)', state: 'planned', highlight: 'gold' } // 🏢 B2Bの目玉4
     ],
     ctaLabel: { authed: 'Studioに切り替える', guest: 'Studioを予約する' },
