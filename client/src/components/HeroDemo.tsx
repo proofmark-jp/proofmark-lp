@@ -95,7 +95,7 @@ const NARRATIONS: NarrationDef[] = [
     sub: "原画はあなたの端末から一切出ません",
   },
   {
-    step: 2,
+    step: 2,  
     label: "タイムスタンプ",
     main: "RFC3161 でタイムスタンプを刻印しています",
     sub: "国際標準の認定機関が「この瞬間」に署名します",
@@ -103,7 +103,7 @@ const NARRATIONS: NarrationDef[] = [
   {
     step: 3,
     label: "証明書生成",
-    main: "改ざん不可能な証明書を生成しています",
+    main: "1ビットの改変も許さない暗号証明を生成しています",
     sub: "SHA-256・タイムスタンプ・検証スクリプトを一括梱包",
   },
   {

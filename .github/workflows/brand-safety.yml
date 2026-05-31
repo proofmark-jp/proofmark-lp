@@ -1,0 +1,25 @@
+name: Brand Safety Lint
+
+# いつ実行するか（mainブランチへのPush時と、Pull Request時）
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  lint-disallowed-words:
+    runs-on: ubuntu-latest # GitHubが用意する無料の仮想サーバー
+
+    steps:
+      # 1. あなたのコードを仮想サーバー上にダウンロードする
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 先ほど作ったスクリプトに「実行権限」を付与する
+      - name: Make script executable
+        run: chmod +x ./scripts/lint-disallowed-words.sh
+
+      # 3. 監視スクリプトを実行する！
+      - name: Run Brand Safety Linter
+        run: ./scripts/lint-disallowed-words.sh

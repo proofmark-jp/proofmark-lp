@@ -124,7 +124,7 @@ export default function WhatItProves() {
                 <span className="text-red-500 font-bold">•</span>
                 <span>
                   <strong>著作権の帰属そのもの</strong>:
-                  本サービスは、お客様がアップロードした作品の著作権がお客様に帰属すること、またはその作品が独創的であることを法的に証明するものではありません。著作権の発生は、創作の事実によって生じます。
+                  本サービスは、お客様がアップロードした作品の著作権がお客様に帰属すること、またはその作品が独創的であることを法的な権利の発生を確定させるものではありません。著作権の発生は、創作の事実によって生じます。
                 </span>
               </li>
               <li className="flex gap-3 text-[#D4D0F4] leading-relaxed">

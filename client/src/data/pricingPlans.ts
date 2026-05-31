@@ -138,7 +138,7 @@ export const FOUNDER_OFFER = {
  *  1. 値の正は本ファイルのみ。Home.tsx / Pricing.tsx / Faq.tsx は
  *     PRICING_PLANS を import して描画すること（直書き禁止）。
  *  2. priceLabel と features の文言は、PROOFMARK_COPY と矛盾しないこと。
- *     特に "改ざん不可能" "法的に勝てる" 等の断定は禁止。
+ *     特に "改ざん不◯能" "法的に勝てる" 等の断定は禁止。
  *  3. Creator を ¥1,480 にしているのは「重要なものを安すぎて売らない」
  *     という意思決定。値下げ提案は Mixpanel/Posthog でのCVRデータ取得後に行う。
  *  4. Free は本番運用に足りない設計（PDFとEvidence Packを除外）にする。

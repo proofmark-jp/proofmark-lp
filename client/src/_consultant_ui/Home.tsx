@@ -230,7 +230,7 @@ export default function Home() {
               <>
                 ファイルをアップロードするだけ。
                 <br className="hidden md:inline" />
-                <span className="pm-accent-text">改ざん不可能な証明</span>
+                <span className="pm-accent-text">1ビットの改変も許さない暗号証明</span>
                 が、その瞬間に刻まれる。
               </>
             }

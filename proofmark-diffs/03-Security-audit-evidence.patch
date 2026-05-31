@@ -99,7 +99,7 @@ index 4c5d6e7..8f9a0b1 100644
              ProofMarkの堅牢なセキュリティ
            </h1>
 -          <p className="text-[#A8A0D8] text-xl max-w-3xl mx-auto leading-relaxed">
--            あなたのデジタル作品の信頼性を守るため、ProofMarkは最先端の技術と厳格なセキュリティ対策を採用しています。プライバシーを最優先し、改ざん不可能な証明を提供します。
+-            あなたのデジタル作品の信頼性を守るため、ProofMarkは最先端の技術と厳格なセキュリティ対策を採用しています。プライバシーを最優先し、1ビットの改変も許さない暗号証明を提供します。
 +          <p className="text-[#A8A0D8] text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
 +            このページに記載する各項目は、<strong>実際に運用されている構成・設定・公開証跡に1対1で対応</strong>します。未実施の対策を「実施済」と記載することはしません。実装根拠は Trust Center（技術ホワイトペーパー）、または公開リポジトリで確認できます。
            </p>
