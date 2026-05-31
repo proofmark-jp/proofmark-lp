@@ -578,7 +578,7 @@ export default function Pricing() {
                 Q. Free と Spot と Creator の違いを30秒で
               </p>
               <p className="text-sm text-[#A8A0D8] leading-relaxed">
-                Free は「Webリンク形式」での存在証明。月30件まで無料で利用でき、検証ページを口コミやSNSでシェアできます（PDF/ZIP発行は非対応）。Spot はアカウント不要で「1案件だけファイル形式の証拠（Evidence Pack）」が必要な場合の使い切り購入。Creator は、毎月の納品で「PDF証明書やEvidence Pack」を正式な納品物として添えたいプロ向けの完全版プランです。
+                Free は「Webリンク形式」での存在証明。月30件まで無料で利用でき、検証ページを口コミやSNSでシェアできます（PDF/ZIP発行は非対応。また将来の商用TSA移行対象外となります）。Spot はアカウント不要で「1案件だけファイル形式の証拠（Evidence Pack）」が必要な場合の使い切り購入。Creator は、毎月の納品で「PDF証明書やEvidence Pack」を正式な納品物として添えたいプロ向けの完全版プランです（将来の商用TSA自動アップグレードが含まれます）。
               </p>
             </div>
             <div className="rounded-xl border border-[#1C1A38] bg-[#0D0B24]/70 p-5">

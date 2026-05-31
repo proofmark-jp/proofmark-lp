@@ -50,6 +50,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       { label: 'Zero-Knowledge 原本非送信', state: 'include' },
       { label: '30日間のポートフォリオ公開', state: 'include' },
       { label: '※PDF・Evidence Pack発行不可', state: 'exclude' }
+      { label: '※商用TSA (SLA付) での発行', state: 'exclude' }, // 👑 追加
     ],
     ctaLabel: { guest: '無料で始める', authed: '現在のプラン' },
     ctaHref: { guest: '/auth?mode=signup', authed: '/dashboard' },
@@ -82,6 +83,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     features: [
       { label: '納品用 Evidence Pack (月30件)', state: 'include' },
       { label: 'Chain of Evidence (制作工程の連鎖証明)', state: 'include', highlight: 'primary' }, // 👑 ここに最強の武器を投下
+      { label: '商用TSAへの自動移行 (初期目標30名で解禁)', state: 'planned', highlight: 'gold' },
       { label: '複数ファイルの並列一括証明 (Batch処理)', state: 'planned', highlight: 'gold' }, // 👑 追加: 時短の魔法（予定）
       { label: 'NDA案件の「漆黒の金庫」モード (無制限)', state: 'include', vaultIcon: true },
       { label: 'ペルソナ切替 (法的本名 / 公開名義)', state: 'include' },
@@ -103,6 +105,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     tagline: '法人取引・複数案件を一元管理したいチーム向け',
     features: [
       { label: '納品用 Evidence Pack (月150件)', state: 'include' },
+      { label: '商用TSAへの自動移行 (初期目標30名で解禁)', state: 'planned', highlight: 'gold' },
       { label: '複数ファイルの並列一括証明 (Batch処理)', state: 'planned', highlight: 'gold' }, // 🏢 追加: 法人の大量処理用（予定）
       { label: '複数人でのチーム管理・案件台帳', state: 'include' }, // 🏢 B2Bの目玉1
       { label: 'チーム共有の Evidence Vault (証拠一元管理)', state: 'include', vaultIcon: true }, // 🏢 B2Bの目玉2
