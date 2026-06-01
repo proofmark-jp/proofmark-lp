@@ -130,9 +130,9 @@ function HeroSection(): JSX.Element {
               className="pm-display mt-5"
               style={{ letterSpacing: '-0.025em' }}
             >
-              プロの「納品」には、<br />
-              反論不能な<br />
-              <span className="pm-accent-text">証拠（エビデンス）</span>を添える。
+              プロの「納品」に、<br />
+              反論できない<br />
+              <span className="pm-accent-text">証拠（エビデンス）</span>を。
             </h1>
             <p className="pm-body mt-6 max-w-xl">
               AI時代のクリエイティブに、もはや言い訳は不要です。<br className="hidden sm:inline" />
