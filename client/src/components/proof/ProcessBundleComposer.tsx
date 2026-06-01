@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   CheckCircle2,
   ChevronDown,
@@ -42,7 +43,7 @@ function fileBaseName(name: string): string {
   return name.replace(/\.[^.]+$/, '');
 }
 
-function guessStepType(name: string): string {
+function guessStepType(name: string, index?: number, total?: number): string {
   const lower = name.toLowerCase();
   if (/rough|ラフ|draft|sketch/i.test(lower)) return 'rough';
   if (/line|lineart|線画|ink/i.test(lower)) return 'lineart';
@@ -1015,22 +1016,47 @@ function StepCard({
 }) {
   const isEditingTitle = editingField?.stepId === step.id && editingField?.field === 'title';
   const isEditingNote = editingField?.stepId === step.id && editingField?.field === 'note';
-  const isEditingType = editingField?.stepId === step.id && editingField?.field === 'type';
   
-  // 自由入力されたカスタムタグの場合はデフォルトカラーを使用し、ラベルもそのまま表示する
-  const typeLabel = STEP_TYPE_LABELS[step.stepType] || step.stepType;
-  const badgeColor = STEP_TYPE_COLORS[step.stepType] || '#A8A0D8';
+  // Smart Auto-Labeling dynamically based on array index
+  const isOrigin = index === 0;
+  const isFinal = index === totalSteps - 1;
+
+  const badgeText = isOrigin 
+    ? '🎨 起点 (Origin)' 
+    : isFinal 
+      ? '✨ 完成 (Final)' 
+      : '📝 途中工程';
+
+  const badgeColor = isOrigin 
+    ? '#F59E0B' 
+    : isFinal 
+      ? '#00D4AA' 
+      : '#818CF8';
+
+  const badgeBg = isOrigin 
+    ? 'rgba(245, 158, 11, 0.12)' 
+    : isFinal 
+      ? 'rgba(0, 212, 170, 0.12)' 
+      : 'rgba(129, 140, 248, 0.12)';
+
+  const badgeBorder = isOrigin 
+    ? '1px solid rgba(245, 158, 11, 0.3)' 
+    : isFinal 
+      ? '1px solid rgba(0, 212, 170, 0.3)' 
+      : '1px solid rgba(129, 140, 248, 0.3)';
 
   return (
-    <div
+    <motion.div
+      layout
       draggable
       onDragStart={onCardDragStart}
       onDragEnter={onCardDragEnter}
       onDragOver={onCardDragOver}
       onDrop={onCardDrop}
       onDragEnd={onCardDragEnd}
+      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       className={`
-        relative w-[190px] md:w-[210px] rounded-2xl border transition-all duration-300 shrink-0 group/card
+        relative w-[190px] md:w-[210px] rounded-2xl border transition-[border-color,opacity,box-shadow] duration-300 shrink-0 group/card
         ${isDragging ? 'opacity-40 scale-95 ring-2 ring-[#6C3EF4]/50' : ''}
         ${step.hashState === 'hashing'
           ? 'border-[#6C3EF4]/50 shadow-[0_0_25px_rgba(108,62,244,0.15)]'
@@ -1091,7 +1117,7 @@ function StepCard({
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-[#6C3EF4] via-[#00D4AA] to-[#6C3EF4] opacity-60" />
         )}
 
-        <div className="absolute top-2 left-2 flex items-center gap-1">
+        <div className="absolute top-2 left-2 flex items-center gap-1 z-10">
           <div className="w-6 h-6 rounded-lg bg-[#07061A]/80 backdrop-blur-sm flex items-center justify-center border border-[#1C1A38]">
             <span className="text-[10px] font-black text-white">{index + 1}</span>
           </div>
@@ -1103,26 +1129,26 @@ function StepCard({
           )}
         </div>
 
-        {/* Type badge (click to edit — disabled for root) */}
-        {!step.isRoot ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSetEditing(isEditingType ? null : { stepId: step.id, field: 'type' });
-            }}
-            className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-[#07061A]/80 backdrop-blur-sm border border-[#1C1A38] text-[10px] font-bold hover:border-[#6C3EF4]/40 transition-colors cursor-pointer"
-            style={{ color: badgeColor }}
-          >
-            {typeLabel}
-          </button>
-        ) : (
-          <div
-            className="absolute top-2 right-2 px-2 py-0.5 rounded-lg bg-[#07061A]/80 backdrop-blur-sm border border-[#00D4AA]/20 text-[10px] font-bold text-[#00D4AA]"
-          >
-            原本
-          </div>
-        )}
+        {/* Dynamic Context Badge — Smart Auto-Labeling with AnimatePresence */}
+        <div className="absolute top-2 right-2 z-10">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={badgeText}
+              initial={{ opacity: 0, scale: 0.8, y: -2 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 2 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+              className="px-2 py-0.5 rounded-lg text-[10px] font-bold backdrop-blur-sm shadow-md whitespace-nowrap"
+              style={{
+                color: badgeColor,
+                backgroundColor: badgeBg,
+                border: badgeBorder,
+              }}
+            >
+              {badgeText}
+            </motion.div>
+          </AnimatePresence>
+        </div>
 
         {/* Delete button — hidden for root steps */}
         {totalSteps > 1 && !step.isRoot && (
@@ -1154,54 +1180,7 @@ function StepCard({
         )}
       </div>
 
-      {/* Type selector dropdown (Combobox) - Moved outside overflow-hidden container */}
-      {isEditingType && (
-        <>
-          {/* Click-away overlay (closes dropdown when clicking outside) */}
-          <div 
-            className="fixed inset-0 z-40" 
-            onClick={(e) => { e.stopPropagation(); onSetEditing(null); }} 
-          />
-          {/* Dropdown panel */}
-          <div className="absolute top-11 right-2 z-50 bg-[#0D0B24] border border-[#1C1A38] rounded-xl shadow-2xl w-40 flex flex-col">
-            <div className="p-1.5 pb-1">
-              {(Object.keys(STEP_TYPE_LABELS)).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onUpdate(step.id, { stepType: t });
-                    onSetEditing(null);
-                  }}
-                  className={`block w-full text-left px-2.5 py-1.5 text-xs font-bold rounded-lg hover:bg-[#6C3EF4]/10 transition-colors ${step.stepType === t ? 'text-[#00D4AA]' : 'text-[#A8A0D8]'}`}
-                >
-                  {STEP_TYPE_LABELS[t]}
-                </button>
-              ))}
-            </div>
-            <div className="p-1.5 pt-1 mt-1 border-t border-[#1C1A38]">
-              <input
-                autoFocus
-                maxLength={20}
-                defaultValue={!STEP_TYPE_LABELS[step.stepType] ? step.stepType : ''}
-                placeholder="カスタム入力..."
-                className="w-full bg-[#07061A] text-xs font-bold text-white px-2.5 py-2 rounded-lg border border-[#1C1A38] focus:border-[#6C3EF4]/60 outline-none transition-colors placeholder:text-[#A8A0D8]/30"
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                    onUpdate(step.id, { stepType: e.currentTarget.value.trim() });
-                    onSetEditing(null);
-                  }
-                  if (e.key === 'Escape') {
-                    onSetEditing(null);
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </>
-      )}
+      {/* Type selector dropdown is removed since context badges are dynamic */}
 
       {/* ── Info row: inline editable title ── */}
       <div className="px-3 py-2.5">
@@ -1279,6 +1258,6 @@ function StepCard({
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

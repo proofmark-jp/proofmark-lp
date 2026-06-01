@@ -1172,7 +1172,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
               </SegBtn>
               <SegBtn active={sortBy === 'trust'} onClick={() => setSortBy('trust')}>
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">信頼順</span>
+                <span className="hidden sm:inline">証明強度順</span>
               </SegBtn>
               <SegBtn active={sortBy === 'starred'} onClick={() => setSortBy('starred')}>
                 <Star className="w-3.5 h-3.5" />
@@ -1409,11 +1409,11 @@ function TrustFilterTabs({
 }) {
   const items: Array<{ key: TrustTier | 'all'; label: string; color: string }> = [
     { key: 'all', label: 'すべて', color: '#A8A0D8' },
-    { key: 'cross', label: `Cross ${counts.cross}`, color: '#F0BB38' },
-    { key: 'trusted', label: `Trusted ${counts.trusted}`, color: '#00D4AA' },
-    { key: 'beta', label: `Beta ${counts.beta}`, color: '#9BA3D4' },
-    { key: 'pending', label: `Pending ${counts.pending}`, color: '#A8A0D8' },
-  ];
+    { key: 'cross', label: `CROSS ${counts?.cross ?? 0}`, color: '#F0BB38' },
+    { key: 'trusted', label: `TRUSTED ${counts?.trusted ?? 0}`, color: '#00D4AA' },
+    { key: 'beta', label: `BETA ${counts?.beta ?? 0}`, color: '#9BA3D4' },
+    { key: 'pending', label: `PENDING ${counts?.pending ?? 0}`, color: '#A8A0D8' },
+  ].filter((it) => it.key === 'all' || (counts && (counts[it.key as TrustTier] ?? 0) > 0));
   return (
     <div role="tablist" aria-label="信頼レベル" className="flex flex-wrap items-center gap-1">
       {items.map((it) => {
