@@ -39,6 +39,7 @@ import {
   Info,
   LayoutGrid,
   Link as LinkIcon,
+  Loader2,
   Lock,
   Plus,
   Rows3,
@@ -338,20 +339,7 @@ function getOptimizedImageUrl(
   url: string | null | undefined,
   opts: { width?: number; quality?: number } = {},
 ): string {
-  if (!url || typeof url !== 'string') return '';
-  const { width = 400, quality = 70 } = opts;
-  try {
-    const u = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'https://proofmark.jp');
-    // Supabase render endpoint 互換のクエリパラメータを付与
-    if (!u.searchParams.has('width')) u.searchParams.set('width', String(width));
-    if (!u.searchParams.has('quality')) u.searchParams.set('quality', String(quality));
-    if (!u.searchParams.has('format')) u.searchParams.set('format', 'webp');
-    return u.toString();
-  } catch {
-    // URL 解析失敗時はそのまま返す (壊さない)
-    const sep = url.includes('?') ? '&' : '?';
-    return `${url}${sep}width=${width}&quality=${quality}&format=webp`;
-  }
+  return url || '';
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -453,7 +441,7 @@ function deriveTrustTier(c: CertRow): TrustDescriptor {
   return {
     tier: 'beta',
     label: 'Beta TSA',
-    sublabel: provider ? provider.toUpperCase() : 'FREETSA',
+    sublabel: '',
     color: '#9BA3D4',
     border: 'rgba(155,163,212,0.35)',
     bg: 'rgba(155,163,212,0.10)',
@@ -833,6 +821,71 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     }
   }, []);
 
+  const handleResync = useCallback(async (certId: string) => {
+    try {
+      // 1. DBから最新データを引く
+      const { data: cert, error } = await supabase
+        .from('certificates')
+        .select('*')
+        .eq('id', certId)
+        .single();
+      if (error) throw error;
+      if (!cert) throw new Error('証明書が見つかりません');
+
+      let updatedCert = cert;
+
+      // タイムスタンプがまだない場合はTSA発行をリトライ
+      if (!cert.timestamp_token || !cert.certified_at) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (!token) throw new Error('セッションがありません');
+
+        const fileHash = cert.sha256 || cert.file_hash;
+        if (!fileHash) throw new Error('ハッシュが存在しません');
+
+        toast.loading('TSAタイムスタンプを再同期中...', { id: `resync-${certId}` });
+
+        const res = await fetch('/api/timestamp', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ certId, hash: fileHash }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || '再同期APIエラー');
+        }
+
+        // 成功したら再度DBから最新の状態を取得
+        const { data: freshCert, error: freshError } = await supabase
+          .from('certificates')
+          .select('*')
+          .eq('id', certId)
+          .single();
+        if (freshError) throw freshError;
+        if (freshCert) {
+          updatedCert = freshCert;
+        }
+      }
+
+      // parent state を更新
+      setCerts((prev) =>
+        prev.map((c) => (c.id === certId ? (updatedCert as CertRow) : c)),
+      );
+
+      toast.success('再同期が完了しました', { id: `resync-${certId}` });
+    } catch (err: any) {
+      console.error('[Resync Error]', err);
+      toast.error('再同期に失敗しました', {
+        id: `resync-${certId}`,
+        description: err.message,
+      });
+    }
+  }, []);
+
   const handleEvidence = useCallback(async (cert: CertRow) => {
     try {
       toast.loading('Evidence Pack を生成しています...', { id: `evidence-${cert.id}` });
@@ -1205,6 +1258,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
               onAssignClientProject={handleAssignClientProject}
               onOpenInspector={(cert) => openInspector(cert, 'overview')}
               onOpenChain={(cert) => openInspector(cert, 'chain')}
+              onResync={handleResync}
               reduce={reduce}
             />
           )}
@@ -1249,6 +1303,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
         onToggleStar={handleToggleStar}
         copiedId={copiedId}
         canExportEvidencePack={canExportEvidencePack}
+        onResync={handleResync}
         reduce={reduce}
       />
 
@@ -1453,8 +1508,17 @@ function TrustBadgeMotion({
  *  Pending Ring — Silent Processing
  * ══════════════════════════════════════════════════════════════ */
 
-function PendingRing({ cert, reduce }: { cert: CertRow; reduce: boolean }) {
+function PendingRing({
+  cert,
+  reduce,
+  onResync,
+}: {
+  cert: CertRow;
+  reduce: boolean;
+  onResync?: (certId: string) => Promise<void>;
+}) {
   const [now, setNow] = useState(() => Date.now());
+  const [resyncing, setResyncing] = useState(false);
 
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 1500);
@@ -1472,29 +1536,37 @@ function PendingRing({ cert, reduce }: { cert: CertRow; reduce: boolean }) {
 
   if (isWarn) {
     return (
-      <div
-        className="absolute inset-0 flex items-center justify-center pointer-events-none"
-        style={{
-          background: 'rgba(7,6,26,0.3)',
-          backdropFilter: 'blur(1px)',
+      <button
+        type="button"
+        disabled={resyncing}
+        onClick={async (e) => {
+          e.stopPropagation();
+          if (resyncing) return;
+          setResyncing(true);
+          if (onResync) {
+            await onResync(cert.id);
+          }
+          setResyncing(false);
         }}
-        title="バックグラウンドで処理中"
-        aria-label="バックグラウンドで処理中"
+        className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/55 transition-colors cursor-pointer group"
+        style={{
+          backdropFilter: 'blur(2px)',
+        }}
+        title="バックグラウンドで処理中。クリックして再同期"
+        aria-label="再同期"
       >
         <div
-          className="flex flex-col items-center justify-center gap-1.5 px-3 py-2 rounded-2xl"
+          className="flex flex-col items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-2xl border border-white/10 bg-[#07061A]/90 hover:border-[#00D4AA]/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
           style={{
-            background: 'rgba(7,6,26,0.7)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            backdropFilter: 'blur(4px)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
           }}
         >
-          <Clock3 className="w-4 h-4 text-[#A8A0D8] animate-pulse" />
-          <span className="text-[9px] font-mono text-[#A8A0D8] uppercase tracking-[0.15em]">
-            Background
+          <Clock3 className={`w-4 h-4 text-[#A8A0D8] group-hover:text-[#00D4AA] ${resyncing ? 'animate-spin' : 'animate-pulse'}`} />
+          <span className="text-[9px] font-mono text-[#A8A0D8] group-hover:text-[#00D4AA] uppercase tracking-[0.15em] transition-colors">
+            {resyncing ? '再同期中...' : '↻ 再同期'}
           </span>
         </div>
-      </div>
+      </button>
     );
   }
 
@@ -1793,6 +1865,7 @@ interface GridViewProps {
   onAssignClientProject: (cert: CertRow) => void;
   onOpenInspector: (cert: CertRow) => void;
   onOpenChain: (cert: CertRow) => void;
+  onResync?: (certId: string) => Promise<void>;
   reduce: boolean;
 }
 
@@ -1807,6 +1880,7 @@ function CertGridView(props: GridViewProps) {
     onAssignClientProject,
     onOpenInspector,
     onOpenChain,
+    onResync,
     reduce,
   } = props;
 
@@ -1828,6 +1902,7 @@ function CertGridView(props: GridViewProps) {
           onAssignClientProject={onAssignClientProject}
           onOpenInspector={onOpenInspector}
           onOpenChain={onOpenChain}
+          onResync={onResync}
           reduce={reduce}
         />
       ))}
@@ -1846,6 +1921,7 @@ function BentoCard({
   onAssignClientProject,
   onOpenInspector,
   onOpenChain,
+  onResync,
   reduce,
 }: {
   cert: CertRow;
@@ -1858,6 +1934,7 @@ function BentoCard({
   onAssignClientProject: (cert: CertRow) => void;
   onOpenInspector: (cert: CertRow) => void;
   onOpenChain: (cert: CertRow) => void;
+  onResync?: (certId: string) => Promise<void>;
   reduce: boolean;
 }) {
   const [imgError, setImgError] = useState(false);
@@ -1931,7 +2008,7 @@ function BentoCard({
         )}
 
         {/* Silent Processing — Pending Ring */}
-        {isPending && <PendingRing cert={cert} reduce={reduce} />}
+        {isPending && <PendingRing cert={cert} reduce={reduce} onResync={onResync} />}
 
         {/* trust badge — breathing */}
         <div className="absolute top-2 left-2 z-10">
@@ -2093,6 +2170,7 @@ interface InspectorProps {
   onToggleStar: (id: string, current: boolean) => void;
   copiedId: string | null;
   canExportEvidencePack: boolean;
+  onResync?: (certId: string) => Promise<void>;
   reduce: boolean;
 }
 
@@ -2108,6 +2186,7 @@ function Inspector({
   onToggleStar,
   copiedId,
   canExportEvidencePack,
+  onResync,
   reduce,
 }: InspectorProps) {
   // ESC で閉じる
@@ -2240,6 +2319,7 @@ function Inspector({
                   onEvidence={onEvidence}
                   onArchive={onArchive}
                   canExportEvidencePack={canExportEvidencePack}
+                  onResync={onResync}
                   reduce={reduce}
                 />
               )}
@@ -2317,6 +2397,7 @@ function InspectorOverview({
   onEvidence,
   onArchive,
   canExportEvidencePack,
+  onResync,
   reduce,
 }: {
   cert: CertRow;
@@ -2325,6 +2406,7 @@ function InspectorOverview({
   onEvidence: (cert: CertRow) => void;
   onArchive: (cert: CertRow, next: boolean) => void;
   canExportEvidencePack: boolean;
+  onResync?: (certId: string) => Promise<void>;
   reduce: boolean;
 }) {
   const [imgError, setImgError] = useState(false);
@@ -2365,7 +2447,7 @@ function InspectorOverview({
           />
         )}
         {(deriveTrustTier(cert).tier === 'pending') && (
-          <PendingRing cert={cert} reduce={reduce} />
+          <PendingRing cert={cert} reduce={reduce} onResync={onResync} />
         )}
       </div>
 
@@ -2482,6 +2564,147 @@ function MetaRow({
 }
 
 /* ── Chain tab body ── */
+const STEP_TYPE_LABELS: Record<string, string> = {
+  rough: 'ラフ',
+  lineart: '線画',
+  color: '着色',
+  final: '完成',
+  other: '途中工程',
+};
+
+const STEP_TYPE_COLORS: Record<string, string> = {
+  rough: '#F59E0B',
+  lineart: '#818CF8',
+  color: '#34D399',
+  final: '#00D4AA',
+  other: '#A8A0D8',
+};
+
+interface ProcessBundleStep {
+  id: string;
+  step_index: number;
+  step_type: string;
+  title: string;
+  description: string;
+  preview_url?: string;
+  sha256: string;
+  issued_at?: string;
+  created_at: string;
+}
+
+function EvidenceChainViewer({ cert }: { cert: CertRow }) {
+  const [steps, setSteps] = useState<ProcessBundleStep[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const fetchTimeline = async () => {
+      const bundleId = (cert as any).process_bundle_id;
+      if (!bundleId) {
+        setSteps([]);
+        return;
+      }
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('process_bundle_steps')
+          .select('*')
+          .eq('bundle_id', bundleId)
+          .order('step_index', { ascending: true });
+
+        if (error) throw error;
+        if (active) {
+          setSteps((data as ProcessBundleStep[]) || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch timeline steps:', err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    fetchTimeline();
+    return () => {
+      active = false;
+    };
+  }, [cert]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-4 text-white/40 justify-center">
+        <Loader2 className="w-4 h-4 animate-spin text-[#6C3EF4]" />
+        <span className="text-xs font-mono">Fetching timeline history...</span>
+      </div>
+    );
+  }
+
+  if (steps.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mb-6 rounded-2xl border border-white/[0.06] bg-white/[0.01] p-4 shrink-0">
+      <div className="flex items-center gap-2 mb-3">
+        <History className="w-4 h-4 text-[#00D4AA]" />
+        <h4 className="text-xs font-mono uppercase tracking-[0.2em] text-[#00D4AA]">
+          Evidence Timeline ({steps.length} Steps)
+        </h4>
+      </div>
+
+      <div className="relative pl-4 border-l border-white/10 space-y-4">
+        {steps.map((step) => {
+          const color = STEP_TYPE_COLORS[step.step_type] || '#A8A0D8';
+          const label = STEP_TYPE_LABELS[step.step_type] || step.step_type;
+          
+          return (
+            <div key={step.id} className="relative group">
+              <div 
+                className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full border border-[#07061A]"
+                style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }}
+              />
+              
+              <div className="flex items-start gap-3">
+                {step.preview_url && (
+                  <div className="w-10 h-10 rounded-lg overflow-hidden border border-white/10 shrink-0 bg-black/40">
+                    <img src={step.preview_url} alt="" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-white group-hover:text-[#00D4AA] transition-colors">
+                      {step.title}
+                    </span>
+                    <span 
+                      className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded tracking-wider"
+                      style={{ backgroundColor: `${color}15`, color: color, border: `1px solid ${color}30` }}
+                    >
+                      {label}
+                    </span>
+                  </div>
+                  
+                  {step.description && (
+                    <p className="text-[11px] text-white/50 mt-0.5 leading-relaxed">
+                      {step.description}
+                    </p>
+                  )}
+                  
+                  <div className="flex items-center gap-3 mt-1 text-[9px] font-mono text-white/30">
+                    <span>SHA-256: {step.sha256.slice(0, 8)}…{step.sha256.slice(-6)}</span>
+                    {step.created_at && (
+                      <span>{new Date(step.created_at).toLocaleDateString()}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function InspectorChain({
   cert,
   canExportEvidencePack,
@@ -2507,6 +2730,9 @@ function InspectorChain({
           ラフ → 線画 → 着色 → 完成 まで、各工程のSHA-256ハッシュをチェーンして単一の不可逆な存在証明を構築します。
         </p>
       </div>
+
+      {/* Evidence Timeline */}
+      <EvidenceChainViewer cert={cert} />
 
       {/* The composer & Shield */}
       <div className="relative flex-1 min-h-[500px]">

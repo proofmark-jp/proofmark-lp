@@ -28,6 +28,7 @@ interface StatusMenuProps {
 
 export function StatusMenu({ current, onChange, disabled }: StatusMenuProps) {
   const [open, setOpen] = useState(false);
+  const [skipDialog, setSkipDialog] = useState(() => localStorage.getItem('skipDialog') === 'true');
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
@@ -56,7 +57,21 @@ export function StatusMenu({ current, onChange, disabled }: StatusMenuProps) {
   const handlePick = async (next: DeliveryStatus | null) => {
     setOpen(false);
     if (next === current) return;
-    await onChange(next);
+
+    if (skipDialog) {
+      // 即座に Supabase の UPDATE API を叩きに行く（楽観的UI）
+      await onChange(next);
+      return;
+    }
+
+    const nextLabel = next ? DELIVERY_STATUS_TOKENS[next].label : '未設定';
+    const confirmed = window.confirm(
+      `ステータスを「${nextLabel}」に変更しますか？\n(次回からこの確認を表示しない場合は「次回から確認しない」にチェックを入れてください)`
+    );
+
+    if (confirmed) {
+      await onChange(next);
+    }
   };
 
   return (
@@ -138,6 +153,29 @@ export function StatusMenu({ current, onChange, disabled }: StatusMenuProps) {
               <span className="w-2 h-2 rounded-full bg-white/30" aria-hidden="true" />
               ステータス未設定に戻す
             </button>
+
+            <div className="my-1 mx-2 border-t border-white/5" />
+
+            {/* skipDialog Checkbox Option */}
+            <div className="px-2.5 py-1.5 flex items-center gap-2">
+              <input
+                id="skip-dialog-checkbox"
+                type="checkbox"
+                checked={skipDialog}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setSkipDialog(val);
+                  localStorage.setItem('skipDialog', String(val));
+                }}
+                className="w-3.5 h-3.5 rounded border-white/20 bg-[#07061A] text-[#6C3EF4] focus:ring-offset-[#07061A] focus:ring-[#6C3EF4] cursor-pointer"
+              />
+              <label
+                htmlFor="skip-dialog-checkbox"
+                className="text-[11px] text-white/55 cursor-pointer hover:text-white/85 transition-colors select-none"
+              >
+                次回から確認しない
+              </label>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
