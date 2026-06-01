@@ -155,90 +155,36 @@ function HashFingerprint({
   className?: string;
   showLabel?: boolean;
 }) {
-  const art = useMemo(() => deriveGenerativeArt(hash), [hash]);
-
   return (
     <div
-      className={`relative h-full w-full overflow-hidden ${className}`}
-      style={{ background: art.background }}
+      className={`relative h-full w-full overflow-hidden bg-[#0D0B24] ${className}`}
+      style={{
+        backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03) 1px, transparent 1px), radial-gradient(circle at 50% 30%, rgba(108,62,244,0.15) 0%, transparent 60%)',
+        backgroundSize: '8px 8px, 100% 100%',
+      }}
     >
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{ background: art.overlay, opacity: 0.15 }}
-      />
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 20% 30%, rgba(255,255,255,0.55) 1px, transparent 1px), radial-gradient(circle at 70% 80%, rgba(255,255,255,0.45) 1px, transparent 1px)',
-          backgroundSize: '6px 6px, 9px 9px',
-          opacity: 0.15,
-        }}
-      />
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(0,0,0,0.45) 100%)',
-        }}
-      />
-
       {showLabel && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4">
           <div
             className="flex h-11 w-11 items-center justify-center rounded-full"
             style={{
-              background: 'rgba(0,0,0,0.5)',
-              border: '1px solid rgba(0,212,170,0.45)',
-              backdropFilter: 'blur(6px)',
-              boxShadow: '0 0 22px rgba(0,212,170,0.4)',
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(168,160,216,0.15)',
+              boxShadow: '0 0 20px rgba(0,0,0,0.5)',
             }}
           >
-            <Lock className="h-5 w-5 text-[#00D4AA]" strokeWidth={1.6} />
+            <Lock className="h-5 w-5 text-[#A8A0D8]" strokeWidth={1.5} />
           </div>
           <div className="text-center">
-            <p className="text-[9.5px] font-mono uppercase tracking-[0.28em] text-white/85">
-              Confidential Proof
+            <p className="text-xs text-[#A8A0D8]/70 tracking-[0.25em] font-mono uppercase">
+              CONFIDENTIAL PROOF
             </p>
-            <p
-              className="mt-1 font-mono text-[10px] text-white/55 tracking-[0.18em]"
-              style={{ textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}
-            >
+            <p className="mt-1 font-mono text-[10px] text-white/30 tracking-[0.2em]">
               {hash ? `${hash.slice(0, 8)}…${hash.slice(-6)}` : '—'}
             </p>
           </div>
         </div>
       )}
-
-      <div
-        aria-hidden
-        className="absolute bottom-2 right-2 flex gap-1 pointer-events-none"
-      >
-        {[art.hueA, art.hueB, art.hueC].map((h, i) => (
-          <span
-            key={i}
-            className="block h-1.5 w-1.5 rounded-full"
-            style={{
-              background: `hsl(${h}, 80%, 60%)`,
-              boxShadow: `0 0 6px hsl(${h}, 80%, 60%)`,
-            }}
-          />
-        ))}
-      </div>
-
-      <div
-        aria-hidden
-        className="absolute top-2 left-2 font-mono text-[8px] tracking-[0.3em]"
-        style={{
-          color: 'rgba(255,255,255,0.5)',
-          textShadow: '0 1px 2px rgba(0,0,0,0.6)',
-        }}
-      >
-        ✦ PM
-      </div>
     </div>
   );
 }
@@ -461,7 +407,7 @@ const ALL_PROJECTS_ID = '__all__';
 const UNASSIGNED_ID = '__unassigned__';
 
 /* ペイウォール閾値 (10秒) */
-const PENDING_WARN_THRESHOLD_MS = 10_000;
+const PENDING_WARN_THRESHOLD_MS = 20_000;
 
 function deriveTrustTier(c: CertRow): TrustDescriptor {
   const provider = (c.tsa_provider || '').toLowerCase();
@@ -1497,8 +1443,8 @@ function TrustBadgeMotion({
       >
         <Icon style={{ width: dims.ic, height: dims.ic }} />
       </motion.span>
-      {t.label}
-      <span className="opacity-70 font-normal normal-case">· {t.sublabel}</span>
+      <span className="hidden sm:inline">{t.label}</span>
+      <span className="hidden sm:inline opacity-70 font-normal normal-case ml-1.5">· {t.sublabel}</span>
     </motion.span>
   );
 }
@@ -1521,11 +1467,36 @@ function PendingRing({ cert, reduce }: { cert: CertRow; reduce: boolean }) {
   }, [cert.created_at, now]);
 
   const isWarn = elapsed >= PENDING_WARN_THRESHOLD_MS;
-  const accent = isWarn ? '#F0BB38' : '#00D4AA';
-  const rgb = isWarn ? '240,187,56' : '0,212,170';
-  const tooltip = isWarn
-    ? 'TSA発行混雑中 — 通常より時間がかかっています'
-    : 'タイムスタンプを発行中…';
+  const accent = '#00D4AA';
+  const rgb = '0,212,170';
+
+  if (isWarn) {
+    return (
+      <div
+        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+        style={{
+          background: 'rgba(7,6,26,0.3)',
+          backdropFilter: 'blur(1px)',
+        }}
+        title="バックグラウンドで処理中"
+        aria-label="バックグラウンドで処理中"
+      >
+        <div
+          className="flex flex-col items-center justify-center gap-1.5 px-3 py-2 rounded-2xl"
+          style={{
+            background: 'rgba(7,6,26,0.7)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <Clock3 className="w-4 h-4 text-[#A8A0D8] animate-pulse" />
+          <span className="text-[9px] font-mono text-[#A8A0D8] uppercase tracking-[0.15em]">
+            Background
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1535,8 +1506,8 @@ function PendingRing({ cert, reduce }: { cert: CertRow; reduce: boolean }) {
           'radial-gradient(circle at 50% 50%, rgba(7,6,26,0.45) 0%, rgba(7,6,26,0.25) 60%, transparent 100%)',
         backdropFilter: 'blur(1px)',
       }}
-      title={tooltip}
-      aria-label={tooltip}
+      title="タイムスタンプを発行中…"
+      aria-label="タイムスタンプを発行中…"
     >
       <motion.div
         className="relative h-14 w-14 rounded-full flex items-center justify-center"
@@ -1578,20 +1549,6 @@ function PendingRing({ cert, reduce }: { cert: CertRow; reduce: boolean }) {
           transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
         />
       </motion.div>
-
-      {isWarn && (
-        <span
-          className="absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.2em] whitespace-nowrap"
-          style={{
-            background: 'rgba(240,187,56,0.14)',
-            border: '1px solid rgba(240,187,56,0.45)',
-            color: '#F0BB38',
-            backdropFilter: 'blur(6px)',
-          }}
-        >
-          TSA混雑中
-        </span>
-      )}
     </div>
   );
 }
@@ -1690,10 +1647,12 @@ function CertListTable(props: ListViewProps) {
                       fill={cert.is_starred ? '#F0BB38' : 'transparent'}
                     />
                   </button>
-                  <p className="text-[13px] font-semibold text-white truncate">
+                  <p 
+                    className="text-[13px] font-semibold text-white whitespace-nowrap overflow-hidden max-w-[140px] sm:max-w-full"
+                    style={{ WebkitMaskImage: 'linear-gradient(to right, black 85%, transparent 100%)', maskImage: 'linear-gradient(to right, black 85%, transparent 100%)' }}
+                  >
                     {cert.title || cert.file_name || 'Untitled'}
                   </p>
-                  {!isStudio && <TrustBadgeMotion cert={cert} size="sm" reduce={reduce} />}
                 </div>
                 <p className="text-[10.5px] text-white/40 font-mono truncate mt-0.5 ml-5">
                   <Hash className="inline w-2.5 h-2.5 mr-1" />
@@ -2014,7 +1973,10 @@ function BentoCard({
 
       <div className="p-3.5 space-y-2.5">
         <div className="flex items-baseline justify-between gap-2 min-w-0">
-          <p className="text-[13px] font-semibold text-white truncate">
+          <p 
+            className="text-[13px] font-semibold text-white whitespace-nowrap overflow-hidden max-w-[200px] sm:max-w-full"
+            style={{ WebkitMaskImage: 'linear-gradient(to right, black 85%, transparent 100%)', maskImage: 'linear-gradient(to right, black 85%, transparent 100%)' }}
+          >
             {cert.title || cert.original_filename || cert.file_name || 'Untitled'}
           </p>
         </div>

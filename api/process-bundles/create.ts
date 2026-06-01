@@ -311,28 +311,10 @@ root_step_id: rootStepId,
       }
     }
 
-    if (lastStep.isRoot) {
-      // 末尾が既存のRoot（順番を入れ替えて別のRootを最後に持ってきたケース等）
-      // 証明書の「顔（URLとハッシュ）」だけを更新し、元の実体データは破壊しない
-      const { error: certUpdateErr } = await supabaseAdmin.from('certificates').update({
-        process_bundle_id: bundleId,
-        public_image_url: finalPreviewUrl,
-        sha256: finalHashData,
-      }).eq('id', finalCertificateIdStr);
-      if (certUpdateErr) throw new Error(`Failed to update root certificate face: ${certUpdateErr.message}`);
-    } else {
-      // 末尾が新しい画像: 完全な上書き
-      const { error: certUpdateErr } = await supabaseAdmin.from('certificates').update({
-        process_bundle_id: bundleId,
-        public_image_url: finalPreviewUrl,
-        storage_path: finalStoragePath,
-        sha256: finalHashData,
-        file_name: finalFileName,
-        mime_type: finalMimeType,
-        file_size: finalFileSize,
-      }).eq('id', finalCertificateIdStr);
-      if (certUpdateErr) throw new Error(`Failed to update certificate to new head: ${certUpdateErr.message}`);
-    }
+    // 8. 既存証明書のハッシュ不変性（Immutability）を保護
+    // 以前はここで certificates テーブルをUPDATEして上書きしていたが、
+    // sha256 は不変であるべきであり、履歴は process_bundles に連鎖（Chain）として記録される。
+    // そのため、親レコードは一切改変せず、Bundleから参照するアーキテクチャとする。
 
         // 9. バンドルを発行済みにアップデート
     const { error: finalUpdateErr } = await supabaseAdmin
