@@ -44,7 +44,76 @@ import {
 import { buildChainOfEvidence } from './_lib/chain-of-evidence.js';
 import { getLegalCopyrightPdf } from './_lib/legal-pdf-cache.js';
 
+// --- React-PDF Dynamic Generation Additions ---
+import { Font, renderToBuffer } from '@react-pdf/renderer';
+import React from 'react';
+import { CertificateDocument } from '../client/src/lib/pdf/CertificateDocument.js';
+import { CoverLetterDocument } from '../client/src/lib/pdf/CoverLetterDocument.js';
+
 export const config = { maxDuration: 300 };
+
+// --- Server-side Font Registration ---
+let serverFontsRegistered = false;
+function registerServerFonts(origin: string) {
+    if (serverFontsRegistered) return;
+    try {
+        Font.register({
+            family: 'NotoSansJP',
+            fonts: [
+                { src: `${origin}/fonts/NotoSansJP-Regular.ttf`, fontWeight: 400 },
+                { src: `${origin}/fonts/NotoSansJP-Medium.ttf`, fontWeight: 500 },
+                { src: `${origin}/fonts/NotoSansJP-Bold.ttf`, fontWeight: 700 },
+            ],
+        });
+
+        Font.register({
+            family: 'JetBrainsMono',
+            fonts: [
+                { src: `${origin}/fonts/JetBrainsMono-Regular.ttf`, fontWeight: 400 },
+                { src: `${origin}/fonts/JetBrainsMono-Bold.ttf`, fontWeight: 700 },
+            ],
+        });
+
+        Font.registerHyphenationCallback((word) => {
+            if (/^[a-zA-Z0-9\-_.,:;/'"!?@#$%^&*()[\]{}]+$/.test(word)) {
+                return [word];
+            }
+            return Array.from(word);
+        });
+        serverFontsRegistered = true;
+    } catch (e) {
+        console.error('[React-PDF Server Fonts] Registration failed:', e);
+    }
+}
+
+function formatBytes(bytes: number | null | undefined): string {
+    if (bytes === undefined || bytes === null || isNaN(bytes) || bytes < 0) return '—';
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function formatJst(dateStr: string | null | undefined): string {
+    if (!dateStr) return '—';
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return '—';
+        return new Intl.DateTimeFormat('ja-JP', {
+            timeZone: 'Asia/Tokyo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).format(date) + ' JST';
+    } catch {
+        return '—';
+    }
+}
 
 // --- Upstash Rate Limit Init (Fail-open) ---
 let ratelimit: Ratelimit | null = null;
@@ -89,6 +158,7 @@ interface CertRecord {
     tsa_url: string | null;
     team_id: string | null;
     c2pa_manifest: Record<string, unknown> | null;
+    file_size?: number | null;
 }
 
 interface SpotOrderRecord {
@@ -381,6 +451,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         let downloadKind: 'auth' | 'spot' = 'auth';
         let spotOrder: SpotOrderRecord | null = null;
         let evidencePackName = 'proofmark-evidence-pack.zip';
+        let profileRecord: any = null;
 
         if (certParam) {
             if (!UUID.test(certParam)) throw new HttpError(400, 'cert must be a UUID');
@@ -388,7 +459,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             const { data, error } = await admin
                 .from('certificates')
-                .select('id, user_id, title, sha256, proof_mode, visibility, public_image_url, storage_path, original_filename, file_name, certified_at, proven_at, created_at, timestamp_token, tsa_provider, tsa_url, team_id, c2pa_manifest')
+                .select('id, user_id, title, sha256, proof_mode, visibility, public_image_url, storage_path, original_filename, file_name, certified_at, proven_at, created_at, timestamp_token, tsa_provider, tsa_url, team_id, c2pa_manifest, file_size')
                 .eq('id', certParam)
                 .maybeSingle();
 
@@ -413,9 +484,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (data.user_id) {
                 const { data: profile } = await admin
                     .from('profiles')
-                    .select('plan_tier')
+                    .select('plan_tier, display_name, username')
                     .eq('id', data.user_id)
                     .maybeSingle();
+
+                profileRecord = profile;
 
                 if (!profile || profile.plan_tier === 'free') {
                     log.warn({ event: 'plan_block', userId: data.user_id, certId: data.id });
@@ -488,6 +561,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const sha256 = cert.sha256 ?? '';
             const verifyUrl = `https://proofmark.jp/cert/${cert.id}`;
 
+            const host = req.headers.host || 'proofmark.jp';
+            const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
+            const origin = `${protocol}://${host}`;
+            registerServerFonts(origin);
+
             // --- Original Filename Selection Logic (Bug 1 Fix) ---
             const rawName = (cert.original_filename && cert.original_filename !== 'unknown_file')
                 ? cert.original_filename
@@ -515,6 +593,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const legalPdf = await getLegalCopyrightPdf(log);
             const legalGuideIncluded = legalPdf !== null;
 
+            // --- React-PDF Dynamic PDF Generation ---
+            let coverLetterBuffer: Buffer | null = null;
+            let certificateBuffer: Buffer | null = null;
+
+            try {
+                const jstTime = formatJst(cert.certified_at ?? cert.proven_at ?? cert.created_at);
+                const humanSize = formatBytes(cert.file_size);
+                const displayCreatorName = profileRecord?.display_name ?? profileRecord?.username ?? 'ProofMark Creator';
+
+                const pdfInput = {
+                    certificateId: cert.id,
+                    creatorDisplayName: displayCreatorName,
+                    fileName: baseFile,
+                    fileSize: humanSize,
+                    sha256: sha256,
+                    timestampJst: jstTime,
+                    verificationUrl: verifyUrl,
+                    sealVariant: (cert.proof_mode === 'private' ? 'teal' : 'gold') as 'teal' | 'gold',
+                    tsaProvider: cert.tsa_provider ?? 'FreeTSA',
+                };
+
+                const treeEntries = [
+                    { name: 'Cover_Letter.pdf', size: '—', description: 'This document (ProofMark Client Hand-off)' },
+                    { name: 'Certificate_of_Authenticity.pdf', size: '—', description: 'Cryptographic Certificate of Authenticity' },
+                    { name: 'hash.txt', size: '—', description: 'Target file SHA-256 hash value' },
+                    { name: 'timestamp.tsr', size: '—', description: 'RFC3161 tamper-proof timestamp token' },
+                    ...(c2paIncluded ? [{ name: 'c2pa.json', size: '—', description: 'Scrubbed Content Credentials manifest' }] : []),
+                    ...(chainIncluded ? [{ name: 'chain_of_evidence.json', size: '—', description: 'Tamper-evident audit trail' }] : []),
+                    ...(legalGuideIncluded ? [{ name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf', size: '—', description: 'Legal Copyright & Compliance PDF' }] : []),
+                    { name: 'verify.sh', size: '—', description: 'Shell verification script (OpenSSL)' },
+                    { name: 'verify.py', size: '—', description: 'Python verification script (OpenSSL)' },
+                    { name: 'metadata.json', size: '—', description: 'Machine-readable evidence metadata' },
+                ];
+
+                const coverLetterInput = {
+                    ...pdfInput,
+                    fileTree: treeEntries,
+                };
+
+                // Render to buffer dynamically via React-PDF
+                const [certBuf, coverBuf] = await Promise.all([
+                    renderToBuffer(React.createElement(CertificateDocument, { input: pdfInput })),
+                    renderToBuffer(React.createElement(CoverLetterDocument, { input: coverLetterInput })),
+                ]);
+
+                certificateBuffer = certBuf;
+                coverLetterBuffer = coverBuf;
+
+                log.info({
+                    event: 'react_pdf.generated',
+                    certSize: certificateBuffer.byteLength,
+                    coverSize: coverLetterBuffer.byteLength
+                });
+            } catch (pdfErr) {
+                log.error({
+                    event: 'react_pdf.generation_failed',
+                    message: String((pdfErr as Error)?.message ?? pdfErr),
+                });
+            }
+
             archive.append(`SHA256= ${sha256}\n`, { name: 'hash.txt', date: zipDate });
 
             if (cert.timestamp_token) {
@@ -527,10 +665,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 });
             }
 
-            archive.append(
-                buildClientLetter(cert, verifyUrl, { c2paIncluded, chainIncluded, legalGuideIncluded }),
-                { name: 'CLIENT_LETTER.txt', date: zipDate },
-            );
+            // Append Generated PDFs
+            if (coverLetterBuffer) {
+                archive.append(coverLetterBuffer, { name: 'Cover_Letter.pdf', date: zipDate });
+            } else {
+                archive.append('PDF Cover Letter generation failed.\n', { name: 'Cover_Letter.MISSING.txt', date: zipDate });
+            }
+
+            if (certificateBuffer) {
+                archive.append(certificateBuffer, { name: 'Certificate_of_Authenticity.pdf', date: zipDate });
+            } else {
+                archive.append('PDF Certificate generation failed.\n', { name: 'Certificate_of_Authenticity.MISSING.txt', date: zipDate });
+            }
 
             if (c2paBlob) {
                 archive.append(c2paBlob.json, { name: 'c2pa.json', date: zipDate });
@@ -612,13 +758,85 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const sha256 = spotOrder.sha256 ?? '';
             const verifyUrl = `https://proofmark.jp/spot-issue/result?sid=${spotOrder.stripe_session_id}`;
 
+            const host = req.headers.host || 'proofmark.jp';
+            const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
+            const origin = `${protocol}://${host}`;
+            registerServerFonts(origin);
+
             // Spot は監査ログ・C2PA を持たないが、Legal Guide PDF だけは同梱できる
             const legalPdf = await getLegalCopyrightPdf(log);
             const legalGuideIncluded = legalPdf !== null;
 
-            archive.append(buildSpotClientLetter(legalGuideIncluded), {
-                name: 'CLIENT_LETTER.txt', date: zipDate,
-            });
+            // --- React-PDF Dynamic PDF Generation for Spot Order ---
+            let coverLetterBuffer: Buffer | null = null;
+            let certificateBuffer: Buffer | null = null;
+
+            try {
+                const jstTime = formatJst(spotOrder.paid_at);
+                const baseFile = safeFilename(spotOrder.filename, 'artwork.bin');
+
+                const pdfInput = {
+                    certificateId: spotOrder.staging_id,
+                    creatorDisplayName: spotOrder.email ?? 'ProofMark Spot Creator',
+                    fileName: baseFile,
+                    fileSize: '—',
+                    sha256: sha256,
+                    timestampJst: jstTime,
+                    verificationUrl: verifyUrl,
+                    sealVariant: 'gold' as 'gold',
+                    tsaProvider: 'FreeTSA',
+                };
+
+                const treeEntries = [
+                    { name: 'Cover_Letter.pdf', size: '—', description: 'This document (ProofMark Client Hand-off)' },
+                    { name: 'Certificate_of_Authenticity.pdf', size: '—', description: 'Cryptographic Certificate of Authenticity' },
+                    { name: 'hash.txt', size: '—', description: 'Target file SHA-256 hash value' },
+                    { name: 'timestamp.tsr', size: '—', description: 'RFC3161 tamper-proof timestamp token' },
+                    ...(legalGuideIncluded ? [{ name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf', size: '—', description: 'Legal Copyright & Compliance PDF' }] : []),
+                    { name: 'verify.sh', size: '—', description: 'Shell verification script (OpenSSL)' },
+                    { name: 'verify.py', size: '—', description: 'Python verification script (OpenSSL)' },
+                    { name: 'metadata.json', size: '—', description: 'Machine-readable evidence metadata' },
+                ];
+
+                const coverLetterInput = {
+                    ...pdfInput,
+                    fileTree: treeEntries,
+                };
+
+                // Render to buffer dynamically via React-PDF
+                const [certBuf, coverBuf] = await Promise.all([
+                    renderToBuffer(React.createElement(CertificateDocument, { input: pdfInput })),
+                    renderToBuffer(React.createElement(CoverLetterDocument, { input: coverLetterInput })),
+                ]);
+
+                certificateBuffer = certBuf;
+                coverLetterBuffer = coverBuf;
+
+                log.info({
+                    event: 'react_pdf.spot.generated',
+                    certSize: certificateBuffer.byteLength,
+                    coverSize: coverLetterBuffer.byteLength
+                });
+            } catch (pdfErr) {
+                log.error({
+                    event: 'react_pdf.spot.generation_failed',
+                    message: String((pdfErr as Error)?.message ?? pdfErr),
+                });
+            }
+
+            // Append Generated PDFs for Spot
+            if (coverLetterBuffer) {
+                archive.append(coverLetterBuffer, { name: 'Cover_Letter.pdf', date: zipDate });
+            } else {
+                archive.append('PDF Cover Letter generation failed.\n', { name: 'Cover_Letter.MISSING.txt', date: zipDate });
+            }
+
+            if (certificateBuffer) {
+                archive.append(certificateBuffer, { name: 'Certificate_of_Authenticity.pdf', date: zipDate });
+            } else {
+                archive.append('PDF Certificate generation failed.\n', { name: 'Certificate_of_Authenticity.MISSING.txt', date: zipDate });
+            }
+
             archive.append(buildVerifyShellScript(), { name: 'verify.sh', date: zipDate, mode: 0o755 });
             archive.append(buildVerifyPython(), { name: 'verify.py', date: zipDate, mode: 0o755 });
             archive.append(`SHA256= ${sha256}\n`, { name: 'hash.txt', date: zipDate });
