@@ -1,30 +1,38 @@
 /**
- * CertificateDocument.tsx (v2)
+ * CertificateDocument.tsx (v3)
  * -----------------------------------------------------------------------------
- * Certificate_of_Authenticity.pdf — 国内最高峰の証券レベル仕様。
+ * Certificate_of_Authenticity.pdf — スイス銀行債券レベルの重厚な公文書仕様。
  *
- * v1 からの変更点:
- *  - GeometricBackdrop の参照を完全削除 (本番フリーズ要因の撤去)。
- *  - BrandMark → ProofMarkLogo (シンボル + ワードマーク) に差替。
- *  - 宣言文 lineHeight: 1.6 を厳守 (法務文書の「読ませる」基準)。
- *  - エディトリアル・タイポグラフィ (eyebrow / tracking / 余白) を再設計。
- *  - "ISSUED · CERT" のヘッダメタを上下 2 段に整理。
- *  - シール直上に「VERIFIED BY PROOFMARK」キャプションを追加 (威圧感)。
- *  - 最下部に TSA 提供者明示 (法的裏付けの透明化)。
+ * v2 → v3 の変更点:
+ *  - 宣言文 (DECLARATION) を「客観的証拠能力」を中核とした厳格な法務文体に
+ *    完全リライト (lineHeight 1.6 は維持)。
+ *  - 証券ウォーターマーク (PROOFMARK SECURE DOCUMENT) を最背面に追加。
+ *    View fixed + position:absolute 全面コンテナで、改ページバグを回避。
+ *    transform: rotate(-45deg) + transformOrigin: 'center'、
+ *    color: PDF_COLORS.rule、opacity 0.05 の上品な調整。
+ *    英数字のみで日本語フォント不要 (文字化けリスクゼロ)。
+ *  - 全 <Text> は既存の StyleSheet 経由でフォント (PDF_FONT_FAMILY.sans/mono)
+ *    が適用されることを保証。独自フォント指定は一切なし。
+ *
+ * @react-pdf/renderer 制約遵守:
+ *  - box-shadow / grid / z-index 等の未対応 CSS は不使用。
+ *  - ウォーターマーク用 View には fixed を必ず付与し、空白ページ生成を防止。
+ *  - 既存スタイル経由でフォントを当て、日本語の文字化けを死守。
  *
  * レイアウト (上から):
- *   1. CornerOrnament (ページ全体, 装飾枠)
- *   2. ヘッダ        : ProofMarkLogo + ヘッダメタ (右寄せ)
- *   3. アイブロウ    : "EVIDENCE OF AUTHENTICITY"
- *   4. タイトル      : "Certificate of Authenticity" (大型 Bold, 2 段)
- *   5. 副題          : "納品物真正性証明書"
+ *   0. ウォーターマーク (View fixed, 最背面)
+ *   1. CornerOrnament  (ページ全体, 装飾枠)
+ *   2. ヘッダ          : ProofMarkLogo + ヘッダメタ (右寄せ)
+ *   3. アイブロウ      : "EVIDENCE OF AUTHENTICITY"
+ *   4. タイトル        : "Certificate of Authenticity" (大型 Bold, 2 段)
+ *   5. 副題            : "納品物真正性証明書"
  *   6. グラデ罫線
- *   7. SUBJECT FILE  : メタグリッド (label/value)
- *   8. SHA-256 カード (パープルバー + モノスペース 8 文字区切り)
- *   9. DECLARATION   : 宣言文 (lineHeight 1.6, body)
+ *   7. SUBJECT FILE    : メタグリッド (label/value)
+ *   8. SHA-256 カード  (パープルバー + モノスペース 8 文字区切り)
+ *   9. DECLARATION     : 宣言文 (lineHeight 1.6, body)
  *  10. 署名行 + Certificate ID
  *  11. 右下: SealedStamp (絶対配置) + 上に "VERIFIED BY PROOFMARK"
- *  12. フッタ        : 罫線 + 検証 URL + TSA 提供者
+ *  12. フッタ          : 罫線 + 検証 URL + TSA 提供者
  * -----------------------------------------------------------------------------
  */
 
@@ -49,6 +57,34 @@ const styles = StyleSheet.create({
     paddingBottom: PDF_LAYOUT.marginBottom,
     paddingHorizontal: PDF_LAYOUT.marginX,
     position: 'relative',
+  },
+
+  /* ===========================================================
+   * Watermark (証券コピーガード透かし)
+   * - View fixed + 絶対配置全面で改ページ副作用を回避
+   * - Text は StyleSheet 経由でフォント (sans) を確実適用
+   * - 英数字のみで日本語化け不可避な要素を含まない
+   * - opacity 0.05 で前面の視認性を絶対阻害しない
+   * =========================================================== */
+  watermarkLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  watermarkText: {
+    fontFamily: PDF_FONT_FAMILY.sans,
+    fontSize: 72,
+    fontWeight: 700,
+    letterSpacing: 6,
+    color: PDF_COLORS.rule,
+    opacity: 0.05,
+    transform: 'rotate(-45deg)',
+    transformOrigin: 'center',
   },
 
   /* Header */
@@ -285,6 +321,16 @@ export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
       producer="ProofMark"
     >
       <Page size="A4" style={styles.page}>
+        {/*
+         * Watermark Layer (最背面)
+         * - fixed: ページ毎に同一描画され、改ページ副作用を起こさない
+         * - 英数字のみのため日本語フォント関連の文字化けリスクなし
+         * - opacity 0.05 で前面コンテンツの視認性を一切阻害しない
+         */}
+        <View fixed style={styles.watermarkLayer}>
+          <Text style={styles.watermarkText}>PROOFMARK SECURE DOCUMENT</Text>
+        </View>
+
         {/* 装飾レイヤー (絶対配置) */}
         <CornerOrnament
           width={PDF_LAYOUT.pageWidth}
@@ -337,16 +383,16 @@ export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
           <Text style={styles.hashValue}>{formatSha256(input.sha256)}</Text>
         </View>
 
-        {/* Declaration (宣言文) */}
+        {/*
+         * Declaration (宣言文) ─ 極限化版
+         *  「客観的証拠能力」を中核に据え、過剰断定を排除した法務文体。
+         *  lineHeight: 1.6 (PDF_LEADING.body) は厳守。
+         */}
         <Text style={styles.statementTitle}>DECLARATION  /  宣言文</Text>
         <Text style={styles.statementBody}>
-          本書は、上記クリエイティブ作品が記載の時刻において確実に当方の手元に存在し、
-          その後 1 ビットも改ざんされていないことを、第三者が独立して検証可能な形で
-          証明するものである。本納品物の真正性は、国際標準規格である RFC 3161 に準拠
-          したタイムスタンプおよび SHA-256 ハッシュアルゴリズムによって、暗号学的に
-          担保されている。本証明書の真正性は、本紙に記載の検証 URL、または同梱された
-          検証スクリプトにより、ProofMark のサーバーに依存することなく、貴社内のみで
-          独立に確認することができる。
+          本書は、クリエイターによって生成された指定のデジタルアセット、およびその制作プロセスの完全性が、記載の時刻において確実に存在し、その後1ビットの改ざんも生じていないことを暗号学的に証明するものである。
+          {'\n'}
+          本証明は、国際標準規格 RFC 3161 に準拠したタイムスタンプと SHA-256 ハッシュアルゴリズムにより客観的な証拠能力が確保されており、ProofMarkのインフラに依存することなく、提供された検証スクリプトを用いて独立かつ永続的に検証可能である。
         </Text>
 
         {/* Signature row */}
@@ -375,7 +421,16 @@ export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
             <Text style={styles.footerText}>
               TSA · {tsaProvider}
             </Text>
-            <Link src={input.verificationUrl?.startsWith('http') ? input.verificationUrl : `https://${input.verificationUrl}`} style={styles.footerMono}>{input.verificationUrl}</Link>
+            <Link
+              src={
+                input.verificationUrl?.startsWith('http')
+                  ? input.verificationUrl
+                  : `https://${input.verificationUrl}`
+              }
+              style={styles.footerMono}
+            >
+              {input.verificationUrl}
+            </Link>
           </View>
         </View>
       </Page>

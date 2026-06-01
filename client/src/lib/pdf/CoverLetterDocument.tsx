@@ -1,17 +1,27 @@
 /**
- * CoverLetterDocument.tsx (v2)
+ * CoverLetterDocument.tsx (v3)
  * -----------------------------------------------------------------------------
- * Cover_Letter.pdf — 非技術者クライアントへ「強固な証拠」を一目で納得させる添え状。
+ * Cover_Letter.pdf — スイス銀行債券レベルの重厚な公文書仕様。
  *
- * v1 からの変更点:
- *  - BrandMark → ProofMarkLogo (シンボル + ワードマーク) に差替。
- *  - 純白基色 (#FFFFFF) へ最適化、各シェードを再キャリブレーション。
- *  - 「3 つの担保」を視覚的にカード化 (SHA-256 / RFC 3161 / Independent Verify).
- *  - 本文 lineHeight を 1.85 → 1.8 (PDF_LEADING.airy) に統一。
- *  - verifyCard を上品なダーク (#0E1024 + Teal アクセント) に再設計し、
- *    複数の検証手段 (URL / verify.sh / verify.py) を等価に並列表示。
- *  - 署名行に「SEAL」キャプション付き SealedStamp を組合せて余白美を演出。
- *  - TSA 提供者をフッタに明示。
+ * v2 → v3 の変更点:
+ *  - Body (挨拶) を「客観的証拠能力」を中核に据えた威圧感のあるコピーへ
+ *    完全書き換え。過剰断定 (「法的に担保する」等) を排除。
+ *  - THE THREE PILLARS の文言を「① CRYPTOGRAPHIC」「② NOTARIZED」
+ *    「③ PROCESS PROVEN」に刷新。
+ *    特に③で「制作過程の連鎖証明 (ハッシュチェーン)」を訴求し、
+ *    完成品単体ではなく「プロセス全体の真正性」を打ち出す。
+ *  - 証券ウォーターマーク (PROOFMARK SECURE DOCUMENT) を最背面に追加。
+ *    View fixed + position:absolute 全面コンテナで改ページバグを回避。
+ *    transform: rotate(-45deg) + transformOrigin: 'center'、
+ *    color: PDF_COLORS.rule、opacity 0.05 の上品な調整。
+ *    英数字のみで文字化けリスクゼロ。
+ *  - 全 <Text> は StyleSheet 経由でフォント (PDF_FONT_FAMILY.sans/mono) が
+ *    確実に適用されることを保証。独自フォント指定は一切なし。
+ *
+ * @react-pdf/renderer 制約遵守:
+ *  - box-shadow / grid / z-index 等の未対応 CSS は不使用。
+ *  - ウォーターマーク用 View には fixed を必ず付与し、空白ページを防止。
+ *  - 既存スタイル経由でフォントを当て、日本語の文字化けを死守。
  * -----------------------------------------------------------------------------
  */
 
@@ -34,6 +44,35 @@ const styles = StyleSheet.create({
     paddingTop: PDF_LAYOUT.marginTop,
     paddingBottom: PDF_LAYOUT.marginBottom,
     paddingHorizontal: PDF_LAYOUT.marginX,
+    position: 'relative',
+  },
+
+  /* ===========================================================
+   * Watermark (証券コピーガード透かし)
+   * - View fixed + 絶対配置全面で改ページ副作用を回避
+   * - Text は StyleSheet 経由で sans フォントを確実適用
+   * - 英数字のみで日本語化け要素なし
+   * - opacity 0.05 で前面の視認性を絶対阻害しない
+   * =========================================================== */
+  watermarkLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  watermarkText: {
+    fontFamily: PDF_FONT_FAMILY.sans,
+    fontSize: 72,
+    fontWeight: 700,
+    letterSpacing: 6,
+    color: PDF_COLORS.rule,
+    opacity: 0.05,
+    transform: 'rotate(-45deg)',
+    transformOrigin: 'center',
   },
 
   /* Header */
@@ -312,6 +351,16 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
       producer="ProofMark"
     >
       <Page size="A4" style={styles.page}>
+        {/*
+         * Watermark Layer (最背面)
+         * - fixed: ページ毎に同一描画され、改ページ副作用を起こさない
+         * - 英数字のみのため日本語フォント関連の文字化けリスクなし
+         * - opacity 0.05 で前面コンテンツの視認性を一切阻害しない
+         */}
+        <View fixed style={styles.watermarkLayer}>
+          <Text style={styles.watermarkText}>PROOFMARK SECURE DOCUMENT</Text>
+        </View>
+
         {/* Header */}
         <View style={styles.headerRow}>
           <ProofMarkLogo height={20} />
@@ -326,42 +375,44 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
         <Text style={styles.eyebrow}>FOR THE CLIENT  /  ご担当者様へ</Text>
         <Text style={styles.title}>納品物の真正性証明について</Text>
 
-        {/* Greeting */}
+        {/*
+         * Body ─ 威厳あるコピーへ完全書き換え。
+         *  挨拶文を廃止し、「客観的証拠能力」を中核に据えた告示文体。
+         *  過剰断定 (法的に担保する等) は使用しない。
+         */}
         <Text style={styles.body}>
-          このたびは制作物をお受け取りいただき、誠にありがとうございます。{'\n'}
-          本パッケージには、納品物が{' '}
-          <Text style={styles.bodyEmphasis}>{input.timestampJst}</Text>{' '}
-          時点で確かに存在し、その後 1 ビットも改ざんされていないことを示す、
-          独立に検証可能な暗号学的証拠が同梱されている。
-          本添え状は、その仕組みと検証方法を非技術者の方にも一目で理解いただくため
-          に作成された。
+          本 Evidence Pack は、クリエイターから納品されたデジタルアセットの存在事実、およびその制作プロセスの完全性が、タイムスタンプ打刻以降<Text style={styles.bodyEmphasis}>1ビットの改ざんも受けていないこと</Text>を示し、客観的かつ強固な証拠能力を確保するための暗号証明パッケージである。
+          {'\n'}
+          クリエイターの権利と、貴社の安全なコンテンツ利用を保護するため、最新のゼロ知識証明アプローチを用いて構築されている。検証は以下のURL、または同封のスクリプトによりブラウザ上で完結し、外部へ原本が送信されることは一切ない。
         </Text>
 
-        {/* 3 つの担保 (Trust Pillars) */}
+        {/*
+         * THE THREE PILLARS ─ 文言刷新版
+         *  ① CRYPTOGRAPHIC: SHA-256 指紋
+         *  ② NOTARIZED:     RFC 3161 タイムスタンプ
+         *  ③ PROCESS PROVEN: 制作過程の連鎖証明 (ハッシュチェーン)
+         */}
         <Text style={styles.sectionH}>THE THREE PILLARS  /  本証拠を支える 3 つの担保</Text>
         <View style={styles.pillarRow}>
           <View style={styles.pillar}>
             <Text style={styles.pillarBadge}>① CRYPTOGRAPHIC</Text>
             <Text style={styles.pillarTitle}>SHA-256 指紋</Text>
             <Text style={styles.pillarText}>
-              納品ファイルから計算した 256 ビットの「指紋」。
-              1 ビット改変するだけで指紋が完全に変化する。
+              納品ファイルから計算された256ビットの暗号ハッシュ。1ビットの改変で完全に異なる値となる。
             </Text>
           </View>
           <View style={styles.pillar}>
             <Text style={styles.pillarBadge}>② NOTARIZED</Text>
             <Text style={styles.pillarTitle}>RFC 3161 タイムスタンプ</Text>
             <Text style={styles.pillarText}>
-              国際標準に準拠した第三者機関 (TSA) が、
-              上記の指紋と日時を暗号署名で連結し担保している。
+              国際標準規格に準拠した第三者機関(TSA)が、指紋と日時を暗号署名で強固に連結している。
             </Text>
           </View>
           <View style={styles.pillar}>
-            <Text style={styles.pillarBadge}>③ INDEPENDENT</Text>
-            <Text style={styles.pillarTitle}>独立検証可能</Text>
+            <Text style={styles.pillarBadge}>③ PROCESS PROVEN</Text>
+            <Text style={styles.pillarTitle}>制作過程の連鎖証明</Text>
             <Text style={styles.pillarText}>
-              ProofMark のサーバーに依存せず、貴社内のみで完結する
-              検証スクリプトとオンライン検証ページを提供している。
+              完成品のみならず、構想から完成に至る制作ステップの連鎖が、ハッシュチェーンにより数学的に連結・証明されている。
             </Text>
           </View>
         </View>
@@ -397,7 +448,16 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
           </Text>
           <View style={styles.verifyUrlRow}>
             <Text style={styles.verifyUrlLabel}>VERIFY URL</Text>
-            <Link src={input.verificationUrl?.startsWith('http') ? input.verificationUrl : `https://${input.verificationUrl}`} style={styles.verifyUrl}>{input.verificationUrl}</Link>
+            <Link
+              src={
+                input.verificationUrl?.startsWith('http')
+                  ? input.verificationUrl
+                  : `https://${input.verificationUrl}`
+              }
+              style={styles.verifyUrl}
+            >
+              {input.verificationUrl}
+            </Link>
           </View>
         </View>
 
