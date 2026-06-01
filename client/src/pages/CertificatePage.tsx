@@ -1,14 +1,16 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRoute, useLocation, Link } from 'wouter';
 import { QRCodeSVG } from 'qrcode.react';
-import { CheckCircle, Clock, ShieldCheck, Image as ImageIcon, Copy, Check, FileText, Lock, ShieldAlert, Flag, Package, Gavel } from 'lucide-react';
+import {
+    CheckCircle, Clock, ShieldCheck, Image as ImageIcon, Copy, Check, FileText,
+    Lock, ShieldAlert, Flag, Package, Gavel, Sparkles, ChevronRight, Layers3,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useAuth } from '../hooks/useAuth';
 import EvidencePackDownloadButton from '@/components/EvidencePackDownloadButton';
 import Navbar from '../components/Navbar';
 import SEO from '../components/SEO';
-import { ProofBundleTimelineCard } from '../components/proof/ProofBundleTimelineCard';
 import type { ProcessBundlePublic } from '../lib/proofmark-types';
 import { getProcessBundleByVerifyToken } from '../lib/proofmark-api';
 import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
@@ -20,7 +22,7 @@ import VerifyDropzone from '../components/VerifyDropzone';
 import TakedownNoticeModal from '../components/proof/TakedownNoticeModal';
 
 /* ═══════════════════════════════════════════════
- *   God-Mode shared easing/tokens
+ *   God-Mode shared easing / tokens
  * ═══════════════════════════════════════════════ */
 const PM_EASE = [0.16, 1, 0.3, 1] as const;
 
@@ -109,8 +111,8 @@ export default function CertificatePage() {
 
                 if (certData.process_bundle_id && certData.public_verify_token) {
                     try {
-                        const bundle = await getProcessBundleByVerifyToken(certData.public_verify_token);
-                        if (bundle) setBundle(bundle);
+                        const bundleData = await getProcessBundleByVerifyToken(certData.public_verify_token);
+                        if (bundleData) setBundle(bundleData);
                     } catch (err) {
                         console.error('Failed to load process bundle:', err);
                     }
@@ -149,7 +151,6 @@ export default function CertificatePage() {
     if (loading) {
         return (
             <div className="min-h-screen bg-[#07061A] text-[#00D4AA] flex justify-center items-center font-bold tracking-widest print:bg-white print:text-black relative overflow-hidden">
-                {/* God-mode loading aura */}
                 <div className="absolute inset-0 pointer-events-none">
                     <motion.div
                         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[480px] h-[480px] rounded-full bg-[#6C3EF4]/15 blur-[120px]"
@@ -230,7 +231,6 @@ export default function CertificatePage() {
 
     const ogpUrl = `https://proofmark.jp/api/og?id=${cert.id}&title=${encodeURIComponent(ogTitle)}&thumb=${encodeURIComponent(ogThumb)}&hash=${ogHash}&timestamp=${encodeURIComponent(formattedTimestamp)}&creator=${encodeURIComponent(ogCreator)}`;
 
-    /* Has-visual = どの Vault でもなく、本物の画像が表示されるかどうか */
     const hasVisualAsset = !cert.is_asset_purged &&
         cert.proof_mode === 'shareable' &&
         cert.public_image_url &&
@@ -282,28 +282,50 @@ export default function CertificatePage() {
                 /* SEALED stamp rotation breathing */
                 @keyframes pm-seal-orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
                 @keyframes pm-seal-orbit-rev { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+
+                /* ───────── Provenance Filmstrip — hide scrollbar but keep scroll-snap ───────── */
+                .pm-filmstrip {
+                  scroll-snap-type: x mandatory;
+                  scroll-padding-left: 1.25rem;
+                  -webkit-overflow-scrolling: touch;
+                  scrollbar-width: thin;
+                  scrollbar-color: rgba(108,62,244,0.5) transparent;
+                }
+                .pm-filmstrip::-webkit-scrollbar { height: 6px; }
+                .pm-filmstrip::-webkit-scrollbar-track { background: transparent; }
+                .pm-filmstrip::-webkit-scrollbar-thumb {
+                  background: linear-gradient(90deg, rgba(108,62,244,0.55), rgba(0,212,170,0.55));
+                  border-radius: 999px;
+                }
+                .pm-filmstrip > * { scroll-snap-align: start; }
+
+                @media (prefers-reduced-motion: reduce) {
+                  .pm-filmstrip { scroll-behavior: auto; }
+                }
             `}</style>
 
             <div className="min-h-screen bg-[#07061A] text-[#F0EFF8] flex flex-col items-center py-10 px-4 sm:px-8 font-sans print:min-h-0 print:bg-white print:py-0 print:px-0 relative overflow-x-hidden">
 
-                {/* ═══════════ God-Mode: Abyss Aura (background) ═══════════ */}
+                {/* ═══════════ Abyss Aura (background) ═══════════ */}
                 <div aria-hidden className="print:hidden pointer-events-none fixed inset-0 -z-0 overflow-hidden">
                     <motion.div
                         className="absolute -top-40 -left-40 w-[700px] h-[700px] rounded-full bg-[#6C3EF4] opacity-[0.10] blur-[160px]"
+                        style={{ willChange: 'opacity, transform' }}
                         animate={{ opacity: [0.07, 0.13, 0.07], scale: [1, 1.04, 1] }}
                         transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
                     />
                     <motion.div
                         className="absolute -bottom-40 -right-40 w-[700px] h-[700px] rounded-full bg-[#00D4AA] opacity-[0.10] blur-[160px]"
+                        style={{ willChange: 'opacity, transform' }}
                         animate={{ opacity: [0.07, 0.13, 0.07], scale: [1, 1.05, 1] }}
                         transition={{ duration: 9, delay: 1.2, repeat: Infinity, ease: 'easeInOut' }}
                     />
                     <motion.div
                         className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] rounded-full bg-[#F0BB38] opacity-[0.04] blur-[140px]"
+                        style={{ willChange: 'opacity' }}
                         animate={{ opacity: [0.02, 0.06, 0.02] }}
                         transition={{ duration: 10, delay: 0.6, repeat: Infinity, ease: 'easeInOut' }}
                     />
-                    {/* Subtle grid */}
                     <div
                         className="absolute inset-0 opacity-[0.025]"
                         style={{
@@ -322,50 +344,66 @@ export default function CertificatePage() {
                     initial={{ opacity: 0, y: 24 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.7, ease: PM_EASE }}
-                    className="print-compact w-full max-w-5xl bg-[#0D0B24] border border-[#1C1A38] rounded-3xl p-8 sm:p-12 relative overflow-hidden print:bg-white print:border-2 print:border-gray-200 print:shadow-none print:p-4 print:w-full print:max-w-none print:break-inside-avoid"
+                    className="print-compact w-full max-w-5xl relative overflow-hidden rounded-3xl print:bg-white print:border-2 print:border-gray-200 print:shadow-none print:p-4 print:w-full print:max-w-none print:break-inside-avoid"
                     style={{
+                        background:
+                            'linear-gradient(165deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.012) 55%, rgba(7,6,26,0.85) 100%), #0D0B24',
+                        border: '1px solid rgba(255,255,255,0.10)',
+                        backdropFilter: 'blur(20px)',
+                        WebkitBackdropFilter: 'blur(20px)',
                         boxShadow:
-                            '0 0 0 1px rgba(255,255,255,0.03) inset, 0 40px 100px -40px rgba(108,62,244,0.35), 0 20px 60px -30px rgba(0,212,170,0.18)',
+                            '0 0 0 1px rgba(255,255,255,0.03) inset, 0 40px 100px -40px rgba(108,62,244,0.45), 0 24px 70px -30px rgba(0,212,170,0.22)',
+                        padding: 'clamp(2rem, 4vw, 3rem)',
                     }}
                 >
-                    {/* top gradient hairline */}
+                    {/* top RGB hairline */}
                     <div
                         aria-hidden
                         className="print:hidden absolute inset-x-8 top-0 h-px"
                         style={{
                             background:
-                                'linear-gradient(90deg, transparent, rgba(108,62,244,0.8), rgba(0,212,170,0.8), rgba(240,187,56,0.6), transparent)',
+                                'linear-gradient(90deg, transparent, rgba(108,62,244,0.85), rgba(0,212,170,0.85), rgba(240,187,56,0.6), transparent)',
                         }}
                     />
+
+                    {/* corner brackets */}
+                    <CornerBracket pos="tl" />
+                    <CornerBracket pos="tr" />
+                    <CornerBracket pos="bl" />
+                    <CornerBracket pos="br" />
 
                     {/* internal orbs */}
                     <div className="print:hidden absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
                         <motion.div
                             className="absolute -top-32 -left-32 w-96 h-96 bg-[#6C3EF4] opacity-10 blur-[100px] rounded-full"
+                            style={{ willChange: 'opacity' }}
                             animate={{ opacity: [0.08, 0.14, 0.08] }}
                             transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
                         />
                         <motion.div
                             className="absolute -bottom-32 -right-32 w-96 h-96 bg-[#00D4AA] opacity-10 blur-[100px] rounded-full"
+                            style={{ willChange: 'opacity' }}
                             animate={{ opacity: [0.08, 0.14, 0.08] }}
                             transition={{ duration: 6, delay: 1, repeat: Infinity, ease: 'easeInOut' }}
                         />
                     </div>
 
                     <div className="w-full relative z-10">
-                        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8 border-b border-[#1C1A38] pb-6 print:border-gray-300">
+                        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8 border-b border-white/[0.08] pb-6 print:border-gray-300">
                             <div>
                                 <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-[#A8A0D8] mb-3 print:text-gray-500">
                                     ProofMark · Verifiable Existence
                                 </p>
-                                <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tighter mb-2 leading-tight print:text-black">
+                                <h1
+                                    className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tighter mb-2 leading-tight print:text-black"
+                                    style={{ fontFamily: '"Poppins", "Inter", sans-serif' }}
+                                >
                                     CERTIFICATE OF<br />AUTHENTICITY
                                 </h1>
                                 <p className="text-[#A8A0D8] font-bold text-sm tracking-widest uppercase print:text-gray-500">ProofMark Digital Existence Certificate</p>
                             </div>
 
                             <div className="flex flex-wrap items-center gap-3">
-                                {/* VERIFIED — breathing badge */}
                                 <BreathingBadge
                                     color="#00D4AA"
                                     rgb="0,212,170"
@@ -415,17 +453,18 @@ export default function CertificatePage() {
 
                         <div className="flex flex-col md:flex-row gap-10 print:flex-row print:gap-8 print:items-center">
 
-                            {/* 左側: アートワーク または SEALED Stamp */}
+                            {/* 左側: アートワーク or SEALED Stamp */}
                             <div className="w-full md:w-2/5 flex-shrink-0 print:w-[38%]">
                                 <div
-                                    className="aspect-square w-full rounded-2xl border border-[#1C1A38] bg-[#07061A] flex flex-col items-center justify-center overflow-hidden relative shadow-inner print:border-gray-300 print:bg-gray-50 print:shadow-none group"
+                                    className="aspect-square w-full rounded-2xl flex flex-col items-center justify-center overflow-hidden relative shadow-inner print:border-gray-300 print:bg-gray-50 print:shadow-none group"
                                     style={{
+                                        background: '#07061A',
+                                        border: '1px solid rgba(255,255,255,0.08)',
                                         boxShadow: hasVisualAsset
-                                            ? '0 30px 80px -30px rgba(0,212,170,0.45), 0 0 0 1px rgba(255,255,255,0.03) inset'
-                                            : '0 30px 80px -30px rgba(240,187,56,0.35), 0 0 0 1px rgba(255,255,255,0.03) inset',
+                                            ? '0 30px 80px -30px rgba(0,212,170,0.45), 0 0 0 1px rgba(255,255,255,0.04) inset'
+                                            : '0 30px 80px -30px rgba(240,187,56,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset',
                                     }}
                                 >
-                                    {/* Under-card glow for visual assets */}
                                     {hasVisualAsset && (
                                         <motion.div
                                             aria-hidden
@@ -433,6 +472,7 @@ export default function CertificatePage() {
                                             style={{
                                                 background:
                                                     'radial-gradient(ellipse at 50% 80%, rgba(0,212,170,0.35) 0%, transparent 60%), radial-gradient(ellipse at 50% 20%, rgba(108,62,244,0.25) 0%, transparent 55%)',
+                                                willChange: 'opacity',
                                             }}
                                             animate={{ opacity: [0.7, 1, 0.7] }}
                                             transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
@@ -460,12 +500,12 @@ export default function CertificatePage() {
                                 </div>
                             </div>
 
-                            {/* 右側 */}
+                            {/* 右側: data */}
                             <div className="w-full md:w-3/5 flex flex-col justify-center space-y-6 print:w-[62%] print:space-y-4">
 
                                 <div>
                                     <p className="text-[10px] sm:text-xs font-bold text-[#A8A0D8] uppercase tracking-widest mb-1 print:text-gray-500">Certificate ID</p>
-                                    <p className="font-mono text-xs sm:text-sm text-white/80 print:text-black">{cert.id}</p>
+                                    <p className="font-mono text-xs sm:text-sm text-white/85 print:text-black">{cert.id}</p>
                                 </div>
 
                                 <div>
@@ -477,26 +517,25 @@ export default function CertificatePage() {
                                     </p>
                                 </div>
 
-                                {/* SHA-256 panel — animated border sheen */}
+                                {/* SHA-256 panel */}
                                 <motion.div
                                     initial={{ opacity: 0, y: 8 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ duration: 0.6, delay: 0.2, ease: PM_EASE }}
-                                    className="relative p-4 sm:p-5 rounded-2xl border border-[#00D4AA]/25 bg-gradient-to-r from-[#00D4AA]/10 to-transparent group overflow-hidden print:bg-none print:bg-gray-50 print:border-gray-300 print:shadow-none"
-                                    style={{ boxShadow: '0 0 0 1px rgba(0,212,170,0.05) inset' }}
+                                    className="relative p-4 sm:p-5 rounded-2xl group overflow-hidden print:bg-none print:bg-gray-50 print:border-gray-300 print:shadow-none"
+                                    style={{
+                                        background:
+                                            'linear-gradient(135deg, rgba(0,212,170,0.10) 0%, rgba(0,212,170,0) 70%)',
+                                        border: '1px solid rgba(0,212,170,0.28)',
+                                        boxShadow: '0 0 0 1px rgba(0,212,170,0.04) inset',
+                                    }}
                                 >
-                                    {/* moving sheen */}
                                     <div
                                         aria-hidden
                                         className="print:hidden absolute -inset-px rounded-2xl pointer-events-none"
                                         style={{
                                             background:
                                                 'conic-gradient(from var(--a, 0deg), transparent 0deg, rgba(0,212,170,0.4) 60deg, transparent 120deg, transparent 360deg)',
-                                            WebkitMaskImage:
-                                                'linear-gradient(#000 0 0), linear-gradient(#000 0 0)',
-                                            WebkitMaskComposite: 'xor',
-                                            maskComposite: 'exclude',
-                                            padding: 1,
                                             opacity: 0.18,
                                         }}
                                     />
@@ -516,14 +555,16 @@ export default function CertificatePage() {
                                     </div>
                                 </motion.div>
 
-                                <div className="flex flex-row gap-6 items-center justify-between border-t border-[#1C1A38] pt-6 print:border-gray-300 print:pt-4">
+                                <div className="flex flex-row gap-6 items-center justify-between border-t border-white/[0.08] pt-6 print:border-gray-300 print:pt-4">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-1">
                                             <Clock className="w-4 h-4 text-[#F0BB38] print:text-yellow-600" />
                                             <h2 className="text-[10px] sm:text-xs font-bold text-[#F0BB38] uppercase tracking-widest print:text-gray-600">Digital Timestamp (JST)</h2>
                                         </div>
-                                        <p className="text-xl sm:text-2xl font-bold text-white tracking-tight print:text-black"
-                                            style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                        <p
+                                            className="text-xl sm:text-2xl font-bold text-white tracking-tight print:text-black"
+                                            style={{ fontVariantNumeric: 'tabular-nums' }}
+                                        >
                                             {new Date(cert.created_at).toLocaleString('ja-JP')}
                                         </p>
                                         {cert?.certified_at && (
@@ -620,8 +661,15 @@ export default function CertificatePage() {
 
                 {/* Owner-only block */}
                 {isOwner && (
-                    <div className="print:hidden w-full max-w-5xl mt-16 bg-[#0D0B24] p-6 sm:p-8 rounded-2xl border border-[#1C1A38] mb-20 relative z-10"
-                        style={{ boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.03), 0 24px 60px -30px rgba(0,212,170,0.18)' }}
+                    <div
+                        className="print:hidden w-full max-w-5xl mt-16 p-6 sm:p-8 rounded-2xl mb-20 relative z-10"
+                        style={{
+                            background:
+                                'linear-gradient(165deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 55%, rgba(7,6,26,0.85) 100%)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            backdropFilter: 'blur(16px)',
+                            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.03), 0 24px 60px -30px rgba(0,212,170,0.20)',
+                        }}
                     >
                         <h3 className="text-[#00D4AA] font-bold mb-4 flex items-center gap-2">
                             <span className="text-xl">💡</span> クライアント・提出先向け 説明テンプレート
@@ -689,11 +737,9 @@ export default function CertificatePage() {
                     </div>
                 )}
 
+                {/* ═══════════ Provenance Gallery ═══════════ */}
                 {bundle && (
-                    <div className="w-full max-w-5xl mt-12 print:hidden relative isolate z-10">
-                        <div className="absolute inset-0 bg-gradient-to-b from-[#6C3EF4]/5 to-transparent blur-3xl -z-10 rounded-[3rem]"></div>
-                        <ProofBundleTimelineCard bundle={bundle} />
-                    </div>
+                    <ProvenanceGallery bundle={bundle} />
                 )}
 
                 {/* ═══════════ Verifier (optical scanner) ═══════════ */}
@@ -737,7 +783,20 @@ export default function CertificatePage() {
 }
 
 /* ═══════════════════════════════════════════════
- *   God-Mode: Breathing Badge
+ *   Corner bracket for the Bento glass card
+ * ═══════════════════════════════════════════════ */
+function CornerBracket({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
+    const base = 'print:hidden absolute w-5 h-5 pointer-events-none';
+    let cls = base;
+    if (pos === 'tl') cls += ' top-3 left-3 border-t border-l';
+    if (pos === 'tr') cls += ' top-3 right-3 border-t border-r';
+    if (pos === 'bl') cls += ' bottom-3 left-3 border-b border-l';
+    if (pos === 'br') cls += ' bottom-3 right-3 border-b border-r';
+    return <div className={cls} style={{ borderColor: 'rgba(255,255,255,0.16)' }} />;
+}
+
+/* ═══════════════════════════════════════════════
+ *   God-Mode: Breathing Badge (波紋アニメーション)
  * ═══════════════════════════════════════════════ */
 function BreathingBadge({
     color,
@@ -759,6 +818,7 @@ function BreathingBadge({
                 background: `rgba(${rgb}, 0.10)`,
                 border: `1px solid rgba(${rgb}, 0.45)`,
                 color,
+                backdropFilter: 'blur(8px)',
             }}
             animate={{
                 boxShadow: [
@@ -782,7 +842,599 @@ function BreathingBadge({
 }
 
 /* ═══════════════════════════════════════════════
- *   God-Mode: SEALED Stamp (replaces old TheVaultFull)
+ *   Visual DNA: deriveGenerativeArt (PortfolioEmbedWidget完全互換)
+ *   hash文字コードから決定論的に色相・座標を算出。同じハッシュ→同じアート。
+ * ═══════════════════════════════════════════════ */
+interface GenerativeArt {
+    background: string;
+    overlay: string;
+    hueA: number;
+    hueB: number;
+    hueC: number;
+}
+
+function deriveGenerativeArt(hash: string): GenerativeArt {
+    const seed = (hash || 'proofmark').padEnd(64, '0');
+    const codeAt = (i: number) => seed.charCodeAt(i % seed.length);
+
+    const hueA = codeAt(2) % 360;
+    const hueB = (codeAt(11) + codeAt(17)) % 360;
+    const hueC = (codeAt(23) * 7) % 360;
+
+    const xA = 10 + (codeAt(5) % 70);
+    const yA = 10 + (codeAt(7) % 70);
+    const xB = 10 + (codeAt(13) % 70);
+    const yB = 10 + (codeAt(19) % 70);
+    const xC = 10 + (codeAt(29) % 80);
+    const yC = 10 + (codeAt(31) % 80);
+
+    const conicAngle = codeAt(3) % 360;
+    const stripeAngle = codeAt(37) % 180;
+    const stripeGap = 6 + (codeAt(41) % 10);
+
+    const satA = 70 + (codeAt(9) % 20);
+    const satB = 60 + (codeAt(15) % 25);
+    const lightA = 45 + (codeAt(21) % 15);
+    const lightB = 35 + (codeAt(27) % 15);
+
+    const background = `
+        radial-gradient(ellipse 80% 60% at ${xA}% ${yA}%, hsl(${hueA}, ${satA}%, ${lightA}%) 0%, transparent 55%),
+        radial-gradient(ellipse 65% 55% at ${xB}% ${yB}%, hsl(${hueB}, ${satB}%, ${lightB}%) 0%, transparent 55%),
+        radial-gradient(circle at ${xC}% ${yC}%, hsl(${hueC}, 80%, 50%) 0%, transparent 45%),
+        conic-gradient(from ${conicAngle}deg at 50% 50%,
+            hsl(${hueA}, 60%, 12%) 0deg,
+            hsl(${hueB}, 70%, 20%) 120deg,
+            hsl(${hueC}, 70%, 16%) 240deg,
+            hsl(${hueA}, 60%, 12%) 360deg)
+    `;
+
+    const overlay = `repeating-linear-gradient(${stripeAngle}deg,
+        rgba(255,255,255,0.05) 0px,
+        rgba(255,255,255,0.05) 1px,
+        transparent 1px,
+        transparent ${stripeGap}px)`;
+
+    return { background, overlay, hueA, hueB, hueC };
+}
+
+/* ═══════════════════════════════════════════════
+ *   Visual DNA: HashFingerprint
+ *   flat composite (opacity 0.15) — mix-blend-mode 排除でグリッド軽量
+ * ═══════════════════════════════════════════════ */
+function HashFingerprint({
+    hash,
+    className = '',
+    showLabel = true,
+}: {
+    hash: string;
+    className?: string;
+    showLabel?: boolean;
+}) {
+    const art = useMemo(() => deriveGenerativeArt(hash), [hash]);
+
+    return (
+        <div
+            className={`relative h-full w-full overflow-hidden ${className}`}
+            style={{ background: art.background }}
+        >
+            <div
+                aria-hidden
+                className="absolute inset-0"
+                style={{ background: art.overlay, opacity: 0.15 }}
+            />
+            <div
+                aria-hidden
+                className="absolute inset-0"
+                style={{
+                    backgroundImage:
+                        'radial-gradient(circle at 20% 30%, rgba(255,255,255,0.55) 1px, transparent 1px), radial-gradient(circle at 70% 80%, rgba(255,255,255,0.45) 1px, transparent 1px)',
+                    backgroundSize: '6px 6px, 9px 9px',
+                    opacity: 0.15,
+                }}
+            />
+            <div
+                aria-hidden
+                className="absolute inset-0"
+                style={{
+                    background:
+                        'radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(0,0,0,0.45) 100%)',
+                }}
+            />
+
+            {showLabel && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4">
+                    <div
+                        className="flex h-11 w-11 items-center justify-center rounded-full"
+                        style={{
+                            background: 'rgba(0,0,0,0.5)',
+                            border: '1px solid rgba(0,212,170,0.45)',
+                            backdropFilter: 'blur(6px)',
+                            boxShadow: '0 0 22px rgba(0,212,170,0.4)',
+                        }}
+                    >
+                        <Lock className="h-5 w-5 text-[#00D4AA]" strokeWidth={1.6} />
+                    </div>
+                    <div className="text-center">
+                        <p className="text-[9.5px] font-mono uppercase tracking-[0.28em] text-white/85">
+                            Confidential Proof
+                        </p>
+                        <p
+                            className="mt-1 font-mono text-[10px] text-white/55 tracking-[0.18em]"
+                            style={{ textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}
+                        >
+                            {hash ? `${hash.slice(0, 8)}…${hash.slice(-6)}` : '—'}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            <div
+                aria-hidden
+                className="absolute bottom-2 right-2 flex gap-1 pointer-events-none"
+            >
+                {[art.hueA, art.hueB, art.hueC].map((h, i) => (
+                    <span
+                        key={i}
+                        className="block h-1.5 w-1.5 rounded-full"
+                        style={{
+                            background: `hsl(${h}, 80%, 60%)`,
+                            boxShadow: `0 0 6px hsl(${h}, 80%, 60%)`,
+                        }}
+                    />
+                ))}
+            </div>
+
+            <div
+                aria-hidden
+                className="absolute top-2 left-2 font-mono text-[8px] tracking-[0.3em]"
+                style={{
+                    color: 'rgba(255,255,255,0.55)',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.6)',
+                }}
+            >
+                ✦ PM
+            </div>
+        </div>
+    );
+}
+
+/* ═══════════════════════════════════════════════
+ *   Provenance Gallery — Horizontal Bento Scroll
+ *   (旧 ProofBundleTimelineCard の置き換え)
+ *
+ *   UX哲学: 透明性レポート / Apple Filmstrip
+ *   - scroll-snap-type: x mandatory で滑らかな水平スクロール
+ *   - 各ステップは Bento-Glassmorphism カード
+ *   - step_type で起点(オレンジ) / 途中(パープル) / 完成(ティール) を色分け
+ *   - preview_url が無ければ HashFingerprint で暗号金庫UIを描画
+ * ═══════════════════════════════════════════════ */
+
+type StepTone = {
+    label: string;
+    color: string;
+    rgb: string;
+    bg: string;
+    border: string;
+};
+
+function getStepTone(step: ProcessBundlePublic['steps'][number], index: number, total: number): StepTone {
+    const stepType = (step.step_type || '').toLowerCase();
+
+    // index ベースの fallback
+    const isFirst = index === 0;
+    const isLast = index === total - 1;
+
+    // 完成 (final or 最後)
+    if (stepType === 'final' || isLast) {
+        return {
+            label: 'FINAL',
+            color: '#00D4AA',
+            rgb: '0,212,170',
+            bg: 'rgba(0,212,170,0.12)',
+            border: 'rgba(0,212,170,0.45)',
+        };
+    }
+    // 起点 (rough or index 0)
+    if (stepType === 'rough' || isFirst) {
+        return {
+            label: 'ORIGIN',
+            color: '#F59E0B',
+            rgb: '245,158,11',
+            bg: 'rgba(245,158,11,0.12)',
+            border: 'rgba(245,158,11,0.45)',
+        };
+    }
+    // 途中 (lineart, color, other)
+    return {
+        label: stepType ? stepType.toUpperCase() : 'STEP',
+        color: '#A8A0D8',
+        rgb: '108,62,244',
+        bg: 'rgba(108,62,244,0.12)',
+        border: 'rgba(108,62,244,0.40)',
+    };
+}
+
+function formatStepDate(iso: string | null | undefined): string {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString('ja-JP', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+function ProvenanceGallery({ bundle }: { bundle: ProcessBundlePublic }) {
+    const sortedSteps = useMemo(
+        () => [...bundle.steps].sort((a, b) => a.step_index - b.step_index),
+        [bundle.steps],
+    );
+    const total = sortedSteps.length;
+
+    return (
+        <motion.section
+            initial={{ opacity: 0, y: 32 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.75, delay: 0.15, ease: PM_EASE }}
+            aria-labelledby="provenance-gallery-title"
+            className="w-full max-w-5xl mt-12 print:hidden relative isolate z-10"
+        >
+            {/* ambient halo */}
+            <div
+                aria-hidden
+                className="absolute -inset-x-12 -top-8 h-48 bg-gradient-to-b from-[#6C3EF4]/12 via-[#00D4AA]/8 to-transparent blur-3xl -z-10 rounded-[3rem]"
+            />
+
+            {/* outer glass shell */}
+            <div
+                className="relative overflow-hidden rounded-3xl"
+                style={{
+                    background:
+                        'linear-gradient(165deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.012) 55%, rgba(7,6,26,0.85) 100%)',
+                    border: '1px solid rgba(255,255,255,0.10)',
+                    backdropFilter: 'blur(20px)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                    boxShadow:
+                        '0 0 0 1px rgba(255,255,255,0.03) inset, 0 30px 80px -30px rgba(108,62,244,0.40), 0 16px 50px -20px rgba(0,212,170,0.15)',
+                }}
+            >
+                {/* RGB hairline */}
+                <div
+                    aria-hidden
+                    className="absolute inset-x-0 top-0 h-px"
+                    style={{
+                        background:
+                            'linear-gradient(90deg, transparent, rgba(245,158,11,0.65), rgba(108,62,244,0.85), rgba(0,212,170,0.85), transparent)',
+                    }}
+                />
+
+                {/* header */}
+                <header className="px-5 sm:px-7 pt-6 sm:pt-7 pb-4 sm:pb-5 border-b border-white/[0.06]">
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-mono uppercase tracking-[0.32em] text-[#A8A0D8] mb-2 flex items-center gap-1.5">
+                                <Layers3 className="w-3 h-3 text-[#6C3EF4]" />
+                                Provenance Gallery · Chain of Evidence
+                            </p>
+                            <h2
+                                id="provenance-gallery-title"
+                                className="text-xl sm:text-2xl font-extrabold text-white tracking-tight leading-tight"
+                                style={{ fontFamily: '"Poppins", "Inter", sans-serif' }}
+                            >
+                                制作プロセスは、暗号証明されています。
+                            </h2>
+                            <p className="mt-2 text-[13px] leading-relaxed text-[#A8A0D8] max-w-2xl">
+                                ラフから完成までの各工程が SHA-256 でハッシュチェーンされ、RFC3161 タイムスタンプで
+                                改ざん不能に保全されています。← → でスクロールしてご確認ください。
+                            </p>
+                        </div>
+
+                        {/* breathing transparency badge */}
+                        <BreathingBadge
+                            color="#BC78FF"
+                            rgb="188,120,255"
+                            icon={<Sparkles className="w-3.5 h-3.5" />}
+                            label="TRANSPARENCY"
+                        />
+                    </div>
+
+                    {/* meta strip */}
+                    <div className="mt-4 flex flex-wrap items-center gap-2.5 text-[10px] font-mono uppercase tracking-[0.22em]">
+                        <span
+                            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1"
+                            style={{
+                                background: 'rgba(245,158,11,0.10)',
+                                border: '1px solid rgba(245,158,11,0.35)',
+                                color: '#F59E0B',
+                            }}
+                        >
+                            <span className="block h-1.5 w-1.5 rounded-full" style={{ background: '#F59E0B' }} />
+                            起点
+                        </span>
+                        <ChevronRight className="w-3 h-3 text-white/30" />
+                        <span
+                            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1"
+                            style={{
+                                background: 'rgba(108,62,244,0.10)',
+                                border: '1px solid rgba(108,62,244,0.35)',
+                                color: '#BC78FF',
+                            }}
+                        >
+                            <span className="block h-1.5 w-1.5 rounded-full" style={{ background: '#6C3EF4' }} />
+                            工程
+                        </span>
+                        <ChevronRight className="w-3 h-3 text-white/30" />
+                        <span
+                            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1"
+                            style={{
+                                background: 'rgba(0,212,170,0.10)',
+                                border: '1px solid rgba(0,212,170,0.35)',
+                                color: '#00D4AA',
+                            }}
+                        >
+                            <span className="block h-1.5 w-1.5 rounded-full" style={{ background: '#00D4AA' }} />
+                            完成
+                        </span>
+                        <span className="text-white/30 mx-1">·</span>
+                        <span className="text-white/50" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                            {total} STEPS
+                        </span>
+                        {typeof bundle.chain_head_sha256 === 'string' && bundle.chain_head_sha256 && (
+                            <>
+                                <span className="text-white/30 mx-1">·</span>
+                                <span className="text-[#00D4AA]">
+                                    HEAD {bundle.chain_head_sha256.slice(0, 10)}…
+                                </span>
+                            </>
+                        )}
+                    </div>
+                </header>
+
+                {/* horizontal filmstrip */}
+                <div className="relative">
+                    {/* fade gradients (edge) */}
+                    <div
+                        aria-hidden
+                        className="pointer-events-none absolute inset-y-0 left-0 w-12 z-10"
+                        style={{ background: 'linear-gradient(90deg, rgba(7,6,26,0.7), transparent)' }}
+                    />
+                    <div
+                        aria-hidden
+                        className="pointer-events-none absolute inset-y-0 right-0 w-12 z-10"
+                        style={{ background: 'linear-gradient(-90deg, rgba(7,6,26,0.7), transparent)' }}
+                    />
+
+                    <div
+                        className="pm-filmstrip flex gap-4 sm:gap-5 px-5 sm:px-7 py-6 sm:py-7 overflow-x-auto"
+                        role="list"
+                        aria-label="制作プロセスのステップ"
+                    >
+                        {sortedSteps.map((step, index) => {
+                            const tone = getStepTone(step, index, total);
+                            return (
+                                <ProvenanceStepCard
+                                    key={step.id}
+                                    step={step}
+                                    index={index}
+                                    total={total}
+                                    tone={tone}
+                                />
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* footer assurance */}
+                <footer className="px-5 sm:px-7 py-4 border-t border-white/[0.06] flex items-center justify-between gap-3 text-[11px] text-[#A8A0D8] font-mono">
+                    <span className="inline-flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-[#00D4AA]" />
+                        各ステップは前ステップのハッシュとチェーンされています
+                    </span>
+                    <span className="hidden sm:inline uppercase tracking-[0.2em] text-white/35">
+                        SHA-256 · RFC 3161
+                    </span>
+                </footer>
+            </div>
+        </motion.section>
+    );
+}
+
+/* ── Step card (filmstrip member) ── */
+function ProvenanceStepCard({
+    step,
+    index,
+    total,
+    tone,
+}: {
+    step: ProcessBundlePublic['steps'][number];
+    index: number;
+    total: number;
+    tone: StepTone;
+}) {
+    const [imgError, setImgError] = useState(false);
+    const hasPreview = typeof step.preview_url === 'string' && step.preview_url !== '' && !imgError;
+    const isLast = index === total - 1;
+
+    return (
+        <motion.article
+            role="listitem"
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-40px' }}
+            transition={{ duration: 0.5, delay: Math.min(index * 0.06, 0.5), ease: PM_EASE }}
+            whileHover={{ y: -3 }}
+            className="group relative shrink-0 w-[280px] sm:w-[320px] overflow-hidden rounded-2xl"
+            style={{
+                background:
+                    'linear-gradient(165deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.012) 60%, rgba(7,6,26,0.85) 100%)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                backdropFilter: 'blur(12px)',
+                boxShadow: '0 14px 40px -20px rgba(0,0,0,0.6)',
+                willChange: 'transform',
+            }}
+        >
+            {/* tone hairline */}
+            <div
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-px"
+                style={{
+                    background: `linear-gradient(90deg, transparent, ${tone.color}, transparent)`,
+                    opacity: 0.7,
+                }}
+            />
+
+            {/* under-card glow on hover */}
+            <div
+                aria-hidden
+                className="absolute -inset-2 rounded-[20px] blur-2xl pointer-events-none opacity-0 group-hover:opacity-100 -z-10"
+                style={{
+                    background: `radial-gradient(ellipse at 50% 80%, rgba(${tone.rgb}, 0.35), transparent 55%)`,
+                    transition: 'opacity 400ms',
+                    willChange: 'opacity',
+                }}
+            />
+
+            {/* preview area */}
+            <div className="relative aspect-[4/5] overflow-hidden">
+                {hasPreview ? (
+                    <img
+                        src={step.preview_url as string}
+                        alt={step.title}
+                        loading="lazy"
+                        decoding="async"
+                        onError={() => setImgError(true)}
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                    />
+                ) : (
+                    <HashFingerprint
+                        hash={step.sha256 || step.id}
+                        className="absolute inset-0"
+                    />
+                )}
+
+                {/* step index badge (top-left) */}
+                <div
+                    className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.22em]"
+                    style={{
+                        background: 'rgba(7,6,26,0.78)',
+                        border: `1px solid ${tone.border}`,
+                        color: tone.color,
+                        backdropFilter: 'blur(8px)',
+                        boxShadow: `0 6px 18px rgba(0,0,0,0.4)`,
+                    }}
+                >
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
+                    </span>
+                </div>
+
+                {/* tone badge (top-right) */}
+                <motion.div
+                    className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold uppercase tracking-[0.22em]"
+                    style={{
+                        background: tone.bg,
+                        border: `1px solid ${tone.border}`,
+                        color: tone.color,
+                        backdropFilter: 'blur(8px)',
+                    }}
+                    animate={{
+                        boxShadow: [
+                            `0 0 0 0 rgba(${tone.rgb}, 0.45)`,
+                            `0 0 0 5px rgba(${tone.rgb}, 0)`,
+                            `0 0 0 0 rgba(${tone.rgb}, 0.45)`,
+                        ],
+                    }}
+                    transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                    {tone.label}
+                </motion.div>
+
+                {/* completion ribbon for final step */}
+                {isLast && (
+                    <div
+                        className="absolute bottom-3 left-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold uppercase tracking-[0.22em]"
+                        style={{
+                            background: 'rgba(0,212,170,0.18)',
+                            border: '1px solid rgba(0,212,170,0.5)',
+                            color: '#FFFFFF',
+                            backdropFilter: 'blur(8px)',
+                            boxShadow: '0 6px 18px rgba(0,212,170,0.35)',
+                        }}
+                    >
+                        <CheckCircle className="w-3 h-3" />
+                        Delivered
+                    </div>
+                )}
+            </div>
+
+            {/* meta */}
+            <div className="px-4 py-3.5">
+                <p
+                    className="text-[13.5px] font-bold text-white leading-snug line-clamp-2"
+                    title={step.title}
+                >
+                    {step.title || `Step ${index + 1}`}
+                </p>
+
+                <div className="mt-2 flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/55">
+                    <Clock className="w-3 h-3" style={{ color: tone.color }} />
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {formatStepDate(step.issued_at)}
+                    </span>
+                </div>
+
+                {/* hash strip */}
+                <div
+                    className="mt-3 rounded-lg px-2.5 py-1.5"
+                    style={{
+                        background: 'rgba(0,0,0,0.25)',
+                        border: '1px solid rgba(255,255,255,0.06)',
+                    }}
+                >
+                    <p className="text-[8.5px] font-mono uppercase tracking-[0.24em] text-white/40">
+                        SHA-256
+                    </p>
+                    <p
+                        className="mt-0.5 font-mono text-[10.5px] truncate"
+                        style={{
+                            color: tone.color,
+                            textShadow: `0 0 8px rgba(${tone.rgb}, 0.3)`,
+                            fontVariantNumeric: 'tabular-nums',
+                        }}
+                        title={step.sha256}
+                    >
+                        {step.sha256 ? `${step.sha256.slice(0, 12)}…${step.sha256.slice(-6)}` : '—'}
+                    </p>
+                </div>
+            </div>
+
+            {/* chain connector — except last */}
+            {!isLast && (
+                <div
+                    aria-hidden
+                    className="hidden sm:flex absolute top-1/2 -right-3 -translate-y-1/2 items-center justify-center z-20"
+                    style={{ pointerEvents: 'none' }}
+                >
+                    <div
+                        className="h-6 w-6 rounded-full flex items-center justify-center"
+                        style={{
+                            background: 'rgba(7,6,26,0.92)',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
+                        }}
+                    >
+                        <ChevronRight className="w-3 h-3 text-white/55" />
+                    </div>
+                </div>
+            )}
+        </motion.article>
+    );
+}
+
+/* ═══════════════════════════════════════════════
+ *   God-Mode: SEALED Stamp Vault
  * ═══════════════════════════════════════════════ */
 function SealedStampVault() {
     return (
@@ -796,7 +1448,6 @@ function SealedStampVault() {
                                 'radial-gradient(circle at center, rgba(240,187,56,0.12) 0%, rgba(108,62,244,0.05) 50%, transparent 80%), #050310',
                         }}
                     >
-                        {/* Vault grid texture */}
                         <div
                             className="absolute inset-0 pointer-events-none opacity-40"
                             style={{
@@ -806,18 +1457,17 @@ function SealedStampVault() {
                             }}
                         />
 
-                        {/* Ambient gold glow */}
                         <motion.div
                             className="absolute inset-0 pointer-events-none"
                             style={{
                                 background:
                                     'radial-gradient(circle at center, rgba(240,187,56,0.22) 0%, transparent 55%)',
+                                willChange: 'opacity',
                             }}
                             animate={{ opacity: [0.45, 0.85, 0.45] }}
                             transition={{ duration: 4.2, repeat: Infinity, ease: 'easeInOut' }}
                         />
 
-                        {/* SEALED Stamp ── SVG */}
                         <motion.div
                             initial={{ scale: 2.4, rotate: -22, opacity: 0 }}
                             animate={{ scale: 1, rotate: -8, opacity: 1 }}
@@ -828,7 +1478,6 @@ function SealedStampVault() {
                                     'drop-shadow(0 0 24px rgba(240,187,56,0.45)) drop-shadow(0 14px 30px rgba(0,0,0,0.7))',
                             }}
                         >
-                            {/* impact rings */}
                             <motion.span
                                 aria-hidden
                                 className="absolute inset-0 rounded-full"
@@ -849,7 +1498,6 @@ function SealedStampVault() {
                             <SealedStampSVG />
                         </motion.div>
 
-                        {/* Caption */}
                         <motion.div
                             className="absolute bottom-5 left-0 right-0 text-center"
                             initial={{ opacity: 0, y: 8 }}
@@ -886,11 +1534,10 @@ function SealedStampVault() {
     );
 }
 
-/* The SEALED stamp itself: inline SVG, no external image */
+/* The SEALED stamp itself: inline SVG */
 function SealedStampSVG() {
     return (
         <div className="relative w-[210px] h-[210px] sm:w-[230px] sm:h-[230px]">
-            {/* slow-rotating outer dashed ring */}
             <div
                 aria-hidden
                 className="absolute inset-0 rounded-full"
@@ -899,7 +1546,6 @@ function SealedStampSVG() {
                     animation: 'pm-seal-orbit 36s linear infinite',
                 }}
             />
-            {/* counter-rotating inner accent ring */}
             <div
                 aria-hidden
                 className="absolute inset-4 rounded-full"
@@ -947,19 +1593,15 @@ function SealedStampSVG() {
                     />
                 </defs>
 
-                {/* Outer disc */}
                 <circle cx="120" cy="120" r="108" fill="url(#pm-seal-bg)" />
                 <circle cx="120" cy="120" r="108" fill="none" stroke="url(#pm-seal-rim)" strokeWidth="2.5" />
                 <circle cx="120" cy="120" r="108" fill="url(#pm-seal-highlight)" />
 
-                {/* notch ring */}
                 <circle cx="120" cy="120" r="98" fill="none" stroke="rgba(80,50,0,0.55)" strokeWidth="0.5" strokeDasharray="2 5" />
 
-                {/* Inner shield */}
                 <circle cx="120" cy="120" r="74" fill="rgba(60,30,0,0.18)" filter="url(#pm-seal-inner-shadow)" />
                 <circle cx="120" cy="120" r="74" fill="none" stroke="rgba(255,210,120,0.55)" strokeWidth="1" />
 
-                {/* Arc text */}
                 <text fill="rgba(40,20,0,0.85)" fontSize="11" fontWeight="900" letterSpacing="4">
                     <textPath href="#pm-seal-arc-top" startOffset="50%" textAnchor="middle">
                         ★ PROOFMARK ★ SEALED ★
@@ -971,11 +1613,9 @@ function SealedStampSVG() {
                     </textPath>
                 </text>
 
-                {/* Central wax glyph: stylised PM monogram */}
                 <g transform="translate(120,124)">
                     <circle r="36" fill="rgba(50,25,0,0.22)" />
                     <circle r="36" fill="none" stroke="rgba(255,225,140,0.6)" strokeWidth="0.75" />
-                    {/* P */}
                     <path
                         d="M -16,-22 L -16,22 M -16,-22 L 4,-22 C 16,-22 16,-2 4,-2 L -16,-2"
                         stroke="#3C1F00"
@@ -984,7 +1624,6 @@ function SealedStampSVG() {
                         strokeLinejoin="round"
                         fill="none"
                     />
-                    {/* M overlay tick */}
                     <path
                         d="M 6,22 L 6,-2 L 14,8 L 22,-2 L 22,22"
                         stroke="#3C1F00"
@@ -993,14 +1632,12 @@ function SealedStampSVG() {
                         strokeLinejoin="round"
                         fill="none"
                     />
-                    {/* tiny stars */}
                     <g fill="#3C1F00" opacity="0.75">
                         <polygon points="-26,0 -24,-2 -22,0 -24,2" />
                         <polygon points="26,0 24,-2 22,0 24,2" />
                     </g>
                 </g>
 
-                {/* SEALED banner */}
                 <g transform="translate(120,184)">
                     <rect x="-44" y="-9" width="88" height="18" rx="3" fill="rgba(40,20,0,0.7)" />
                     <text
@@ -1017,7 +1654,6 @@ function SealedStampSVG() {
                 </g>
             </svg>
 
-            {/* glow halo behind */}
             <div
                 aria-hidden
                 className="absolute inset-0 rounded-full -z-10 blur-2xl"
@@ -1027,7 +1663,7 @@ function SealedStampSVG() {
     );
 }
 
-/* ─── Vault components (unchanged behaviour, refined visuals) ─────────────── */
+/* ─── Vault components (preserved) ─────────────── */
 
 const PurgedVaultFull = () => (
     <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-950 p-8 text-center relative overflow-hidden border border-zinc-800/50 rounded-xl">
@@ -1069,8 +1705,6 @@ const PurgedVaultFull = () => (
     </div>
 );
 
-/* Legacy TheVaultFull kept for backwards-compat but now delegates to SEALED Stamp.
- * Logic and signatures unchanged. */
 function TheVaultFull() {
     return <SealedStampVault />;
 }
