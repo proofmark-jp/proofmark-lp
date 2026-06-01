@@ -54,13 +54,13 @@ export function StatusMenu({ current, onChange, disabled }: StatusMenuProps) {
     };
   }, [open]);
 
-  const handlePick = async (next: DeliveryStatus | null) => {
+  const handlePick = (next: DeliveryStatus | null) => {
     setOpen(false);
     if (next === current) return;
 
     if (skipDialog) {
-      // 即座に Supabase の UPDATE API を叩きに行く（楽観的UI）
-      await onChange(next);
+      // 即座に onChange を発火させて楽観的UIを実行
+      onChange(next);
       return;
     }
 
@@ -70,7 +70,7 @@ export function StatusMenu({ current, onChange, disabled }: StatusMenuProps) {
     );
 
     if (confirmed) {
-      await onChange(next);
+      onChange(next);
     }
   };
 

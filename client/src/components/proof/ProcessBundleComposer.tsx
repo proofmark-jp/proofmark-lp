@@ -348,7 +348,11 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
   /* ── add files at a specific insertion index ── */
   const addFilesAtIndex = useCallback(
     (files: FileList | File[], insertAt: number) => {
-      const fileArray = Array.from(files).filter((f) => f.type.startsWith('image/'));
+      // 複数ドロップされたファイルを lastModified (最終更新日時) の古い順（過去→現在）に自動ソート
+      const fileArray = Array.from(files)
+        .filter((f) => f.type.startsWith('image/'))
+        .sort((a, b) => a.lastModified - b.lastModified);
+
       if (fileArray.length === 0) {
         setMessage('※ PSDやCLIPなどの作業ファイルは直接証明できません。PNGやJPEGに書き出してください。');
         return;
@@ -792,7 +796,7 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        multiple
+        multiple={true}
         className="hidden"
         onChange={onFileInputChange}
       />
