@@ -47,7 +47,7 @@ import { getLegalCopyrightPdf } from './_lib/legal-pdf-cache.js';
 export const config = { maxDuration: 300 };
 
 // --- React-PDF Dynamic Generation Additions ---
-import { generateCertificatePdfBuffer, generateCoverLetterPdfBuffer } from '../src/lib/pdf/generator';
+import { generateCertificatePdfBuffer, generateCoverLetterPdfBuffer } from '../src/lib/pdf/generator.js';
 
 function formatBytes(bytes: number | null | undefined): string {
     if (bytes === undefined || bytes === null || isNaN(bytes) || bytes < 0) return '—';
