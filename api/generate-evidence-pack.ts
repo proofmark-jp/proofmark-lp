@@ -44,47 +44,10 @@ import {
 import { buildChainOfEvidence } from './_lib/chain-of-evidence.js';
 import { getLegalCopyrightPdf } from './_lib/legal-pdf-cache.js';
 
-// --- React-PDF Dynamic Generation Additions ---
-import { Font, renderToBuffer } from '@react-pdf/renderer';
-import React from 'react';
-import { CertificateDocument } from '../client/src/lib/pdf/CertificateDocument.js';
-import { CoverLetterDocument } from '../client/src/lib/pdf/CoverLetterDocument.js';
-
 export const config = { maxDuration: 300 };
 
-// --- Server-side Font Registration ---
-let serverFontsRegistered = false;
-function registerServerFonts(origin: string) {
-    if (serverFontsRegistered) return;
-    try {
-        Font.register({
-            family: 'NotoSansJP',
-            fonts: [
-                { src: `${origin}/fonts/NotoSansJP-Regular.ttf`, fontWeight: 400 },
-                { src: `${origin}/fonts/NotoSansJP-Medium.ttf`, fontWeight: 500 },
-                { src: `${origin}/fonts/NotoSansJP-Bold.ttf`, fontWeight: 700 },
-            ],
-        });
-
-        Font.register({
-            family: 'JetBrainsMono',
-            fonts: [
-                { src: `${origin}/fonts/JetBrainsMono-Regular.ttf`, fontWeight: 400 },
-                { src: `${origin}/fonts/JetBrainsMono-Bold.ttf`, fontWeight: 700 },
-            ],
-        });
-
-        Font.registerHyphenationCallback((word) => {
-            if (/^[a-zA-Z0-9\-_.,:;/'"!?@#$%^&*()[\]{}]+$/.test(word)) {
-                return [word];
-            }
-            return Array.from(word);
-        });
-        serverFontsRegistered = true;
-    } catch (e) {
-        console.error('[React-PDF Server Fonts] Registration failed:', e);
-    }
-}
+// --- React-PDF Dynamic Generation Additions ---
+import { generateCertificatePdfBuffer, generateCoverLetterPdfBuffer } from '../src/lib/pdf/generator';
 
 function formatBytes(bytes: number | null | undefined): string {
     if (bytes === undefined || bytes === null || isNaN(bytes) || bytes < 0) return '—';
@@ -632,10 +595,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     fileTree: treeEntries,
                 };
 
-                // Render to buffer dynamically via React-PDF
+                // Render to buffer dynamically via React-PDF generator module
                 const [certBuf, coverBuf] = await Promise.all([
-                    renderToBuffer(React.createElement(CertificateDocument, { input: pdfInput })),
-                    renderToBuffer(React.createElement(CoverLetterDocument, { input: coverLetterInput })),
+                    generateCertificatePdfBuffer(pdfInput, origin),
+                    generateCoverLetterPdfBuffer(coverLetterInput, origin),
                 ]);
 
                 certificateBuffer = certBuf;
@@ -803,10 +766,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     fileTree: treeEntries,
                 };
 
-                // Render to buffer dynamically via React-PDF
+                // Render to buffer dynamically via React-PDF generator module
                 const [certBuf, coverBuf] = await Promise.all([
-                    renderToBuffer(React.createElement(CertificateDocument, { input: pdfInput })),
-                    renderToBuffer(React.createElement(CoverLetterDocument, { input: coverLetterInput })),
+                    generateCertificatePdfBuffer(pdfInput, origin),
+                    generateCoverLetterPdfBuffer(coverLetterInput, origin),
                 ]);
 
                 certificateBuffer = certBuf;
