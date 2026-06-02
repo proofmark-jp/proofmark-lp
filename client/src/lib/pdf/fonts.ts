@@ -46,6 +46,9 @@ export const PDF_FONT_FAMILY = {
  */
 const FONT_BASE = '/fonts';
 
+// ブラウザのオリジン（URL）を動的に取得して絶対パス化する
+const getBaseUrl = () => typeof window !== 'undefined' ? window.location.origin : '';
+
 const FONT_SOURCES = {
   notoSansJpRegular: 'https://cdn.jsdelivr.net/gh/google/fonts/ofl/notosansjp/static/NotoSansJP-Regular.ttf',
   notoSansJpMedium: 'https://cdn.jsdelivr.net/gh/google/fonts/ofl/notosansjp/static/NotoSansJP-Medium.ttf',
