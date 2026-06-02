@@ -1,35 +1,31 @@
 /**
- * POST /api/generate-evidence-pack
- *   body: { cert: UUID, certificate_b64: string, cover_letter_b64: string }
+ * GET /api/generate-evidence-pack?cert=<UUID>
+ *      OR
+ * GET /api/generate-evidence-pack?spot=<sessionId>&staging=<uuid>
  *
- *      OR (Spot order)
- * POST /api/generate-evidence-pack
- *   body: { spot: sessionId, staging: uuid, certificate_b64: string, cover_letter_b64: string }
+ * In-Browser ZIP Assembly Architecture (v4)
+ * ─────────────────────────────────────────
+ * このAPIはZIPを返さない。代わりに「暗号部品のJSON Payload」を返す。
+ * ブラウザ側の EvidencePackDownloadButton.tsx が JSZip + @react-pdf/renderer を
+ * 用いてPDF生成・ZIP組み立て・ダウンロードの全重労働を担う。
  *
- * Zero-Cost Architecture (v3):
- *   PDF generation is fully offloaded to the browser via @react-pdf/renderer.
- *   This API receives pre-rendered PDFs as Base64 strings, decodes them to
- *   Buffer, and appends them directly into the ZIP archive.
- *   NO React / JSX / @react-pdf/renderer imports on the server side.
+ * レスポンス形式: application/json — EvidencePackPayload
+ *   • filename     : ZIPのファイル名
+ *   • pdfMeta      : フロントのPDF生成に必要な certInput / coverInput
+ *   • files        : ZIPに含める各ファイル記述子の配列
+ *     - type:"text"   → content: 文字列のまま
+ *     - type:"base64" → content: Base64文字列 (バイナリを安全に転送)
+ *     - type:"url"    → url: 署名付きURL (ブラウザがfetchして追加)
  *
- * Phase 11.B で確立した invariants は厳守:
- *   • archiver を `res` に直接 pipe。原画は Buffer 化せずストリーム結合。
- *   • upstream stream の AbortController + watchdog timeout。
- *   • TSA CA bundle の process-local cache (LRU=1, TTL 6h)。
- *   • c2pa.json 10KB ハードキャップ。
- *   • stream.pipeline 化 (backpressure 安全)。
+ * 既存 invariants (Auth/Spot分岐, 権限チェック, RateLimit, Plan Guard) 完全維持。
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import archiver from 'archiver';
-import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 import {
     HttpError,
     getAdminClient,
-    json,
     makeLogger,
     methodGuard,
     tryUser,
@@ -37,14 +33,45 @@ import {
 import { buildChainOfEvidence } from './_lib/chain-of-evidence.js';
 import { getLegalCopyrightPdf } from './_lib/legal-pdf-cache.js';
 
-export const config = {
-    maxDuration: 300,
-    api: {
-        bodyParser: {
-            sizeLimit: '25mb'
-        }
-    }
-};
+export const config = { maxDuration: 120 };
+
+// ─────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────
+
+type FileEntry =
+    | { name: string; type: 'text';   content: string }
+    | { name: string; type: 'base64'; content: string }
+    | { name: string; type: 'url';    url: string };
+
+interface PdfMetaCertInput {
+    certificateId: string;
+    creatorDisplayName: string;
+    fileName: string;
+    fileSize: string;
+    sha256: string;
+    timestampJst: string;
+    verificationUrl: string;
+    sealVariant: 'teal' | 'gold';
+    tsaProvider: string;
+}
+
+interface PdfMetaCoverInput extends PdfMetaCertInput {
+    fileTree: ReadonlyArray<{ name: string; size: string; description?: string }>;
+}
+
+export interface EvidencePackPayload {
+    filename: string;
+    pdfMeta: {
+        certInput: PdfMetaCertInput;
+        coverInput: PdfMetaCoverInput;
+    };
+    files: FileEntry[];
+}
+
+// ─────────────────────────────────────────────────────────
+// Helpers: formatters
+// ─────────────────────────────────────────────────────────
 
 function formatBytes(bytes: number | null | undefined): string {
     if (bytes === undefined || bytes === null || isNaN(bytes) || bytes < 0) return '—';
@@ -68,14 +95,17 @@ function formatJst(dateStr: string | null | undefined): string {
             hour: '2-digit',
             minute: '2-digit',
             second: '2-digit',
-            hour12: false
+            hour12: false,
         }).format(date) + ' JST';
     } catch {
         return '—';
     }
 }
 
-// --- Upstash Rate Limit Init (Fail-open) ---
+// ─────────────────────────────────────────────────────────
+// Rate Limit (Fail-open)
+// ─────────────────────────────────────────────────────────
+
 let ratelimit: Ratelimit | null = null;
 try {
     const redis = new Redis({
@@ -92,12 +122,19 @@ try {
     console.error('[RateLimit] Initialization failed:', error);
 }
 
-const FIXED_ZIP_TIME = new Date('2026-01-01T00:00:00.000Z');
+// ─────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────
 
 const C2PA_HARD_CAP_BYTES = 10 * 1024;
-const STREAM_FETCH_TIMEOUT_MS = 290_000;
 const TSA_CA_FETCH_TIMEOUT_MS = 3_000;
 const TSA_CA_TTL_MS = 6 * 60 * 60 * 1000;
+// 原画signed URLの有効期間: PDF生成などに時間がかかることを考慮して300秒
+const SIGNED_URL_EXPIRY_SEC = 300;
+
+// ─────────────────────────────────────────────────────────
+// DB Record Interfaces
+// ─────────────────────────────────────────────────────────
 
 interface CertRecord {
     id: string;
@@ -131,12 +168,15 @@ interface SpotOrderRecord {
     paid_at: string | null;
 }
 
+// ─────────────────────────────────────────────────────────
+// Helpers: validation & safety
+// ─────────────────────────────────────────────────────────
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function fail(res: VercelResponse, status: number, msg: string) {
     if (!res.headersSent) {
-        res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.send(JSON.stringify({ error: msg }));
+        res.status(status).json({ error: msg });
     }
 }
 
@@ -145,79 +185,23 @@ function safeFilename(input: string | null | undefined, fallback: string): strin
     return base.length > 0 ? base : fallback;
 }
 
-interface ClientLetterOptions {
-    c2paIncluded: boolean;
-    chainIncluded: boolean;
-    legalGuideIncluded: boolean;
+function safeC2paJson(raw: Record<string, unknown> | null): { json: string; bytes: number } | null {
+    if (!raw) return null;
+    if (typeof raw !== 'object' || Array.isArray(raw)) return null;
+    let json: string;
+    try {
+        json = JSON.stringify(raw, null, 2);
+    } catch {
+        return null;
+    }
+    const bytes = Buffer.byteLength(json, 'utf8');
+    if (bytes <= 0 || bytes > C2PA_HARD_CAP_BYTES) return null;
+    return { json, bytes };
 }
 
-function buildClientLetter(
-    cert: CertRecord,
-    verifyUrl: string,
-    options: ClientLetterOptions,
-): string {
-    const issuedAt = cert.certified_at ?? cert.proven_at ?? cert.created_at ?? '';
-    const niceTitle = cert.title ?? cert.original_filename ?? cert.file_name ?? 'Verified Digital Artwork';
-    const sha256 = cert.sha256 ?? '';
-    const isPrivate = cert.proof_mode === 'private';
-
-    const verifySteps: string[] = [
-        isPrivate 
-            ? '1. [ZERO-KNOWLEDGE MODE] Original file is NOT included. Place your original file in this folder and run `verify.sh <your_file>` to confirm its SHA-256 matches.'
-            : '1. Compute SHA-256 of the supplied original file and ensure it matches "SHA-256" above.',
-        '2. Run `verify.sh` (or `verify.py`) inside this archive to verify the RFC3161 timestamp token (timestamp.tsr) using OpenSSL.',
-    ];
-    let n = 3;
-    if (options.c2paIncluded) {
-        verifySteps.push(`${n}. If this work contains Content Credentials, open c2pa.json to review the scrubbed manifest.`);
-        n += 1;
-    }
-    if (options.chainIncluded) {
-        verifySteps.push(`${n}. Open chain_of_evidence.json to inspect the tamper-evident audit log (SHA-256 chain).`);
-        n += 1;
-    }
-    if (options.legalGuideIncluded) {
-        verifySteps.push(`${n}. Refer to /legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf for the relevant legal context.`);
-        n += 1;
-    }
-    verifySteps.push(`${n}. Optionally open Verify URL to compare against the public certificate page.`);
-
-    const tsaStatus = cert.timestamp_token 
-        ? 'This package includes an RFC3161-compliant timestamp token (timestamp.tsr).'
-        : 'This package serves as a Primary Cryptographic Proof (SHA-256) registered in the ProofMark immutable ledger. An institutional RFC3161 timestamp is currently being provisioned in the background. Once complete, an extended package will be available.';
-
-    return [
-        'ProofMark Evidence Pack — Client Hand-off Letter',
-        '',
-        `Title       : ${niceTitle}`,
-        `Issued at   : ${issuedAt}`,
-        `SHA-256     : ${sha256}`,
-        `Verify URL  : ${verifyUrl}`,
-        `Mode        : ${isPrivate ? 'Private (Zero-Knowledge)' : 'Shareable'}`,
-        '',
-        'About this Evidence Pack',
-        '------------------------',
-        tsaStatus,
-        'It contains the cryptographic data and verification scripts required to independently',
-        'confirm that the file with the SHA-256 above existed at the issued time.',
-        '',
-        'How to verify (no ProofMark account required)',
-        '----------------------------------------------',
-        ...verifySteps,
-        '',
-        'Notes',
-        '-----',
-        'For details on the issuing TSA and its legal admissibility, please refer to',
-        'the Trust Center: [https://proofmark.jp/trust-center](https://proofmark.jp/trust-center)',
-    ].filter((line) => line !== '').join('\n');
-}
-
-function buildSpotClientLetter(legalGuideIncluded: boolean): string {
-    const head = 'ProofMark Spot Evidence Pack\n\nThis archive contains the cryptographic timestamp data required to independently confirm the existence of your file. Keep it safe.';
-    return legalGuideIncluded
-        ? `${head}\nA legal context PDF is bundled under /legal_guide/.`
-        : head;
-}
+// ─────────────────────────────────────────────────────────
+// Helpers: verify scripts (unchanged)
+// ─────────────────────────────────────────────────────────
 
 function buildVerifyShellScript(): string {
     return [
@@ -284,6 +268,10 @@ function buildVerifyPython(): string {
     ].join('\n');
 }
 
+// ─────────────────────────────────────────────────────────
+// Helpers: TSA CA bundle cache (process-local LRU=1, TTL 6h)
+// ─────────────────────────────────────────────────────────
+
 let tsaCaCache: { ca: Buffer; tsa: Buffer; expiresAt: number } | null = null;
 let tsaCaInflight: Promise<{ ca: Buffer; tsa: Buffer } | null> | null = null;
 
@@ -317,79 +305,15 @@ async function fetchTsaCa(): Promise<{ ca: Buffer; tsa: Buffer } | null> {
     return tsaCaInflight;
 }
 
-interface ManagedStream {
-    stream: Readable;
-    abort: () => void;
-}
-
-async function streamSupabaseFile(
-    admin: any,
-    bucket: string,
-    path: string,
-): Promise<ManagedStream> {
-    const { data, error } = await admin.storage.from(bucket).createSignedUrl(path, 60);
-    if (error || !data) throw new Error(`Failed to sign URL for ${path}: ${error?.message}`);
-
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(new Error('stream_timeout')), STREAM_FETCH_TIMEOUT_MS);
-
-    let fetchRes: Response;
-    try {
-        fetchRes = await fetch(data.signedUrl, { signal: ac.signal });
-    } catch (e) {
-        clearTimeout(timer);
-        throw e;
-    }
-    if (!fetchRes.ok || !fetchRes.body) {
-        clearTimeout(timer);
-        ac.abort();
-        throw new Error(`Failed to fetch stream for ${path}: ${fetchRes.statusText}`);
-    }
-
-    const node = Readable.fromWeb(fetchRes.body as any);
-    node.once('end', () => clearTimeout(timer));
-    node.once('error', () => clearTimeout(timer));
-    node.once('close', () => clearTimeout(timer));
-
-    return {
-        stream: node,
-        abort: () => {
-            try { ac.abort(); } catch { /* noop */ }
-            try { node.destroy(); } catch { /* noop */ }
-            clearTimeout(timer);
-        },
-    };
-}
-
-function safeC2paJson(raw: Record<string, unknown> | null): { json: string; bytes: number } | null {
-    if (!raw) return null;
-    if (typeof raw !== 'object' || Array.isArray(raw)) return null;
-    let json: string;
-    try {
-        json = JSON.stringify(raw, null, 2);
-    } catch {
-        return null;
-    }
-    const bytes = Buffer.byteLength(json, 'utf8');
-    if (bytes <= 0 || bytes > C2PA_HARD_CAP_BYTES) return null;
-    return { json, bytes };
-}
+// ─────────────────────────────────────────────────────────
+// Handler
+// ─────────────────────────────────────────────────────────
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     const log = makeLogger('generate-evidence-pack');
     res.setHeader('x-request-id', log.ctx.reqId);
 
-    if (!methodGuard(req, res, ['GET', 'POST'])) return;
-
-    // POST body のパース (JSON)
-    let reqBody: Record<string, string> = {};
-    if (req.method === 'POST') {
-        if (typeof req.body === 'object' && req.body !== null) {
-            reqBody = req.body as Record<string, string>;
-        } else if (typeof req.body === 'string') {
-            try { reqBody = JSON.parse(req.body); } catch { /* ignore */ }
-        }
-    }
+    if (!methodGuard(req, res, ['GET'])) return;
 
     // --- Rate Limit Check ---
     if (ratelimit) {
@@ -402,31 +326,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 return;
             }
         } catch (limitError) {
-            // Fail-open: Redis障害時はクラッシュさせず通過させる
             log.error({ event: 'ratelimit_error', message: String(limitError) });
         }
     }
 
-    const upstreamStreams: ManagedStream[] = [];
-
     try {
-        // GET: query params / POST: body
-        const certParam    = (reqBody.cert    ?? (req.query.cert    as string | undefined) ?? '');
-        const spotSession  = (reqBody.spot    ?? (req.query.spot    as string | undefined) ?? '');
-        const stagingId    = (reqBody.staging ?? (req.query.staging as string | undefined) ?? '');
-
-        // クライアント側で生成済みの PDF (Base64) を受け取る
-        const certificateB64 = typeof reqBody.certificate_b64 === 'string'
-            ? reqBody.certificate_b64
-            : (typeof reqBody.pdfCertBase64 === 'string' ? reqBody.pdfCertBase64 : null);
-        const coverLetterB64 = typeof reqBody.cover_letter_b64 === 'string'
-            ? reqBody.cover_letter_b64
-            : (typeof reqBody.pdfCoverBase64 === 'string' ? reqBody.pdfCoverBase64 : null);
-
-        // POST リクエストでは Authorization ヘッダの代替として body の access_token を許容
-        if (req.method === 'POST' && reqBody.access_token && !req.headers.authorization) {
-            (req.headers as Record<string, string>).authorization = `Bearer ${reqBody.access_token}`;
-        }
+        const certParam   = (req.query.cert    as string | undefined) ?? '';
+        const spotSession = (req.query.spot    as string | undefined) ?? '';
+        const stagingId   = (req.query.staging as string | undefined) ?? '';
 
         if (!certParam && !spotSession) throw new HttpError(400, 'cert or spot is required');
 
@@ -437,6 +344,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         let evidencePackName = 'proofmark-evidence-pack.zip';
         let profileRecord: any = null;
 
+        // ── Auth flow (cert UUID) ────────────────────────────────
         if (certParam) {
             if (!UUID.test(certParam)) throw new HttpError(400, 'cert must be a UUID');
             const user = await tryUser(req);
@@ -479,10 +387,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     throw new HttpError(403, 'Evidence Pack generation requires Creator plan or higher');
                 }
             }
-            // --------------------------------------------
 
             cert = data as CertRecord;
             evidencePackName = `evidence-pack-${(cert.id || 'cert').slice(0, 8)}.zip`;
+
+        // ── Spot flow ────────────────────────────────────────────
         } else {
             if (!UUID.test(stagingId)) throw new HttpError(400, 'staging must be a UUID');
             const { data, error } = await admin
@@ -499,148 +408,140 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             evidencePackName = `evidence-pack-spot-${stagingId.slice(0, 8)}.zip`;
         }
 
-        // --- Dynamic Zip Date Setup (Bug 2 Fix) ---
-        const zipDate = downloadKind === 'auth' && cert
-            ? (cert.certified_at ? new Date(cert.certified_at) : (cert.proven_at ? new Date(cert.proven_at) : new Date()))
-            : (spotOrder?.paid_at ? new Date(spotOrder.paid_at) : new Date());
-
-        // Stream ZIP — backpressure aware
-        res.status(200);
-        res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', `attachment; filename="${evidencePackName}"`);
-        res.setHeader('Cache-Control', 'private, no-store');
-
-        const archive = archiver('zip', {
-            zlib: { level: 6 },
-            forceLocalTime: false,
-        });
-
-        const cleanupUpstreams = () => {
-            for (const s of upstreamStreams) {
-                try { s.abort(); } catch { /* noop */ }
-            }
-        };
-
-        archive.on('warning', (err) => log.warn({ event: 'archiver.warning', message: err.message }));
-
-        // クライアント切断 → upstream を即座に解放
-        res.on('close', () => {
-            if (!res.writableEnded) {
-                log.warn({ event: 'evidence-pack.client_disconnect' });
-                cleanupUpstreams();
-                try { archive.abort(); } catch { /* noop */ }
-            }
-        });
-
-        // pipeline で archiver→res を結ぶ。drain / error / cleanup を Node に
-        // 任せる (Phase 12.4 罠3 への回答)。pipeline の戻り Promise は最後に
-        // await する。
-        const pipelineDone = pipeline(archive, res).catch((err) => {
-            log.error({ event: 'pipeline.error', message: String((err as Error)?.message ?? err) });
-            cleanupUpstreams();
-            // headersSent の場合は何もできない (res は破棄)
-        });
+        // ── Build JSON Payload ───────────────────────────────────
+        const files: FileEntry[] = [];
+        let pdfMeta: EvidencePackPayload['pdfMeta'];
 
         if (downloadKind === 'auth' && cert) {
             const sha256 = cert.sha256 ?? '';
             const verifyUrl = `https://proofmark.jp/cert/${cert.id}`;
-
-            // --- Original Filename Selection Logic ---
             const rawName = (cert.original_filename && cert.original_filename !== 'unknown_file')
                 ? cert.original_filename
                 : (cert.file_name || 'asset.bin');
             const baseFile = safeFilename(rawName, 'asset.bin');
+            const jstTime = formatJst(cert.certified_at ?? cert.proven_at ?? cert.created_at);
+            const humanSize = formatBytes(cert.file_size);
+            const displayCreatorName = profileRecord?.display_name ?? profileRecord?.username ?? 'ProofMark Creator';
 
+            // --- c2pa ---
             const c2paBlob = safeC2paJson(cert.c2pa_manifest);
             const c2paIncluded = c2paBlob !== null;
 
-            // chain_of_evidence.json
-            let chainBuffer: Buffer | null = null;
+            // --- chain of evidence ---
+            let chainIncluded = false;
             try {
-                chainBuffer = await buildChainOfEvidence(admin, cert.id, { log });
-                if (chainBuffer.byteLength > 1 * 1024 * 1024) {
-                    log.warn({ event: 'chain.size_warn', bytes: chainBuffer.byteLength });
+                const chainBuffer = await buildChainOfEvidence(admin, cert.id, { log });
+                if (chainBuffer && chainBuffer.byteLength > 0) {
+                    if (chainBuffer.byteLength > 1 * 1024 * 1024) {
+                        log.warn({ event: 'chain.size_warn', bytes: chainBuffer.byteLength });
+                    }
+                    files.push({ name: 'chain_of_evidence.json', type: 'text', content: chainBuffer.toString('utf8') });
+                    chainIncluded = true;
+                    log.info({ event: 'evidence-pack.chain_attached', bytes: chainBuffer.byteLength });
                 }
             } catch (err) {
                 log.warn({ event: 'chain.build_failed', message: String((err as Error)?.message ?? err) });
-                chainBuffer = null;
             }
-            const chainIncluded = chainBuffer !== null && chainBuffer.byteLength > 0;
 
-            // Legal guide PDF — CDN 経由でグローバルキャッシュから取得
+            // --- legal guide PDF ---
             const legalPdf = await getLegalCopyrightPdf(log);
             const legalGuideIncluded = legalPdf !== null;
 
-            // --- クライアント側で生成済みの PDF を Buffer に変換 ---
-            const coverLetterBuffer: Buffer | null = coverLetterB64
-                ? Buffer.from(coverLetterB64, 'base64')
-                : null;
-            const certificateBuffer: Buffer | null = certificateB64
-                ? Buffer.from(certificateB64, 'base64')
-                : null;
-
-            if (certificateBuffer) {
-                log.info({ event: 'client_pdf.received', certSize: certificateBuffer.byteLength });
-            } else {
-                log.warn({ event: 'client_pdf.missing', file: 'certificate' });
+            // --- original file (shareable) — signed URL for browser fetch ---
+            let originalIncluded = false;
+            if (cert.proof_mode === 'shareable' && cert.storage_path) {
+                try {
+                    const { data: signedData, error: signErr } = await admin
+                        .storage
+                        .from('proofmark-originals')
+                        .createSignedUrl(cert.storage_path, SIGNED_URL_EXPIRY_SEC);
+                    if (signErr || !signedData?.signedUrl) {
+                        throw new Error(signErr?.message ?? 'No signed URL returned');
+                    }
+                    files.push({ name: `original/${baseFile}`, type: 'url', url: signedData.signedUrl });
+                    originalIncluded = true;
+                    log.info({ event: 'evidence-pack.original_signed', path: cert.storage_path });
+                } catch (err) {
+                    log.warn({
+                        event: 'auth.original_sign_failed',
+                        path: cert.storage_path,
+                        message: String((err as Error)?.message ?? err),
+                    });
+                    files.push({
+                        name: `original/${baseFile}.MISSING.txt`,
+                        type: 'text',
+                        content: 'Original file could not be retrieved at this time.\n',
+                    });
+                }
             }
-            if (coverLetterBuffer) {
-                log.info({ event: 'client_pdf.received', coverSize: coverLetterBuffer.byteLength });
-            } else {
-                log.warn({ event: 'client_pdf.missing', file: 'cover_letter' });
-            }
 
-            archive.append(`SHA256= ${sha256}\n`, { name: 'hash.txt', date: zipDate });
+            // --- fileTree (for Cover Letter PDF) ---
+            const fileTree: Array<{ name: string; size: string; description?: string }> = [
+                { name: 'Cover_Letter.pdf', size: '—', description: 'ProofMark Client Hand-off Letter (PDF)' },
+                { name: 'Certificate_of_Authenticity.pdf', size: '—', description: 'Cryptographic Certificate of Authenticity (PDF)' },
+                { name: 'hash.txt', size: '—', description: 'Target file SHA-256 hash value' },
+                ...(cert.timestamp_token ? [{ name: 'timestamp.tsr', size: '—', description: 'RFC3161 tamper-proof timestamp token' }] : []),
+                ...(c2paIncluded ? [{ name: 'c2pa.json', size: '—', description: 'Scrubbed Content Credentials manifest' }] : []),
+                ...(chainIncluded ? [{ name: 'chain_of_evidence.json', size: '—', description: 'Tamper-evident audit trail' }] : []),
+                ...(legalGuideIncluded ? [{ name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf', size: '—', description: 'Legal Copyright & Compliance PDF' }] : []),
+                ...(originalIncluded ? [{ name: `original/${baseFile}`, size: '—', description: 'Original verified asset' }] : []),
+                { name: 'verify.sh', size: '—', description: 'Shell verification script (OpenSSL)' },
+                { name: 'verify.py', size: '—', description: 'Python verification script (OpenSSL)' },
+                { name: 'metadata.json', size: '—', description: 'Machine-readable evidence metadata' },
+                { name: 'freetsa-ca.crt', size: '—', description: 'FreeTSA CA Certificate' },
+                { name: 'freetsa-tsa.crt', size: '—', description: 'FreeTSA TSA Certificate' },
+            ];
+
+            // --- pdfMeta ---
+            const certInput: PdfMetaCertInput = {
+                certificateId: cert.id,
+                creatorDisplayName: displayCreatorName,
+                fileName: baseFile,
+                fileSize: humanSize,
+                sha256,
+                timestampJst: jstTime,
+                verificationUrl: verifyUrl,
+                sealVariant: cert.proof_mode === 'private' ? 'teal' : 'gold',
+                tsaProvider: cert.tsa_provider ?? 'FreeTSA',
+            };
+            pdfMeta = { certInput, coverInput: { ...certInput, fileTree } };
+
+            // --- Static files ---
+            files.push({ name: 'hash.txt', type: 'text', content: `SHA256= ${sha256}\n` });
 
             if (cert.timestamp_token) {
-                const tsr = Buffer.from(cert.timestamp_token, 'base64');
-                archive.append(tsr, { name: 'timestamp.tsr', date: zipDate });
+                // cert.timestamp_token はDBにBase64で保存されているためそのまま渡す
+                files.push({ name: 'timestamp.tsr', type: 'base64', content: cert.timestamp_token });
             } else {
-                archive.append('Timestamp token is not yet issued for this certificate.\n', {
+                files.push({
                     name: 'timestamp.MISSING.txt',
-                    date: zipDate,
+                    type: 'text',
+                    content: 'Timestamp token is not yet issued for this certificate.\n',
                 });
-            }
-
-            // Append Generated PDFs
-            if (coverLetterBuffer) {
-                archive.append(coverLetterBuffer, { name: 'Cover_Letter.pdf', date: zipDate });
-            } else {
-                archive.append('PDF Cover Letter generation failed.\n', { name: 'Cover_Letter.MISSING.txt', date: zipDate });
-            }
-
-            if (certificateBuffer) {
-                archive.append(certificateBuffer, { name: 'Certificate_of_Authenticity.pdf', date: zipDate });
-            } else {
-                archive.append('PDF Certificate generation failed.\n', { name: 'Certificate_of_Authenticity.MISSING.txt', date: zipDate });
             }
 
             if (c2paBlob) {
-                archive.append(c2paBlob.json, { name: 'c2pa.json', date: zipDate });
+                files.push({ name: 'c2pa.json', type: 'text', content: c2paBlob.json });
                 log.info({ event: 'evidence-pack.c2pa_attached', bytes: c2paBlob.bytes });
             }
 
-            if (chainBuffer) {
-                archive.append(chainBuffer, { name: 'chain_of_evidence.json', date: zipDate });
-                log.info({ event: 'evidence-pack.chain_attached', bytes: chainBuffer.byteLength });
-            }
-
             if (legalPdf) {
-                archive.append(legalPdf.buffer, {
+                files.push({
                     name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf',
-                    date: zipDate,
+                    type: 'base64',
+                    content: legalPdf.buffer.toString('base64'),
                 });
                 log.info({ event: 'evidence-pack.legal_guide_attached', bytes: legalPdf.bytes });
             } else {
-                archive.append(
-                    'ProofMark_Legal_and_Compliance_Guide.pdf could not be embedded in this archive.\n' +
-                    'Please refer to https://proofmark.jp/legal-guide for the latest legal context.\n',
-                    { name: 'legal_guide/README.txt', date: zipDate },
-                );
+                files.push({
+                    name: 'legal_guide/README.txt',
+                    type: 'text',
+                    content: 'ProofMark_Legal_and_Compliance_Guide.pdf could not be embedded.\nPlease refer to https://proofmark.jp/legal-guide for the latest legal context.\n',
+                });
             }
 
-            archive.append(buildVerifyShellScript(), { name: 'verify.sh', date: zipDate, mode: 0o755 });
-            archive.append(buildVerifyPython(), { name: 'verify.py', date: zipDate, mode: 0o755 });
+            files.push({ name: 'verify.sh', type: 'text', content: buildVerifyShellScript() });
+            files.push({ name: 'verify.py', type: 'text', content: buildVerifyPython() });
 
             const meta = {
                 certificate_id: cert.id,
@@ -659,85 +560,103 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 chain_present: chainIncluded,
                 legal_guide_present: legalGuideIncluded,
             };
-            archive.append(JSON.stringify(meta, null, 2), { name: 'metadata.json', date: zipDate });
+            files.push({ name: 'metadata.json', type: 'text', content: JSON.stringify(meta, null, 2) });
 
-            // 原画 (shareable のみ) — ストリーム結合
-            if (cert.proof_mode === 'shareable' && cert.storage_path) {
-                try {
-                    const managed = await streamSupabaseFile(admin, 'proofmark-originals', cert.storage_path);
-                    upstreamStreams.push(managed);
-                    archive.append(managed.stream, { name: `original/${baseFile}`, date: zipDate });
-                } catch (err) {
-                    log.warn({
-                        event: 'auth.original_stream_failed',
-                        path: cert.storage_path,
-                        message: String((err as Error)?.message ?? err),
-                    });
-                    archive.append(
-                        'Original file could not be streamed at archive time.\n',
-                        { name: `original/${baseFile}.MISSING.txt`, date: zipDate },
-                    );
-                }
-            }
-
-            // FreeTSA CA (キャッシュ済み)
+            // --- TSA CA certs ---
             const caBundle = await fetchTsaCa();
             if (caBundle) {
-                archive.append(caBundle.ca, { name: 'freetsa-ca.crt', date: zipDate });
-                archive.append(caBundle.tsa, { name: 'freetsa-tsa.crt', date: zipDate });
+                files.push({ name: 'freetsa-ca.crt', type: 'base64', content: caBundle.ca.toString('base64') });
+                files.push({ name: 'freetsa-tsa.crt', type: 'base64', content: caBundle.tsa.toString('base64') });
             } else {
-                archive.append(
-                    'CA/TSA certificates could not be embedded automatically.\nPlease download from https://freetsa.org/files/ before running verify.sh.\n',
-                    { name: 'freetsa.README.txt', date: zipDate },
-                );
+                files.push({
+                    name: 'freetsa.README.txt',
+                    type: 'text',
+                    content: 'CA/TSA certificates could not be embedded automatically.\nPlease download from https://freetsa.org/files/ before running verify.sh.\n',
+                });
             }
+
         } else if (downloadKind === 'spot' && spotOrder) {
             const sha256 = spotOrder.sha256 ?? '';
             const verifyUrl = `https://proofmark.jp/spot-issue/result?sid=${spotOrder.stripe_session_id}`;
+            const baseFile = safeFilename(spotOrder.filename, 'artwork.bin');
+            const jstTime = formatJst(spotOrder.paid_at);
 
-            // Spot は監査ログ・C2PA を持たないが、Legal Guide PDF だけは同梱できる
+            // --- legal guide PDF ---
             const legalPdf = await getLegalCopyrightPdf(log);
             const legalGuideIncluded = legalPdf !== null;
 
-            // --- クライアント側で生成済みの PDF を Buffer に変換 ---
-            const coverLetterBuffer: Buffer | null = coverLetterB64
-                ? Buffer.from(coverLetterB64, 'base64')
-                : null;
-            const certificateBuffer: Buffer | null = certificateB64
-                ? Buffer.from(certificateB64, 'base64')
-                : null;
+            // --- fileTree ---
+            const fileTree: Array<{ name: string; size: string; description?: string }> = [
+                { name: 'Cover_Letter.pdf', size: '—', description: 'ProofMark Spot Client Hand-off Letter (PDF)' },
+                { name: 'Certificate_of_Authenticity.pdf', size: '—', description: 'Cryptographic Certificate of Authenticity (PDF)' },
+                { name: 'hash.txt', size: '—', description: 'Target file SHA-256 hash value' },
+                { name: 'timestamp.tsr', size: '—', description: 'RFC3161 tamper-proof timestamp token' },
+                ...(legalGuideIncluded ? [{ name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf', size: '—', description: 'Legal Copyright & Compliance PDF' }] : []),
+                { name: 'verify.sh', size: '—', description: 'Shell verification script (OpenSSL)' },
+                { name: 'verify.py', size: '—', description: 'Python verification script (OpenSSL)' },
+                { name: 'metadata.json', size: '—', description: 'Machine-readable evidence metadata' },
+                { name: 'freetsa-ca.crt', size: '—', description: 'FreeTSA CA Certificate' },
+                { name: 'freetsa-tsa.crt', size: '—', description: 'FreeTSA TSA Certificate' },
+            ];
 
-            if (certificateBuffer) {
-                log.info({ event: 'client_pdf.spot.received', certSize: certificateBuffer.byteLength });
-            } else {
-                log.warn({ event: 'client_pdf.spot.missing', file: 'certificate' });
+            // --- pdfMeta ---
+            const certInput: PdfMetaCertInput = {
+                certificateId: spotOrder.staging_id,
+                creatorDisplayName: spotOrder.email ?? 'ProofMark Spot Creator',
+                fileName: baseFile,
+                fileSize: '—',
+                sha256,
+                timestampJst: jstTime,
+                verificationUrl: verifyUrl,
+                sealVariant: 'gold',
+                tsaProvider: 'FreeTSA',
+            };
+            pdfMeta = { certInput, coverInput: { ...certInput, fileTree } };
+
+            // --- Static files ---
+            files.push({ name: 'hash.txt', type: 'text', content: `SHA256= ${sha256}\n` });
+
+            // Spot timestamp.tsr はプライベートバケット → サーバー側で全量DLしてbase64化
+            try {
+                const { data: tsrBlob, error: tsrErr } = await admin
+                    .storage
+                    .from('spot-evidence')
+                    .download(`${spotOrder.staging_id}/timestamp.tsr`);
+                if (tsrErr || !tsrBlob) throw new Error(tsrErr?.message ?? 'No blob');
+                const arrayBuf = await tsrBlob.arrayBuffer();
+                const tsrBuffer = Buffer.from(arrayBuf);
+                files.push({ name: 'timestamp.tsr', type: 'base64', content: tsrBuffer.toString('base64') });
+                log.info({ event: 'spot.tsr_attached', bytes: tsrBuffer.byteLength });
+            } catch (err) {
+                log.warn({
+                    event: 'spot.tsr_missing',
+                    stagingId: spotOrder.staging_id,
+                    message: String((err as Error)?.message ?? err),
+                });
+                files.push({
+                    name: 'timestamp.MISSING.txt',
+                    type: 'text',
+                    content: 'Timestamp token (timestamp.tsr) could not be retrieved.\nPlease re-run the Spot verification step or contact support.\n',
+                });
             }
-            if (coverLetterBuffer) {
-                log.info({ event: 'client_pdf.spot.received', coverSize: coverLetterBuffer.byteLength });
-            } else {
-                log.warn({ event: 'client_pdf.spot.missing', file: 'cover_letter' });
+
+            if (legalPdf) {
+                files.push({
+                    name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf',
+                    type: 'base64',
+                    content: legalPdf.buffer.toString('base64'),
+                });
+                log.info({ event: 'evidence-pack.legal_guide_attached', kind: 'spot', bytes: legalPdf.bytes });
             }
 
-            // Append Generated PDFs for Spot
-            if (coverLetterBuffer) {
-                archive.append(coverLetterBuffer, { name: 'Cover_Letter.pdf', date: zipDate });
-            } else {
-                archive.append('PDF Cover Letter generation failed.\n', { name: 'Cover_Letter.MISSING.txt', date: zipDate });
-            }
+            files.push({ name: 'verify.sh', type: 'text', content: buildVerifyShellScript() });
+            files.push({ name: 'verify.py', type: 'text', content: buildVerifyPython() });
 
-            if (certificateBuffer) {
-                archive.append(certificateBuffer, { name: 'Certificate_of_Authenticity.pdf', date: zipDate });
-            } else {
-                archive.append('PDF Certificate generation failed.\n', { name: 'Certificate_of_Authenticity.MISSING.txt', date: zipDate });
-            }
-
-            archive.append(buildVerifyShellScript(), { name: 'verify.sh', date: zipDate, mode: 0o755 });
-            archive.append(buildVerifyPython(), { name: 'verify.py', date: zipDate, mode: 0o755 });
-            archive.append(`SHA256= ${sha256}\n`, { name: 'hash.txt', date: zipDate });
-
-            archive.append(
-                JSON.stringify(
-                     {
+            files.push({
+                name: 'metadata.json',
+                type: 'text',
+                content: JSON.stringify(
+                    {
                         kind: 'spot',
                         staging_id: spotOrder.staging_id,
                         stripe_session_id: spotOrder.stripe_session_id,
@@ -751,55 +670,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     null,
                     2,
                 ),
-                { name: 'metadata.json', date: zipDate },
-            );
+            });
 
-            if (legalPdf) {
-                archive.append(legalPdf.buffer, {
-                    name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf',
-                    date: zipDate,
-                });
-                log.info({ event: 'evidence-pack.legal_guide_attached', kind: 'spot', bytes: legalPdf.bytes });
-            }
-
-            try {
-                const managed = await streamSupabaseFile(
-                    admin, 'spot-evidence', `${spotOrder.staging_id}/timestamp.tsr`,
-                );
-                upstreamStreams.push(managed);
-                archive.append(managed.stream, { name: 'timestamp.tsr', date: zipDate });
-            } catch (err) {
-                log.warn({
-                    event: 'spot.tsr_missing',
-                    stagingId: spotOrder.staging_id,
-                    message: String((err as Error)?.message ?? err),
-                });
-                archive.append(
-                    'Timestamp token (timestamp.tsr) could not be retrieved.\nPlease re-run the Spot verification step or contact support.\n',
-                    { name: 'timestamp.MISSING.txt', date: zipDate },
-                );
-            }
-
+            // --- TSA CA certs ---
             const caBundle = await fetchTsaCa();
             if (caBundle) {
-                archive.append(caBundle.ca, { name: 'freetsa-ca.crt', date: zipDate });
-                archive.append(caBundle.tsa, { name: 'freetsa-tsa.crt', date: zipDate });
+                files.push({ name: 'freetsa-ca.crt', type: 'base64', content: caBundle.ca.toString('base64') });
+                files.push({ name: 'freetsa-tsa.crt', type: 'base64', content: caBundle.tsa.toString('base64') });
             }
+        } else {
+            throw new HttpError(500, 'Invalid download kind');
         }
 
-        await archive.finalize();
-        await pipelineDone;
+        // ── Return JSON Payload ──────────────────────────────────
+        const payload: EvidencePackPayload = {
+            filename: evidencePackName,
+            pdfMeta: pdfMeta!,
+            files,
+        };
+
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.status(200).json(payload);
 
         log.info({
-            event: 'evidence-pack.streamed',
+            event: 'evidence-pack.payload_sent',
             kind: downloadKind,
             certId: cert?.id ?? null,
             stagingId: spotOrder?.staging_id ?? null,
+            fileCount: files.length,
         });
+
     } catch (err) {
-        for (const s of upstreamStreams) {
-            try { s.abort(); } catch { /* noop */ }
-        }
         if (err instanceof HttpError) {
             fail(res, err.status, err.message);
             return;
