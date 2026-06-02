@@ -536,7 +536,7 @@ export default function Settings() {
                     ? 'チーム管理、監査ログ(WORM)、Chain of Evidenceを利用可能な月150件のエンタープライズ運用プランです。'
                     : currentPlan === 'creator'
                       ? '月30件のPDF証明書・Evidence Pack発行、案件単位整理、NDA表示モードが利用可能な本番運用プランです。'
-                      : '無料で月30件までのWebタイムスタンプ証明が利用可能です。Evidence Packの出力など全機能の解放にはアップグレードが必要です。'}
+                      : '無料で月3件までのWebタイムスタンプ証明が利用可能です。Evidence Packの出力など全機能の解放にはアップグレードが必要です。'}
                 </p>
               </div>
 
