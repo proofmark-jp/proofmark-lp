@@ -37,7 +37,14 @@ import {
 import { buildChainOfEvidence } from './_lib/chain-of-evidence.js';
 import { getLegalCopyrightPdf } from './_lib/legal-pdf-cache.js';
 
-export const config = { maxDuration: 300 };
+export const config = {
+    maxDuration: 300,
+    api: {
+        bodyParser: {
+            sizeLimit: '25mb'
+        }
+    }
+};
 
 function formatBytes(bytes: number | null | undefined): string {
     if (bytes === undefined || bytes === null || isNaN(bytes) || bytes < 0) return '—';
@@ -409,8 +416,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const stagingId    = (reqBody.staging ?? (req.query.staging as string | undefined) ?? '');
 
         // クライアント側で生成済みの PDF (Base64) を受け取る
-        const certificateB64 = typeof reqBody.certificate_b64  === 'string' ? reqBody.certificate_b64  : null;
-        const coverLetterB64 = typeof reqBody.cover_letter_b64 === 'string' ? reqBody.cover_letter_b64 : null;
+        const certificateB64 = typeof reqBody.certificate_b64 === 'string'
+            ? reqBody.certificate_b64
+            : (typeof reqBody.pdfCertBase64 === 'string' ? reqBody.pdfCertBase64 : null);
+        const coverLetterB64 = typeof reqBody.cover_letter_b64 === 'string'
+            ? reqBody.cover_letter_b64
+            : (typeof reqBody.pdfCoverBase64 === 'string' ? reqBody.pdfCoverBase64 : null);
 
         // POST リクエストでは Authorization ヘッダの代替として body の access_token を許容
         if (req.method === 'POST' && reqBody.access_token && !req.headers.authorization) {

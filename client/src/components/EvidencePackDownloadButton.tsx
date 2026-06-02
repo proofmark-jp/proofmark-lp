@@ -1,5 +1,5 @@
 /**
- * EvidencePackDownloadButton.tsx — Zero-Cost Architecture (v3)
+ * EvidencePackDownloadButton.tsx — Zero-Cost Architecture (v4)
  * -------------------------------------------------------------------
  * ブラウザ側で React-PDF を使い 2 つの PDF を Blob 生成し、
  * Base64 エンコードして /api/generate-evidence-pack に POST。
@@ -8,7 +8,7 @@
  * -------------------------------------------------------------------
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Download, Loader2, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -17,7 +17,7 @@ import type { CertificatePdfInput, CoverLetterPdfInput } from '@/lib/pdf/types';
 
 interface Props {
     certId: string;
-    /** PDF 生成に必要なメタデータ。渡されない場合は API から取得する */
+    /** PDF 生成に必要なメタデータ。渡されない場合は直接 Supabase からフェッチする */
     pdfMeta?: {
         certificateId: string;
         creatorDisplayName: string;
@@ -31,6 +31,8 @@ interface Props {
         // Cover Letter 専用
         fileTree?: ReadonlyArray<{ name: string; size: string; description?: string }>;
     };
+    /** 古いコードとの互換性のための certificates テーブルレコードオブジェクト */
+    apiData?: any;
     variant?: 'primary' | 'ghost';
     label?: string;
 }
@@ -50,42 +52,10 @@ async function blobToBase64(blob: Blob): Promise<string> {
     });
 }
 
-/** 隠し form を自動送信して ZIP をダウンロードさせる */
-function submitDownloadForm(params: {
-    certId: string;
-    accessToken: string;
-    coverLetterB64: string;
-    certificateB64: string;
-    filename: string;
-}) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/api/generate-evidence-pack';
-    // 別タブを使わず同タブでダウンロードさせる
-    form.style.display = 'none';
-
-    const addField = (name: string, value: string) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = name;
-        input.value = value;
-        form.appendChild(input);
-    };
-
-    addField('cert', params.certId);
-    addField('access_token', params.accessToken);
-    addField('cover_letter_b64', params.coverLetterB64);
-    addField('certificate_b64', params.certificateB64);
-
-    document.body.appendChild(form);
-    form.submit();
-    // DOM クリーンアップ（非同期）
-    setTimeout(() => form.remove(), 5000);
-}
-
 export default function EvidencePackDownloadButton({
     certId,
     pdfMeta,
+    apiData,
     variant = 'primary',
     label = 'Evidence Pack をダウンロード',
 }: Props): JSX.Element {
@@ -103,47 +73,115 @@ export default function EvidencePackDownloadButton({
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.access_token) throw new Error('ログインセッションが切れました。再ログインしてください。');
 
-            // ── 2. PDF メタ取得 (pdfMeta が渡されていない場合はフォールバック) ──
+            // ── 2. PDF メタ取得 (pdfMeta または apiData がない場合は直接 Supabase からフェッチ) ──
             let certInput: CertificatePdfInput;
             let coverInput: CoverLetterPdfInput;
 
-            if (pdfMeta) {
+            const inputData = pdfMeta || apiData;
+
+            if (inputData) {
+                const certIdVal = inputData.certificateId ?? inputData.id ?? certId;
+                const fileNameVal = inputData.fileName ?? inputData.original_filename ?? inputData.file_name ?? 'asset.bin';
+                const sha256Val = inputData.sha256 ?? '';
+                const createdTime = inputData.created_at ?? '';
+                const displayTime = inputData.certified_at ?? inputData.proven_at ?? createdTime;
+                
+                let humanSize = '—';
+                const sizeBytes = inputData.file_size ?? inputData.size;
+                if (typeof sizeBytes === 'number') {
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                    const i = Math.floor(Math.log(sizeBytes) / Math.log(k));
+                    humanSize = parseFloat((sizeBytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+                } else if (typeof sizeBytes === 'string') {
+                    humanSize = sizeBytes;
+                }
+
+                let creatorName = inputData.creatorDisplayName ?? 'ProofMark Creator';
+                if (!inputData.creatorDisplayName && inputData.creator_display_name) {
+                    creatorName = inputData.creator_display_name;
+                }
+
                 certInput = {
-                    certificateId: pdfMeta.certificateId,
-                    creatorDisplayName: pdfMeta.creatorDisplayName,
-                    fileName: pdfMeta.fileName,
-                    fileSize: pdfMeta.fileSize,
-                    sha256: pdfMeta.sha256,
-                    timestampJst: pdfMeta.timestampJst,
-                    verificationUrl: pdfMeta.verificationUrl,
-                    sealVariant: pdfMeta.sealVariant,
-                    tsaProvider: pdfMeta.tsaProvider,
+                    certificateId: certIdVal,
+                    creatorDisplayName: creatorName,
+                    fileName: fileNameVal,
+                    fileSize: humanSize,
+                    sha256: sha256Val,
+                    timestampJst: displayTime ? new Date(displayTime).toLocaleString('ja-JP') + ' JST' : '—',
+                    verificationUrl: inputData.verificationUrl ?? `https://proofmark.jp/cert/${certIdVal}`,
+                    sealVariant: inputData.sealVariant ?? (inputData.proof_mode === 'private' ? 'teal' : 'gold'),
+                    tsaProvider: inputData.tsaProvider ?? inputData.tsa_provider ?? 'FreeTSA',
                 };
                 coverInput = {
                     ...certInput,
-                    fileTree: pdfMeta.fileTree,
+                    fileTree: inputData.fileTree ?? [
+                        { name: 'Cover_Letter.pdf', size: '—', description: 'This document (ProofMark Client Hand-off)' },
+                        { name: 'Certificate_of_Authenticity.pdf', size: '—', description: 'Cryptographic Certificate of Authenticity' },
+                        { name: 'hash.txt', size: '—', description: 'Target file SHA-256 hash value' },
+                        { name: 'timestamp.tsr', size: '—', description: 'RFC3161 tamper-proof timestamp token' },
+                        { name: 'verify.sh', size: '—', description: 'Shell verification script (OpenSSL)' },
+                        { name: 'verify.py', size: '—', description: 'Python verification script (OpenSSL)' },
+                        { name: 'metadata.json', size: '—', description: 'Machine-readable evidence metadata' },
+                    ],
                 };
             } else {
-                // フォールバック: API から最低限のメタを取得
-                const metaRes = await fetch(`/api/generate-evidence-pack?cert=${certId}&meta_only=1`, {
-                    headers: { Authorization: `Bearer ${session.access_token}` },
-                });
-                if (!metaRes.ok) throw new Error('証明書メタデータの取得に失敗しました');
-                const meta = await metaRes.json();
+                // フォールバック: Supabase から直接メタデータを取得 (APIの meta_only=1 を完全排除)
+                const { data: cert, error: certErr } = await supabase
+                    .from('certificates')
+                    .select('id, user_id, title, sha256, proof_mode, file_name, original_filename, created_at, certified_at, proven_at, tsa_provider, file_size')
+                    .eq('id', certId)
+                    .maybeSingle();
+
+                if (certErr || !cert) throw new Error('証明書データの取得に失敗しました');
+
+                let creatorDisplayName = 'ProofMark Creator';
+                if (cert.user_id) {
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('display_name, username')
+                        .eq('id', cert.user_id)
+                        .maybeSingle();
+                    if (profile) {
+                        creatorDisplayName = profile.display_name ?? profile.username ?? 'ProofMark Creator';
+                    }
+                }
+
+                const displayTime = cert.certified_at ?? cert.proven_at ?? cert.created_at;
+                let humanSize = '—';
+                if (cert.file_size) {
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                    const i = Math.floor(Math.log(cert.file_size) / Math.log(k));
+                    humanSize = parseFloat((cert.file_size / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+                }
+
+                const rawName = (cert.original_filename && cert.original_filename !== 'unknown_file')
+                    ? cert.original_filename
+                    : (cert.file_name || 'asset.bin');
+
                 certInput = {
-                    certificateId: meta.certificate_id ?? certId,
-                    creatorDisplayName: meta.creator_display_name ?? 'ProofMark Creator',
-                    fileName: meta.file_name ?? 'asset.bin',
-                    fileSize: meta.file_size ?? '—',
-                    sha256: meta.sha256 ?? '',
-                    timestampJst: meta.timestamp_jst ?? '—',
-                    verificationUrl: meta.verify_url ?? `https://proofmark.jp/cert/${certId}`,
-                    sealVariant: meta.seal_variant ?? 'teal',
-                    tsaProvider: meta.tsa_provider ?? 'FreeTSA',
+                    certificateId: cert.id,
+                    creatorDisplayName,
+                    fileName: rawName,
+                    fileSize: humanSize,
+                    sha256: cert.sha256 ?? '',
+                    timestampJst: displayTime ? new Date(displayTime).toLocaleString('ja-JP') + ' JST' : '—',
+                    verificationUrl: `https://proofmark.jp/cert/${cert.id}`,
+                    sealVariant: cert.proof_mode === 'private' ? 'teal' : 'gold',
+                    tsaProvider: cert.tsa_provider ?? 'FreeTSA',
                 };
                 coverInput = {
                     ...certInput,
-                    fileTree: meta.file_tree,
+                    fileTree: [
+                        { name: 'Cover_Letter.pdf', size: '—', description: 'This document (ProofMark Client Hand-off)' },
+                        { name: 'Certificate_of_Authenticity.pdf', size: '—', description: 'Cryptographic Certificate of Authenticity' },
+                        { name: 'hash.txt', size: '—', description: 'Target file SHA-256 hash value' },
+                        { name: 'timestamp.tsr', size: '—', description: 'RFC3161 tamper-proof timestamp token' },
+                        { name: 'verify.sh', size: '—', description: 'Shell verification script (OpenSSL)' },
+                        { name: 'verify.py', size: '—', description: 'Python verification script (OpenSSL)' },
+                        { name: 'metadata.json', size: '—', description: 'Machine-readable evidence metadata' },
+                    ],
                 };
             }
 
@@ -212,7 +250,7 @@ export default function EvidencePackDownloadButton({
         } finally {
             setPhase('idle');
         }
-    }, [certId, pdfMeta, isProcessing]);
+    }, [certId, pdfMeta, apiData, isProcessing]);
 
     const phaseLabel =
         phase === 'generating' ? 'PDF を生成中…' :

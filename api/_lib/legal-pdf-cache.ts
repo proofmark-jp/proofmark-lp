@@ -57,8 +57,26 @@ export interface LegalPdfRef {
 export async function getLegalCopyrightPdf(
     log?: { warn: (o: Record<string, unknown>) => void; info: (o: Record<string, unknown>) => void },
 ): Promise<LegalPdfRef | null> {
-    const url = optionalEnv('LEGAL_GUIDE_PDF_URL');
+    let url = optionalEnv('LEGAL_GUIDE_PDF_URL');
     if (!url) return null;
+
+    try {
+        const parsedUrl = new URL(url);
+        const encodedPath = parsedUrl.pathname
+            .split('/')
+            .map(segment => {
+                const decoded = decodeURIComponent(segment);
+                return encodeURIComponent(decoded)
+                    .replace(/%20/g, '%20')
+                    .replace(/&/g, '%26')
+                    .replace(/%26/g, '%26');
+            })
+            .join('/');
+        parsedUrl.pathname = encodedPath;
+        url = parsedUrl.toString();
+    } catch {
+        url = url.replace(/ /g, '%20').replace(/&/g, '%26');
+    }
 
     if (isFresh(pdfCache)) {
         return {
