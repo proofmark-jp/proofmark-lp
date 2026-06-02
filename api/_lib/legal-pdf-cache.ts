@@ -60,21 +60,23 @@ export async function getLegalCopyrightPdf(
     let url = optionalEnv('LEGAL_GUIDE_PDF_URL');
     if (!url) return null;
 
+    // URL中のファイル名部分（スペース・&等の特殊文字）を確実にエンコードする。
+    // URLオブジェクトへの代入は実装によって再デコードされることがあるため、
+    // 文字列を直接置換する方が確実かつ副作用がない。
+    //   手順: まず既存の%エンコードを一度デコードして重複エンコードを防ぎ、
+    //   その後 encodeURIComponent でパスセグメントを再エンコード。
+    //   ただし "/" はパス区切りなので置換しない。
     try {
-        const parsedUrl = new URL(url);
-        const encodedPath = parsedUrl.pathname
+        // origin + path を分解し、パスセグメントのみ安全にエンコードする
+        const urlObj = new URL(url);
+        const encodedSegments = urlObj.pathname
             .split('/')
-            .map(segment => {
-                const decoded = decodeURIComponent(segment);
-                return encodeURIComponent(decoded)
-                    .replace(/%20/g, '%20')
-                    .replace(/&/g, '%26')
-                    .replace(/%26/g, '%26');
-            })
+            .map((seg) => encodeURIComponent(decodeURIComponent(seg)))
             .join('/');
-        parsedUrl.pathname = encodedPath;
-        url = parsedUrl.toString();
+        // search/hash はそのまま保持 (今回は不要だが念のため)
+        url = `${urlObj.origin}${encodedSegments}${urlObj.search}${urlObj.hash}`;
     } catch {
+        // URLパースに失敗した場合のフォールバック: 生文字列の空白と & を置換
         url = url.replace(/ /g, '%20').replace(/&/g, '%26');
     }
 

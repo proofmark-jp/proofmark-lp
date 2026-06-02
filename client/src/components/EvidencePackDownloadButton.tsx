@@ -13,10 +13,12 @@
  */
 
 import { useCallback, useState } from 'react';
+import type { ReactElement } from 'react';
 import { Download, Loader2, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { generateCertificatePdfBlob, generateCoverLetterPdfBlob } from '@/lib/pdf/generator';
+import { ensurePdfFontsRegistered } from '@/lib/pdf/fonts';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
@@ -100,7 +102,7 @@ export default function EvidencePackDownloadButton({
     apiData,
     variant = 'primary',
     label = 'Evidence Pack をダウンロード',
-}: Props): JSX.Element {
+}: Props): ReactElement {
     const [phase, setPhase] = useState<Phase>('idle');
     const isProcessing = phase !== 'idle';
 
@@ -117,7 +119,10 @@ export default function EvidencePackDownloadButton({
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.access_token) throw new Error('ログインセッションが切れました。再ログインしてください。');
 
-            // ── 2. APIからJSON Payloadを取得 (GET) ───────────────
+            // ── 2. フォントを確実に登録 (PDF生成クラッシュ防止) ───
+            ensurePdfFontsRegistered();
+
+            // ── 3. APIからJSON Payloadを取得 (GET) ───────────────
             // Auth flow: ?cert=UUID
             // Spot flow: ?spot=sessionId&staging=uuid
             let apiUrl: string;
@@ -132,7 +137,7 @@ export default function EvidencePackDownloadButton({
             const payloadRes = await fetch(apiUrl, {
                 method: 'GET',
                 headers: { Authorization: `Bearer ${session.access_token}` },
-                credentials: 'omit',
+                credentials: 'include',
             });
 
             if (!payloadRes.ok) {
@@ -143,15 +148,20 @@ export default function EvidencePackDownloadButton({
             const payload: EvidencePackPayload = await payloadRes.json();
             const { pdfMeta, files, filename } = payload;
 
-            // ── 3. ブラウザ側でPDFを直列生成 ──────────────────────
+            // ── 4. ブラウザ側でPDFを直列生成 ──────────────────────
             setPhase('generating');
             toast.loading('証明書 PDF を生成しています… (1/2)', { id: toastId });
             const certBlob = await generateCertificatePdfBlob(pdfMeta.certInput);
 
+            // スレッドを解放してGCとアニメーションに機会を与える
+            await new Promise<void>((r) => setTimeout(r, 50));
+
             toast.loading('カバーレター PDF を生成しています… (2/2)', { id: toastId });
             const coverBlob = await generateCoverLetterPdfBlob(pdfMeta.coverInput);
 
-            // ── 4. URL型ファイルを並列fetch ───────────────────────
+            await new Promise<void>((r) => setTimeout(r, 50));
+
+            // ── 5. URL型ファイルを並列fetch ───────────────────────
             setPhase('downloading');
             toast.loading('アセットを取得中…', { id: toastId });
 
@@ -195,7 +205,7 @@ export default function EvidencePackDownloadButton({
             // 並列fetchが全て完了するのを待つ
             await Promise.all(urlFetches);
 
-            // ── 5. JSZipでZIP構築 ────────────────────────────────
+            // ── 6. JSZipでZIP構築 ────────────────────────────────
             setPhase('building');
             toast.loading('ZIP を構築中…', { id: toastId });
 
@@ -205,7 +215,7 @@ export default function EvidencePackDownloadButton({
                 compressionOptions: { level: 6 },
             });
 
-            // ── 6. ダウンロード発火 ───────────────────────────────
+            // ── 7. ダウンロード発火 ───────────────────────────────
             saveAs(zipBlob, filename);
 
             toast.success('Evidence Pack のダウンロードが完了しました', { id: toastId });
