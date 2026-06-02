@@ -1,30 +1,14 @@
 /**
- * api/_lib/legal-pdf-cache.ts — Phase 12.4
+ * api/_lib/legal-pdf-cache.ts
  *
- * Supabase Storage の **public バケット** に静的配置された
- *   public-assets/legal/ai_copyright_guide.pdf
- * を、Vercel Function のグローバルスコープ (= コールドスタート間共有) に
- * Buffer でキャッシュする。
- *
- * 設計の核 (PRD 罠4 への対応):
- *   1. SDK (`supabase.storage.from(...).download()`) は使わず、CDN 直 URL を
- *      `fetch` する。エッジキャッシュが効き、TLS ハンドシェイクも 1 回。
- *   2. グローバルスコープ変数 `pdfCache` で in-memory キャッシュ (TTL 6h)。
- *      PDF が ~500KB を超える場合は警戒ログを出すだけで、キャッシュはする
- *      (Vercel Node の 1024MB に対して常識的なサイズ)。
- *   3. 失敗してもサービスは止めない。`null` を返し、呼び出し側 (Evidence
- *      Pack) は「README.txt」に降格する。
- *   4. 二重 fetch を避けるため in-flight Promise を共有する。
- *
- * ENV:
- *   LEGAL_GUIDE_PDF_URL  例: https://<proj>.supabase.co/storage/v1/object/public/public-assets/legal/ai_copyright_guide.pdf
- *   (未設定なら `null` を返してフォールバック)
+ * Supabase Storage の public バケットに配置された法的ガイドPDFを、
+ * Supabase SDK を用いて安全に取得し、メモリにキャッシュする。
+ * URLエンコード問題やCDNのキャッシュ罠を完全に回避する堅牢版。
  */
 
-import { optionalEnv } from './server.js';
+import { getAdminClient } from './server.js';
 
 const TTL_MS = 6 * 60 * 60 * 1000;
-const FETCH_TIMEOUT_MS = 5_000;
 const SOFT_SIZE_WARN_BYTES = 4 * 1024 * 1024; // 4MB を超えたら警告
 
 interface PdfCacheEntry {
@@ -32,117 +16,85 @@ interface PdfCacheEntry {
     bytes: number;
     fetchedAt: number;
     expiresAt: number;
-    sourceUrl: string;
-}
-
-// 関数間で共有 (Vercel Node のコールドスタートで最初の 1 回だけ fetch)
-let pdfCache: PdfCacheEntry | null = null;
-let pdfInflight: Promise<PdfCacheEntry | null> | null = null;
-
-function isFresh(entry: PdfCacheEntry | null): boolean {
-    return !!entry && entry.expiresAt > Date.now();
 }
 
 export interface LegalPdfRef {
     buffer: Buffer;
     bytes: number;
-    sourceUrl: string;
     fromCache: boolean;
 }
 
-/**
- * 静的 PDF を Buffer で返す。失敗時は null。
- * 呼び出し側は `null` の場合に「README.txt」へ降格する。
- */
+// コールドスタート間で共有する in-memory キャッシュ
+let pdfCache: PdfCacheEntry | null = null;
+let pdfInflight: Promise<PdfCacheEntry | null> | null = null;
+
 export async function getLegalCopyrightPdf(
     log?: { warn: (o: Record<string, unknown>) => void; info: (o: Record<string, unknown>) => void },
 ): Promise<LegalPdfRef | null> {
-    let url = optionalEnv('LEGAL_GUIDE_PDF_URL');
-    if (!url) return null;
-
-    // URL中のファイル名部分（スペース・&等の特殊文字）を確実にエンコードする。
-    // URLオブジェクトへの代入は実装によって再デコードされることがあるため、
-    // 文字列を直接置換する方が確実かつ副作用がない。
-    //   手順: まず既存の%エンコードを一度デコードして重複エンコードを防ぎ、
-    //   その後 encodeURIComponent でパスセグメントを再エンコード。
-    //   ただし "/" はパス区切りなので置換しない。
-    try {
-        // origin + path を分解し、パスセグメントのみ安全にエンコードする
-        const urlObj = new URL(url);
-        const encodedSegments = urlObj.pathname
-            .split('/')
-            .map((seg) => encodeURIComponent(decodeURIComponent(seg)))
-            .join('/');
-        // search/hash はそのまま保持 (今回は不要だが念のため)
-        url = `${urlObj.origin}${encodedSegments}${urlObj.search}${urlObj.hash}`;
-    } catch {
-        // URLパースに失敗した場合のフォールバック: 生文字列の空白と & を置換
-        url = url.replace(/ /g, '%20').replace(/&/g, '%26');
+    
+    // キャッシュが有効なら即座に返す
+    if (pdfCache && pdfCache.expiresAt > Date.now()) {
+        return { buffer: pdfCache.buffer, bytes: pdfCache.bytes, fromCache: true };
     }
-
-    if (isFresh(pdfCache)) {
-        return {
-            buffer: pdfCache!.buffer,
-            bytes: pdfCache!.bytes,
-            sourceUrl: pdfCache!.sourceUrl,
-            fromCache: true,
-        };
-    }
+    // 既に誰かがfetch中なら相乗りする
     if (pdfInflight) {
         const inflight = await pdfInflight;
-        return inflight
-            ? { buffer: inflight.buffer, bytes: inflight.bytes, sourceUrl: inflight.sourceUrl, fromCache: false }
-            : null;
+        return inflight ? { buffer: inflight.buffer, bytes: inflight.bytes, fromCache: false } : null;
     }
 
     pdfInflight = (async () => {
-        const ac = new AbortController();
-        const timer = setTimeout(() => ac.abort(new Error('legal_pdf_timeout')), FETCH_TIMEOUT_MS);
         try {
-            const res = await fetch(url, {
-                signal: ac.signal,
-                headers: { Accept: 'application/pdf,application/octet-stream;q=0.9,*/*;q=0.1' },
-            });
-            if (!res.ok) {
-                log?.warn({ event: 'legal_pdf.fetch_failed', status: res.status, url });
+            const admin = getAdminClient();
+            
+            // SDKを使用して安全にダウンロード（URLエンコード問題などを内部で解決）
+            const { data, error } = await admin.storage
+                .from('proofmark-public')
+                .download('legal/ProofMark_Legal_and_Compliance_Guide.pdf');
+
+            if (error || !data) {
+                log?.warn({ event: 'legal_pdf.sdk_download_failed', message: error?.message });
                 return null;
             }
-            const arrayBuf = await res.arrayBuffer();
+
+            const arrayBuf = await data.arrayBuffer();
             const buffer = Buffer.from(arrayBuf);
             const bytes = buffer.byteLength;
-            // PDF magic %PDF- (25 50 44 46 2D)
+
+            // PDF magic %PDF- (25 50 44 46 2D) の検証（破損ファイル対策）
             const isPdf = buffer.length >= 5 &&
                 buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 &&
                 buffer[3] === 0x46 && buffer[4] === 0x2d;
+
             if (!isPdf) {
                 log?.warn({ event: 'legal_pdf.not_pdf', bytes, head: buffer.subarray(0, 8).toString('hex') });
                 return null;
             }
+
             if (bytes > SOFT_SIZE_WARN_BYTES) {
                 log?.warn({ event: 'legal_pdf.soft_size_warn', bytes });
             }
+
             const entry: PdfCacheEntry = {
                 buffer,
                 bytes,
-                sourceUrl: url,
                 fetchedAt: Date.now(),
                 expiresAt: Date.now() + TTL_MS,
             };
             pdfCache = entry;
             log?.info({ event: 'legal_pdf.cached', bytes });
             return entry;
+            
         } catch (err) {
             log?.warn({ event: 'legal_pdf.fetch_error', message: String((err as Error)?.message ?? err) });
             return null;
         } finally {
-            clearTimeout(timer);
             pdfInflight = null;
         }
     })();
 
     const got = await pdfInflight;
     if (!got) return null;
-    return { buffer: got.buffer, bytes: got.bytes, sourceUrl: got.sourceUrl, fromCache: false };
+    return { buffer: got.buffer, bytes: got.bytes, fromCache: false };
 }
 
 /** テスト/Cron 用に手動で破棄するエスケープハッチ。 */

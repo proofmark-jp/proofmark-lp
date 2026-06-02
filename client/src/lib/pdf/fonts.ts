@@ -50,11 +50,11 @@ const FONT_BASE = '/fonts';
 const getBaseUrl = () => typeof window !== 'undefined' ? window.location.origin : '';
 
 const FONT_SOURCES = {
-  notoSansJpRegular: 'https://cdn.jsdelivr.net/gh/google/fonts/ofl/notosansjp/static/NotoSansJP-Regular.ttf',
-  notoSansJpMedium: 'https://cdn.jsdelivr.net/gh/google/fonts/ofl/notosansjp/static/NotoSansJP-Medium.ttf',
-  notoSansJpBold: 'https://cdn.jsdelivr.net/gh/google/fonts/ofl/notosansjp/static/NotoSansJP-Bold.ttf',
-  jetbrainsMonoRegular: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/ttf/JetBrainsMono-Regular.ttf',
-  jetbrainsMonoBold: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/ttf/JetBrainsMono-Bold.ttf',
+  notoSansJpRegular: `${getBaseUrl()}/fonts/NotoSansJP-Regular.ttf`,
+  notoSansJpMedium: `${getBaseUrl()}/fonts/NotoSansJP-Medium.ttf`,
+  notoSansJpBold: `${getBaseUrl()}/fonts/NotoSansJP-Bold.ttf`,
+  jetbrainsMonoRegular: `${getBaseUrl()}/fonts/JetBrainsMono-Regular.ttf`,
+  jetbrainsMonoBold: `${getBaseUrl()}/fonts/JetBrainsMono-Bold.ttf`,
 } as const;
 
 /** 多重登録防止 (HMR 含む) */
