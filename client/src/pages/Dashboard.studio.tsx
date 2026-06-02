@@ -70,6 +70,7 @@ import { StatusMenu } from '../components/ops/StatusMenu';
 import { AuditDrawer } from '../components/ops/AuditDrawer';
 import { SlimUploadDock } from '../components/dashboard/SlimUploadDock';
 import VisibilityToggle from '../components/VisibilityToggle';
+import { executeEvidencePackDownload } from '../components/EvidencePackDownloadButton';
 
 // Chain of Evidence builder (Inspector 内に常設マウント)
 const ProcessBundleComposer = lazy(() =>
@@ -888,38 +889,12 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
 
   const handleEvidence = useCallback(async (cert: CertRow) => {
     try {
-      toast.loading('Evidence Pack を生成しています...', { id: `evidence-${cert.id}` });
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`/api/generate-evidence-pack?cert=${cert.id}`, {
-        headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
-        credentials: 'omit',
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string; reqId?: string };
-        throw new Error(j.error ?? `HTTP ${res.status}`);
-      }
-      const cd = res.headers.get('content-disposition') || '';
-      const m5987 = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(cd);
-      const mPlain = /filename\s*=\s*"?([^";]+)"?/i.exec(cd);
-      const filename = m5987
-        ? decodeURIComponent(m5987[1])
-        : mPlain
-          ? mPlain[1]
-          : `proofmark-evidence-${cert.id.slice(0, 8)}.zip`;
-      const blob = await res.blob();
-      const href = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = href;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(href);
-      toast.success('Evidence Pack をダウンロードしました', { id: `evidence-${cert.id}` });
+      toast.loading('Evidence Pack を生成しています…', { id: `evidence-${cert.id}` });
+      await executeEvidencePackDownload({ certId: cert.id });
     } catch (e) {
-      toast.error('Evidence Pack 生成に失敗', {
+      toast.error('Evidence Pack の生成に失敗しました', {
         id: `evidence-${cert.id}`,
-        description: e instanceof Error ? e.message : 'API をご確認ください。',
+        description: e instanceof Error ? e.message : 'ネットワーク接続を確認してください。',
       });
     }
   }, []);

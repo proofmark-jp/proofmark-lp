@@ -1,14 +1,18 @@
 /**
- * EvidencePackDownloadButton.tsx — In-Browser ZIP Assembly Architecture (v5)
+ * EvidencePackDownloadButton.tsx — In-Browser ZIP Assembly Architecture (v6)
  * ─────────────────────────────────────────────────────────────────────────────
- * Figma・Figmaライクなアーキテクチャ:
+ * アーキテクチャ:
  *   1. APIから「暗号部品のJSON Payload」を取得 (GET)
  *   2. ブラウザで @react-pdf/renderer により PDF を生成
  *   3. Payload の files[] を JSZip でブラウザ内にアセンブル
  *   4. file-saver の saveAs() でZIPをダウンロード
  *
- * サーバー側で archiver / ZIP ストリームは一切行わない。
- * タイムアウト・メモリリークのリスクをゼロに。
+ * v6 の変更:
+ *   - ダウンロードの全フローを純粋な非同期関数 `executeEvidencePackDownload`
+ *     として切り出し、UI（コンポーネント）から完全分離。
+ *   - Dashboard.studio.tsx など、ボタンUIを持たない呼び出し元が
+ *     直接 `executeEvidencePackDownload` をインポートして使用できる。
+ *   - コンポーネント本体は `executeEvidencePackDownload` の薄いラッパー。
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -23,7 +27,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
 // ─────────────────────────────────────────────────────────
-// Types (API Payload契約)
+// Types (API Payload 契約)
 // ─────────────────────────────────────────────────────────
 
 type FileEntry =
@@ -57,31 +61,169 @@ interface EvidencePackPayload {
 }
 
 // ─────────────────────────────────────────────────────────
-// Component Props
+// Download Params
 // ─────────────────────────────────────────────────────────
 
-interface Props {
+export interface EvidencePackDownloadParams {
     certId?: string;
-    /** Spot orderの場合: spot session ID */
+    /** Spot orderの場合: stripe session ID */
     spotSession?: string;
     /** Spot orderの場合: staging ID */
     stagingId?: string;
     /** 後方互換: 旧来のコードが渡す certId prop */
     apiData?: any;
+}
+
+// ─────────────────────────────────────────────────────────
+// ★ Core: 純粋な非同期ダウンロード関数 (UI 非依存)
+//    Dashboard.studio.tsx 等の呼び出し元から直接 import して使用可能。
+// ─────────────────────────────────────────────────────────
+
+/**
+ * Evidence Pack のダウンロード全フローを実行する。
+ *
+ * - supabase セッション取得
+ * - APIからJSON Payloadをfetch (GET)
+ * - @react-pdf/renderer でPDF生成
+ * - JSZip でブラウザ内ZIP組み立て
+ * - file-saver の saveAs でダウンロード発火
+ *
+ * @param params    certId / spotSession / stagingId のいずれかを指定
+ * @param onPhaseChange フェーズ変更通知コールバック (任意)
+ * @throws エラー時は `Error` をスローする (呼び出し元でキャッチすること)
+ */
+export async function executeEvidencePackDownload(
+    params: EvidencePackDownloadParams,
+    onPhaseChange?: (phase: 'fetching' | 'generating' | 'downloading' | 'building') => void,
+): Promise<void> {
+    const resolvedCertId = params.certId ?? params.apiData?.id ?? '';
+    const { spotSession, stagingId } = params;
+
+    const toastKey = `evidence-${resolvedCertId || stagingId || 'pack'}`;
+
+    // ── 1. セッション確認 ────────────────────────────────────
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+        throw new Error('ログインセッションが切れました。再ログインしてください。');
+    }
+
+    // ── 2. フォントを先行登録 (PDF生成前に呼ぶことでクラッシュを防止) ──
+    ensurePdfFontsRegistered();
+
+    // ── 3. APIからJSON Payloadを取得 (GET) ───────────────────
+    onPhaseChange?.('fetching');
+
+    let apiUrl: string;
+    if (resolvedCertId) {
+        apiUrl = `/api/generate-evidence-pack?cert=${resolvedCertId}`;
+    } else if (spotSession && stagingId) {
+        apiUrl = `/api/generate-evidence-pack?spot=${spotSession}&staging=${stagingId}`;
+    } else {
+        throw new Error('ダウンロードに必要なパラメータが不足しています');
+    }
+
+    const payloadRes = await fetch(apiUrl, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        credentials: 'include',
+    });
+
+    if (!payloadRes.ok) {
+        const j = await payloadRes.json().catch(() => ({})) as { error?: string };
+        throw new Error(j.error ?? `サーバーエラーが発生しました (HTTP ${payloadRes.status})`);
+    }
+
+    const payload: EvidencePackPayload = await payloadRes.json();
+    const { pdfMeta, files, filename } = payload;
+
+    // ── 4. ブラウザ側でPDFを直列生成 ─────────────────────────
+    onPhaseChange?.('generating');
+    toast.loading('証明書 PDF を生成しています… (1/2)', { id: toastKey });
+
+    const certBlob = await generateCertificatePdfBlob(pdfMeta.certInput);
+
+    // スレッドを解放してGCとアニメーションに機会を与える
+    await new Promise<void>((r) => setTimeout(r, 50));
+
+    toast.loading('カバーレター PDF を生成しています… (2/2)', { id: toastKey });
+    const coverBlob = await generateCoverLetterPdfBlob(pdfMeta.coverInput);
+
+    await new Promise<void>((r) => setTimeout(r, 50));
+
+    // ── 5. URL型ファイルを並列fetch ───────────────────────────
+    onPhaseChange?.('downloading');
+    toast.loading('アセットを取得中…', { id: toastKey });
+
+    const zip = new JSZip();
+
+    // 生成したPDF 2種を先に追加
+    zip.file('Certificate_of_Authenticity.pdf', certBlob);
+    zip.file('Cover_Letter.pdf', coverBlob);
+
+    // text / base64 は同期追加、url は並列fetch
+    const urlFetches: Promise<void>[] = [];
+
+    for (const f of files) {
+        if (f.type === 'text') {
+            zip.file(f.name, f.content);
+        } else if (f.type === 'base64') {
+            zip.file(f.name, f.content, { base64: true });
+        } else if (f.type === 'url') {
+            urlFetches.push(
+                fetch(f.url)
+                    .then((r) => {
+                        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                        return r.blob();
+                    })
+                    .then((blob) => {
+                        zip.file(f.name, blob);
+                    })
+                    .catch((err) => {
+                        // fetch失敗でもZIP生成を続行し、プレースホルダを挿入
+                        const msg = err instanceof Error ? err.message : String(err);
+                        zip.file(`${f.name}.MISSING.txt`, `Could not fetch asset: ${msg}\n`);
+                    }),
+            );
+        }
+    }
+
+    await Promise.all(urlFetches);
+
+    // ── 6. JSZipでZIP構築 ────────────────────────────────────
+    onPhaseChange?.('building');
+    toast.loading('ZIP を構築中…', { id: toastKey });
+
+    const zipBlob = await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 },
+    });
+
+    // ── 7. ダウンロード発火 ───────────────────────────────────
+    saveAs(zipBlob, filename);
+
+    toast.success('Evidence Pack のダウンロードが完了しました', { id: toastKey });
+}
+
+// ─────────────────────────────────────────────────────────
+// Component Props
+// ─────────────────────────────────────────────────────────
+
+interface Props extends EvidencePackDownloadParams {
     variant?: 'primary' | 'ghost';
     label?: string;
 }
 
 // ─────────────────────────────────────────────────────────
-// Download Phases
+// Download Phases (UI 用ラベル)
 // ─────────────────────────────────────────────────────────
 
 type Phase =
     | 'idle'
-    | 'fetching'    // APIからJSONペイロード取得中
-    | 'generating'  // PDF生成中
-    | 'downloading' // URL型ファイルのfetch中
-    | 'building';   // JSZipでZIP構築中
+    | 'fetching'
+    | 'generating'
+    | 'downloading'
+    | 'building';
 
 const PHASE_LABELS: Record<Phase, string> = {
     idle:        'Evidence Pack をダウンロード',
@@ -92,7 +234,7 @@ const PHASE_LABELS: Record<Phase, string> = {
 };
 
 // ─────────────────────────────────────────────────────────
-// Component
+// Component — executeEvidencePackDownload の薄いUIラッパー
 // ─────────────────────────────────────────────────────────
 
 export default function EvidencePackDownloadButton({
@@ -108,120 +250,14 @@ export default function EvidencePackDownloadButton({
 
     const handleDownload = useCallback(async () => {
         if (isProcessing) return;
-
-        // certId は apiData.id からも補完可能
-        const resolvedCertId = certId ?? apiData?.id ?? '';
-        const toastId = toast.loading('データを取得中…', { id: `evidence-${resolvedCertId || stagingId}` });
         setPhase('fetching');
-
         try {
-            // ── 1. セッション確認 ────────────────────────────────
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.access_token) throw new Error('ログインセッションが切れました。再ログインしてください。');
-
-            // ── 2. フォントを確実に登録 (PDF生成クラッシュ防止) ───
-            ensurePdfFontsRegistered();
-
-            // ── 3. APIからJSON Payloadを取得 (GET) ───────────────
-            // Auth flow: ?cert=UUID
-            // Spot flow: ?spot=sessionId&staging=uuid
-            let apiUrl: string;
-            if (resolvedCertId) {
-                apiUrl = `/api/generate-evidence-pack?cert=${resolvedCertId}`;
-            } else if (spotSession && stagingId) {
-                apiUrl = `/api/generate-evidence-pack?spot=${spotSession}&staging=${stagingId}`;
-            } else {
-                throw new Error('ダウンロードに必要なパラメータが不足しています');
-            }
-
-            const payloadRes = await fetch(apiUrl, {
-                method: 'GET',
-                headers: { Authorization: `Bearer ${session.access_token}` },
-                credentials: 'include',
-            });
-
-            if (!payloadRes.ok) {
-                const j = await payloadRes.json().catch(() => ({}));
-                throw new Error(j.error ?? `サーバーエラーが発生しました (HTTP ${payloadRes.status})`);
-            }
-
-            const payload: EvidencePackPayload = await payloadRes.json();
-            const { pdfMeta, files, filename } = payload;
-
-            // ── 4. ブラウザ側でPDFを直列生成 ──────────────────────
-            setPhase('generating');
-            toast.loading('証明書 PDF を生成しています… (1/2)', { id: toastId });
-            const certBlob = await generateCertificatePdfBlob(pdfMeta.certInput);
-
-            // スレッドを解放してGCとアニメーションに機会を与える
-            await new Promise<void>((r) => setTimeout(r, 50));
-
-            toast.loading('カバーレター PDF を生成しています… (2/2)', { id: toastId });
-            const coverBlob = await generateCoverLetterPdfBlob(pdfMeta.coverInput);
-
-            await new Promise<void>((r) => setTimeout(r, 50));
-
-            // ── 5. URL型ファイルを並列fetch ───────────────────────
-            setPhase('downloading');
-            toast.loading('アセットを取得中…', { id: toastId });
-
-            // まずZIPを初期化し、text/base64は先に追加
-            const zip = new JSZip();
-
-            // 生成したPDF2種を追加
-            zip.file('Certificate_of_Authenticity.pdf', certBlob);
-            zip.file('Cover_Letter.pdf', coverBlob);
-
-            // URL型の並列fetch (Promise.all)
-            const urlFetches: Promise<void>[] = [];
-
-            for (const f of files) {
-                if (f.type === 'text') {
-                    zip.file(f.name, f.content);
-                } else if (f.type === 'base64') {
-                    zip.file(f.name, f.content, { base64: true });
-                } else if (f.type === 'url') {
-                    urlFetches.push(
-                        fetch(f.url)
-                            .then(r => {
-                                if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                                return r.blob();
-                            })
-                            .then(blob => {
-                                zip.file(f.name, blob);
-                            })
-                            .catch(err => {
-                                // fetchに失敗してもZIP生成は続行し、プレースホルダを挿入
-                                const msg = err instanceof Error ? err.message : String(err);
-                                zip.file(
-                                    `${f.name}.MISSING.txt`,
-                                    `Could not fetch asset: ${msg}\n`,
-                                );
-                            }),
-                    );
-                }
-            }
-
-            // 並列fetchが全て完了するのを待つ
-            await Promise.all(urlFetches);
-
-            // ── 6. JSZipでZIP構築 ────────────────────────────────
-            setPhase('building');
-            toast.loading('ZIP を構築中…', { id: toastId });
-
-            const zipBlob = await zip.generateAsync({
-                type: 'blob',
-                compression: 'DEFLATE',
-                compressionOptions: { level: 6 },
-            });
-
-            // ── 7. ダウンロード発火 ───────────────────────────────
-            saveAs(zipBlob, filename);
-
-            toast.success('Evidence Pack のダウンロードが完了しました', { id: toastId });
+            await executeEvidencePackDownload(
+                { certId, spotSession, stagingId, apiData },
+                (p) => setPhase(p),
+            );
         } catch (e) {
             toast.error('ダウンロードに失敗しました', {
-                id: toastId,
                 description: e instanceof Error ? e.message : 'ネットワーク接続を確認してください。',
             });
         } finally {
