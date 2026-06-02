@@ -1,30 +1,23 @@
 /**
- * GET /api/generate-evidence-pack?cert=<UUID>
- *      OR
- * GET /api/generate-evidence-pack?spot=<sessionId>&staging=<uuid>
+ * POST /api/generate-evidence-pack
+ *   body: { cert: UUID, certificate_b64: string, cover_letter_b64: string }
  *
- * Phase 12.4 — Evidence Engine Value-Add pass.
+ *      OR (Spot order)
+ * POST /api/generate-evidence-pack
+ *   body: { spot: sessionId, staging: uuid, certificate_b64: string, cover_letter_b64: string }
+ *
+ * Zero-Cost Architecture (v3):
+ *   PDF generation is fully offloaded to the browser via @react-pdf/renderer.
+ *   This API receives pre-rendered PDFs as Base64 strings, decodes them to
+ *   Buffer, and appends them directly into the ZIP archive.
+ *   NO React / JSX / @react-pdf/renderer imports on the server side.
  *
  * Phase 11.B で確立した invariants は厳守:
  *   • archiver を `res` に直接 pipe。原画は Buffer 化せずストリーム結合。
- *   • FIXED_ZIP_TIME による決定論的 ZIP。
  *   • upstream stream の AbortController + watchdog timeout。
  *   • TSA CA bundle の process-local cache (LRU=1, TTL 6h)。
- *   • c2pa.json 10KB ハードキャップ + 動的 CLIENT_LETTER。
- *
- * Phase 12.4 で追加:
- *   1. **chain_of_evidence.json** — `cert_audit_logs` から監査ログを時系列
- *      取得し、`fn_verify_audit_chain` の結果を chain_ok として埋め込む。
- *      Buffer のまま archiver に渡す (動的生成 / DB 軽量読み出しのみ)。
- *   2. ** /legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf ** — Supabase public バケット
- *      にあらかじめ配置された静的 PDF を CDN から fetch し、Vercel グローバル
- *      スコープに Buffer キャッシュ(TTL 6h)。PDFKit 等の動的 PDF 生成は
- *      絶対に使わない(Zero - Op 厳守)。
- *   3. ** stream.pipeline 化 ** — archiver→res の接続を`node:stream/promises`
- *      の pipeline で行い、backpressure を Node.js 側に確実に委ねる。
- *      これにより slow consumer(スマホ回線) でも heap が膨張しない。
- *   4. CLIENT_LETTER に「法務向け参考 PDF が同梱される旨」を、PDF が実際に
- *      同梱できた時のみ動的に追記。
+ *   • c2pa.json 10KB ハードキャップ。
+ *   • stream.pipeline 化 (backpressure 安全)。
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -45,9 +38,6 @@ import { buildChainOfEvidence } from './_lib/chain-of-evidence.js';
 import { getLegalCopyrightPdf } from './_lib/legal-pdf-cache.js';
 
 export const config = { maxDuration: 300 };
-
-// --- React-PDF Dynamic Generation Additions ---
-import { generateCertificatePdfBuffer, generateCoverLetterPdfBuffer } from '../src/lib/pdf/generator.js';
 
 function formatBytes(bytes: number | null | undefined): string {
     if (bytes === undefined || bytes === null || isNaN(bytes) || bytes < 0) return '—';
@@ -382,7 +372,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const log = makeLogger('generate-evidence-pack');
     res.setHeader('x-request-id', log.ctx.reqId);
 
-    if (!methodGuard(req, res, ['GET'])) return;
+    if (!methodGuard(req, res, ['GET', 'POST'])) return;
+
+    // POST body のパース (JSON)
+    let reqBody: Record<string, string> = {};
+    if (req.method === 'POST') {
+        if (typeof req.body === 'object' && req.body !== null) {
+            reqBody = req.body as Record<string, string>;
+        } else if (typeof req.body === 'string') {
+            try { reqBody = JSON.parse(req.body); } catch { /* ignore */ }
+        }
+    }
 
     // --- Rate Limit Check ---
     if (ratelimit) {
@@ -403,9 +403,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const upstreamStreams: ManagedStream[] = [];
 
     try {
-        const certParam = (req.query.cert as string | undefined) ?? '';
-        const spotSession = (req.query.spot as string | undefined) ?? '';
-        const stagingId = (req.query.staging as string | undefined) ?? '';
+        // GET: query params / POST: body
+        const certParam    = (reqBody.cert    ?? (req.query.cert    as string | undefined) ?? '');
+        const spotSession  = (reqBody.spot    ?? (req.query.spot    as string | undefined) ?? '');
+        const stagingId    = (reqBody.staging ?? (req.query.staging as string | undefined) ?? '');
+
+        // クライアント側で生成済みの PDF (Base64) を受け取る
+        const certificateB64 = typeof reqBody.certificate_b64  === 'string' ? reqBody.certificate_b64  : null;
+        const coverLetterB64 = typeof reqBody.cover_letter_b64 === 'string' ? reqBody.cover_letter_b64 : null;
+
+        // POST リクエストでは Authorization ヘッダの代替として body の access_token を許容
+        if (req.method === 'POST' && reqBody.access_token && !req.headers.authorization) {
+            (req.headers as Record<string, string>).authorization = `Bearer ${reqBody.access_token}`;
+        }
 
         if (!certParam && !spotSession) throw new HttpError(400, 'cert or spot is required');
 
@@ -524,12 +534,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const sha256 = cert.sha256 ?? '';
             const verifyUrl = `https://proofmark.jp/cert/${cert.id}`;
 
-            const host = req.headers.host || 'proofmark.jp';
-            const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
-            const origin = `${protocol}://${host}`;
-            registerServerFonts(origin);
-
-            // --- Original Filename Selection Logic (Bug 1 Fix) ---
+            // --- Original Filename Selection Logic ---
             const rawName = (cert.original_filename && cert.original_filename !== 'unknown_file')
                 ? cert.original_filename
                 : (cert.file_name || 'asset.bin');
@@ -538,12 +543,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const c2paBlob = safeC2paJson(cert.c2pa_manifest);
             const c2paIncluded = c2paBlob !== null;
 
-            // chain_of_evidence.json (Phase 12.4)
+            // chain_of_evidence.json
             let chainBuffer: Buffer | null = null;
             try {
                 chainBuffer = await buildChainOfEvidence(admin, cert.id, { log });
                 if (chainBuffer.byteLength > 1 * 1024 * 1024) {
-                    // Audit chain は通常 数十KB ですが、念のためソフト上限
                     log.warn({ event: 'chain.size_warn', bytes: chainBuffer.byteLength });
                 }
             } catch (err) {
@@ -552,68 +556,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
             const chainIncluded = chainBuffer !== null && chainBuffer.byteLength > 0;
 
-            // Legal guide PDF (Phase 12.4) — CDN 経由でグローバルキャッシュから取得
+            // Legal guide PDF — CDN 経由でグローバルキャッシュから取得
             const legalPdf = await getLegalCopyrightPdf(log);
             const legalGuideIncluded = legalPdf !== null;
 
-            // --- React-PDF Dynamic PDF Generation ---
-            let coverLetterBuffer: Buffer | null = null;
-            let certificateBuffer: Buffer | null = null;
+            // --- クライアント側で生成済みの PDF を Buffer に変換 ---
+            const coverLetterBuffer: Buffer | null = coverLetterB64
+                ? Buffer.from(coverLetterB64, 'base64')
+                : null;
+            const certificateBuffer: Buffer | null = certificateB64
+                ? Buffer.from(certificateB64, 'base64')
+                : null;
 
-            try {
-                const jstTime = formatJst(cert.certified_at ?? cert.proven_at ?? cert.created_at);
-                const humanSize = formatBytes(cert.file_size);
-                const displayCreatorName = profileRecord?.display_name ?? profileRecord?.username ?? 'ProofMark Creator';
-
-                const pdfInput = {
-                    certificateId: cert.id,
-                    creatorDisplayName: displayCreatorName,
-                    fileName: baseFile,
-                    fileSize: humanSize,
-                    sha256: sha256,
-                    timestampJst: jstTime,
-                    verificationUrl: verifyUrl,
-                    sealVariant: (cert.proof_mode === 'private' ? 'teal' : 'gold') as 'teal' | 'gold',
-                    tsaProvider: cert.tsa_provider ?? 'FreeTSA',
-                };
-
-                const treeEntries = [
-                    { name: 'Cover_Letter.pdf', size: '—', description: 'This document (ProofMark Client Hand-off)' },
-                    { name: 'Certificate_of_Authenticity.pdf', size: '—', description: 'Cryptographic Certificate of Authenticity' },
-                    { name: 'hash.txt', size: '—', description: 'Target file SHA-256 hash value' },
-                    { name: 'timestamp.tsr', size: '—', description: 'RFC3161 tamper-proof timestamp token' },
-                    ...(c2paIncluded ? [{ name: 'c2pa.json', size: '—', description: 'Scrubbed Content Credentials manifest' }] : []),
-                    ...(chainIncluded ? [{ name: 'chain_of_evidence.json', size: '—', description: 'Tamper-evident audit trail' }] : []),
-                    ...(legalGuideIncluded ? [{ name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf', size: '—', description: 'Legal Copyright & Compliance PDF' }] : []),
-                    { name: 'verify.sh', size: '—', description: 'Shell verification script (OpenSSL)' },
-                    { name: 'verify.py', size: '—', description: 'Python verification script (OpenSSL)' },
-                    { name: 'metadata.json', size: '—', description: 'Machine-readable evidence metadata' },
-                ];
-
-                const coverLetterInput = {
-                    ...pdfInput,
-                    fileTree: treeEntries,
-                };
-
-                // Render to buffer dynamically via React-PDF generator module
-                const [certBuf, coverBuf] = await Promise.all([
-                    generateCertificatePdfBuffer(pdfInput, origin),
-                    generateCoverLetterPdfBuffer(coverLetterInput, origin),
-                ]);
-
-                certificateBuffer = certBuf;
-                coverLetterBuffer = coverBuf;
-
-                log.info({
-                    event: 'react_pdf.generated',
-                    certSize: certificateBuffer.byteLength,
-                    coverSize: coverLetterBuffer.byteLength
-                });
-            } catch (pdfErr) {
-                log.error({
-                    event: 'react_pdf.generation_failed',
-                    message: String((pdfErr as Error)?.message ?? pdfErr),
-                });
+            if (certificateBuffer) {
+                log.info({ event: 'client_pdf.received', certSize: certificateBuffer.byteLength });
+            } else {
+                log.warn({ event: 'client_pdf.missing', file: 'certificate' });
+            }
+            if (coverLetterBuffer) {
+                log.info({ event: 'client_pdf.received', coverSize: coverLetterBuffer.byteLength });
+            } else {
+                log.warn({ event: 'client_pdf.missing', file: 'cover_letter' });
             }
 
             archive.append(`SHA256= ${sha256}\n`, { name: 'hash.txt', date: zipDate });
@@ -721,70 +684,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const sha256 = spotOrder.sha256 ?? '';
             const verifyUrl = `https://proofmark.jp/spot-issue/result?sid=${spotOrder.stripe_session_id}`;
 
-            const host = req.headers.host || 'proofmark.jp';
-            const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
-            const origin = `${protocol}://${host}`;
-            registerServerFonts(origin);
-
             // Spot は監査ログ・C2PA を持たないが、Legal Guide PDF だけは同梱できる
             const legalPdf = await getLegalCopyrightPdf(log);
             const legalGuideIncluded = legalPdf !== null;
 
-            // --- React-PDF Dynamic PDF Generation for Spot Order ---
-            let coverLetterBuffer: Buffer | null = null;
-            let certificateBuffer: Buffer | null = null;
+            // --- クライアント側で生成済みの PDF を Buffer に変換 ---
+            const coverLetterBuffer: Buffer | null = coverLetterB64
+                ? Buffer.from(coverLetterB64, 'base64')
+                : null;
+            const certificateBuffer: Buffer | null = certificateB64
+                ? Buffer.from(certificateB64, 'base64')
+                : null;
 
-            try {
-                const jstTime = formatJst(spotOrder.paid_at);
-                const baseFile = safeFilename(spotOrder.filename, 'artwork.bin');
-
-                const pdfInput = {
-                    certificateId: spotOrder.staging_id,
-                    creatorDisplayName: spotOrder.email ?? 'ProofMark Spot Creator',
-                    fileName: baseFile,
-                    fileSize: '—',
-                    sha256: sha256,
-                    timestampJst: jstTime,
-                    verificationUrl: verifyUrl,
-                    sealVariant: 'gold' as 'gold',
-                    tsaProvider: 'FreeTSA',
-                };
-
-                const treeEntries = [
-                    { name: 'Cover_Letter.pdf', size: '—', description: 'This document (ProofMark Client Hand-off)' },
-                    { name: 'Certificate_of_Authenticity.pdf', size: '—', description: 'Cryptographic Certificate of Authenticity' },
-                    { name: 'hash.txt', size: '—', description: 'Target file SHA-256 hash value' },
-                    { name: 'timestamp.tsr', size: '—', description: 'RFC3161 tamper-proof timestamp token' },
-                    ...(legalGuideIncluded ? [{ name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf', size: '—', description: 'Legal Copyright & Compliance PDF' }] : []),
-                    { name: 'verify.sh', size: '—', description: 'Shell verification script (OpenSSL)' },
-                    { name: 'verify.py', size: '—', description: 'Python verification script (OpenSSL)' },
-                    { name: 'metadata.json', size: '—', description: 'Machine-readable evidence metadata' },
-                ];
-
-                const coverLetterInput = {
-                    ...pdfInput,
-                    fileTree: treeEntries,
-                };
-
-                // Render to buffer dynamically via React-PDF generator module
-                const [certBuf, coverBuf] = await Promise.all([
-                    generateCertificatePdfBuffer(pdfInput, origin),
-                    generateCoverLetterPdfBuffer(coverLetterInput, origin),
-                ]);
-
-                certificateBuffer = certBuf;
-                coverLetterBuffer = coverBuf;
-
-                log.info({
-                    event: 'react_pdf.spot.generated',
-                    certSize: certificateBuffer.byteLength,
-                    coverSize: coverLetterBuffer.byteLength
-                });
-            } catch (pdfErr) {
-                log.error({
-                    event: 'react_pdf.spot.generation_failed',
-                    message: String((pdfErr as Error)?.message ?? pdfErr),
-                });
+            if (certificateBuffer) {
+                log.info({ event: 'client_pdf.spot.received', certSize: certificateBuffer.byteLength });
+            } else {
+                log.warn({ event: 'client_pdf.spot.missing', file: 'certificate' });
+            }
+            if (coverLetterBuffer) {
+                log.info({ event: 'client_pdf.spot.received', coverSize: coverLetterBuffer.byteLength });
+            } else {
+                log.warn({ event: 'client_pdf.spot.missing', file: 'cover_letter' });
             }
 
             // Append Generated PDFs for Spot
