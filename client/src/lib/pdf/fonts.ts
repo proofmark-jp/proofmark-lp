@@ -47,11 +47,11 @@ export const PDF_FONT_FAMILY = {
 const FONT_BASE = '/fonts';
 
 const FONT_SOURCES = {
-  notoSansJpRegular: `${FONT_BASE}/NotoSansJP-Regular.ttf`,
-  notoSansJpMedium: `${FONT_BASE}/NotoSansJP-Medium.ttf`,
-  notoSansJpBold: `${FONT_BASE}/NotoSansJP-Bold.ttf`,
-  jetbrainsMonoRegular: `${FONT_BASE}/JetBrainsMono-Regular.ttf`,
-  jetbrainsMonoBold: `${FONT_BASE}/JetBrainsMono-Bold.ttf`,
+  notoSansJpRegular: 'https://cdn.jsdelivr.net/gh/google/fonts/ofl/notosansjp/static/NotoSansJP-Regular.ttf',
+  notoSansJpMedium: 'https://cdn.jsdelivr.net/gh/google/fonts/ofl/notosansjp/static/NotoSansJP-Medium.ttf',
+  notoSansJpBold: 'https://cdn.jsdelivr.net/gh/google/fonts/ofl/notosansjp/static/NotoSansJP-Bold.ttf',
+  jetbrainsMonoRegular: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/ttf/JetBrainsMono-Regular.ttf',
+  jetbrainsMonoBold: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/ttf/JetBrainsMono-Bold.ttf',
 } as const;
 
 /** 多重登録防止 (HMR 含む) */

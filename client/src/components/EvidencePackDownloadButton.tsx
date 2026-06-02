@@ -1,5 +1,5 @@
 /**
- * EvidencePackDownloadButton.tsx — Zero-Cost Architecture (v4)
+ * EvidencePackDownloadButton.tsx — Zero-Cost Architecture (v5)
  * -------------------------------------------------------------------
  * ブラウザ側で React-PDF を使い 2 つの PDF を Blob 生成し、
  * Base64 エンコードして /api/generate-evidence-pack に POST。
@@ -216,10 +216,14 @@ export default function EvidencePackDownloadButton({
                 credentials: 'omit',
             });
 
+            // 1. `if (!res.ok)` の場合のみ `await res.json()` でエラーメッセージを抽出しスローする
             if (!res.ok) {
                 const j = await res.json().catch(() => ({}));
                 throw new Error(j.error ?? `サーバーエラーが発生しました (HTTP ${res.status})`);
             }
+
+            // 2. 成功時は 必ず `const blob = await res.blob();` としてバイナリを受け取る
+            const blob = await res.blob();
 
             // ── 6. ファイル名抽出 & Blob ダウンロード ─────────────
             const cd = res.headers.get('content-disposition') || '';
@@ -231,7 +235,7 @@ export default function EvidencePackDownloadButton({
                     ? mPlain[1]
                     : `proofmark-evidence-${certId.slice(0, 8)}.zip`;
 
-            const blob = await res.blob();
+            // 3. `URL.createObjectURL(blob)` を使用して `<a>` タグを生成し、ネイティブのファイルダウンロードを発火させる
             const href = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = href;
