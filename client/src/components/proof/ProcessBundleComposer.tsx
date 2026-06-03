@@ -18,6 +18,23 @@ import {
 } from 'lucide-react';
 import { createProcessBundle } from '../../lib/proofmark-api';
 import type { BundleStepType, CertificateRecord, ProcessBundleDraftStep } from '../../lib/proofmark-types';
+import {
+  DndContext,
+  closestCenter,
+  useSensor,
+  useSensors,
+  MouseSensor,
+  TouchSensor,
+  DragStartEvent,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  horizontalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 /* ═══════════════════════════════════════════════════════════════
    HELPERS
@@ -102,61 +119,37 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
   /** Index of insertion slot being hovered (-1 = none, 0..steps.length) */
   const [insertSlotIndex, setInsertSlotIndex] = useState(-1);
 
-  /* ── card reorder drag state ── */
-  const draggedIndexRef = useRef<number | null>(null);
-  const [reorderOverIndex, setReorderOverIndex] = useState<number | null>(null);
-  const [isDraggingCard, setIsDraggingCard] = useState(false);
+  /* ── dnd-kit sensors configuration ── */
+  const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
+      },
+    }),
+  );
 
-  const onCardDragStart = useCallback((e: React.DragEvent, index: number) => {
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(index));
-    draggedIndexRef.current = index;
-    setIsDraggingCard(true);
-    // Slight delay so the browser renders the drag ghost before we apply opacity
-    requestAnimationFrame(() => {
-      setIsDraggingCard(true);
-    });
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
   }, []);
 
-  const onCardDragEnter = useCallback((e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    if (draggedIndexRef.current === null) return;
-    if (index !== draggedIndexRef.current) {
-      setReorderOverIndex(index);
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+    if (over && active.id !== over.id) {
+      setSteps((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
     }
-  }, []);
-
-  const onCardDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  }, []);
-
-  const onCardDrop = useCallback((e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const fromIndex = draggedIndexRef.current;
-    if (fromIndex === null || fromIndex === dropIndex) {
-      draggedIndexRef.current = null;
-      setReorderOverIndex(null);
-      setIsDraggingCard(false);
-      return;
-    }
-    setSteps((cur) => {
-      const copy = [...cur];
-      const [moved] = copy.splice(fromIndex, 1);
-      copy.splice(dropIndex > fromIndex ? dropIndex - 1 : dropIndex, 0, moved);
-      return copy;
-    });
-    draggedIndexRef.current = null;
-    setReorderOverIndex(null);
-    setIsDraggingCard(false);
-  }, []);
-
-  const onCardDragEnd = useCallback((_e: React.DragEvent) => {
-    // Always fully reset — prevents opacity-blur bug when drag is cancelled by Escape
-    draggedIndexRef.current = null;
-    setReorderOverIndex(null);
-    setIsDraggingCard(false);
   }, []);
 
   /* ── click-based move (accessibility alternative to D&D) ── */
@@ -686,100 +679,94 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
 
           {/* Scrollable canvas */}
           <div className="overflow-x-auto pb-6 -mx-2 px-2 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[#1C1A38]">
-            <div className="flex items-stretch w-max pr-8">
-              {/* Insert slot BEFORE first step */}
-              <InsertSlot
-                index={0}
-                active={insertSlotIndex === 0}
-                visible={globalDragOver}
-                onHover={setInsertSlotIndex}
-              />
-
-              {steps.map((step, index) => (
-                <div key={step.id} className="flex items-stretch shrink-0">
-                  {/* ── Reorder drop indicator (before card) ── */}
-                  {isDraggingCard && reorderOverIndex === index && draggedIndexRef.current !== null && draggedIndexRef.current > index && (
-                    <div className="w-1.5 rounded-full bg-[#6C3EF4] shadow-[0_0_12px_rgba(108,62,244,0.5)] mx-0.5 my-4 shrink-0 transition-all" />
-                  )}
-                  {/* ── Step Card ── */}
-                  <StepCard
-                    step={step}
-                    index={index}
-                    totalSteps={steps.length}
-                    editingField={editingField}
-                    onSetEditing={setEditingField}
-                    onUpdate={updateStep}
-                    onRemove={removeStep}
-                    onMoveStep={(dir) => moveStep(index, dir)}
-                    isDraggedOver={reorderOverIndex === index}
-                    isDragging={isDraggingCard && draggedIndexRef.current === index}
-                    onCardDragStart={(e) => onCardDragStart(e, index)}
-                    onCardDragEnter={(e) => onCardDragEnter(e, index)}
-                    onCardDragOver={onCardDragOver}
-                    onCardDrop={(e) => onCardDrop(e, index)}
-                    onCardDragEnd={onCardDragEnd}
-                    onReplace={(file) => {
-                      const cache = urlCacheRef.current;
-                      const old = cache.get(step.id);
-                      if (old) URL.revokeObjectURL(old);
-                      cache.delete(step.id);
-                      const newUrl = getPreviewUrl(step.id, file);
-                      updateStep(step.id, {
-                        file,
-                        previewUrl: newUrl,
-                        title: fileBaseName(file.name) || step.title,
-                        hashState: 'idle',
-                      });
-                      computeHash(step.id, file);
-                    }}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={steps.map((s) => s.id)} strategy={horizontalListSortingStrategy}>
+                <div className="flex items-stretch w-max pr-8">
+                  {/* Insert slot BEFORE first step */}
+                  <InsertSlot
+                    index={0}
+                    active={insertSlotIndex === 0}
+                    visible={globalDragOver}
+                    onHover={setInsertSlotIndex}
                   />
-                  {/* ── Reorder drop indicator (after card) ── */}
-                  {isDraggingCard && reorderOverIndex === index && draggedIndexRef.current !== null && draggedIndexRef.current < index && (
-                    <div className="w-1.5 rounded-full bg-[#6C3EF4] shadow-[0_0_12px_rgba(108,62,244,0.5)] mx-0.5 my-4 shrink-0 transition-all" />
-                  )}
 
-                  {/* Chain connector + insert slot AFTER this step */}
-                  {index < steps.length - 1 && (
-                    <div className="relative flex items-center shrink-0">
-                      <ChainConnector verified={step.hashState === 'verified' && steps[index + 1]?.hashState === 'verified'} />
-                      <InsertSlot
-                        index={index + 1}
-                        active={insertSlotIndex === index + 1}
-                        visible={globalDragOver}
-                        onHover={setInsertSlotIndex}
+                  {steps.map((step, index) => (
+                    <div key={step.id} className="flex items-stretch shrink-0">
+                      {/* ── Step Card ── */}
+                      <StepCard
+                        step={step}
+                        index={index}
+                        totalSteps={steps.length}
+                        editingField={editingField}
+                        onSetEditing={setEditingField}
+                        onUpdate={updateStep}
+                        onRemove={removeStep}
+                        onReplace={(file) => {
+                          const cache = urlCacheRef.current;
+                          const old = cache.get(step.id);
+                          if (old) URL.revokeObjectURL(old);
+                          cache.delete(step.id);
+                          const newUrl = getPreviewUrl(step.id, file);
+                          updateStep(step.id, {
+                            file,
+                            previewUrl: newUrl,
+                            title: fileBaseName(file.name) || step.title,
+                            hashState: 'idle',
+                          });
+                          computeHash(step.id, file);
+                        }}
+                        onMoveStep={(dir) => moveStep(index, dir)}
                       />
-                    </div>
-                  )}
 
-                  {/* After last step: connector to add button */}
-                  {index === steps.length - 1 && (
-                    <div className="relative flex items-center shrink-0">
-                      <ChainConnectorGhost />
-                      <InsertSlot
-                        index={steps.length}
-                        active={insertSlotIndex === steps.length}
-                        visible={globalDragOver}
-                        onHover={setInsertSlotIndex}
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
+                      {/* Chain connector + insert slot AFTER this step */}
+                      {index < steps.length - 1 && (
+                        <div className="relative flex items-center shrink-0">
+                          <ChainConnector verified={step.hashState === 'verified' && steps[index + 1]?.hashState === 'verified'} />
+                          <InsertSlot
+                            index={index + 1}
+                            active={insertSlotIndex === index + 1}
+                            visible={globalDragOver}
+                            onHover={setInsertSlotIndex}
+                          />
+                        </div>
+                      )}
 
-              {/* Ghost add card */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-[190px] md:w-[210px] rounded-2xl border-2 border-dashed border-[#1C1A38] hover:border-[#6C3EF4]/30 bg-transparent hover:bg-[#6C3EF4]/5 flex flex-col items-center justify-center gap-2 py-14 transition-all group/add shrink-0"
-              >
-                <div className="w-10 h-10 rounded-xl bg-[#6C3EF4]/10 group-hover/add:bg-[#6C3EF4]/20 flex items-center justify-center transition-colors">
-                  <ImagePlus className="w-5 h-5 text-[#6C3EF4]" />
+                      {/* After last step: connector to add button */}
+                      {index === steps.length - 1 && (
+                        <div className="relative flex items-center shrink-0">
+                          <ChainConnectorGhost />
+                          <InsertSlot
+                            index={steps.length}
+                            active={insertSlotIndex === steps.length}
+                            visible={globalDragOver}
+                            onHover={setInsertSlotIndex}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Ghost add card */}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-[190px] md:w-[210px] rounded-2xl border-2 border-dashed border-[#1C1A38] hover:border-[#6C3EF4]/30 bg-transparent hover:bg-[#6C3EF4]/5 flex flex-col items-center justify-center gap-2 py-14 transition-all group/add shrink-0"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-[#6C3EF4]/10 group-hover/add:bg-[#6C3EF4]/20 flex items-center justify-center transition-colors">
+                      <ImagePlus className="w-5 h-5 text-[#6C3EF4]" />
+                    </div>
+                    <span className="text-xs font-bold text-[#A8A0D8]/50 group-hover/add:text-[#A8A0D8]">
+                      工程を追加
+                    </span>
+                  </button>
                 </div>
-                <span className="text-xs font-bold text-[#A8A0D8]/50 group-hover/add:text-[#A8A0D8]">
-                  工程を追加
-                </span>
-              </button>
-            </div>
+              </SortableContext>
+            </DndContext>
           </div>
         </div>
       )}
@@ -993,13 +980,6 @@ function StepCard({
   onRemove,
   onReplace,
   onMoveStep,
-  isDraggedOver,
-  isDragging,
-  onCardDragStart,
-  onCardDragEnter,
-  onCardDragOver,
-  onCardDrop,
-  onCardDragEnd,
 }: {
   step: WorkspaceStep;
   index: number;
@@ -1010,58 +990,64 @@ function StepCard({
   onRemove: (id: string) => void;
   onReplace: (file: File) => void;
   onMoveStep: (direction: -1 | 1) => void;
-  isDraggedOver: boolean;
-  isDragging: boolean;
-  onCardDragStart: (e: React.DragEvent) => void;
-  onCardDragEnter: (e: React.DragEvent) => void;
-  onCardDragOver: (e: React.DragEvent) => void;
-  onCardDrop: (e: React.DragEvent) => void;
-  onCardDragEnd: (e: React.DragEvent) => void;
 }) {
   const isEditingTitle = editingField?.stepId === step.id && editingField?.field === 'title';
   const isEditingNote = editingField?.stepId === step.id && editingField?.field === 'note';
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: step.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const isEditing = isEditingTitle || isEditingNote;
+  const dragListeners = isEditing ? {} : listeners;
   
   // Smart Auto-Labeling dynamically based on array index
   const isOrigin = index === 0;
   const isFinal = index === totalSteps - 1;
 
-  const badgeText = isOrigin 
-    ? '🎨 起点 (Origin)' 
-    : isFinal 
-      ? '✨ 完成 (Final)' 
-      : '📝 途中工程';
+  const badgeIcon = isOrigin ? '🎨' : isFinal ? '✨' : '📝';
+  const badgeLabel = isOrigin ? '起点 (Origin)' : isFinal ? '完成 (Final)' : '途中工程';
+  const badgeText = `${badgeIcon} ${badgeLabel}`;
 
   const badgeColor = isOrigin 
     ? '#F59E0B' 
     : isFinal 
-      ? '#00D4AA' 
-      : '#818CF8';
+    ? '#00D4AA' 
+    : '#818CF8';
 
   const badgeBg = isOrigin 
     ? 'rgba(245, 158, 11, 0.12)' 
     : isFinal 
-      ? 'rgba(0, 212, 170, 0.12)' 
-      : 'rgba(129, 140, 248, 0.12)';
+    ? 'rgba(0, 212, 170, 0.12)' 
+    : 'rgba(129, 140, 248, 0.12)';
 
   const badgeBorder = isOrigin 
     ? '1px solid rgba(245, 158, 11, 0.3)' 
     : isFinal 
-      ? '1px solid rgba(0, 212, 170, 0.3)' 
-      : '1px solid rgba(129, 140, 248, 0.3)';
+    ? '1px solid rgba(0, 212, 170, 0.3)' 
+    : '1px solid rgba(129, 140, 248, 0.3)';
 
   return (
     <motion.div
+      ref={setNodeRef}
+      style={style}
       layout
-      draggable
-      onDragStart={onCardDragStart}
-      onDragEnter={onCardDragEnter}
-      onDragOver={onCardDragOver}
-      onDrop={onCardDrop}
-      onDragEnd={onCardDragEnd}
+      {...attributes}
+      {...dragListeners}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       className={`
         relative w-[190px] md:w-[210px] rounded-2xl border transition-[border-color,opacity,box-shadow] duration-300 shrink-0 group/card
-        ${isDragging ? 'opacity-40 scale-95 ring-2 ring-[#6C3EF4]/50' : ''}
+        ${isDragging ? 'opacity-40 scale-95 ring-2 ring-[#6C3EF4]/50 z-50' : ''}
         ${step.hashState === 'hashing'
           ? 'border-[#6C3EF4]/50 shadow-[0_0_25px_rgba(108,62,244,0.15)]'
           : step.hashState === 'verified'
@@ -1088,7 +1074,7 @@ function StepCard({
           <div className="w-full h-full flex items-center justify-center">
             <label className="cursor-pointer flex flex-col items-center gap-2 text-[#A8A0D8]/40 hover:text-[#6C3EF4] transition-colors">
               <ImagePlus className="w-8 h-8" />
-              <span className="text-xs font-medium">画像を選択</span>
+              <span className="text-[10px] font-medium">画像を選択</span>
               <input
                 type="file"
                 accept="image/*"
@@ -1121,20 +1107,20 @@ function StepCard({
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-[#6C3EF4] via-[#00D4AA] to-[#6C3EF4] opacity-60" />
         )}
 
-        <div className="absolute top-2 left-2 flex items-center gap-1 z-10">
-          <div className="w-6 h-6 rounded-lg bg-[#07061A]/80 backdrop-blur-sm flex items-center justify-center border border-[#1C1A38]">
-            <span className="text-[10px] font-black text-white">{index + 1}</span>
-          </div>
-          {step.isRoot && (
-            <div className="px-1.5 py-0.5 rounded-lg bg-[#00D4AA]/20 backdrop-blur-sm border border-[#00D4AA]/30 flex items-center gap-1">
-              <Shield className="w-2.5 h-2.5 text-[#00D4AA]" />
-              <span className="text-[8px] font-black text-[#00D4AA] uppercase tracking-wider">Root</span>
+        {/* Top Badges container with absolute positioning and flex wrap to prevent overlap */}
+        <div className="absolute top-2 inset-x-2 flex items-center justify-between gap-1 z-10 min-w-0">
+          <div className="flex items-center gap-1 min-w-0 shrink-0">
+            <div className="w-6 h-6 rounded-lg bg-[#07061A]/80 backdrop-blur-sm flex items-center justify-center border border-[#1C1A38] shrink-0">
+              <span className="text-[10px] font-black text-white">{index + 1}</span>
             </div>
-          )}
-        </div>
+            {step.isRoot && (
+              <div className="px-1.5 py-0.5 rounded-lg bg-[#00D4AA]/20 backdrop-blur-sm border border-[#00D4AA]/30 flex items-center gap-1 shrink-0">
+                <Shield className="w-2.5 h-2.5 text-[#00D4AA]" />
+                <span className="text-[8px] font-black text-[#00D4AA] uppercase tracking-wider hidden sm:inline">Root</span>
+              </div>
+            )}
+          </div>
 
-        {/* Dynamic Context Badge — Smart Auto-Labeling with AnimatePresence */}
-        <div className="absolute top-2 right-2 z-10">
           <AnimatePresence mode="wait">
             <motion.div
               key={badgeText}
@@ -1142,14 +1128,15 @@ function StepCard({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.8, y: 2 }}
               transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-              className="px-2 py-0.5 rounded-lg text-[10px] font-bold backdrop-blur-sm shadow-md whitespace-nowrap"
+              className="px-2 py-0.5 rounded-lg text-[10px] font-bold backdrop-blur-sm shadow-md flex items-center gap-1 shrink-0"
               style={{
                 color: badgeColor,
                 backgroundColor: badgeBg,
                 border: badgeBorder,
               }}
             >
-              {badgeText}
+              <span>{badgeIcon}</span>
+              <span className="hidden sm:inline">{badgeLabel}</span>
             </motion.div>
           </AnimatePresence>
         </div>

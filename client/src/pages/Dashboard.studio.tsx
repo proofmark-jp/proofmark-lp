@@ -29,6 +29,7 @@ import {
   ArrowUpDown,
   BadgeCheck,
   Check,
+  CheckSquare2,
   Clock3,
   Copy,
   ExternalLink,
@@ -47,7 +48,9 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Square,
   Star,
+  Tag,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -336,12 +339,45 @@ function BreathingBadge({
  *    既にクエリがある場合は破壊しない。
  * ══════════════════════════════════════════════════════════════ */
 
+/**
+ * Supabase Image Transform を利用して超軽量サムネイルを返す。
+ *
+ * Supabase Storage の Public URL に対して以下のクエリパラメータを付与:
+ *   width   — リサイズ幅 (px)
+ *   quality — JPEG/WebP 品質 (1-100)
+ *   format  — 出力フォーマット ('webp' | 'jpeg' | 'origin')
+ *
+ * Supabase 以外のドメイン（CDN等）はそのまま返す（変換不要）。
+ * 既にパラメータが付いている URL は再付与しない（冪等）。
+ *
+ * @see https://supabase.com/docs/guides/storage/serving/image-transformations
+ */
 function getOptimizedImageUrl(
   url: string | null | undefined,
-  opts: { width?: number; quality?: number } = {},
+  opts: { width?: number; quality?: number; format?: string } = {},
 ): string {
-  return url || '';
+  if (!url) return '';
+
+  // Supabase Storage URL かどうかを判定
+  // 形式: https://<project>.supabase.co/storage/v1/object/public/...
+  const isSupabaseStorage =
+    url.includes('.supabase.co/storage/') ||
+    url.includes('.supabase.in/storage/');
+
+  if (!isSupabaseStorage) return url;
+
+  // 既に transform パラメータが付いている場合は再付与しない
+  if (url.includes('width=') || url.includes('format=')) return url;
+
+  const params = new URLSearchParams();
+  if (opts.width)   params.set('width',   String(opts.width));
+  if (opts.quality) params.set('quality', String(opts.quality));
+  params.set('format', opts.format ?? 'webp');
+
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}${params.toString()}`;
 }
+
 
 /* ══════════════════════════════════════════════════════════════
  *  Types
@@ -500,6 +536,17 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const [showArchived, setShowArchived] = useState(false);
   const [trustFilter, setTrustFilter] = useState<TrustTier | 'all'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  /* ── Bulk selection ── */
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [groupByProject, setGroupByProject] = useState(false);
+
+  /* ── Client Project Dialog (replaces window.prompt) ── */
+  const [cpDialog, setCpDialog] = useState<{
+    open: boolean;
+    cert: CertRow | null;
+    initialValue: string;
+  } | null>(null);
 
   const [composerOpen, setComposerOpen] = useState(false);
   const [auditCertId, setAuditCertId] = useState<string | null>(null);
@@ -899,30 +946,103 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     }
   }, []);
 
-  const handleAssignClientProject = useCallback(async (cert: CertRow) => {
-    const current = cert.client_project ?? '';
-    const next = window.prompt(
-      'この証明書を紐づける案件名 (例: ACME社 / 表紙イラスト)',
-      current,
-    );
-    if (next === null) return;
-    const trimmed = next.trim() || null;
-    setCerts((prev) =>
-      prev.map((c) => (c.id === cert.id ? { ...c, client_project: trimmed } : c)),
-    );
-    const { error } = await supabase
-      .from('certificates')
-      .update({ client_project: trimmed })
-      .eq('id', cert.id);
-    if (error) {
-      setCerts((prev) =>
-        prev.map((c) => (c.id === cert.id ? { ...c, client_project: current } : c)),
-      );
-      toast.error('案件の紐づけに失敗', { description: error.message });
-    } else {
-      toast.success(trimmed ? `「${trimmed}」に紐づけました` : '案件の紐づけを解除しました');
-    }
+  /* ── Open the custom dialog (replaces window.prompt) ── */
+  const handleAssignClientProject = useCallback((cert: CertRow) => {
+    setCpDialog({ open: true, cert, initialValue: cert.client_project ?? '' });
   }, []);
+
+  /* ── Dialog confirm: handles both single-cert and bulk mode ── */
+  const handleCpDialogConfirm = useCallback(async (value: string | null) => {
+    if (!cpDialog) return;
+    const { cert } = cpDialog;
+    setCpDialog(null);
+    const trimmed = value?.trim() || null;
+
+    if (cert) {
+      // Single mode
+      const original = cert.client_project ?? null;
+      setCerts((prev) =>
+        prev.map((c) => (c.id === cert.id ? { ...c, client_project: trimmed } : c)),
+      );
+      const { error } = await supabase
+        .from('certificates')
+        .update({ client_project: trimmed })
+        .eq('id', cert.id);
+      if (error) {
+        setCerts((prev) =>
+          prev.map((c) => (c.id === cert.id ? { ...c, client_project: original } : c)),
+        );
+        toast.error('案件の紐づけに失敗', { description: error.message });
+      } else {
+        toast.success(trimmed ? `「${trimmed}」に紐づけました` : '案件の紐づけを解除しました');
+      }
+    } else {
+      // Bulk mode
+      const ids = Array.from(selectedIds);
+      setCerts((prev) =>
+        prev.map((c) => (selectedIds.has(c.id) ? { ...c, client_project: trimmed } : c)),
+      );
+      const { error } = await supabase
+        .from('certificates')
+        .update({ client_project: trimmed })
+        .in('id', ids);
+      if (error) {
+        toast.error('一括分類に失敗しました', { description: error.message });
+      } else {
+        toast.success(trimmed ? `${ids.length}件を「${trimmed}」に分類しました` : `${ids.length}件の案件分類を解除しました`);
+      }
+      setSelectedIds(new Set());
+    }
+  }, [cpDialog, selectedIds]);
+
+  /* ── Bulk: star all selected ── */
+  const handleBulkStar = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    setCerts((prev) => prev.map((c) => (selectedIds.has(c.id) ? { ...c, is_starred: true } : c)));
+    const { error } = await supabase.from('certificates').update({ is_starred: true }).in('id', ids);
+    if (error) {
+      toast.error('一括保護に失敗しました', { description: error.message });
+    } else {
+      toast.success(`${ids.length}件を保護しました`);
+    }
+    setSelectedIds(new Set());
+  }, [selectedIds]);
+
+  /* ── Bulk: archive all selected ── */
+  const handleBulkArchive = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    setCerts((prev) => prev.map((c) => (selectedIds.has(c.id) ? { ...c, is_archived: true } : c)));
+    const { error } = await supabase.from('certificates').update({ is_archived: true }).in('id', ids);
+    if (error) {
+      toast.error('一括アーカイブに失敗しました', { description: error.message });
+    } else {
+      toast.success(`${ids.length}件をアーカイブしました`);
+    }
+    setSelectedIds(new Set());
+  }, [selectedIds]);
+
+  /* ── Toggle single cert selection ── */
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  /* ── Select/deselect all visible certs ── */
+  const handleSelectAll = useCallback(
+    (certs: CertRow[]) => {
+      setSelectedIds((prev) => {
+        if (prev.size === certs.length && certs.every((c) => prev.has(c.id))) {
+          return new Set();
+        }
+        return new Set(certs.map((c) => c.id));
+      });
+    },
+    [],
+  );
 
   const handleStatusChange = useCallback(
     async (cert: CertRow, next: DeliveryStatus | null) => {
@@ -1174,6 +1294,22 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
               <Archive className="w-3 h-3" />
               アーカイブ
             </label>
+
+            {/* Group-by toggle */}
+            <button
+              type="button"
+              onClick={() => setGroupByProject((v) => !v)}
+              className={[
+                'inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors border',
+                groupByProject
+                  ? 'text-[#6C3EF4] border-[#6C3EF4]/40 bg-[#6C3EF4]/10'
+                  : 'text-white/45 border-white/[0.06] bg-white/[0.02] hover:text-white/70',
+              ].join(' ')}
+              title="案件ごとにグループ表示"
+            >
+              <Tag className="w-3 h-3" />
+              <span className="hidden sm:inline">案件分類</span>
+            </button>
           </div>
         </section>
 
@@ -1197,8 +1333,12 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
               isStudio={isStudio}
               ops={ops}
               copiedId={copiedId}
+              selectedIds={selectedIds}
+              groupByProject={groupByProject}
+              onToggleSelect={handleToggleSelect}
+              onSelectAll={() => handleSelectAll(filteredSortedCerts)}
               onCopyLink={handleCopyLink}
-              // ▼ 権限がない場合は、エラーではなく InspectorのChainタブ（ペイウォール）を開いて課金誘導する
+              // ▼ 権限がない場合は、エラーではなく InspectorのChainタブ（ペイウォール）を開いて課金誤導する
               onEvidence={(cert) => canExportEvidencePack ? handleEvidence(cert) : openInspector(cert, 'chain')}
               onArchive={handleArchive}
               onToggleStar={handleToggleStar}
@@ -1225,6 +1365,8 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
             <CertGridView
               certs={filteredSortedCerts}
               copiedId={copiedId}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
               onCopyLink={handleCopyLink}
               // ▼ 権限ガードを適用
               onEvidence={(cert) => canExportEvidencePack ? handleEvidence(cert) : openInspector(cert, 'chain')}
@@ -1239,6 +1381,32 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
           )}
         </section>
       </main>
+
+      {/* ── Floating Action Bar (bulk selection) ── */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <FloatingActionBar
+            count={selectedIds.size}
+            onBulkAssign={() => setCpDialog({ open: true, cert: null, initialValue: '' })}
+            onBulkStar={handleBulkStar}
+            onBulkArchive={handleBulkArchive}
+            onClear={() => setSelectedIds(new Set())}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Client Project Dialog (replaces window.prompt) ── */}
+      <AnimatePresence>
+        {cpDialog?.open && (
+          <ClientProjectDialog
+            cert={cpDialog.cert}
+            bulkCount={selectedIds.size}
+            initialValue={cpDialog.initialValue}
+            onConfirm={handleCpDialogConfirm}
+            onCancel={() => setCpDialog(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── Studio modals & drawers ── */}
       {isStudio && (
@@ -1609,6 +1777,10 @@ interface ListViewProps {
   isStudio: boolean;
   ops: ReturnType<typeof useStudioOps>;
   copiedId: string | null;
+  selectedIds: Set<string>;
+  groupByProject: boolean;
+  onToggleSelect: (id: string) => void;
+  onSelectAll: () => void;
   onCopyLink: (cert: CertRow) => void;
   onEvidence: (cert: CertRow) => void;
   onArchive: (cert: CertRow, next: boolean) => void;
@@ -1628,6 +1800,10 @@ function CertListTable(props: ListViewProps) {
     isStudio,
     ops,
     copiedId,
+    selectedIds,
+    groupByProject,
+    onToggleSelect,
+    onSelectAll,
     onCopyLink,
     onEvidence,
     onArchive,
@@ -1641,18 +1817,34 @@ function CertListTable(props: ListViewProps) {
     reduce,
   } = props;
 
+  const allSelected = certs.length > 0 && certs.every((c) => selectedIds.has(c.id));
+  const someSelected = !allSelected && certs.some((c) => selectedIds.has(c.id));
+
   const cols = isStudio
-    ? '2fr 1fr 1fr 0.9fr auto'
-    : '2.2fr 1fr 1fr 0.9fr auto';
+    ? '28px 2fr 1fr 1fr 0.9fr auto'
+    : '28px 2.2fr 1fr 1fr 0.9fr auto';
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-md">
-      <div className="min-w-[920px]">
+      <div className="min-w-[960px]">
+        {/* Table header */}
         <div
           role="row"
           className="grid gap-3 px-4 py-3 text-[10px] uppercase tracking-widest text-white/40 border-b border-white/5"
           style={{ gridTemplateColumns: cols }}
         >
+          {/* Select-all checkbox */}
+          <span role="columnheader" onClick={(e) => { e.stopPropagation(); onSelectAll(); }} className="cursor-pointer flex items-center">
+            {allSelected ? (
+              <CheckSquare2 className="w-3.5 h-3.5 text-[#6C3EF4]" />
+            ) : someSelected ? (
+              <div className="w-3.5 h-3.5 rounded border-2 border-[#6C3EF4] flex items-center justify-center">
+                <div className="w-1.5 h-0.5 bg-[#6C3EF4] rounded" />
+              </div>
+            ) : (
+              <Square className="w-3.5 h-3.5 text-white/20 hover:text-white/50 transition-colors" />
+            )}
+          </span>
           <span role="columnheader">案件 / タイトル</span>
           <span role="columnheader">{isStudio ? 'ステータス' : '信頼レベル'}</span>
           <span role="columnheader">案件</span>
@@ -1661,24 +1853,188 @@ function CertListTable(props: ListViewProps) {
             操作
           </span>
         </div>
-        {certs.map((cert) => {
-          const project =
-            isStudio && cert.project_id
+
+        {/* Rows, optionally grouped by client_project */}
+        {(() => {
+          let lastGroup: string | null = undefined as unknown as null;
+          const rows: React.ReactNode[] = [];
+
+          certs.forEach((cert) => {
+            const project = isStudio && cert.project_id
               ? ops.projects.find((p) => p.id === cert.project_id)
               : null;
-          return (
-            <div
-              key={cert.id}
-              id={`cert-row-${cert.id}`}
-              role="row"
-              className="grid gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 hover:bg-white/[0.02] transition-colors cursor-pointer"
-              style={{ gridTemplateColumns: cols }}
-              onClick={(e) => {
-                // 行クリックで Inspector を開く (内側のボタンクリックは伝播停止される)
-                onOpenInspector(cert);
-              }}
-            >
-              <div role="cell" className="min-w-0">
+
+            const groupKey = isStudio
+              ? (project?.name ?? cert.client_project ?? '未分類')
+              : (cert.client_project?.trim() || '未分類');
+
+            // Group header separator
+            if (groupByProject && groupKey !== lastGroup) {
+              lastGroup = groupKey;
+              rows.push(
+                <div
+                  key={`group-${groupKey}-${cert.id}`}
+                  className="px-4 py-2 flex items-center gap-2 border-b border-white/5 bg-white/[0.01]"
+                >
+                  <Tag className="w-3 h-3 text-[#6C3EF4]/70" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
+                    {groupKey}
+                  </span>
+                </div>,
+              );
+            }
+
+            const isSelected = selectedIds.has(cert.id);
+            rows.push(
+              <div
+                key={cert.id}
+                id={`cert-row-${cert.id}`}
+                role="row"
+                className={[
+                  'grid gap-3 px-4 py-3 border-b border-white/5 last:border-b-0 transition-colors cursor-pointer',
+                  isSelected
+                    ? 'bg-[#6C3EF4]/[0.06] hover:bg-[#6C3EF4]/[0.09]'
+                    : 'hover:bg-white/[0.02]',
+                ].join(' ')}
+                style={{ gridTemplateColumns: cols }}
+                onClick={() => onOpenInspector(cert)}
+              >
+                {/* Checkbox */}
+                <div
+                  role="cell"
+                  className="self-center flex items-center"
+                  onClick={(e) => { e.stopPropagation(); onToggleSelect(cert.id); }}
+                >
+                  {isSelected ? (
+                    <CheckSquare2 className="w-3.5 h-3.5 text-[#6C3EF4]" />
+                  ) : (
+                    <Square className="w-3.5 h-3.5 text-white/20 hover:text-white/50 transition-colors" />
+                  )}
+                </div>
+
+                <div role="cell" className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleStar(cert.id, !!cert.is_starred);
+                      }}
+                      className="shrink-0 text-white/35 hover:text-[#F0BB38] transition-colors"
+                      title={cert.is_starred ? '保護を解除' : '保護'}
+                    >
+                      <Star
+                        className="w-3.5 h-3.5"
+                        fill={cert.is_starred ? '#F0BB38' : 'transparent'}
+                      />
+                    </button>
+                    <p
+                      className="text-[13px] font-semibold text-white whitespace-nowrap overflow-hidden max-w-[140px] sm:max-w-full"
+                      style={{ WebkitMaskImage: 'linear-gradient(to right, black 85%, transparent 100%)', maskImage: 'linear-gradient(to right, black 85%, transparent 100%)' }}
+                    >
+                      {cert.title || cert.file_name || 'Untitled'}
+                    </p>
+                  </div>
+                  <p className="text-[10.5px] text-white/40 font-mono truncate mt-0.5 ml-5">
+                    <Hash className="inline w-2.5 h-2.5 mr-1" />
+                    {(cert.sha256 || cert.file_hash || '').slice(0, 24)}…
+                  </p>
+                </div>
+
+                <div role="cell" className="self-center" onClick={(e) => e.stopPropagation()}>
+                  {isStudio ? (
+                    <StatusMenu
+                      current={cert.delivery_status ?? null}
+                      onChange={(next) => onStatusChange(cert, next)}
+                    />
+                  ) : (
+                    <TrustBadgeMotion cert={cert} size="sm" reduce={reduce} />
+                  )}
+                </div>
+
+                <div role="cell" className="self-center" onClick={(e) => e.stopPropagation()}>
+                  {isStudio ? (
+                    <ProjectAssignButton
+                      currentProjectId={cert.project_id ?? null}
+                      currentProjectColor={project?.color ?? null}
+                      currentProjectName={project?.name ?? cert.client_project ?? null}
+                      projects={ops.projects}
+                      onAssign={(pid) => onAssignProjectId(cert, pid)}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onAssignClientProject(cert)}
+                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] text-[11px] text-white/75 transition-colors max-w-[180px]"
+                      title="案件を編集"
+                    >
+                      <FolderKanban className="w-3 h-3 opacity-60" />
+                      <span className="truncate">{cert.client_project || '未分類'}</span>
+                    </button>
+                  )}
+                </div>
+
+                <div role="cell" className="self-center text-[11px] text-white/55 tabular-nums">
+                  {cert.certified_at
+                    ? formatDate(cert.certified_at)
+                    : cert.created_at
+                      ? formatDate(cert.created_at)
+                      : '—'}
+                </div>
+
+                <div role="cell" className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="mr-2">
+                    <VisibilityToggle assetId={cert.id} initialVisibility={(cert.visibility as 'public' | 'private') || 'public'} />
+                  </div>
+                  <IconBtn
+                    title={copiedId === cert.id ? 'コピー済' : '検証URLをコピー'}
+                    onClick={() => onCopyLink(cert)}
+                  >
+                    {copiedId === cert.id ? (
+                      <Check className="w-3.5 h-3.5" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </IconBtn>
+                  <IconBtn title="Evidence Pack" onClick={() => onEvidence(cert)}>
+                    <FileDown className="w-3.5 h-3.5" />
+                  </IconBtn>
+                  <IconBtn title="Chain of Evidence" onClick={() => onOpenChain(cert)}>
+                    <LinkIcon className="w-3.5 h-3.5" />
+                  </IconBtn>
+                  {isStudio && (
+                    <IconBtn title="操作履歴" onClick={() => onOpenAudit(cert)}>
+                      <History className="w-3.5 h-3.5" />
+                    </IconBtn>
+                  )}
+                  <IconBtn
+                    title={cert.is_archived ? 'アーカイブから戻す' : 'アーカイブ'}
+                    onClick={() => onArchive(cert, !cert.is_archived)}
+                  >
+                    {cert.is_archived ? (
+                      <ArchiveRestore className="w-3.5 h-3.5" />
+                    ) : (
+                      <Archive className="w-3.5 h-3.5" />
+                    )}
+                  </IconBtn>
+                  <a
+                    href={`/cert/${cert.id}`}
+                    title="証明書を開く"
+                    onClick={(e) => e.stopPropagation()}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white/80 border border-white/10 hover:bg-white/5 transition-colors inline-flex items-center gap-1"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    開く
+                  </a>
+                </div>
+              </div>,
+            );
+          });
+
+          return rows;
+        })()}
+
+function IconBtn({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -1922,7 +2278,7 @@ function BentoCard({
     !imgError;
 
   const optimizedSrc = useMemo(
-    () => (hasRealImage ? getOptimizedImageUrl(cert.public_image_url, { width: 600, quality: 75 }) : ''),
+    () => (hasRealImage ? getOptimizedImageUrl(cert.public_image_url, { width: 400, quality: 80, format: 'webp' }) : ''),
     [hasRealImage, cert.public_image_url],
   );
 
@@ -2391,7 +2747,7 @@ function InspectorOverview({
     cert.public_image_url !== '' &&
     !imgError;
   const optimizedSrc = useMemo(
-    () => (hasRealImage ? getOptimizedImageUrl(cert.public_image_url, { width: 1000, quality: 80 }) : ''),
+    () => (hasRealImage ? getOptimizedImageUrl(cert.public_image_url, { width: 800, quality: 80, format: 'webp' }) : ''),
     [hasRealImage, cert.public_image_url],
   );
 

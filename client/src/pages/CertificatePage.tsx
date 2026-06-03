@@ -327,11 +327,13 @@ export default function CertificatePage() {
                         transition={{ duration: 10, delay: 0.6, repeat: Infinity, ease: 'easeInOut' }}
                     />
                     <div
-                        className="absolute inset-0 opacity-[0.025]"
+                        className="absolute inset-0 opacity-[0.025] print:hidden"
                         style={{
                             backgroundImage:
                                 'linear-gradient(0deg, rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)',
                             backgroundSize: '48px 48px',
+                            // iOS Safari は -webkit- プレフィックスなしの maskImage を無視する
+                            WebkitMaskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
                             maskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
                         }}
                     />
@@ -463,6 +465,10 @@ export default function CertificatePage() {
                                         boxShadow: hasVisualAsset
                                             ? '0 30px 80px -30px rgba(0,212,170,0.45), 0 0 0 1px rgba(255,255,255,0.04) inset'
                                             : '0 30px 80px -30px rgba(240,187,56,0.35), 0 0 0 1px rgba(255,255,255,0.04) inset',
+                                        // iOS Safari: overflow:hidden + object-cover の組み合わせで画像が消えるバグを回避。
+                                        // translateZ(0) で GPU コンポジッタレイヤーを強制割り当て。
+                                        transform: 'translateZ(0)',
+                                        isolation: 'isolate',
                                     }}
                                 >
                                     {hasVisualAsset && (
@@ -491,7 +497,7 @@ export default function CertificatePage() {
                                             transition={{ duration: 0.8, ease: PM_EASE }}
                                         />
                                     ) : user && user.id === cert.user_id && cert.public_image_url ? (
-                                        <TranslucentVaultFull imageUrl={secureImageUrl} />
+                                        <TranslucentVaultFull imageUrl={secureImageUrl ?? ''} />
                                     ) : user && user.id === cert.user_id ? (
                                         <OwnerVaultFull />
                                     ) : (
@@ -1717,7 +1723,14 @@ function TranslucentVaultFull({ imageUrl }: { imageUrl: string }) {
                 alt=""
                 aria-hidden="true"
                 className="w-full h-full object-cover"
-                style={{ filter: 'blur(16px) grayscale(100%) opacity(0.6)' }}
+                style={{
+                    // -webkit-filter なしでは一部の iOS バージョンで画像が消える。
+                    // contain:strict で描画リソースをコンテナ内に限定しメモリ溈を別レイヤー化。
+                    WebkitFilter: 'blur(16px) grayscale(100%) opacity(0.6)',
+                    filter: 'blur(16px) grayscale(100%) opacity(0.6)',
+                    contain: 'strict',
+                    transform: 'translateZ(0)',
+                }}
             />
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0e27]/40 backdrop-blur-[2px]">
                 <motion.div
