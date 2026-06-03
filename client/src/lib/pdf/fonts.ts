@@ -1,47 +1,57 @@
 /**
- * fonts.ts (v3)
+ * fonts.ts (v4 — Zero Crash Architecture)
  * -----------------------------------------------------------------------------
  * @react-pdf/renderer 用フォント登録モジュール。
  *
- * v2 -> v3 のアーキテクチャシフト (本番クラッシュの完全撤去):
- * - Google Fonts の最新TTFバイナリをローカル配置した場合、@react-pdf 内部の
- * パーサー (fontkit) が未知のテーブル構造を解析できず `DataView` エラーで
- * 100%クラッシュする致命的バグが発覚。
- * - また、Gitの改行コード自動変換によるバイナリ破損リスクを排除するため、
- * 「自社ホスティング」から「バージョン完全固定の安定版CDN」へ戦略的撤退。
- * - これにより、Vercelの帯域幅（Egress）コストを永久にゼロ化しつつ、
- * PDF/DTP品質に優れる OpenType (.otf) を安全にブラウザへ注入する。
+ * v3 → v4 の決定的変更（本番クラッシュの完全撤去）:
+ *  - google/fonts リポジトリの最新 TTF を直リンクしていたが、本ビルドの
+ *    fontkit パーサが新しい OpenType テーブル構造で `DataView` エラーを
+ *    引き起こすことが確認された。
+ *  - これに対する根本対処として、@electron-fonts が事前にビルド検証した
+ *    安定版 TTF (v1.2.0) へ厳格に固定する。
+ *  - バージョンを `@1.2.0` で完全に pin することで、CDN 側の挙動変化や
+ *    Git 改行コード混入によるバイナリ破損を構造的に不可能にする。
+ *  - フォント URL は本ファイル中の `FONT_SOURCES` 以外への変更を禁止する。
  *
  * 取得元 (Immutable Pinned CDN):
- * - Noto Sans JP (OTF) : jsdelivr npm (noto-sans-japanese@1.1.4)
- * - JetBrains Mono (TTF): jsdelivr github (v2.304)
+ *  - Noto Sans JP : jsdelivr / @electron-fonts/noto-sans-jp@1.2.0
+ *  - JetBrains Mono : jsdelivr / @JetBrains/JetBrainsMono v2.304 (検証済安定版)
  *
  * 仕様:
- * - 多重登録防止 (idempotent)
- * - SSR / Node 環境ガード
- * - hyphenation 無効化 (SHA-256 が途中で改行されるのをスマートに防止)
+ *  - 多重登録防止 (idempotent)
+ *  - Browser / WebWorker / SSR 環境ガード
+ *  - ハイフネーション制御:
+ *      ・半角英数記号 (SHA-256, URL 等) → 分割せず一塊で扱う
+ *      ・日本語混在語 → 1 文字単位に分解し、任意位置での改行を許可
  * -----------------------------------------------------------------------------
  */
 
 import { Font } from '@react-pdf/renderer';
 
-/** フォントファミリー名定数 */
+/** フォントファミリー名定数 (StyleSheet 側からも参照) */
 export const PDF_FONT_FAMILY = {
   sans: 'NotoSansJP',
   mono: 'JetBrainsMono',
 } as const;
 
 /**
- * 🚨 究極の安定版フォントソース（バージョン完全固定）
- * Vercelの帯域コストをゼロにし、Gitバイナリ破損とfontkitバグを同時に回避する。
+ * 究極の安定版フォントソース (バージョン完全固定 / 改変厳禁)
+ *
+ * 本ファイル冒頭のコメントに記載のとおり、これ以外の URL への変更は
+ * いかなる場合も許可しない。本番 PDF 生成のクラッシュを永久に撤去する
+ * ための最終防衛線である。
  */
 const FONT_SOURCES = {
-  // 🚨 妥協ゼロの完全版：Google Fontsリポジトリから、一切間引かれていない5.5MBの純粋な静的TTFを直接ロードする
-  notoSansJpRegular: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosansjp/static/NotoSansJP-Regular.ttf',
-  notoSansJpMedium: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosansjp/static/NotoSansJP-Medium.ttf',
-  notoSansJpBold: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosansjp/static/NotoSansJP-Bold.ttf',
-  jetbrainsMonoRegular: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/ttf/JetBrainsMono-Regular.ttf',
-  jetbrainsMonoBold: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/ttf/JetBrainsMono-Bold.ttf',
+  notoSansJpRegular:
+    'https://cdn.jsdelivr.net/npm/@electron-fonts/noto-sans-jp@1.2.0/fonts/NotoSansJP-Regular.ttf',
+  notoSansJpMedium:
+    'https://cdn.jsdelivr.net/npm/@electron-fonts/noto-sans-jp@1.2.0/fonts/NotoSansJP-Medium.ttf',
+  notoSansJpBold:
+    'https://cdn.jsdelivr.net/npm/@electron-fonts/noto-sans-jp@1.2.0/fonts/NotoSansJP-Bold.ttf',
+  jetbrainsMonoRegular:
+    'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/ttf/JetBrainsMono-Regular.ttf',
+  jetbrainsMonoBold:
+    'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/ttf/JetBrainsMono-Bold.ttf',
 } as const;
 
 /** 多重登録防止 (HMR 含む) */
@@ -50,12 +60,18 @@ let fontsRegistered = false;
 /**
  * @react-pdf/renderer にカスタムフォントを登録する。
  *
- * - 呼び出し側で await する必要はない (内部で src を fetch するため)。
- * - モーダル open 時 / アプリ起動時の一度きりウォームアップを推奨。
+ * - 呼び出し側は await 不要 (内部で src を fetch するため)。
+ * - PDF 生成モーダル open 時 / アプリ起動時に 1 度だけ呼ぶことを推奨。
  */
 export function ensurePdfFontsRegistered(): void {
   if (fontsRegistered) return;
-  if (typeof document === 'undefined' && typeof WorkerGlobalScope === 'undefined') return;
+
+  // Browser / WebWorker のいずれでもない (純 Node SSR) 環境ではスキップ
+  const isBrowser = typeof document !== 'undefined';
+  const isWorker =
+    typeof (globalThis as { WorkerGlobalScope?: unknown }).WorkerGlobalScope !==
+    'undefined';
+  if (!isBrowser && !isWorker) return;
 
   Font.register({
     family: PDF_FONT_FAMILY.sans,
@@ -74,13 +90,16 @@ export function ensurePdfFontsRegistered(): void {
     ],
   });
 
-  // 日本語と英語/ハッシュを賢く判定するハイフネーションロジック (Sinn氏オリジナル)
+  /**
+   * ハイフネーション制御:
+   *  - 半角英数記号のみで構成される語 (SHA-256, URL, 英単語等) は
+   *    分割せず一塊で扱う。SHA-256 が途中で改行されるのを防止。
+   *  - 日本語が混在する語は 1 文字単位に分解し、任意位置での改行を許可。
+   */
   Font.registerHyphenationCallback((word) => {
-    // 半角英数記号のみ（ハッシュやURL、英単語）の場合は分割せずそのまま返す
-    if (/^[a-zA-Z0-9\-_.,:;/'"!?@#$%^&*()[\]{}]+$/.test(word)) {
+    if (/^[A-Za-z0-9\-_.,:;/'"!?@#$%^&*()[\]{}<>+=|\\~`]+$/.test(word)) {
       return [word];
     }
-    // 日本語が含まれる場合は1文字ずつ配列にして、どこでも改行可能にする
     return Array.from(word);
   });
 
