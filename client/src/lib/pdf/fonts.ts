@@ -49,12 +49,15 @@ const FONT_BASE = '/fonts';
 // ブラウザのオリジン（URL）を動的に取得して絶対パス化する
 const getBaseUrl = () => typeof window !== 'undefined' ? window.location.origin : '';
 
+// 🚨 究極のキャッシュバスター：古い404の記憶を強制的に消し飛ばす
+const CACHE_BUSTER = `?v=${Date.now()}`;
+
 const FONT_SOURCES = {
-  notoSansJpRegular: `${getBaseUrl()}/fonts/NotoSansJP-Regular.ttf`,
-  notoSansJpMedium: `${getBaseUrl()}/fonts/NotoSansJP-Medium.ttf`,
-  notoSansJpBold: `${getBaseUrl()}/fonts/NotoSansJP-Bold.ttf`,
-  jetbrainsMonoRegular: `${getBaseUrl()}/fonts/JetBrainsMono-Regular.ttf`,
-  jetbrainsMonoBold: `${getBaseUrl()}/fonts/JetBrainsMono-Bold.ttf`,
+  notoSansJpRegular: `${getBaseUrl()}/fonts/NotoSansJP-Regular.ttf${CACHE_BUSTER}`,
+  notoSansJpMedium: `${getBaseUrl()}/fonts/NotoSansJP-Medium.ttf${CACHE_BUSTER}`,
+  notoSansJpBold: `${getBaseUrl()}/fonts/NotoSansJP-Bold.ttf${CACHE_BUSTER}`,
+  jetbrainsMonoRegular: `${getBaseUrl()}/fonts/JetBrainsMono-Regular.ttf${CACHE_BUSTER}`,
+  jetbrainsMonoBold: `${getBaseUrl()}/fonts/JetBrainsMono-Bold.ttf${CACHE_BUSTER}`,
 } as const;
 
 /** 多重登録防止 (HMR 含む) */
