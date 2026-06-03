@@ -36,9 +36,10 @@ export const PDF_FONT_FAMILY = {
  * Vercelの帯域コストをゼロにし、Gitバイナリ破損とfontkitバグを同時に回避する。
  */
 const FONT_SOURCES = {
-  notoSansJpRegular: 'https://cdn.jsdelivr.net/npm/@electron-fonts/noto-sans-jp@1.2.0/fonts/NotoSansJP-Regular.ttf',
-  notoSansJpMedium: 'https://cdn.jsdelivr.net/npm/@electron-fonts/noto-sans-jp@1.2.0/fonts/NotoSansJP-Medium.ttf',
-  notoSansJpBold: 'https://cdn.jsdelivr.net/npm/@electron-fonts/noto-sans-jp@1.2.0/fonts/NotoSansJP-Bold.ttf',
+  // 🚨 妥協ゼロの完全版：Google Fontsリポジトリから、一切間引かれていない5.5MBの純粋な静的TTFを直接ロードする
+  notoSansJpRegular: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosansjp/static/NotoSansJP-Regular.ttf',
+  notoSansJpMedium: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosansjp/static/NotoSansJP-Medium.ttf',
+  notoSansJpBold: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosansjp/static/NotoSansJP-Bold.ttf',
   jetbrainsMonoRegular: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/ttf/JetBrainsMono-Regular.ttf',
   jetbrainsMonoBold: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/ttf/JetBrainsMono-Bold.ttf',
 } as const;
