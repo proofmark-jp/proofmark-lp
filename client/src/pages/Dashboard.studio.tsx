@@ -2030,128 +2030,8 @@ function CertListTable(props: ListViewProps) {
               </div>,
             );
           });
-
           return rows;
         })()}
-
-function IconBtn({
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleStar(cert.id, !!cert.is_starred);
-                    }}
-                    className="shrink-0 text-white/35 hover:text-[#F0BB38] transition-colors"
-                    title={cert.is_starred ? '保護を解除' : '保護'}
-                  >
-                    <Star
-                      className="w-3.5 h-3.5"
-                      fill={cert.is_starred ? '#F0BB38' : 'transparent'}
-                    />
-                  </button>
-                  <p 
-                    className="text-[13px] font-semibold text-white whitespace-nowrap overflow-hidden max-w-[140px] sm:max-w-full"
-                    style={{ WebkitMaskImage: 'linear-gradient(to right, black 85%, transparent 100%)', maskImage: 'linear-gradient(to right, black 85%, transparent 100%)' }}
-                  >
-                    {cert.title || cert.file_name || 'Untitled'}
-                  </p>
-                </div>
-                <p className="text-[10.5px] text-white/40 font-mono truncate mt-0.5 ml-5">
-                  <Hash className="inline w-2.5 h-2.5 mr-1" />
-                  {(cert.sha256 || cert.file_hash || '').slice(0, 24)}…
-                </p>
-              </div>
-
-              <div role="cell" className="self-center" onClick={(e) => e.stopPropagation()}>
-                {isStudio ? (
-                  <StatusMenu
-                    current={cert.delivery_status ?? null}
-                    onChange={(next) => onStatusChange(cert, next)}
-                  />
-                ) : (
-                  <TrustBadgeMotion cert={cert} size="sm" reduce={reduce} />
-                )}
-              </div>
-
-              <div role="cell" className="self-center" onClick={(e) => e.stopPropagation()}>
-                {isStudio ? (
-                  <ProjectAssignButton
-                    currentProjectId={cert.project_id ?? null}
-                    currentProjectColor={project?.color ?? null}
-                    currentProjectName={project?.name ?? cert.client_project ?? null}
-                    projects={ops.projects}
-                    onAssign={(pid) => onAssignProjectId(cert, pid)}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onAssignClientProject(cert)}
-                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-white/10 bg-white/[0.02] hover:bg-white/[0.05] text-[11px] text-white/75 transition-colors max-w-[180px]"
-                    title="案件を編集"
-                  >
-                    <FolderKanban className="w-3 h-3 opacity-60" />
-                    <span className="truncate">{cert.client_project || '未分類'}</span>
-                  </button>
-                )}
-              </div>
-
-              <div role="cell" className="self-center text-[11px] text-white/55 tabular-nums">
-                {cert.certified_at
-                  ? formatDate(cert.certified_at)
-                  : cert.created_at
-                    ? formatDate(cert.created_at)
-                    : '—'}
-              </div>
-
-              <div role="cell" className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                <div className="mr-2">
-                  <VisibilityToggle assetId={cert.id} initialVisibility={(cert.visibility as 'public' | 'private') || 'public'} />
-                </div>
-                <IconBtn
-                  title={copiedId === cert.id ? 'コピー済' : '検証URLをコピー'}
-                  onClick={() => onCopyLink(cert)}
-                >
-                  {copiedId === cert.id ? (
-                    <Check className="w-3.5 h-3.5" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5" />
-                  )}
-                </IconBtn>
-                <IconBtn title="Evidence Pack" onClick={() => onEvidence(cert)}>
-                  <FileDown className="w-3.5 h-3.5" />
-                </IconBtn>
-                <IconBtn title="Chain of Evidence" onClick={() => onOpenChain(cert)}>
-                  <LinkIcon className="w-3.5 h-3.5" />
-                </IconBtn>
-                {isStudio && (
-                  <IconBtn title="操作履歴" onClick={() => onOpenAudit(cert)}>
-                    <History className="w-3.5 h-3.5" />
-                  </IconBtn>
-                )}
-                <IconBtn
-                  title={cert.is_archived ? 'アーカイブから戻す' : 'アーカイブ'}
-                  onClick={() => onArchive(cert, !cert.is_archived)}
-                >
-                  {cert.is_archived ? (
-                    <ArchiveRestore className="w-3.5 h-3.5" />
-                  ) : (
-                    <Archive className="w-3.5 h-3.5" />
-                  )}
-                </IconBtn>
-                <a
-                  href={`/cert/${cert.id}`}
-                  title="証明書を開く"
-                  onClick={(e) => e.stopPropagation()}
-                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white/80 border border-white/10 hover:bg-white/5 transition-colors inline-flex items-center gap-1"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  開く
-                </a>
-              </div>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
@@ -2189,6 +2069,8 @@ function IconBtn({
 interface GridViewProps {
   certs: CertRow[];
   copiedId: string | null;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
   onCopyLink: (cert: CertRow) => void;
   onEvidence: (cert: CertRow) => void;
   onArchive: (cert: CertRow, next: boolean) => void;
@@ -2204,6 +2086,8 @@ function CertGridView(props: GridViewProps) {
   const {
     certs,
     copiedId,
+    selectedIds,
+    onToggleSelect,
     onCopyLink,
     onEvidence,
     onArchive,
@@ -2226,6 +2110,8 @@ function CertGridView(props: GridViewProps) {
           cert={cert}
           index={index}
           copiedId={copiedId}
+          isSelected={selectedIds.has(cert.id)}
+          onToggleSelect={() => onToggleSelect(cert.id)}
           onCopyLink={onCopyLink}
           onEvidence={onEvidence}
           onArchive={onArchive}
@@ -2245,6 +2131,8 @@ function BentoCard({
   cert,
   index,
   copiedId,
+  isSelected,
+  onToggleSelect,
   onCopyLink,
   onEvidence,
   onArchive,
@@ -2258,6 +2146,8 @@ function BentoCard({
   cert: CertRow;
   index: number;
   copiedId: string | null;
+  isSelected: boolean;
+  onToggleSelect: () => void;
   onCopyLink: (cert: CertRow) => void;
   onEvidence: (cert: CertRow) => void;
   onArchive: (cert: CertRow, next: boolean) => void;
@@ -2306,8 +2196,26 @@ function BentoCard({
       onClick={() => onOpenInspector(cert)}
       whileHover={reduce ? undefined : { y: -3 }}
       transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-      className="group relative rounded-2xl border border-white/[0.07] bg-white/[0.02] backdrop-blur-md overflow-hidden hover:border-[#6C3EF4]/40 transition-colors cursor-pointer"
+      className={[
+        'group relative rounded-2xl border bg-white/[0.02] backdrop-blur-md overflow-hidden transition-colors cursor-pointer',
+        isSelected ? 'border-[#6C3EF4]' : 'border-white/[0.07] hover:border-[#6C3EF4]/40'
+      ].join(' ')}
     >
+      {/* Selection checkbox overlay */}
+      <div 
+        className={[
+          'absolute top-2 left-2 z-20 flex items-center justify-center p-1.5 rounded-lg transition-all',
+          isSelected ? 'opacity-100 bg-black/40' : 'opacity-0 group-hover:opacity-100 hover:bg-black/40'
+        ].join(' ')}
+        onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+      >
+        {isSelected ? (
+          <CheckSquare2 className="w-5 h-5 text-[#00D4AA]" />
+        ) : (
+          <Square className="w-5 h-5 text-white/60 hover:text-white" />
+        )}
+      </div>
+
       {/* under-card glow (real images only) */}
       {hasRealImage && (
         <div
@@ -2342,7 +2250,7 @@ function BentoCard({
         {isPending && <PendingRing cert={cert} reduce={reduce} onResync={onResync} />}
 
         {/* trust badge — breathing */}
-        <div className="absolute top-2 left-2 z-10">
+        <div className="absolute top-2 right-12 z-10">
           <TrustBadgeMotion cert={cert} size="sm" reduce={reduce} />
         </div>
 
@@ -3410,4 +3318,158 @@ function toCertificateRecord(cert: CertRow): CertificateRecord {
     proven_at: cert.certified_at ?? cert.created_at,
     created_at: cert.created_at,
   };
+}
+
+/* ══════════════════════════════════════════════════════════════
+ *  Bulk Actions & Client Project Modal
+ * ══════════════════════════════════════════════════════════════ */
+
+function FloatingActionBar({
+  count,
+  onBulkAssign,
+  onBulkStar,
+  onBulkArchive,
+  onClear,
+}: {
+  count: number;
+  onBulkAssign: () => void;
+  onBulkStar: () => void;
+  onBulkArchive: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ y: 100, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: 100, opacity: 0 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-3 rounded-2xl border border-white/10 bg-[#07061A]/95 shadow-[0_20px_40px_-10px_rgba(108,62,244,0.3)] backdrop-blur-xl"
+    >
+      <div className="flex items-center gap-2 px-2 border-r border-white/10">
+        <span className="w-6 h-6 rounded-md bg-[#6C3EF4]/20 text-[#6C3EF4] flex items-center justify-center text-xs font-bold">
+          {count}
+        </span>
+        <span className="text-[11px] font-semibold text-white/70">選択中</span>
+      </div>
+
+      <button
+        type="button"
+        onClick={onBulkAssign}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white bg-white/5 hover:bg-white/10 transition-colors"
+      >
+        <FolderKanban className="w-3.5 h-3.5 opacity-70" />
+        案件分類
+      </button>
+
+      <button
+        type="button"
+        onClick={onBulkStar}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white bg-white/5 hover:bg-white/10 transition-colors"
+      >
+        <Star className="w-3.5 h-3.5 text-[#F0BB38] opacity-70" />
+        スター
+      </button>
+
+      <button
+        type="button"
+        onClick={onBulkArchive}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-white bg-white/5 hover:bg-white/10 transition-colors"
+      >
+        <Archive className="w-3.5 h-3.5 opacity-70" />
+        アーカイブ
+      </button>
+
+      <button
+        type="button"
+        onClick={onClear}
+        className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors ml-2"
+        title="選択を解除"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </motion.div>
+  );
+}
+
+function ClientProjectDialog({
+  cert,
+  bulkCount,
+  initialValue,
+  onConfirm,
+  onCancel,
+}: {
+  cert: CertRow | null;
+  bulkCount: number;
+  initialValue: string;
+  onConfirm: (val: string) => void;
+  onCancel: () => void;
+}) {
+  const [val, setVal] = useState(initialValue);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onCancel();
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 overflow-y-auto"
+      style={{ background: 'rgba(7,6,26,0.78)', backdropFilter: 'blur(8px)' }}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 12, scale: 0.98 }}
+        transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+        className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0E0B26]/95 shadow-[0_60px_120px_-60px_rgba(108,62,244,0.6)] p-6"
+      >
+        <h3 className="text-sm font-semibold text-white mb-1">
+          {cert ? '案件分類を変更' : `一括案件分類 (${bulkCount}件)`}
+        </h3>
+        <p className="text-[11px] text-white/50 mb-4">
+          未分類にする場合は空白のまま保存してください。
+        </p>
+
+        <input
+          ref={inputRef}
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onConfirm(val.trim());
+          }}
+          placeholder="案件名を入力"
+          maxLength={80}
+          className="w-full rounded-lg bg-white/[0.03] border border-white/10 focus:border-[#6C3EF4]/50 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none transition-colors"
+        />
+
+        <div className="flex justify-end gap-2 mt-5">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-3 py-1.5 rounded-lg text-[11.5px] font-medium text-white/60 hover:text-white hover:bg-white/5 transition-colors"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(val.trim())}
+            className="px-3 py-1.5 rounded-lg text-[11.5px] font-semibold bg-gradient-to-r from-[#6C3EF4] to-[#00D4AA] text-[#07061A] hover:opacity-90 transition-opacity"
+          >
+            保存
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
 }
