@@ -45,7 +45,7 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
 
   const closeMenu = () => setIsMenuOpen(false);
 
-  const NavLink = ({ href, children, icon: Icon, active, onClick }: any) => (
+  const NavLink = ({ href, children, icon: Icon, avatarUrl, active, onClick }: any) => (
     <Link href={href}>
       <span
         onClick={onClick}
@@ -55,7 +55,15 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
             : 'text-[#A8A0D8] hover:text-white hover:bg-white/5 border border-transparent'
           }`}
       >
-        {Icon && <Icon className="w-4 h-4" />}
+        {avatarUrl ? (
+          <img 
+            src={avatarUrl} 
+            alt="Avatar" 
+            className="w-5 h-5 rounded-full object-cover border border-[#00D4AA]/40" 
+          />
+        ) : (
+          Icon && <Icon className="w-4 h-4" />
+        )}
         {children}
       </span>
     </Link>
@@ -112,7 +120,7 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
               )}
               <NavLink href="/dashboard" icon={LayoutDashboard} active={location === '/dashboard'}>管理画面</NavLink>
               <NavLink href={`/u/${displayUsername}`} icon={ImageIcon} active={location.startsWith('/u/')}>公開ギャラリー</NavLink>
-              <NavLink href="/settings" icon={Settings} active={location === '/settings'}>設定</NavLink>
+              <NavLink href="/settings" icon={Settings} avatarUrl={user?.user_metadata?.avatar_url} active={location === '/settings'}>設定</NavLink>
               <NavLink href="/contact" icon={HelpCircle} active={location === '/contact'}>サポート</NavLink>
               <button
                 onClick={signOut}
@@ -190,7 +198,7 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
                 )}
                 <NavLink href="/dashboard" icon={LayoutDashboard} active={location === '/dashboard'} onClick={closeMenu}>管理画面</NavLink>
                 <NavLink href={`/u/${displayUsername}`} icon={ImageIcon} active={location.startsWith('/u/')} onClick={closeMenu}>公開ギャラリー</NavLink>
-                <NavLink href="/settings" icon={Settings} active={location === '/settings'} onClick={closeMenu}>プロフィール設定</NavLink>
+                <NavLink href="/settings" icon={Settings} avatarUrl={user?.user_metadata?.avatar_url} active={location === '/settings'} onClick={closeMenu}>プロフィール設定</NavLink>
                 <NavLink href="/contact" icon={HelpCircle} active={location === '/contact'} onClick={closeMenu}>サポート</NavLink>
               </div>
             ) : (

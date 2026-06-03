@@ -133,16 +133,67 @@ export default function Settings() {
       if (!event.target.files || event.target.files.length === 0) return;
 
       const file = event.target.files[0];
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}-${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
+
+      // 1. ファイルサイズの検証 (最大2MB = 2,097,152バイト)
+      const maxFileSize = 2 * 1024 * 1024;
+      if (file.size > maxFileSize) {
+        toast.error('画像サイズは2MB以下にしてください。');
+        return;
+      }
+
+      // 2. 拡張子の検証 (ホワイトリスト定義)
+      const parts = file.name.split('.');
+      if (parts.length < 2) {
+        toast.error('ファイル名に拡張子がありません。');
+        return;
+      }
+      const fileExt = parts.pop()?.toLowerCase();
+      const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+      if (!fileExt || !allowedExtensions.includes(fileExt)) {
+        toast.error('許可されていないファイル形式です。 (jpg, jpeg, png, gif, webp のみ許可)');
+        return;
+      }
+
+      // 3. MIMEタイプの検証 (ホワイトリスト定義)
+      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedMimeTypes.includes(file.type)) {
+        toast.error('画像ファイル以外のアップロードは禁止されています。');
+        return;
+      }
+
+      // 4. MIMEタイプと拡張子の一致確認 (二重拡張子や偽装対策)
+      const mimeToExtMap: Record<string, string[]> = {
+        'image/jpeg': ['jpg', 'jpeg'],
+        'image/png': ['png'],
+        'image/gif': ['gif'],
+        'image/webp': ['webp']
+      };
+      const expectedExts = mimeToExtMap[file.type];
+      if (!expectedExts || !expectedExts.includes(fileExt)) {
+        toast.error('ファイルの拡張子とMIMEタイプが一致しません。');
+        return;
+      }
+
+      // 5. UUIDを用いた安全なファイル名生成 (元ファイル名の完全破棄によるパス移動やXSS排除)
+      const generateUUID = () => {
+        if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+          return window.crypto.randomUUID();
+        }
+        // Secure random fallback
+        const array = new Uint32Array(4);
+        window.crypto.getRandomValues(array);
+        return Array.from(array, dec => dec.toString(16).padStart(8, '0')).join('-');
+      };
+      const secureFileName = `${generateUUID()}.${fileExt}`;
+      const filePath = secureFileName;
 
       // avatarsバケットへアップロード（※Supabase側でavatarsバケットの作成が必要）
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, file, {
-          upsert: true,          // 🌟 必須：既存のファイルを強制的に上書きする
-          cacheControl: '0'      // 🌟 キャッシュをさせない
+          upsert: true,
+          contentType: file.type, // MIMEタイプを明示的に指定してブラウザによる不正判定を防ぐ
+          cacheControl: '3600'    // ブラウザ・CDNキャッシュは有効にし、クエリでキャッシュバスティングする
         });
 
       if (uploadError) throw uploadError;
@@ -150,14 +201,18 @@ export default function Settings() {
       // パブリックURLの取得
       const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
 
-      // 🌟 追加: DB保存用には cleanUrl を使い、画面の即時反映のみ displayUrl を使用する
+      // キャッシュバスティング用タイムスタンプの生成
+      const timestamp = Date.now();
       const cleanUrl = publicUrlData.publicUrl;
-      setAvatarUrl(cleanUrl); // 🌟 StateにはクリーンなURLだけを入れる
-      setAvatarCacheKey(Date.now()); // 🌟 画像を強制リロードするためのキーを更新
+      const displayUrl = `${cleanUrl}?v=${timestamp}`;
+
+      // 状態の更新
+      setAvatarUrl(displayUrl);
+      setAvatarCacheKey(timestamp);
 
       // 🌟 AuthのメタデータにURLを書き込む
       const { error: updateError } = await supabase.auth.updateUser({
-        data: { avatar_url: cleanUrl }
+        data: { avatar_url: displayUrl }
       });
 
       if (updateError) {
@@ -169,15 +224,15 @@ export default function Settings() {
           .upsert({
             id: user.id,
             username: username,
-            avatar_url: cleanUrl,
+            avatar_url: displayUrl,
             updated_at: new Date().toISOString()
           });
 
         toast.success('アバター画像を更新しました！');
-        // 🌟 確実な反映のため、Reactの状態だけでなく画面自体をハードリロードする
+        // 🌟 確実な反映のため、Navbar等へ変更を即座に伝播させるためにリロード
         setTimeout(() => {
-          window.location.href = window.location.pathname;
-        }, 1000);
+          window.location.reload();
+        }, 800);
       }
 
     } catch (error: any) {
@@ -350,7 +405,7 @@ export default function Settings() {
             <div className="relative group">
               <div className="w-28 h-28 rounded-full bg-gradient-to-br from-[#6C3EF4] to-[#00D4AA] flex items-center justify-center overflow-hidden border-2 border-[#1C1A38] shadow-lg">
                 {avatarUrl ? (
-                  <img src={`${avatarUrl}?t=${avatarCacheKey}`} alt="Avatar" className="w-full h-full object-cover" />
+                  <img src={avatarUrl.includes('?') ? `${avatarUrl}&t=${avatarCacheKey}` : `${avatarUrl}?t=${avatarCacheKey}`} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-4xl font-extrabold text-white">{username.charAt(0).toUpperCase()}</span>
                 )}
