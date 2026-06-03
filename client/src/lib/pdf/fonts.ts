@@ -36,9 +36,9 @@ export const PDF_FONT_FAMILY = {
  * Vercelの帯域コストをゼロにし、Gitバイナリ破損とfontkitバグを同時に回避する。
  */
 const FONT_SOURCES = {
-  notoSansJpRegular: 'https://cdn.jsdelivr.net/npm/noto-sans-japanese@1.1.4/fonts/NotoSansJP-Regular.otf',
-  notoSansJpMedium: 'https://cdn.jsdelivr.net/npm/noto-sans-japanese@1.1.4/fonts/NotoSansJP-Medium.otf',
-  notoSansJpBold: 'https://cdn.jsdelivr.net/npm/noto-sans-japanese@1.1.4/fonts/NotoSansJP-Bold.otf',
+  notoSansJpRegular: 'https://cdn.jsdelivr.net/npm/@electron-fonts/noto-sans-jp@1.2.0/fonts/NotoSansJP-Regular.ttf',
+  notoSansJpMedium: 'https://cdn.jsdelivr.net/npm/@electron-fonts/noto-sans-jp@1.2.0/fonts/NotoSansJP-Medium.ttf',
+  notoSansJpBold: 'https://cdn.jsdelivr.net/npm/@electron-fonts/noto-sans-jp@1.2.0/fonts/NotoSansJP-Bold.ttf',
   jetbrainsMonoRegular: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/ttf/JetBrainsMono-Regular.ttf',
   jetbrainsMonoBold: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/ttf/JetBrainsMono-Bold.ttf',
 } as const;
