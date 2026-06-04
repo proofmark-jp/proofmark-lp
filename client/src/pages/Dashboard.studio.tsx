@@ -353,11 +353,20 @@ function BreathingBadge({
  *
  * @see https://supabase.com/docs/guides/storage/serving/image-transformations
  */
+const ENABLE_IMAGE_OPTIMIZATION = false;
+
 function getOptimizedImageUrl(
   url: string | null | undefined,
   opts: { width?: number; quality?: number; format?: string } = {},
 ): string {
   if (!url) return '';
+
+  if (!ENABLE_IMAGE_OPTIMIZATION) {
+    const timestamp = Date.now();
+    const sep = url.includes('?') ? '&' : '?';
+    if (url.includes('v=') || url.includes('t=')) return url;
+    return `${url}${sep}v=${timestamp}`;
+  }
 
   // Supabase Storage URL かどうかを判定
   // 形式: https://<project>.supabase.co/storage/v1/object/public/...
@@ -529,8 +538,11 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const reduce = useReducedMotion() ?? false;
   const [certs, setCerts] = useState<CertRow[]>([]);
   const [loadingCerts, setLoadingCerts] = useState(true);
-  const [offset, setOffset] = useState(0);
+  const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+
+  const profileData: any = null;
+  const isFounder = profileData?.is_founder || user?.user_metadata?.is_founder || user?.user_metadata?.username === 'sinn' || user?.email?.includes('ogurishinya');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'starred' | 'trust'>('newest');
@@ -617,9 +629,9 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     [inspectorCertId, syncInspectorToUrl],
   );
 
-  // Reset offset and list when filters change to trigger clean initial load
+  // Reset page and list when filters change to trigger clean initial load
   useEffect(() => {
-    setOffset(0);
+    setPage(0);
     setHasMore(true);
     setCerts([]);
   }, [searchQuery, activeProjectId, showArchived, trustFilter, sortBy]);
@@ -684,7 +696,9 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
       }
 
       // Paginate
-      q = q.range(offset, offset + 23);
+      const from = page * 24;
+      const to = from + 23;
+      q = q.range(from, to);
 
       const { data, error } = await q;
       if (cancelled) return;
@@ -692,7 +706,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
         toast.error('証明書の取得に失敗しました', { description: error.message });
       } else {
         const fetchedCerts = (data ?? []) as CertRow[];
-        setCerts((prev) => offset === 0 ? fetchedCerts : [...prev, ...fetchedCerts]);
+        setCerts((prev) => page === 0 ? fetchedCerts : [...prev, ...fetchedCerts]);
         setHasMore(fetchedCerts.length === 24);
       }
       setLoadingCerts(false);
@@ -700,7 +714,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     return () => {
       cancelled = true;
     };
-  }, [user, isStudio, showArchived, searchQuery, activeProjectId, trustFilter, sortBy, offset]);
+  }, [user, isStudio, showArchived, searchQuery, activeProjectId, trustFilter, sortBy, page]);
 
   const visibleCerts = useMemo(
     () => (showArchived ? certs : certs.filter((c) => !c.is_archived)),
@@ -1157,7 +1171,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
                 style={{ fontFamily: '"Poppins", "Inter", sans-serif' }}
               >
                 <span>{user?.user_metadata?.username ? `@${user.user_metadata.username}` : 'Dashboard'}</span>
-                {user?.user_metadata?.is_founder && <FounderBadge className="!py-1 !px-3" />}
+                {isFounder && <FounderBadge className="!py-1 !px-3" />}
               </h1>
             </div>
             <span className="hidden md:inline text-[11px] text-white/40 font-mono uppercase tracking-[0.2em]">
@@ -1385,7 +1399,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
             <div className="flex justify-center mt-8">
               <button
                 type="button"
-                onClick={() => setOffset((prev) => prev + 24)}
+                onClick={() => setPage((prev) => prev + 1)}
                 disabled={loadingCerts}
                 className="px-6 py-3 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-[#6C3EF4]/50 hover:shadow-[0_0_15px_rgba(108,62,244,0.15)] text-sm font-bold text-[#A8A0D8] hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 group cursor-pointer"
               >

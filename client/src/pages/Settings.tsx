@@ -44,6 +44,8 @@ export default function Settings() {
   const [targetUserId, setTargetUserId] = useState('');
   const [isImpersonating, setIsImpersonating] = useState(false);
 
+  const isFounder = profileData?.is_founder || user?.user_metadata?.is_founder || user?.user_metadata?.username === 'sinn' || user?.email?.includes('ogurishinya');
+
   const handleImpersonate = async () => {
     if (!targetUserId) return;
     try {
@@ -187,7 +189,7 @@ export default function Settings() {
         return Array.from(array, dec => dec.toString(16).padStart(8, '0')).join('-');
       };
       const secureFileName = `${generateUUID()}.${fileExt}`;
-      filePath = `${user.id}/${secureFileName}`;
+      filePath = secureFileName;
 
       // avatarsバケットへアップロード（※Supabase側でavatarsバケットの作成が必要）
       const { error: uploadError } = await supabase.storage
@@ -209,12 +211,12 @@ export default function Settings() {
       const displayUrl = `${cleanUrl}?v=${timestamp}`;
 
       // 状態の更新
-      setAvatarUrl(displayUrl);
-      setAvatarCacheKey(timestamp);
+      setAvatarUrl(publicUrlData.publicUrl);
+      setAvatarCacheKey(Date.now());
 
       // 🌟 AuthのメタデータにURLを書き込む
       const { error: updateError } = await supabase.auth.updateUser({
-        data: { avatar_url: displayUrl }
+        data: { avatar_url: publicUrlData.publicUrl }
       });
 
       if (updateError) {
@@ -226,7 +228,7 @@ export default function Settings() {
           .upsert({
             id: user.id,
             username: username,
-            avatar_url: displayUrl,
+            avatar_url: publicUrlData.publicUrl,
             updated_at: new Date().toISOString()
           });
 
@@ -406,7 +408,7 @@ export default function Settings() {
         <h1 className="text-3xl font-extrabold text-white tracking-tight flex flex-wrap items-center gap-3">
           <Edit3 className="w-8 h-8 text-[#6C3EF4]" />
           <span>プロフィール構築</span>
-          {(profileData?.is_founder || user?.user_metadata?.is_founder) && <FounderBadge />}
+          {isFounder && <FounderBadge />}
         </h1>
         <p className="text-[#A8A0D8] mt-2 text-sm leading-relaxed">世界に公開されるあなたのアイデンティティを、細部まで磨き上げます。</p>
       </div>
@@ -419,7 +421,7 @@ export default function Settings() {
             <div className="relative group">
               <div className="w-28 h-28 rounded-full bg-gradient-to-br from-[#6C3EF4] to-[#00D4AA] flex items-center justify-center overflow-hidden border-2 border-[#1C1A38] shadow-lg">
                 {avatarUrl ? (
-                  <img src={avatarUrl.includes('?') ? `${avatarUrl}&t=${avatarCacheKey}` : `${avatarUrl}?t=${avatarCacheKey}`} alt="Avatar" className="w-full h-full object-cover" />
+                  <img src={`${avatarUrl}?t=${avatarCacheKey}`} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-4xl font-extrabold text-white">{username.charAt(0).toUpperCase()}</span>
                 )}

@@ -522,6 +522,8 @@ export default function PublicProfile() {
   const [profileExists, setProfileExists] = useState(false);
   const { user, signOut } = useAuth();
 
+  const isFounder = profileData?.is_founder || user?.user_metadata?.is_founder || user?.user_metadata?.username === 'sinn' || user?.email?.includes('ogurishinya');
+
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -774,7 +776,7 @@ export default function PublicProfile() {
                   style={{ fontFamily: '"Poppins", "Inter", sans-serif' }}
                 >
                   <span>@{safeUsername}</span>
-                  {profileData?.is_founder && <FounderBadge />}
+                  {isFounder && <FounderBadge />}
                 </h1>
                 <BreathingBadge reduce={reduce} size="normal" tone="teal" label="ProofMark" />
               </div>
