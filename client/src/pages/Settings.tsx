@@ -6,6 +6,7 @@ import WidgetBuilder from '../components/embed/WidgetBuilder';
 import AdminStorageSimulator from '../components/admin/AdminStorageSimulator';
 import AdminSafetyPanel from '../components/admin/AdminSafetyPanel';
 import { supabase } from '../lib/supabase';
+import FounderBadge from '../components/FounderBadge';
 
 export default function Settings() {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -128,6 +129,7 @@ export default function Settings() {
   }, []);
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    let filePath = '';
     try {
       setUploading(true);
       if (!event.target.files || event.target.files.length === 0) return;
@@ -185,7 +187,7 @@ export default function Settings() {
         return Array.from(array, dec => dec.toString(16).padStart(8, '0')).join('-');
       };
       const secureFileName = `${generateUUID()}.${fileExt}`;
-      const filePath = secureFileName;
+      filePath = `${user.id}/${secureFileName}`;
 
       // avatarsバケットへアップロード（※Supabase側でavatarsバケットの作成が必要）
       const { error: uploadError } = await supabase.storage
@@ -236,8 +238,18 @@ export default function Settings() {
       }
 
     } catch (error: any) {
-      toast.error('画像のアップロードに失敗しました');
-      console.error(error);
+      toast.error('画像のアップロードに失敗しました', {
+        description: error.message || '詳細なログを参照してください。'
+      });
+      console.error('[Avatar Upload Failure Details]:', {
+        error,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code,
+        userId: user?.id,
+        filePath
+      });
     } finally {
       setUploading(false);
     }
@@ -391,8 +403,10 @@ export default function Settings() {
             </span>
           )}
         </div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
-          <Edit3 className="w-8 h-8 text-[#6C3EF4]" /> プロフィール構築
+        <h1 className="text-3xl font-extrabold text-white tracking-tight flex flex-wrap items-center gap-3">
+          <Edit3 className="w-8 h-8 text-[#6C3EF4]" />
+          <span>プロフィール構築</span>
+          {(profileData?.is_founder || user?.user_metadata?.is_founder) && <FounderBadge />}
         </h1>
         <p className="text-[#A8A0D8] mt-2 text-sm leading-relaxed">世界に公開されるあなたのアイデンティティを、細部まで磨き上げます。</p>
       </div>

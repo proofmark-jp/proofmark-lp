@@ -19,7 +19,6 @@ import {
   HelpCircle
 } from 'lucide-react';
 import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
-import founderBadge from '../assets/logo/badges/proofmark-badge-founder.svg';
 import { useAuth } from '../hooks/useAuth';
 
 export default function Navbar({ user, signOut }: { user: any, signOut: () => void }) {
@@ -128,17 +127,6 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
               >
                 <LogOut className="w-4 h-4" />
               </button>
-              {/* Founderバッジ — デスクトップ右端。isAdmin(=Founder)のみ表示 */}
-              {isAdmin && (
-                <span
-                  aria-label="Founder"
-                  title="ProofMark Founder"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[#F0BB38]/40 bg-[#F0BB38]/10 text-[#F0BB38] text-[11px] font-black tracking-wide shadow-[0_0_12px_rgba(240,187,56,0.2)] select-none shrink-0"
-                >
-                  <img src={founderBadge} alt="" aria-hidden className="w-3.5 h-3.5" />
-                  FOUNDER
-                </span>
-              )}
             </>
           ) : (
             <div className="flex items-center gap-4">
@@ -179,15 +167,6 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
             {user ? (
               <div className="grid grid-cols-1 gap-1">
                 <p className="text-[10px] font-black text-[#6C3EF4] tracking-[0.2em] uppercase mb-1 px-2">Navigation</p>
-                {/* Founderバッジ — モバイルメニュー内。isAdmin(=Founder)のみ表示 */}
-                {isAdmin && (
-                  <div className="flex items-center gap-2 px-2 py-2 mb-1">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#F0BB38]/40 bg-[#F0BB38]/10 text-[#F0BB38] text-[11px] font-black tracking-wide shadow-[0_0_12px_rgba(240,187,56,0.2)] select-none">
-                      <img src={founderBadge} alt="" aria-hidden className="w-3.5 h-3.5" />
-                      FOUNDER
-                    </span>
-                  </div>
-                )}
                 {isAdmin && (
                   <Link href="/admin">
                     <span onClick={closeMenu} className="flex items-center gap-2 px-4 py-2 mb-1 text-sm font-bold text-white bg-gradient-to-r from-[#6C3EF4]/20 to-[#00D4AA]/20 border border-[#6C3EF4]/40 rounded-xl hover:from-[#6C3EF4]/40 hover:to-[#00D4AA]/40 transition-all shadow-[0_0_15px_rgba(108,62,244,0.15)] cursor-pointer group">

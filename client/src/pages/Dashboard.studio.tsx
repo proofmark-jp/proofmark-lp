@@ -74,6 +74,7 @@ import { AuditDrawer } from '../components/ops/AuditDrawer';
 import { SlimUploadDock } from '../components/dashboard/SlimUploadDock';
 import VisibilityToggle from '../components/VisibilityToggle';
 import { executeEvidencePackDownload } from '../components/EvidencePackDownloadButton';
+import FounderBadge from '../components/FounderBadge';
 
 // Chain of Evidence builder (Inspector 内に常設マウント)
 const ProcessBundleComposer = lazy(() =>
@@ -528,6 +529,8 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const reduce = useReducedMotion() ?? false;
   const [certs, setCerts] = useState<CertRow[]>([]);
   const [loadingCerts, setLoadingCerts] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'starred' | 'trust'>('newest');
@@ -614,6 +617,13 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     [inspectorCertId, syncInspectorToUrl],
   );
 
+  // Reset offset and list when filters change to trigger clean initial load
+  useEffect(() => {
+    setOffset(0);
+    setHasMore(true);
+    setCerts([]);
+  }, [searchQuery, activeProjectId, showArchived, trustFilter, sortBy]);
+
   /* ━━━━━━━━━━━━━━━━ Data fetch ━━━━━━━━━━━━━━━━ */
   useEffect(() => {
     if (!user) return;
@@ -622,26 +632,75 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
       setLoadingCerts(true);
       let q = supabase
         .from('certificates')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500);
+        .select('*');
+
       if (!isStudio) q = q.eq('user_id', user.id);
       if (!showArchived) q = q.eq('is_archived', false);
+
+      // Active project filter
+      if (activeProjectId !== ALL_PROJECTS_ID) {
+        if (isStudio) {
+          if (activeProjectId === UNASSIGNED_ID) {
+            q = q.is('project_id', null);
+          } else {
+            q = q.eq('project_id', activeProjectId);
+          }
+        } else {
+          if (activeProjectId === UNASSIGNED_ID) {
+            q = q.is('client_project', null);
+          } else {
+            q = q.eq('client_project', activeProjectId);
+          }
+        }
+      }
+
+      // Search filter
+      if (searchQuery.trim()) {
+        const searchVal = `%${searchQuery.trim()}%`;
+        q = q.or(`title.ilike.${searchVal},file_name.ilike.${searchVal},client_project.ilike.${searchVal},sha256.ilike.${searchVal},file_hash.ilike.${searchVal}`);
+      }
+
+      // Trust filter
+      if (trustFilter === 'pending') {
+        q = q.or('timestamp_token.is.null,certified_at.is.null');
+      } else if (trustFilter === 'cross') {
+        q = q.not('cross_anchors', 'is', null);
+      } else if (trustFilter === 'trusted') {
+        q = q.in('tsa_provider', ['digicert', 'globalsign', 'seiko', 'sectigo'])
+             .not('timestamp_token', 'is', null)
+             .not('certified_at', 'is', null);
+      } else if (trustFilter === 'beta') {
+        q = q.not('tsa_provider', 'in', ['digicert', 'globalsign', 'seiko', 'sectigo'])
+             .not('timestamp_token', 'is', null)
+             .not('certified_at', 'is', null)
+             .is('cross_anchors', null);
+      }
+
+      // Sorting
+      if (sortBy === 'starred') {
+        q = q.order('is_starred', { ascending: false }).order('created_at', { ascending: false });
+      } else {
+        q = q.order('created_at', { ascending: false });
+      }
+
+      // Paginate
+      q = q.range(offset, offset + 23);
 
       const { data, error } = await q;
       if (cancelled) return;
       if (error) {
         toast.error('証明書の取得に失敗しました', { description: error.message });
-        setCerts([]);
       } else {
-        setCerts((data ?? []) as CertRow[]);
+        const fetchedCerts = (data ?? []) as CertRow[];
+        setCerts((prev) => offset === 0 ? fetchedCerts : [...prev, ...fetchedCerts]);
+        setHasMore(fetchedCerts.length === 24);
       }
       setLoadingCerts(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [user, isStudio, showArchived]);
+  }, [user, isStudio, showArchived, searchQuery, activeProjectId, trustFilter, sortBy, offset]);
 
   const visibleCerts = useMemo(
     () => (showArchived ? certs : certs.filter((c) => !c.is_archived)),
@@ -649,68 +708,8 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   );
 
   const filteredSortedCerts = useMemo(() => {
-    let r = [...visibleCerts];
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const projectMap = isStudio
-        ? new Map(ops.projects.map((p) => [p.id, p.name.toLowerCase()]))
-        : new Map();
-      r = r.filter((c) => {
-        const projectName =
-          isStudio && c.project_id
-            ? projectMap.get(c.project_id) || ''
-            : (c.client_project || '').toLowerCase();
-        return (
-          (c.title ?? '').toLowerCase().includes(q) ||
-          (c.file_name ?? '').toLowerCase().includes(q) ||
-          projectName.includes(q) ||
-          (c.sha256 ?? c.file_hash ?? '').toLowerCase().includes(q)
-        );
-      });
-    }
-
-    if (activeProjectId !== ALL_PROJECTS_ID) {
-      if (isStudio) {
-        r = r.filter((c) => (c.project_id || UNASSIGNED_ID) === activeProjectId);
-      } else {
-        r = r.filter((c) => {
-          const key = c.client_project?.trim() || UNASSIGNED_ID;
-          return key === activeProjectId;
-        });
-      }
-    }
-
-    if (trustFilter !== 'all') {
-      r = r.filter((c) => deriveTrustTier(c).tier === trustFilter);
-    }
-
-    const rank: Record<TrustTier, number> = { cross: 0, trusted: 1, beta: 2, pending: 3 };
-    const sorted = r
-      .map((c) => ({
-        cert: c,
-        time: new Date(c.created_at).getTime() || 0,
-        trustRank: rank[deriveTrustTier(c).tier],
-      }))
-      .sort((a, b) => {
-        if (sortBy === 'starred') {
-          const av = a.cert.is_starred ? 1 : 0;
-          const bv = b.cert.is_starred ? 1 : 0;
-          if (av !== bv) return bv - av;
-        }
-        if (sortBy === 'trust') {
-          const d = a.trustRank - b.trustRank;
-          if (d !== 0) return d;
-        }
-        if (isStudio) {
-          const diff = compareByAttention(a.cert.delivery_status ?? null, b.cert.delivery_status ?? null);
-          if (diff !== 0) return diff;
-        }
-        return b.time - a.time;
-      });
-
-    return sorted.map((item) => item.cert);
-  }, [visibleCerts, activeProjectId, searchQuery, trustFilter, sortBy, isStudio, ops.projects]);
+    return visibleCerts;
+  }, [visibleCerts]);
 
   const projectChips: ProjectChipModel[] = useMemo(() => {
     const chips = new Map<string, ProjectChipModel>();
@@ -1154,10 +1153,11 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
                 {isStudio ? 'Evidence Operations · Studio' : 'Evidence Console'}
               </p>
               <h1
-                className="text-[26px] sm:text-[28px] font-black tracking-tight mt-1"
+                className="text-[26px] sm:text-[28px] font-black tracking-tight mt-1 flex flex-wrap items-center gap-2.5"
                 style={{ fontFamily: '"Poppins", "Inter", sans-serif' }}
               >
-                {user?.user_metadata?.username ? `@${user.user_metadata.username}` : 'Dashboard'}
+                <span>{user?.user_metadata?.username ? `@${user.user_metadata.username}` : 'Dashboard'}</span>
+                {user?.user_metadata?.is_founder && <FounderBadge className="!py-1 !px-3" />}
               </h1>
             </div>
             <span className="hidden md:inline text-[11px] text-white/40 font-mono uppercase tracking-[0.2em]">
@@ -1379,6 +1379,25 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
               reduce={reduce}
             />
           )}
+
+          {/* Load More button */}
+          {hasMore && certs.length > 0 && (
+            <div className="flex justify-center mt-8">
+              <button
+                type="button"
+                onClick={() => setOffset((prev) => prev + 24)}
+                disabled={loadingCerts}
+                className="px-6 py-3 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-[#6C3EF4]/50 hover:shadow-[0_0_15px_rgba(108,62,244,0.15)] text-sm font-bold text-[#A8A0D8] hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 group cursor-pointer"
+              >
+                {loadingCerts ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-[#00D4AA]" />
+                ) : (
+                  <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300 text-[#00D4AA]" />
+                )}
+                さらに読み込む
+              </button>
+            </div>
+          )}
         </section>
       </main>
 
@@ -1551,11 +1570,11 @@ function TrustFilterTabs({
   counts: Record<TrustTier, number>;
 }) {
   const items: Array<{ key: TrustTier | 'all'; label: string; color: string }> = [
-    { key: 'all', label: 'すべて', color: '#A8A0D8' },
-    { key: 'cross', label: `CROSS ${counts?.cross ?? 0}`, color: '#F0BB38' },
-    { key: 'trusted', label: `TRUSTED ${counts?.trusted ?? 0}`, color: '#00D4AA' },
-    { key: 'beta', label: `BETA ${counts?.beta ?? 0}`, color: '#9BA3D4' },
-    { key: 'pending', label: `PENDING ${counts?.pending ?? 0}`, color: '#A8A0D8' },
+    { key: 'all' as const, label: 'すべて', color: '#A8A0D8' },
+    { key: 'cross' as const, label: `CROSS ${counts?.cross ?? 0}`, color: '#F0BB38' },
+    { key: 'trusted' as const, label: `TRUSTED ${counts?.trusted ?? 0}`, color: '#00D4AA' },
+    { key: 'beta' as const, label: `BETA ${counts?.beta ?? 0}`, color: '#9BA3D4' },
+    { key: 'pending' as const, label: `PENDING ${counts?.pending ?? 0}`, color: '#A8A0D8' },
   ].filter((it) => it.key === 'all' || (counts && (counts[it.key as TrustTier] ?? 0) > 0));
   return (
     <div role="tablist" aria-label="信頼レベル" className="flex flex-wrap items-center gap-1">

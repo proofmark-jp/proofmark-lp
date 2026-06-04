@@ -770,13 +770,13 @@ export default function PublicProfile() {
             <div className="flex-1 text-center md:text-left z-10 w-full flex flex-col items-center md:items-start justify-center min-w-0">
               <div className="flex flex-wrap items-center gap-3 mb-3 justify-center md:justify-start">
                 <h1
-                  className="text-3xl md:text-4xl font-extrabold text-white tracking-tight"
+                  className="text-3xl md:text-4xl font-extrabold text-white tracking-tight flex flex-wrap items-center gap-3"
                   style={{ fontFamily: '"Poppins", "Inter", sans-serif' }}
                 >
-                  @{safeUsername}
+                  <span>@{safeUsername}</span>
+                  {profileData?.is_founder && <FounderBadge />}
                 </h1>
                 <BreathingBadge reduce={reduce} size="normal" tone="teal" label="ProofMark" />
-                {profileData?.is_founder && <FounderBadge />}
               </div>
 
               {hasBio ? (
