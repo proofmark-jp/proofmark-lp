@@ -1,37 +1,37 @@
 /**
- * CertificateDocument.tsx (v4 — Final Commit)
+ * CertificateDocument.tsx (v5 — Final Commit)
  * -----------------------------------------------------------------------------
  * Certificate_of_Authenticity.pdf
- *   スイス銀行債券レベル × 政府発行公文書レベルの「究極の 1 ページ完結」仕様。
+ *   スイス銀行の債券レベル × 政府発行公文書レベルの「究極の 1 ページ完結」仕様。
  *
- * v3 → v4 の決定的変更（レイアウト崩壊の完全撤去 + DTP 品質の極限化）:
+ * v4 → v5 の決定的変更:
  *
- *  [致命的バグの修正]
- *   - `CornerOrnament` / Watermark が absolute だけで `fixed` を持たず、
- *     親フローを巻き込んで「1 ページ目が真っ白」「3 ページに分断」を
- *     引き起こしていた。これを `<View fixed style={{ position:'absolute',
- *     top:0, left:0, right:0, bottom:0, zIndex:-1 }}>` で完全隔離。
- *     コンテンツフローと装飾レイヤーを物理的に切り離した。
- *   - 累積マージン (mb 26 / 30 / 36 ...) で本文が 919pt に達し、A4 使用域
- *     729pt を超過していた。黄金比 (φ=1.618) に基づくモジュラースケールで
- *     全マージン・フォントサイズを再計算し、本文を 737pt 以内に厳密配置。
+ *  [要件 1] 公式ブランド SVG への完全準拠
+ *   - 公式 SVG（角丸ダークネイビー + 六角形リング + チェック）を
+ *     @react-pdf プリミティブ (<Svg>/<Defs>/<LinearGradient>/<Stop>/<Path>/<Rect>)
+ *     へ厳格に翻訳した `<ProofMarkLogo />` をローカル定義。全属性キャメルケース。
+ *   - ヘッダ左上に `ProofMarkLogo` + 太字テキスト「ProofMark」のロックアップ。
+ *   - 旧テキスト透かし "PROOFMARK SECURE DOCUMENT" を完全削除。
+ *     代わりに公式 SVG の <Path> と <Polygon→Path> のみを抽出した
+ *     幅 300pt の `<ProofMarkWatermark />` を opacity={0.03} で中央に配置。
  *
- *  [1 ページ厳守の防御 CSS]
- *   - 全てのテキストブロックに `flexShrink: 1`, `flexWrap: 'wrap'` を付与。
- *   - 長大ハッシュ・URL・ファイル名には `wordBreak: 'break-all'` を併用し、
- *     いかなる入力でもコンテナを突き破らないことを保証。
+ *  [要件 2] ダサい装飾の完全破壊と Bond Frame 導入
+ *   - `SealedStamp`（右下シール）を完全削除。import からも撤去。
+ *   - `CornerOrnament`（4 隅 L 字）を完全削除。import からも撤去。
+ *   - 代わりに、ページ端から内側 28pt の位置に途切れない 1 本の証券枠
+ *     `Bond Frame` (border 1px solid PDF_COLORS.inkDeep) を敷設。
+ *   - 全テキストはこの枠の内側に美しく収まる。
  *
- *  [タイポグラフィ昇華]
- *   - 全長文ブロックに `textAlign: 'justify'` を適用し、両端揃えの
- *     証券特有のブロック体を形成。
- *   - 仕切り線は単一罫線ではなく `borderTop` + 細罫線 + `borderBottom` の
- *     精緻な三層構造を採用 (sectionBand)。
- *   - 行間 `lineHeight: 1.62` (≒ φ) を本文に厳格適用。
+ *  [要件 4] justify バグの完全撤去
+ *   - 旧 `textAlign: 'justify'` を全て `textAlign: 'left'` に変更。
+ *   - 長文ブロックの lineHeight を 1.65 以上に引き上げ、余裕ある左揃え。
  *
- *  [細部への執念]
- *   - フッタにページ番号 `Text.render({pageNumber, totalPages})` を実装。
- *   - SHA-256 を 4 文字 × 16 ブロックの 2 行構成に変更し、4 桁等幅で
- *     証券らしい「桁あり感」を演出。
+ *  [維持された v4 の長所]
+ *   - 装飾レイヤーは `<View fixed>` + zIndex:-1 でフロー完全隔離。
+ *   - 黄金比モジュラースケール (SCALE 定数) で全余白統制。
+ *   - 防御 CSS (flexShrink/flexWrap/wordBreak)。
+ *   - ページ番号 (Text.render の動的レンダリング)。
+ *   - @electron-fonts への安定版固定。
  * -----------------------------------------------------------------------------
  */
 
@@ -43,32 +43,28 @@ import {
   Text,
   Link,
   StyleSheet,
+  Svg,
+  Defs,
+  LinearGradient,
+  Stop,
+  Path,
+  Rect,
 } from '@react-pdf/renderer';
-import { PDF_COLORS, PDF_LAYOUT, PDF_LEADING, PDF_TRACKING } from './tokens';
+import { PDF_COLORS, PDF_LAYOUT, PDF_TRACKING } from './tokens';
 import { PDF_FONT_FAMILY } from './fonts';
-import {
-  ProofMarkLogo,
-  CornerOrnament,
-  SealedStamp,
-  DividerRule,
-} from './Decorations';
+import { DividerRule } from './Decorations';
 import type { CertificatePdfInput } from './types';
 
 /* =============================================================================
- * モジュラースケール (黄金比 φ = 1.618 ベース)
- * -----------------------------------------------------------------------------
- *  本ドキュメントの全余白・全フォントは下記スケールに準拠する。
- *  値は実測・累積予算管理の結果 A4 1 ページ内に収まる定数として確定済。
+ * モジュラースケール (黄金比 φ = 1.618)
  * =========================================================================== */
 const SCALE = {
-  /** スペーシング (8pt grid を黄金比で展開) */
   s1: 4,
   s2: 8,
   s3: 13,
   s4: 20,
   s5: 33,
   s6: 52,
-  /** フォントサイズ */
   caption: 6.5,
   micro: 7.5,
   small: 8.5,
@@ -78,21 +74,96 @@ const SCALE = {
   title: 27,
 } as const;
 
+/* =============================================================================
+ * Bond Frame Geometry
+ *  ページ端から 28pt 内側に 1px の証券枠を敷設し、全コンテンツはその内側に配置。
+ * =========================================================================== */
+const FRAME_INSET = 28;
+
+/* =============================================================================
+ * 公式ブランド SVG の path / polygon 定義 (両コンポーネントで共有)
+ * =========================================================================== */
+const PM_HEX_PATH =
+  'M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 87,25 L 82,29 L 76,18 Z';
+const PM_CHECK_PATH =
+  'M 17,46 L 27,47 L 39,62 L 79,22 L 83,28 L 36,70 L 23,58 Z';
+
+/* =============================================================================
+ * <ProofMarkLogo />
+ *  公式ブランド SVG を @react-pdf へ厳格翻訳したロゴ。
+ *  - 全属性キャメルケース
+ *  - LinearGradient id はインスタンス毎にユニーク化して衝突回避
+ * =========================================================================== */
+interface ProofMarkLogoProps {
+  size?: number;
+  instanceId: string;
+}
+const ProofMarkLogo: React.FC<ProofMarkLogoProps> = ({ size = 22, instanceId }) => {
+  const gradId = `pmLogoGrad-${instanceId}`;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 100 100">
+      <Defs>
+        <LinearGradient id={gradId} x1="15%" y1="0%" x2="85%" y2="100%">
+          <Stop offset="0%" stopColor="#5830CC" />
+          <Stop offset="100%" stopColor="#00B896" />
+        </LinearGradient>
+      </Defs>
+      <Rect x={0} y={0} width={100} height={100} rx={22} ry={22} fill="#0D0B24" />
+      <Path
+        d={PM_HEX_PATH}
+        fill="none"
+        stroke={`url(#${gradId})`}
+        strokeWidth={3.8}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        opacity={0.85}
+      />
+      <Path d={PM_CHECK_PATH} fill="#00D4AA" />
+    </Svg>
+  );
+};
+
+/* =============================================================================
+ * <ProofMarkWatermark />
+ *  公式 SVG から外枠 rect を除き、六角形リングとチェックのみを抽出。
+ *  幅 300pt、opacity 0.03 でページ中央に絶対配置。
+ * =========================================================================== */
+interface ProofMarkWatermarkProps {
+  size?: number;
+}
+const ProofMarkWatermark: React.FC<ProofMarkWatermarkProps> = ({
+  size = 300,
+}) => {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 100 100" opacity={0.06}>
+      {/* 外枠 rect は意図的に省略 (要件: path と polygon のみ抽出) */}
+      {/* 透かしはグラデ不要 — コントラスト確保のため #0D0B24 単色で統一 */}
+      <Path
+        d={PM_HEX_PATH}
+        fill="none"
+        stroke="#0D0B24"
+        strokeWidth={3.8}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <Path d={PM_CHECK_PATH} fill="#0D0B24" />
+    </Svg>
+  );
+};
+
 const styles = StyleSheet.create({
   page: {
     fontFamily: PDF_FONT_FAMILY.sans,
     backgroundColor: PDF_COLORS.paper,
     color: PDF_COLORS.ink,
-    paddingTop: SCALE.s5, // 33
-    paddingBottom: SCALE.s5 + SCALE.s4, // 53 (フッタ余白を含む)
+    paddingTop: SCALE.s5 + SCALE.s2, // 41
+    paddingBottom: SCALE.s5 + SCALE.s4, // 53
     paddingHorizontal: PDF_LAYOUT.marginX, // 56
     position: 'relative',
   },
 
   /* ===========================================================================
    * 装飾レイヤー (絶対隔離 / コンテンツフローに 0 の影響)
-   * - <View fixed> + zIndex:-1 で完全に背景化
-   * - これによりレイアウト崩壊の根本原因を物理的に断つ
    * ========================================================================= */
   decorationLayer: {
     position: 'absolute',
@@ -102,6 +173,18 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: -1,
   },
+  /* Bond Frame — ページ端から 28pt 内側に 1 本の証券枠 */
+  bondFrame: {
+    position: 'absolute',
+    top: FRAME_INSET,
+    left: FRAME_INSET,
+    right: FRAME_INSET,
+    bottom: FRAME_INSET,
+    borderWidth: 1,
+    borderColor: PDF_COLORS.inkDeep,
+    borderStyle: 'solid',
+  },
+  /* Watermark 中央配置コンテナ */
   watermarkAlign: {
     position: 'absolute',
     top: 0,
@@ -112,25 +195,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  watermarkText: {
-    fontFamily: PDF_FONT_FAMILY.sans,
-    fontSize: 68,
-    fontWeight: 700,
-    letterSpacing: 8,
-    color: PDF_COLORS.rule,
-    opacity: 0.05,
-    transform: 'rotate(-45deg)',
-    transformOrigin: 'center',
-  },
 
   /* ===========================================================================
-   * Header (約 46pt)
+   * Header — ProofMarkLogo + "ProofMark" ロックアップ
    * ========================================================================= */
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: SCALE.s4, // 20
+  },
+  brandLockup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  brandText: {
+    fontFamily: PDF_FONT_FAMILY.sans,
+    fontSize: SCALE.subheading - 1, // 12
+    fontWeight: 700,
+    color: PDF_COLORS.inkDeep,
+    letterSpacing: 0.6,
+    marginLeft: SCALE.s2, // 8
   },
   headerRight: {
     alignItems: 'flex-end',
@@ -152,7 +237,7 @@ const styles = StyleSheet.create({
   },
 
   /* ===========================================================================
-   * Title Block (約 96pt)
+   * Title Block
    * ========================================================================= */
   eyebrow: {
     fontFamily: PDF_FONT_FAMILY.sans,
@@ -180,8 +265,7 @@ const styles = StyleSheet.create({
   },
 
   /* ===========================================================================
-   * Section Band (精緻な仕切り線: borderTop + 細罫 + borderBottom)
-   *   約 18pt 高
+   * Section Band (精緻な仕切り線 / 二層構造)
    * ========================================================================= */
   sectionBand: {
     marginTop: SCALE.s4, // 20
@@ -192,9 +276,6 @@ const styles = StyleSheet.create({
     borderBottomColor: PDF_COLORS.inkDeep,
     paddingTop: 3,
     paddingBottom: 3,
-  },
-  sectionBandInner: {
-    height: 2,
   },
 
   /* ===========================================================================
@@ -210,7 +291,7 @@ const styles = StyleSheet.create({
   },
 
   /* ===========================================================================
-   * File info grid (約 68pt)
+   * File info grid
    * ========================================================================= */
   metaGrid: {
     flexDirection: 'column',
@@ -241,7 +322,6 @@ const styles = StyleSheet.create({
     fontSize: SCALE.body - 0.5, // 10
     color: PDF_COLORS.inkDeep,
     fontWeight: 500,
-    // 防御 CSS: 長大なファイル名でもコンテナを突き破らない
     flexWrap: 'wrap',
     // @ts-expect-error wordBreak は @react-pdf にて実装されているが型未公開
     wordBreak: 'break-all',
@@ -258,7 +338,7 @@ const styles = StyleSheet.create({
   },
 
   /* ===========================================================================
-   * Hash card (約 62pt)
+   * Hash card
    * ========================================================================= */
   hashCard: {
     marginBottom: SCALE.s4, // 20
@@ -294,9 +374,8 @@ const styles = StyleSheet.create({
   },
 
   /* ===========================================================================
-   * Statement (宣言文 / 約 158pt @ 約 11 行)
-   * - textAlign: 'justify' で両端揃え、証券特有のブロック体を形成
-   * - lineHeight: 1.62 (≒ φ) で「読ませる」法務文体
+   * Statement (宣言文)
+   *  justify バグ撤去: textAlign = 'left'、lineHeight = 1.72 で余裕の左揃え
    * ========================================================================= */
   statementTitle: {
     fontFamily: PDF_FONT_FAMILY.sans,
@@ -309,14 +388,16 @@ const styles = StyleSheet.create({
   statementBody: {
     fontFamily: PDF_FONT_FAMILY.sans,
     fontSize: SCALE.body, // 10.5
-    lineHeight: 1.62, // ≒ φ (黄金比)
+    lineHeight: 1.72,
     color: PDF_COLORS.ink,
     marginBottom: SCALE.s4 + SCALE.s1, // 24
-    textAlign: 'justify',
+    textAlign: 'left',
   },
 
   /* ===========================================================================
-   * Signature row (約 72pt)
+   * Signature row (SealedStamp 削除版)
+   *  - 左: SEALED BY + 署名者 + Certificate ID
+   *  - 右: Verified mark (BrandLockup の小型版 + キャプション)
    * ========================================================================= */
   signatureRow: {
     flexDirection: 'row',
@@ -326,7 +407,7 @@ const styles = StyleSheet.create({
   signatureBlock: {
     flexGrow: 1,
     flexShrink: 1,
-    maxWidth: 320,
+    maxWidth: 360,
   },
   signedBy: {
     fontFamily: PDF_FONT_FAMILY.sans,
@@ -364,17 +445,10 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     marginTop: 1,
   },
-
-  /* ===========================================================================
-   * Seal anchor (絶対配置 / フロー予算外)
-   * ========================================================================= */
-  sealAnchor: {
-    position: 'absolute',
-    right: PDF_LAYOUT.marginX + 4,
-    bottom: SCALE.s6 + SCALE.s4, // 72
+  verifiedStack: {
     alignItems: 'center',
   },
-  sealCaption: {
+  verifiedCaption: {
     fontFamily: PDF_FONT_FAMILY.sans,
     marginTop: SCALE.s2 - 2, // 6
     fontSize: SCALE.caption, // 6.5
@@ -384,13 +458,13 @@ const styles = StyleSheet.create({
   },
 
   /* ===========================================================================
-   * Footer (fixed / 予算外)
+   * Footer (fixed)
    * ========================================================================= */
   footer: {
     position: 'absolute',
     left: PDF_LAYOUT.marginX,
     right: PDF_LAYOUT.marginX,
-    bottom: SCALE.s4, // 20
+    bottom: FRAME_INSET + SCALE.s3, // 28 + 13 = 41pt — Bond Frame 内側に揃え
   },
   footerRow: {
     flexDirection: 'row',
@@ -424,9 +498,7 @@ const styles = StyleSheet.create({
 
 /**
  * SHA-256 を 4 文字 × 16 チャンクで整形。
- * - 横幅 483pt の使用域に対し、8 ブロック × 2 行 = 約 60pt × 8 + 7 gap × 4pt ≒ 510pt
- *   となるため、自動的に 8 + 8 の 2 行に折り返される。
- * - 4 桁等幅で証券らしい「桁あり感」を演出。
+ * 自動的に 8 + 8 の 2 行に折り返される設計。
  */
 function formatSha256(hex: string): string {
   const clean = hex.replace(/\s+/g, '').toLowerCase();
@@ -436,20 +508,16 @@ function formatSha256(hex: string): string {
 }
 
 /**
- * 装飾レイヤー (CornerOrnament + Watermark) を単一の fixed コンテナへ封じ込め、
- * コンテンツフローから完全に隔離する。これがレイアウト崩壊撤去の核心。
+ * 装飾レイヤー (Bond Frame + ProofMarkWatermark) を単一の fixed コンテナへ
+ * 封じ込め、コンテンツフローから完全に隔離する。
  */
 const DecorationLayer: React.FC = () => (
   <View fixed style={styles.decorationLayer}>
-    <CornerOrnament
-      width={PDF_LAYOUT.pageWidth}
-      height={PDF_LAYOUT.pageHeight}
-      margin={32}
-      armLength={48}
-      color={PDF_COLORS.purple}
-    />
+    {/* Bond Frame — 1px 証券枠 */}
+    <View style={styles.bondFrame} />
+    {/* 中央 Watermark */}
     <View style={styles.watermarkAlign}>
-      <Text style={styles.watermarkText}>PROOFMARK SECURE DOCUMENT</Text>
+      <ProofMarkWatermark size={300} />
     </View>
   </View>
 );
@@ -457,7 +525,6 @@ const DecorationLayer: React.FC = () => (
 export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
   input,
 }) => {
-  const sealVariant = input.sealVariant ?? 'teal';
   const tsaProvider = input.tsaProvider ?? 'RFC 3161 Compliant TSA';
   const verifyHref = input.verificationUrl?.startsWith('http')
     ? input.verificationUrl
@@ -475,9 +542,12 @@ export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
         {/* 装飾レイヤー (絶対隔離) */}
         <DecorationLayer />
 
-        {/* ─── Header ─── */}
+        {/* ─── Header: 公式ロゴ + ProofMark ワードマーク ─── */}
         <View style={styles.headerRow}>
-          <ProofMarkLogo height={20} />
+          <View style={styles.brandLockup}>
+            <ProofMarkLogo size={22} instanceId="cert-header" />
+            <Text style={styles.brandText}>ProofMark</Text>
+          </View>
           <View style={styles.headerRight}>
             <Text style={styles.headerMetaLabel}>ISSUED AT</Text>
             <Text style={styles.headerMetaValue}>{input.timestampJst}</Text>
@@ -491,7 +561,7 @@ export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
         <Text style={styles.title}>Certificate of Authenticity</Text>
         <Text style={styles.subtitle}>納品物真正性証明書</Text>
 
-        {/* ─── 精緻な仕切り線 (借款証券スタイル) ─── */}
+        {/* ─── 精緻な仕切り線 ─── */}
         <View style={styles.sectionBand}>
           <DividerRule
             width={PDF_LAYOUT.pageWidth - PDF_LAYOUT.marginX * 2}
@@ -522,13 +592,13 @@ export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
           <Text style={styles.hashValue}>{formatSha256(input.sha256)}</Text>
         </View>
 
-        {/* ─── Declaration (宣言文) ─── */}
+        {/* ─── Declaration (宣言文 / left-aligned) ─── */}
         <Text style={styles.statementTitle}>DECLARATION  /  宣言文</Text>
         <Text style={styles.statementBody}>
           本書は、クリエイターによって生成された指定のデジタルアセット、およびその制作プロセスの完全性が、記載の時刻において確実に存在し、その後1ビットの改ざんも生じていないことを暗号学的に証明するものである。本証明は、国際標準規格 RFC 3161 に準拠したタイムスタンプと SHA-256 ハッシュアルゴリズムにより客観的な証拠能力が確保されており、ProofMarkのインフラに依存することなく、提供された検証スクリプトを用いて独立かつ永続的に検証可能である。
         </Text>
 
-        {/* ─── Signature row ─── */}
+        {/* ─── Signature row (SealedStamp 削除版) ─── */}
         <View style={styles.signatureRow}>
           <View style={styles.signatureBlock}>
             <Text style={styles.signedBy}>SEALED BY  /  発行者</Text>
@@ -536,15 +606,13 @@ export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
             <Text style={styles.certificateIdLabel}>CERTIFICATE ID</Text>
             <Text style={styles.certificateId}>#{input.certificateId}</Text>
           </View>
+          <View style={styles.verifiedStack}>
+            <ProofMarkLogo size={36} instanceId="cert-sig" />
+            <Text style={styles.verifiedCaption}>VERIFIED BY PROOFMARK</Text>
+          </View>
         </View>
 
-        {/* ─── Seal (絶対配置 / フロー予算外) ─── */}
-        <View style={styles.sealAnchor}>
-          <SealedStamp size={104} variant={sealVariant} rotation={-7} />
-          <Text style={styles.sealCaption}>VERIFIED BY PROOFMARK</Text>
-        </View>
-
-        {/* ─── Footer (fixed) ─── */}
+        {/* ─── Footer (fixed / ページ番号付き) ─── */}
         <View style={styles.footer} fixed>
           <DividerRule
             width={PDF_LAYOUT.pageWidth - PDF_LAYOUT.marginX * 2}

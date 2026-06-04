@@ -1,14 +1,12 @@
 /**
- * EvidencePackDownloader.tsx
+ * EvidencePackDownloader.tsx (v9 Apex Integration - Full Code)
  * ─────────────────────────────────────────────────────────────
- *  ProofMark Evidence Pack の生成 UI。
+ * ProofMark Evidence Pack の生成 UI（美しいプログレスアニメーション）。
  *
- *  3 段階の儀式感:
- *    1. IDLE  — 「証明書を、クライアントに渡せる形で生み出す」CTA
- *    2. GEN   — ステータステキストが滑らかに切替・プログレスバーが伸長
- *    3. DONE  — Teal パルス + ✅ スプリングで完成を祝う
- *
- *  デザイン言語は CertificatePage.tsx と完全同期 (#0D0B24 / Teal / Gold)。
+ * 【アーキテクチャの進化】
+ * 古い useEvidencePack フックへの依存を完全に断ち切り、
+ * 1つ上の階層にある最強の非同期エンジン `executeEvidencePackDownload` を呼び出します。
+ * UIコンポーネント（Shell, StepDot, ManifestList 等）は1ミリも損なわず完全維持しています。
  * ─────────────────────────────────────────────────────────────
  */
 
@@ -33,80 +31,101 @@ import {
   UserCircle,
 } from 'lucide-react';
 
-import {
-  useEvidencePack,
-  type SpotIssueApiResponse,
-} from '@/hooks/useEvidencePack';
+import type { SpotIssueApiResponse } from '@/hooks/useEvidencePack';
+// 👑 階層に合わせてインポートパスを修正（spotフォルダから見て1つ上）
+import { executeEvidencePackDownload } from '../EvidencePackDownloadButton';
 
 const PM_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 /* ─────────────────────────────────────────────
- *  Props
+ * Props
  * ───────────────────────────────────────────── */
 
 export interface EvidencePackDownloaderProps {
-  /** SpotIssue / CertificatePage から渡される確定 API レスポンス */
   apiData: SpotIssueApiResponse;
-  /** 画像なら DataURL (PDF サムネ用)。private なら undefined。 */
   thumbnailDataUrl?: string;
-  /** 自動でダウンロードを発火させたい場合 true */
   autoStart?: boolean;
-  /** SUCCESS / ERROR を親に通知 (任意) */
   onComplete?: (status: 'success' | 'error') => void;
 }
 
 /* ─────────────────────────────────────────────
- *  Component
+ * Component
  * ───────────────────────────────────────────── */
 
 export default function EvidencePackDownloader({
   apiData,
-  thumbnailDataUrl,
+  thumbnailDataUrl, // 新エンジンでは使用しませんがPropsの互換性維持のため残します
   autoStart = false,
   onComplete,
 }: EvidencePackDownloaderProps): JSX.Element {
-  const { state, generatePack, reset, redownload } = useEvidencePack();
   const reduce = useReducedMotion() ?? false;
 
+  const [phase, setPhase] = useState<'idle' | 'fetching' | 'generating' | 'downloading' | 'building' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
   const [persona, setPersona] = useState<'creator' | 'legal'>(apiData.default_persona || 'creator');
   
   const printName = persona === 'creator' 
     ? apiData.creator_display_name 
     : (apiData.legal_name || apiData.creator_display_name);
 
+  // 👑 新しいダウンロードロジックの呼び出し
+  const startDownload = async () => {
+    try {
+      setPhase('fetching');
+      setErrorMessage('');
+      
+      // エンジンを起動し、進行状況（phase）をこのUIに同期させる
+      await executeEvidencePackDownload(
+        { apiData: { ...apiData, creator_display_name: printName } },
+        (newPhase) => setPhase(newPhase)
+      );
+      
+      setPhase('success');
+      onComplete?.('success');
+    } catch (error: any) {
+      console.error(error);
+      setErrorMessage(error.message || 'ネットワークエラーが発生しました。');
+      setPhase('error');
+      onComplete?.('error');
+    }
+  };
+
   /* autoStart */
   useEffect(() => {
-    if (autoStart && state.status === 'idle') {
-      void generatePack({ ...apiData, creator_display_name: printName }, thumbnailDataUrl);
+    if (autoStart && phase === 'idle') {
+      void startDownload();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /* 完了通知 */
-  useEffect(() => {
-    if (state.status === 'success') onComplete?.('success');
-    if (state.status === 'error') onComplete?.('error');
-  }, [state.status, onComplete]);
+  }, [autoStart, phase]);
 
   const stepIndex = useMemo<number>(() => {
-    switch (state.status) {
-      case 'generating_certificate':
+    switch (phase) {
+      case 'generating':
         return 1;
-      case 'generating_cover_letter':
+      case 'downloading':
         return 2;
-      case 'packing_zip':
+      case 'building':
+      case 'success':
         return 3;
       default:
         return 0;
     }
-  }, [state.status]);
+  }, [phase]);
 
-  const isGenerating = stepIndex > 0;
+  const isGenerating = ['fetching', 'generating', 'downloading', 'building'].includes(phase);
+
+  const getStatusText = () => {
+    if (phase === 'fetching') return '暗号部品を取得中...';
+    if (phase === 'generating') return '証明書とQRコードを生成中...';
+    if (phase === 'downloading') return 'オリジナル・アセットを取得中...';
+    if (phase === 'building') return 'ZIPパッケージをアセンブル中...';
+    return '';
+  };
 
   /* ─────────────────────────────────────────────
-   *  IDLE
+   * IDLE
    * ───────────────────────────────────────────── */
-  if (state.status === 'idle') {
+  if (phase === 'idle') {
     return (
       <Shell>
         <div className="flex items-center gap-3">
@@ -170,7 +189,7 @@ export default function EvidencePackDownloader({
 
         <button
           type="button"
-          onClick={() => void generatePack({ ...apiData, creator_display_name: printName }, thumbnailDataUrl)}
+          onClick={startDownload}
           className="group mt-5 inline-flex w-full items-center justify-between gap-3 rounded-2xl px-5 py-4 font-bold text-white"
           style={{
             background: 'linear-gradient(135deg, #6C3EF4 0%, #00D4AA 100%)',
@@ -182,7 +201,6 @@ export default function EvidencePackDownloader({
               <Download className="h-4 w-4" />
               Evidence Pack をダウンロード
             </span>
-            {/* 🚨 マイクロコピーを動的に変更：選択中の名義を明示して100%の確信を与える */}
             <span className="text-[11px] font-medium text-white/72">
               証明書PDF · カバーレター · TSR一式（印字名義: <span className="text-[#00D4AA] font-bold">{printName}</span>）
             </span>
@@ -196,9 +214,9 @@ export default function EvidencePackDownloader({
   }
 
   /* ─────────────────────────────────────────────
-   *  ERROR
+   * ERROR
    * ───────────────────────────────────────────── */
-  if (state.status === 'error') {
+  if (phase === 'error') {
     return (
       <Shell
         borderColor="rgba(255,69,58,0.32)"
@@ -221,12 +239,12 @@ export default function EvidencePackDownloader({
             <p className="text-base font-bold text-white">
               Evidence Pack を生成できませんでした
             </p>
-            {state.errorMessage ? (
+            {errorMessage ? (
               <p
                 className="mt-1 text-[12px]"
                 style={{ color: 'rgba(255,255,255,0.55)' }}
               >
-                {state.errorMessage}
+                {errorMessage}
               </p>
             ) : null}
           </div>
@@ -235,10 +253,7 @@ export default function EvidencePackDownloader({
         <div className="mt-5 flex flex-col gap-2">
           <button
             type="button"
-            onClick={() => {
-              reset();
-              void generatePack({ ...apiData, creator_display_name: printName }, thumbnailDataUrl);
-            }}
+            onClick={startDownload}
             className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold text-white"
             style={{
               background: 'linear-gradient(135deg, #6C3EF4 0%, #8B61FF 100%)',
@@ -253,7 +268,7 @@ export default function EvidencePackDownloader({
   }
 
   /* ─────────────────────────────────────────────
-   *  GENERATING
+   * GENERATING
    * ───────────────────────────────────────────── */
   if (isGenerating) {
     return (
@@ -285,20 +300,20 @@ export default function EvidencePackDownloader({
             </p>
             <AnimatePresence mode="wait" initial={false}>
               <motion.p
-                key={state.statusText}
+                key={phase}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.35, ease: PM_EASE }}
                 className="text-[16px] font-bold text-white"
               >
-                {state.statusText}
+                {getStatusText()}
               </motion.p>
             </AnimatePresence>
           </div>
         </div>
 
-        {/* progress */}
+        {/* progress - simplified for phases */}
         <div className="mt-6">
           <div
             className="h-1.5 w-full overflow-hidden rounded-full"
@@ -310,7 +325,7 @@ export default function EvidencePackDownloader({
                 background: 'linear-gradient(90deg, #6C3EF4 0%, #00D4AA 100%)',
                 boxShadow: '0 0 16px rgba(0,212,170,0.55)',
               }}
-              animate={{ width: `${state.progress}%` }}
+              animate={{ width: `${(stepIndex / 3) * 100}%` }}
               transition={{ duration: 0.6, ease: PM_EASE }}
             />
           </div>
@@ -322,19 +337,13 @@ export default function EvidencePackDownloader({
             >
               ステップ {stepIndex} / 3
             </span>
-            <span
-              className="font-mono text-[11.5px]"
-              style={{ color: 'rgba(255,255,255,0.55)' }}
-            >
-              {state.progress}%
-            </span>
           </div>
         </div>
 
         {/* step rail */}
         <div className="mt-5 grid grid-cols-3 gap-2">
           <StepDot active={stepIndex >= 1} done={stepIndex > 1} label="Certificate" />
-          <StepDot active={stepIndex >= 2} done={stepIndex > 2} label="Cover Letter" />
+          <StepDot active={stepIndex >= 2} done={stepIndex > 2} label="Assets" />
           <StepDot active={stepIndex >= 3} done={false} label="Sealing ZIP" />
         </div>
       </Shell>
@@ -342,7 +351,7 @@ export default function EvidencePackDownloader({
   }
 
   /* ─────────────────────────────────────────────
-   *  SUCCESS
+   * SUCCESS
    * ───────────────────────────────────────────── */
   return (
     <SuccessShell reduce={reduce}>
@@ -432,7 +441,7 @@ export default function EvidencePackDownloader({
 
         <button
           type="button"
-          onClick={redownload}
+          onClick={startDownload}
           className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-2xl border px-6 py-3.5 text-sm font-bold text-white transition-colors hover:bg-white/[0.04]"
           style={{
             borderColor: 'rgba(255,255,255,0.16)',
@@ -459,7 +468,7 @@ export default function EvidencePackDownloader({
 }
 
 /* ─────────────────────────────────────────────
- *  Shells
+ * Shells
  * ───────────────────────────────────────────── */
 
 function Shell({
@@ -547,7 +556,7 @@ function SuccessShell({
 }
 
 /* ─────────────────────────────────────────────
- *  Pieces
+ * Pieces
  * ───────────────────────────────────────────── */
 
 function StepDot({

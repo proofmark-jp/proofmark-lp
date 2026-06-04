@@ -1,10 +1,16 @@
 /**
- * types.ts (v2)
+ * types.ts (v5 — Final Commit)
  * -----------------------------------------------------------------------------
  * Evidence Pack PDF 生成への入力契約。
  *
- * v1 との互換性を保ちつつ、optional フィールドのみ追加。
- * 既存呼び出しコードはそのまま動作する。
+ * v4 → v5 の変更点:
+ *  - `CoverLetterPdfInput` に `qrCodeDataUrl?: string` を追加。
+ *    HOW TO VERIFY セクションで URL と並べて QR コードをレンダリングするため。
+ *    フロントエンドで生成した data URL (例: `data:image/png;base64,...`) を
+ *    そのまま @react-pdf の <Image src={...} /> に渡せる構造。
+ *  - 既存の `sealVariant` 等の後方互換フィールドは保持。
+ *    本ドキュメント本体では SealedStamp が完全削除されたため未使用となるが、
+ *    型としては残し、呼び出し元のリグレッションを防止する。
  * -----------------------------------------------------------------------------
  */
 
@@ -24,7 +30,10 @@ export interface CertificatePdfInput {
   timestampJst: string;
   /** 検証 URL */
   verificationUrl: string;
-  /** シール色の選択 (デフォルト teal) */
+  /**
+   * シール色の選択 (後方互換のため型としては残す)
+   * @deprecated v5 以降、SealedStamp は廃止された。本フィールドは無視される。
+   */
   sealVariant?: 'teal' | 'gold';
   /** TSA 提供者名 (例: 'FreeTSA'). フッタに掲載される. */
   tsaProvider?: string;
@@ -47,4 +56,13 @@ export interface CoverLetterPdfInput {
     size: string;
     description?: string;
   }>;
+  /**
+   * 検証 URL の QR コード画像 (data URL 推奨)。
+   * 例: `data:image/png;base64,iVBORw0KGgo...`
+   *
+   * フロントエンド側で `qrcode` 等のライブラリで生成し、本フィールドに
+   * 渡すことで HOW TO VERIFY セクション右側にレンダリングされる。
+   * undefined の場合は QR コード枠を非表示にし、URL のみを表示する。
+   */
+  qrCodeDataUrl?: string;
 }

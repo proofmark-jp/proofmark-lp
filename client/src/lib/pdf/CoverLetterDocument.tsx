@@ -1,31 +1,32 @@
 /**
- * CoverLetterDocument.tsx (v4 — Final Commit)
+ * CoverLetterDocument.tsx (v5 — Final Commit)
  * -----------------------------------------------------------------------------
  * Cover_Letter.pdf
  *   スイス銀行債券レベル × 政府発行公文書レベルの「2 ページ完結公文書」仕様。
  *
- * v3 → v4 の決定的変更:
+ * v4 → v5 の決定的変更:
  *
- *  [致命的バグの修正]
- *   - 装飾を `<View fixed>` + `zIndex:-1` の専用レイヤーへ完全隔離。
- *   - 累積マージンを黄金比モジュラースケールで再計算し、2 ページに
- *     自然分断 (1p: Body + Three Pillars + Package Contents、
- *               2p: Verify card + Signature + Footer)。
+ *  [要件 1] 公式ブランド SVG への完全準拠
+ *   - 公式 SVG を @react-pdf プリミティブへ厳格翻訳した `<ProofMarkLogo />` を
+ *     ローカル定義。ヘッダ左上に Logo + 太字「ProofMark」のロックアップ。
+ *   - 旧テキスト透かしを完全削除し、外枠を除いた path / polygon のみで構成した
+ *     `<ProofMarkWatermark />` を opacity={0.03}・幅 300pt でページ中央に配置。
  *
- *  [防御 CSS]
- *   - 全テキストブロックに `flexShrink: 1`, `flexWrap: 'wrap'`,
- *     `wordBreak: 'break-all'` を組合せ、長大入力でもコンテナを
- *     一切突き破らない構造を構築。
+ *  [要件 2] ダサい装飾の完全破壊と Bond Frame 導入
+ *   - 署名欄の `SealedStamp`、絶対配置の `CornerOrnament` を完全削除。
+ *   - 代わりにページ端から 28pt 内側に 1px の証券枠 Bond Frame を敷設。
  *
- *  [タイポグラフィ昇華]
- *   - Body, pillarText, verifyText に `textAlign: 'justify'` を厳格適用。
- *   - lineHeight: 1.72 (φ ≒ 1.62 を上回る余裕値) で添え状特有の柔らかさを維持。
- *   - 仕切り線は `borderTop` + `borderBottom` の二層構造で証券感を強化。
+ *  [要件 3] QR コード実装
+ *   - 入力契約 `CoverLetterPdfInput` に `qrCodeDataUrl?: string` を追加。
+ *   - HOW TO VERIFY セクションで URL と並べて `<Image>` でレンダリング。
+ *   - undefined 時は QR 枠を非表示にし、URL のみ表示する設計。
  *
- *  [細部への執念]
- *   - 全ページ共通フッタにページ番号 (例: 01 / 02) を実装。
- *   - フッタは TSA / VERIFY / PAGE の 3 列を均等に配置し、Certificate と
- *     完全に統一感のあるブランド体験を提供。
+ *  [要件 4] justify バグの完全撤去
+ *   - 旧 `textAlign: 'justify'` 全箇所を `textAlign: 'left'` に変更。
+ *   - 長文の lineHeight を 1.7 以上に引き上げ、余裕ある左揃え。
+ *
+ *  [要件 5] コピーライティングの差替
+ *   - Body を提供された洗練された法務文体に完全差替。
  * -----------------------------------------------------------------------------
  */
 
@@ -36,20 +37,22 @@ import {
   View,
   Text,
   Link,
+  Image,
   StyleSheet,
+  Svg,
+  Defs,
+  LinearGradient,
+  Stop,
+  Path,
+  Rect,
 } from '@react-pdf/renderer';
-import { PDF_COLORS, PDF_LAYOUT, PDF_LEADING, PDF_TRACKING } from './tokens';
+import { PDF_COLORS, PDF_LAYOUT, PDF_TRACKING } from './tokens';
 import { PDF_FONT_FAMILY } from './fonts';
-import {
-  DividerRule,
-  ProofMarkLogo,
-  SealedStamp,
-  CornerOrnament,
-} from './Decorations';
+import { DividerRule } from './Decorations';
 import type { CoverLetterPdfInput } from './types';
 
 /* =============================================================================
- * モジュラースケール (黄金比 φ = 1.618 ベース) — Certificate と完全共通
+ * モジュラースケール (黄金比 φ = 1.618) — Certificate と完全共通
  * =========================================================================== */
 const SCALE = {
   s1: 4,
@@ -67,19 +70,89 @@ const SCALE = {
   title: 23,
 } as const;
 
+/* =============================================================================
+ * Bond Frame Geometry
+ * =========================================================================== */
+const FRAME_INSET = 28;
+
+/* =============================================================================
+ * 公式ブランド SVG の path / polygon 定義 (両コンポーネントで共有)
+ * =========================================================================== */
+const PM_HEX_PATH =
+  'M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 87,25 L 82,29 L 76,18 Z';
+const PM_CHECK_PATH =
+  'M 17,46 L 27,47 L 39,62 L 79,22 L 83,28 L 36,70 L 23,58 Z';
+
+/* =============================================================================
+ * <ProofMarkLogo />
+ * =========================================================================== */
+interface ProofMarkLogoProps {
+  size?: number;
+  instanceId: string;
+}
+const ProofMarkLogo: React.FC<ProofMarkLogoProps> = ({ size = 20, instanceId }) => {
+  const gradId = `pmLogoGrad-${instanceId}`;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 100 100">
+      <Defs>
+        <LinearGradient id={gradId} x1="15%" y1="0%" x2="85%" y2="100%">
+          <Stop offset="0%" stopColor="#5830CC" />
+          <Stop offset="100%" stopColor="#00B896" />
+        </LinearGradient>
+      </Defs>
+      <Rect x={0} y={0} width={100} height={100} rx={22} ry={22} fill="#0D0B24" />
+      <Path
+        d={PM_HEX_PATH}
+        fill="none"
+        stroke={`url(#${gradId})`}
+        strokeWidth={3.8}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        opacity={0.85}
+      />
+      <Path d={PM_CHECK_PATH} fill="#00D4AA" />
+    </Svg>
+  );
+};
+
+/* =============================================================================
+ * <ProofMarkWatermark /> (外枠 rect を除いた path + polygon のみ)
+ * =========================================================================== */
+interface ProofMarkWatermarkProps {
+  size?: number;
+}
+const ProofMarkWatermark: React.FC<ProofMarkWatermarkProps> = ({
+  size = 300,
+}) => {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 100 100" opacity={0.06}>
+      {/* 透かしはグラデ不要 — コントラスト確保のため #0D0B24 単色で統一 */}
+      <Path
+        d={PM_HEX_PATH}
+        fill="none"
+        stroke="#0D0B24"
+        strokeWidth={3.8}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <Path d={PM_CHECK_PATH} fill="#0D0B24" />
+    </Svg>
+  );
+};
+
 const styles = StyleSheet.create({
   page: {
     fontFamily: PDF_FONT_FAMILY.sans,
     backgroundColor: PDF_COLORS.paper,
     color: PDF_COLORS.ink,
-    paddingTop: SCALE.s5, // 33
+    paddingTop: SCALE.s5 + SCALE.s2, // 41
     paddingBottom: SCALE.s5 + SCALE.s4, // 53
     paddingHorizontal: PDF_LAYOUT.marginX, // 56
     position: 'relative',
   },
 
   /* ===========================================================================
-   * 装飾レイヤー (絶対隔離)
+   * 装飾レイヤー
    * ========================================================================= */
   decorationLayer: {
     position: 'absolute',
@@ -88,6 +161,16 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: -1,
+  },
+  bondFrame: {
+    position: 'absolute',
+    top: FRAME_INSET,
+    left: FRAME_INSET,
+    right: FRAME_INSET,
+    bottom: FRAME_INSET,
+    borderWidth: 1,
+    borderColor: PDF_COLORS.inkDeep,
+    borderStyle: 'solid',
   },
   watermarkAlign: {
     position: 'absolute',
@@ -99,16 +182,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  watermarkText: {
-    fontFamily: PDF_FONT_FAMILY.sans,
-    fontSize: 68,
-    fontWeight: 700,
-    letterSpacing: 8,
-    color: PDF_COLORS.rule,
-    opacity: 0.05,
-    transform: 'rotate(-45deg)',
-    transformOrigin: 'center',
-  },
 
   /* ===========================================================================
    * Header
@@ -119,6 +192,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: SCALE.s3, // 13
   },
+  brandLockup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  brandText: {
+    fontFamily: PDF_FONT_FAMILY.sans,
+    fontSize: SCALE.subheading - 1, // 12
+    fontWeight: 700,
+    color: PDF_COLORS.inkDeep,
+    letterSpacing: 0.6,
+    marginLeft: SCALE.s2, // 8
+  },
   headerTag: {
     fontFamily: PDF_FONT_FAMILY.sans,
     fontSize: SCALE.small, // 8.5
@@ -128,7 +213,7 @@ const styles = StyleSheet.create({
   },
 
   /* ===========================================================================
-   * Section Band (精緻な二層仕切り線)
+   * Section Band (精緻な仕切り線)
    * ========================================================================= */
   sectionBand: {
     marginBottom: SCALE.s4 + SCALE.s1, // 24
@@ -162,15 +247,15 @@ const styles = StyleSheet.create({
   },
 
   /* ===========================================================================
-   * Body
+   * Body (justify 撤去 / 左揃え + 余裕の lineHeight 1.78)
    * ========================================================================= */
   body: {
     fontFamily: PDF_FONT_FAMILY.sans,
     fontSize: SCALE.body, // 10.5
-    lineHeight: 1.72,
+    lineHeight: 1.78,
     color: PDF_COLORS.ink,
     marginBottom: SCALE.s4, // 20
-    textAlign: 'justify',
+    textAlign: 'left',
   },
   bodyEmphasis: {
     fontWeight: 700,
@@ -191,7 +276,7 @@ const styles = StyleSheet.create({
   },
 
   /* ===========================================================================
-   * Three Pillars (横並び 3 カード)
+   * Three Pillars
    * ========================================================================= */
   pillarRow: {
     flexDirection: 'row',
@@ -232,16 +317,16 @@ const styles = StyleSheet.create({
   pillarText: {
     fontFamily: PDF_FONT_FAMILY.sans,
     fontSize: SCALE.micro + 0.5, // 8
-    lineHeight: 1.62,
+    lineHeight: 1.7,
     color: PDF_COLORS.ink,
-    textAlign: 'justify',
+    textAlign: 'left',
     flexWrap: 'wrap',
     // @ts-expect-error wordBreak は @react-pdf にて実装されているが型未公開
     wordBreak: 'break-all',
   },
 
   /* ===========================================================================
-   * File tree (テーブル風)
+   * File tree
    * ========================================================================= */
   treeWrap: {
     borderTopWidth: 1,
@@ -274,7 +359,7 @@ const styles = StyleSheet.create({
     fontFamily: PDF_FONT_FAMILY.sans,
     fontSize: SCALE.micro + 0.5, // 8
     color: PDF_COLORS.inkMuted,
-    lineHeight: 1.45,
+    lineHeight: 1.5,
   },
   treeSize: {
     width: 56,
@@ -285,10 +370,12 @@ const styles = StyleSheet.create({
   },
 
   /* ===========================================================================
-   * Verify CTA card (ダーク)
+   * Verify CTA card (ダーク / QR 内包)
    * ========================================================================= */
   verifyCard: {
-    backgroundColor: PDF_COLORS.paperDeep,
+    borderWidth: 1,
+    borderColor: PDF_COLORS.inkDeep,
+    borderStyle: 'solid',
     padding: SCALE.s4 - 2, // 18
     borderRadius: 4,
     marginBottom: SCALE.s4 + SCALE.s1, // 24
@@ -296,7 +383,7 @@ const styles = StyleSheet.create({
   verifyEyebrow: {
     fontFamily: PDF_FONT_FAMILY.sans,
     fontSize: SCALE.micro - 0.2, // 7.3
-    color: PDF_COLORS.teal,
+    color: PDF_COLORS.purple,
     fontWeight: 700,
     letterSpacing: PDF_TRACKING.eyebrow,
     marginBottom: SCALE.s2 - 2, // 6
@@ -305,21 +392,30 @@ const styles = StyleSheet.create({
     fontFamily: PDF_FONT_FAMILY.sans,
     fontSize: SCALE.heading - 4, // 13
     fontWeight: 700,
-    color: PDF_COLORS.paper,
+    color: PDF_COLORS.inkDeep,
     marginBottom: SCALE.s2 + 2, // 10
     letterSpacing: 0.4,
+  },
+  verifyBodyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SCALE.s3, // 13
+  },
+  verifyTextCol: {
+    flexGrow: 1,
+    flexShrink: 1,
   },
   verifyText: {
     fontFamily: PDF_FONT_FAMILY.sans,
     fontSize: SCALE.body - 1, // 9.5
-    color: '#C8C9DC',
-    lineHeight: 1.62,
+    color: PDF_COLORS.ink,
+    lineHeight: 1.7,
     marginBottom: SCALE.s3, // 13
-    textAlign: 'justify',
+    textAlign: 'left',
   },
   verifyMono: {
     fontFamily: PDF_FONT_FAMILY.mono,
-    color: PDF_COLORS.paper,
+    color: PDF_COLORS.inkDeep,
   },
   verifyUrlRow: {
     flexDirection: 'row',
@@ -327,12 +423,12 @@ const styles = StyleSheet.create({
     gap: SCALE.s2, // 8
     paddingTop: SCALE.s2 + 2, // 10
     borderTopWidth: 0.5,
-    borderTopColor: '#2A2C46',
+    borderTopColor: PDF_COLORS.ruleSoft,
   },
   verifyUrlLabel: {
     fontFamily: PDF_FONT_FAMILY.sans,
     fontSize: SCALE.caption + 0.5, // 7
-    color: PDF_COLORS.teal,
+    color: PDF_COLORS.purple,
     fontWeight: 700,
     letterSpacing: 1.4,
   },
@@ -341,15 +437,44 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontFamily: PDF_FONT_FAMILY.mono,
     fontSize: SCALE.small + 1, // 9.5
-    color: PDF_COLORS.paper,
+    color: PDF_COLORS.inkDeep,
     letterSpacing: 0.4,
     flexWrap: 'wrap',
     // @ts-expect-error
     wordBreak: 'break-all',
   },
+  /* QR code containers — 白背景は維持（QR読取りのため）、padding を整理 */
+  qrFrame: {
+    width: 72,
+    height: 72,
+    padding: 4,
+    backgroundColor: PDF_COLORS.paper,
+    borderRadius: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  qrImage: {
+    width: 60,
+    height: 60,
+  },
+  qrCaption: {
+    fontFamily: PDF_FONT_FAMILY.sans,
+    fontSize: SCALE.caption - 0.5, // 6
+    color: PDF_COLORS.inkMuted,
+    letterSpacing: 1,
+    marginTop: SCALE.s1 + 1, // 5
+    textAlign: 'center',
+  },
+  qrStack: {
+    alignItems: 'center',
+    flexShrink: 0,
+  },
 
   /* ===========================================================================
-   * Signature footer
+   * Signature (SealedStamp 削除版)
+   *  - 左: 発行者情報
+   *  - 右: ProofMarkLogo + VERIFIED キャプション
    * ========================================================================= */
   sigRow: {
     flexDirection: 'row',
@@ -383,8 +508,8 @@ const styles = StyleSheet.create({
     fontSize: SCALE.small, // 8.5
     color: PDF_COLORS.inkMuted,
   },
-  sealStack: { alignItems: 'center' },
-  sealStackCaption: {
+  verifiedStack: { alignItems: 'center' },
+  verifiedStackCaption: {
     fontFamily: PDF_FONT_FAMILY.sans,
     marginTop: SCALE.s1 + 1, // 5
     fontSize: SCALE.caption - 0.2, // 6.3
@@ -400,7 +525,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: PDF_LAYOUT.marginX,
     right: PDF_LAYOUT.marginX,
-    bottom: SCALE.s4, // 20
+    bottom: FRAME_INSET + SCALE.s3, // 28 + 13 = 41pt — Bond Frame 内側に揃え
   },
   footerRow: {
     flexDirection: 'row',
@@ -432,7 +557,7 @@ const styles = StyleSheet.create({
   },
 });
 
-/** デフォルトの同梱ファイルツリー (input.fileTree 未指定時) */
+/** デフォルトの同梱ファイルツリー */
 const DEFAULT_FILE_TREE: ReadonlyArray<{
   name: string;
   size: string;
@@ -459,20 +584,14 @@ const DEFAULT_FILE_TREE: ReadonlyArray<{
 ];
 
 /**
- * 装飾レイヤー (CornerOrnament + Watermark) を fixed コンテナへ完全隔離。
- * これがレイアウト崩壊撤去の核心。
+ * 装飾レイヤー: Bond Frame + ProofMarkWatermark (path/polygon のみ)
+ * すべて <View fixed> + zIndex:-1 でフロー完全隔離。
  */
 const DecorationLayer: React.FC = () => (
   <View fixed style={styles.decorationLayer}>
-    <CornerOrnament
-      width={PDF_LAYOUT.pageWidth}
-      height={PDF_LAYOUT.pageHeight}
-      margin={32}
-      armLength={48}
-      color={PDF_COLORS.purple}
-    />
+    <View style={styles.bondFrame} />
     <View style={styles.watermarkAlign}>
-      <Text style={styles.watermarkText}>PROOFMARK SECURE DOCUMENT</Text>
+      <ProofMarkWatermark size={300} />
     </View>
   </View>
 );
@@ -488,6 +607,7 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
   const verifyHref = input.verificationUrl?.startsWith('http')
     ? input.verificationUrl
     : `https://${input.verificationUrl}`;
+  const hasQr = Boolean(input.qrCodeDataUrl);
 
   return (
     <Document
@@ -501,9 +621,12 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
         {/* 装飾レイヤー (絶対隔離) */}
         <DecorationLayer />
 
-        {/* ─── Header ─── */}
+        {/* ─── Header: 公式ロゴ + ProofMark ワードマーク ─── */}
         <View style={styles.headerRow}>
-          <ProofMarkLogo height={18} />
+          <View style={styles.brandLockup}>
+            <ProofMarkLogo size={20} instanceId="cl-header" />
+            <Text style={styles.brandText}>ProofMark</Text>
+          </View>
           <Text style={styles.headerTag}>COVER LETTER · 添え状</Text>
         </View>
 
@@ -519,11 +642,11 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
         <Text style={styles.eyebrow}>FOR THE CLIENT  /  ご担当者様へ</Text>
         <Text style={styles.title}>納品物の真正性証明について</Text>
 
-        {/* ─── Body (威厳あるコピー) ─── */}
+        {/* ─── Body (新コピーへ完全差替 / left-aligned) ─── */}
         <Text style={styles.body}>
-          本 Evidence Pack は、クリエイターから納品されたデジタルアセットの存在事実、およびその制作プロセスの完全性が、タイムスタンプ打刻以降<Text style={styles.bodyEmphasis}>1ビットの改ざんも受けていないこと</Text>を示し、客観的かつ強固な証拠能力を確保するための暗号証明パッケージである。
+          本パッケージ（Evidence Pack）は、クリエイターから納品されたデジタルデータの「存在事実」および「制作プロセスの完全性」を暗号学的に証明するものです。タイムスタンプ打刻以降、データが<Text style={styles.bodyEmphasis}>1ビットたりとも改ざんされていないこと</Text>を数学的に保証し、第三者に対する客観的な証拠能力を提供します。
           {'\n'}
-          クリエイターの権利と、貴社の安全なコンテンツ利用を保護するため、最新のゼロ知識証明アプローチを用いて構築されている。検証は以下のURL、または同封のスクリプトによりブラウザ上で完結し、外部へ原本が送信されることは一切ない。
+          クリエイターの権利と、貴社の安全なコンテンツ利用を保護するため、最新のゼロ知識証明アプローチを用いて構築されています。検証は以下のURLおよびQRコード、または同封のスクリプトによりブラウザ・ローカル環境で完結し、外部へ原本が送信されることは一切ありません。
         </Text>
 
         {/* ─── THE THREE PILLARS ─── */}
@@ -574,15 +697,27 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
           })}
         </View>
 
-        {/* ─── Verify card (2ページ目想定 / break で自然分断を促す) ─── */}
+        {/* ─── Verify card (2ページ目 / QR コード内包) ─── */}
         <View style={styles.verifyCard} break>
           <Text style={styles.verifyEyebrow}>HOW TO VERIFY</Text>
           <Text style={styles.verifyTitle}>検証方法</Text>
-          <Text style={styles.verifyText}>
-            同梱の <Text style={styles.verifyMono}>verify.sh</Text> もしくは{' '}
-            <Text style={styles.verifyMono}>verify.py</Text>{' '}
-            を実行することで、外部ネットワークに一切接続せず、貴社内のみで完結する形でファイルと TSA 署名の整合を検証することができる。あるいは下記のオンライン検証ページから即座に確認することも可能である。
-          </Text>
+          <View style={styles.verifyBodyRow}>
+            <View style={styles.verifyTextCol}>
+              <Text style={styles.verifyText}>
+                同梱の <Text style={styles.verifyMono}>verify.sh</Text> もしくは{' '}
+                <Text style={styles.verifyMono}>verify.py</Text>{' '}
+                を実行することで、外部ネットワークに一切接続せず、貴社内のみで完結する形でファイルと TSA 署名の整合を検証することができる。あるいは下記のオンライン検証ページから即座に確認することも可能である。
+              </Text>
+            </View>
+            {hasQr && (
+              <View style={styles.qrStack}>
+                <View style={styles.qrFrame}>
+                  <Image src={input.qrCodeDataUrl} style={styles.qrImage} />
+                </View>
+                <Text style={styles.qrCaption}>SCAN TO VERIFY</Text>
+              </View>
+            )}
+          </View>
           <View style={styles.verifyUrlRow}>
             <Text style={styles.verifyUrlLabel}>VERIFY URL</Text>
             <Link src={verifyHref} style={styles.verifyUrl}>
@@ -591,7 +726,7 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
           </View>
         </View>
 
-        {/* ─── Signature ─── */}
+        {/* ─── Signature (SealedStamp 削除版) ─── */}
         <View style={styles.sigRow}>
           <View style={styles.sigBlock}>
             <Text style={styles.sigLabel}>SEALED BY  /  発行者</Text>
@@ -601,13 +736,13 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
             </Text>
             <Text style={styles.sigMeta}>TSA · {tsaProvider}</Text>
           </View>
-          <View style={styles.sealStack}>
-            <SealedStamp size={62} variant="teal" rotation={-6} />
-            <Text style={styles.sealStackCaption}>VERIFIED</Text>
+          <View style={styles.verifiedStack}>
+            <ProofMarkLogo size={32} instanceId="cl-sig" />
+            <Text style={styles.verifiedStackCaption}>VERIFIED</Text>
           </View>
         </View>
 
-        {/* ─── Footer (fixed) ─── */}
+        {/* ─── Footer (fixed / ページ番号) ─── */}
         <View style={styles.footer} fixed>
           <DividerRule
             width={PDF_LAYOUT.pageWidth - PDF_LAYOUT.marginX * 2}
