@@ -16,7 +16,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import Navbar from '../components/Navbar';
 import FounderBadge from '../components/FounderBadge';
-import VerifiedBadge from '../components/ui/VerifiedBadge';
+import VerifiedBadge from '../components/ui/VerifiedBadge.tsx';
 
 
 interface CertRecord {
