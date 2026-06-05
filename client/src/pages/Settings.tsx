@@ -223,14 +223,17 @@ export default function Settings() {
         toast.error("アバターURLの保存に失敗しました");
       } else {
         // 🌟 公開プロファイルテーブルにも同期保存
-        await supabase
+        const { error: dbError } = await supabase
           .from('profiles')
-          .upsert({
-            id: user.id,
-            username: username,
-            avatar_url: publicUrlData.publicUrl,
-            updated_at: new Date().toISOString()
-          });
+         .update({
+          avatar_url: publicUrlData.publicUrl,
+           updated_at: new Date().toISOString()
+       })
+       .eq('id', user.id); // upsertではなくupdate+eqを使い、確実に対象行のみを狙撃する
+
+        if (dbError) {
+        throw new Error(`DB保存エラー: ${dbError.message}`);
+        }
 
         toast.success('アバター画像を更新しました！');
         // 🌟 確実な反映のため、Navbar等へ変更を即座に伝播させるためにリロード
