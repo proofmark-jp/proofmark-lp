@@ -16,6 +16,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import Navbar from '../components/Navbar';
 import FounderBadge from '../components/FounderBadge';
+import VerifiedBadge from '../components/ui/VerifiedBadge';
 
 
 interface CertRecord {
@@ -1084,11 +1085,6 @@ function GalleryItem({
                   className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-700"
                 />
 
-                {/* Verified breathing badge on hover (real images only) */}
-                <div className="absolute top-3 right-3 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-                  <BreathingBadge reduce={reduce} size="mini" tone="teal" />
-                </div>
-
                 {/* Process bundle overlay */}
                 {processBundle.length > 0 && (
                   <div className="absolute inset-0 bg-[#050505]/70 backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center hidden md:flex">
@@ -1127,6 +1123,14 @@ function GalleryItem({
                 className="absolute inset-0"
               />
             )}
+
+            {/* ──────────────────────────────────────────────────────────────
+              * VerifiedBadge — The Prestige Trust Signal
+              *  - hasRealImage / isMasked いずれの場合も常時表示
+              *  - 右上 (top-3 right-3 z-30) に固定、ホバーで左方向に展開
+              *  - 親の overflow-hidden の影響を受けず、GPU レイヤーに完全隔離
+              * ────────────────────────────────────────────────────────────── */}
+            <VerifiedBadge isMasked={isMasked} reduce={reduce} />
 
             {/* Subtle corner brackets */}
             <div className="absolute top-2 left-2 h-4 w-4 border-t border-l border-white/10 pointer-events-none" />
