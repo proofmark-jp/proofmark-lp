@@ -614,15 +614,14 @@ export default function CertificateUpload() {
             setDeliveryModalFile(null);
             setDeliveryFileHash(null);
 
-            if (res.certificate?.id) {
-              const targetUrl = `/cert/${res.certificate.id}`;
-              setLocation(targetUrl);
-              setTimeout(() => {
-                if (!window.location.pathname.includes(res.certificate.id)) {
-                  window.location.href = targetUrl;
-                }
-              }, 500);
+            const certId = res.certificate?.id || (res as any).id;
+
+            if (!certId || typeof certId !== 'string') {
+              throw new Error("証明書は作成されましたが、IDの取得に失敗しました。ダッシュボードをリロードしてください。");
             }
+
+            const targetUrl = `/cert/${certId}`;
+            window.location.href = targetUrl;
           } catch (e) {
             const errMsg = e instanceof Error ? e.message : '昇格に失敗しました';
             setShellError(errMsg);

@@ -152,7 +152,7 @@ function EphemeralPassword({ password }: { password: string }) {
       </motion.button>
 
       <p className="text-[10px] text-[#A8A0D8]/40 leading-relaxed">
-        ⚠️ このパスワードはサーバーに保存されません。クライアントへ別途（メール等）で安全に伝達してください。
+        ⚠️ このパスワードは、クライアントが納品データを開封する際に必要です。発行される検証用URLと共にお渡しください。
       </p>
     </div>
   );
@@ -537,8 +537,7 @@ function DeliveryKitModalInner({
             <div className="flex items-center gap-2 text-[10px] text-[#A8A0D8]/30">
               <Shield className="w-3 h-3 shrink-0" />
               <span>
-                暗号化はブラウザ内で完結。平文ファイルはサーバーに送信されません。
-                鍵は V8 隔離領域に封印 (extractable: false)。
+                暗号化はご使用の端末内で完結し、運営を含め第三者が元データにアクセスすることは物理的に不可能です。NDA（秘密保持契約）案件にも安全にご利用いただけます。
               </span>
             </div>
           </div>
