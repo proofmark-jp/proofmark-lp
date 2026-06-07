@@ -586,17 +586,18 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     setRefreshKey((prev) => prev + 1);
   }, []);
 
-  const handleUpload = useCallback((file: File, uploadSettings: { proofMode: string }) => {
+  const handleUpload = useCallback(async (file: File, uploadSettings: { proofMode: string }) => {
     if (uploadSettings.proofMode === 'private') {
-      // 1. WASM Workerで安全にハッシュを事前計算
-      hashFile(file).then((hashResult) => {
+      try {
+        // 1. WASM Workerで安全にハッシュを事前計算
+        const hashResult = await hashFile(file);
         setDeliveryFileHash(hashResult.sha256);
         // 2. モーダルを開く
         setDeliveryModalFile(file);
-      }).catch((e) => {
+      } catch (e) {
         toast.error('ハッシュ計算に失敗しました');
-      });
-      return;
+      }
+      return; // 後続のPublicアップロード処理を遮断
     }
   }, [hashFile]);
 
