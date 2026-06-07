@@ -39,6 +39,8 @@ import { supabase } from '../lib/supabase';
 import { useC2pa, probeC2paMagic } from '../hooks/useC2pa';
 import { C2paUpsell } from './cert/C2paUpsell';
 import type { C2paManifest } from '../lib/c2pa-schema';
+import { DeliveryKitModal } from './DeliveryKitModal';
+import { usePromoteCertificate } from '../hooks/usePromoteCertificate';
 
 async function requestUploadUrl(file: File, token: string) {
   const res = await fetch('/api/upload-url', {
@@ -99,6 +101,10 @@ export default function CertificateUpload() {
   const [visibility, setVisibility] = useState<VisibilityMode>('private');
   const [processStatus, setProcessStatus] = useState<string>('');
   const [, setLocation] = useLocation();
+
+  const [deliveryModalFile, setDeliveryModalFile] = useState<File | null>(null);
+  const [deliveryFileHash, setDeliveryFileHash] = useState<string | null>(null);
+  const { promote, isPromoting } = usePromoteCertificate();
 
   // Obsidian Desk UI States
   const [windowDragActive, setWindowDragActive] = useState(false);
@@ -231,6 +237,24 @@ export default function CertificateUpload() {
 
   const handleIssueCertificate = async () => {
     if (!file) return;
+
+    if (proofMode === 'private') {
+      setIsProcessing(true);
+      setProcessStatus('ローカル暗号化の準備中...');
+      try {
+        const hashResult = await hashFile(file);
+        setDeliveryFileHash(hashResult.sha256);
+        setDeliveryModalFile(file); // モーダル展開
+      } catch (e) {
+        setShellError('ハッシュ計算に失敗しました');
+        setTimeout(() => setShellError(null), 4200);
+      } finally {
+        setIsProcessing(false);
+        setProcessStatus('');
+      }
+      return; // ★ 絶対にここで処理を終了させ、下部のShareableルートを遮断する
+    }
+
     setIsProcessing(true);
     try {
       setProcessStatus('準備中...');
@@ -566,6 +590,46 @@ export default function CertificateUpload() {
           </div>
         )}
       </div>
+      <DeliveryKitModal
+        isOpen={!!deliveryModalFile}
+        file={deliveryModalFile}
+        fileHash={deliveryFileHash}
+        onClose={() => {
+          if (isPromoting) return;
+          setDeliveryModalFile(null);
+          setDeliveryFileHash(null);
+        }}
+        onComplete={async (payload) => {
+          try {
+            if (!deliveryModalFile) return;
+            setProcessStatus('WORM台帳へ昇格中...');
+            const res = await promote({
+              ...payload,
+              c2paManifest: isPaidPlan && c2paManifest ? JSON.stringify(c2paManifest) : null
+            }, deliveryModalFile);
+
+            setShellError('Private Proofの封印が完了しました');
+            setTimeout(() => setShellError(null), 4200);
+
+            setDeliveryModalFile(null);
+            setDeliveryFileHash(null);
+
+            if (res.certificate?.id) {
+              const targetUrl = `/cert/${res.certificate.id}`;
+              setLocation(targetUrl);
+              setTimeout(() => {
+                if (!window.location.pathname.includes(res.certificate.id)) {
+                  window.location.href = targetUrl;
+                }
+              }, 500);
+            }
+          } catch (e) {
+            const errMsg = e instanceof Error ? e.message : '昇格に失敗しました';
+            setShellError(errMsg);
+            setTimeout(() => setShellError(null), 4200);
+          }
+        }}
+      />
     </div>
   );
 }
