@@ -35,6 +35,7 @@ export interface ModalPayload {
   password: string;
   clientName: string;
   fileHash: string;
+  c2paManifest?: string | null;
 }
 
 /** POST /api/certificates/create のレスポンス */
@@ -59,7 +60,7 @@ export interface UsePromoteCertificateReturn {
    * @param modalPayload DeliveryKitModal.onComplete から渡されるペイロード
    * @param originalFile 元の File オブジェクト（メタデータ抽出用）
    */
-  promote: (modalPayload: ModalPayload, originalFile: File) => Promise<void>;
+  promote: (modalPayload: ModalPayload, originalFile: File) => Promise<CreateCertificateResponse>;
   /** 昇格処理中は true。多重実行防止に使用 */
   isPromoting: boolean;
   /** 最後に発生したエラーメッセージ。成功時・リセット時は null */
@@ -75,7 +76,7 @@ export function usePromoteCertificate(): UsePromoteCertificateReturn {
   const [error, setError] = useState<string | null>(null);
 
   const promote = useCallback(
-    async (modalPayload: ModalPayload, originalFile: File): Promise<void> => {
+    async (modalPayload: ModalPayload, originalFile: File): Promise<CreateCertificateResponse> => {
       /* ── ミューテックス: 多重実行を物理排除 ── */
       if (isPromoting) {
         throw new Error('既に昇格処理が進行中です。完了までお待ちください。');
@@ -106,6 +107,7 @@ export function usePromoteCertificate(): UsePromoteCertificateReturn {
           // ── quarantine 昇格キー ──
           quarantinePath: modalPayload.quarantinePath,
           sha256:         modalPayload.fileHash,
+          c2paManifest:   modalPayload.c2paManifest || null,
 
           // ── 表示・分類 ──
           title,
@@ -162,6 +164,7 @@ export function usePromoteCertificate(): UsePromoteCertificateReturn {
         // 呼び出し元が certificate 情報を必要とする場合は
         // return data.certificate 等に変更する。
         // 現仕様では void を返すのみ。
+        return data;
 
       } catch (err) {
         /* ── エラー状態を state に記録し、呼び出し元にも re-throw ── */

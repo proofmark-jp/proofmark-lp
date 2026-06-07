@@ -75,8 +75,9 @@ import { SlimUploadDock } from '../components/dashboard/SlimUploadDock';
 import VisibilityToggle from '../components/VisibilityToggle';
 import { executeEvidencePackDownload } from '../components/EvidencePackDownloadButton';
 import FounderBadge from '../components/FounderBadge';
-import { usePromoteCertificate } from '../hooks/usePromoteCertificate';
-import { DeliveryKitModal } from '../components/DeliveryKitModal';
+import { DeliveryKitModal } from '@/components/DeliveryKitModal';
+import { usePromoteCertificate } from '@/hooks/usePromoteCertificate';
+import { useHashFile } from '@/hooks/useHashFile';
 
 // Chain of Evidence builder (Inspector 内に常設マウント)
 const ProcessBundleComposer = lazy(() =>
@@ -574,15 +575,30 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const [inspectorTab, setInspectorTab] = useState<'overview' | 'chain'>('overview');
 
   // ── One-Click Delivery Kit States & Hook ──
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [calculatedHash, setCalculatedHash] = useState<string | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [deliveryModalFile, setDeliveryModalFile] = useState<File | null>(null);
+  const [deliveryFileHash, setDeliveryFileHash] = useState<string | null>(null);
+  const { promote, isPromoting } = usePromoteCertificate();
+  const { hashFile } = useHashFile();
   const [refreshKey, setRefreshKey] = useState(0);
-  const { promote } = usePromoteCertificate();
+  const [, setLocation] = useLocation();
 
-  const mutate = useCallback(() => {
+  const mutateCertificates = useCallback(() => {
     setRefreshKey((prev) => prev + 1);
   }, []);
+
+  const handleUpload = useCallback((file: File, uploadSettings: { proofMode: string }) => {
+    if (uploadSettings.proofMode === 'private') {
+      // 1. WASM Workerで安全にハッシュを事前計算
+      hashFile(file).then((hashResult) => {
+        setDeliveryFileHash(hashResult.sha256);
+        // 2. モーダルを開く
+        setDeliveryModalFile(file);
+      }).catch((e) => {
+        toast.error('ハッシュ計算に失敗しました');
+      });
+      return;
+    }
+  }, [hashFile]);
 
   // ── URL → state (初回マウント & popstate)
   useEffect(() => {
@@ -1478,23 +1494,36 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
         </>
       )}
 
-      {modalOpen && selectedFile && (
-        <DeliveryKitModal
-          file={selectedFile}
-          fileHash={calculatedHash}
-          isOpen={modalOpen}
-          onComplete={async (payload) => {
-            try {
-              await promote(payload, selectedFile);
-              toast.success("証明書の発行が完了しました");
-              mutate(); // 一覧のリロード
-            } catch (e) {
-              toast.error("証明書の登録に失敗しました");
+      <DeliveryKitModal
+        isOpen={!!deliveryModalFile}
+        file={deliveryModalFile as File}
+        fileHash={deliveryFileHash}
+        onClose={() => {
+          if (isPromoting) return;
+          setDeliveryModalFile(null);
+          setDeliveryFileHash(null);
+        }}
+        onComplete={async (payload) => {
+          try {
+            if (!deliveryModalFile) return;
+            const res = await promote({
+               ...payload,
+               c2paManifest: null // 既存のC2PA抽出フックがある場合はその値を渡すが、一旦nullで安全に繋ぐ
+            }, deliveryModalFile);
+
+            toast.success('Private Proofの封印が完了しました');
+            setDeliveryModalFile(null);
+            setDeliveryFileHash(null);
+
+            mutateCertificates(); // 一覧のリロード
+            if (res.certificate?.id) {
+              setLocation(`?asset=${res.certificate.id}`); // Inspectorの自動展開
             }
-          }}
-          onClose={() => setModalOpen(false)}
-        />
-      )}
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : '昇格に失敗しました');
+          }
+        }}
+      />
 
       {/* ─────────── THE INSPECTOR (right slide-in drawer) ─────────── */}
       <Inspector
