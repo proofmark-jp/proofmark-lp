@@ -75,6 +75,8 @@ import { SlimUploadDock } from '../components/dashboard/SlimUploadDock';
 import VisibilityToggle from '../components/VisibilityToggle';
 import { executeEvidencePackDownload } from '../components/EvidencePackDownloadButton';
 import FounderBadge from '../components/FounderBadge';
+import { usePromoteCertificate } from '../hooks/usePromoteCertificate';
+import { DeliveryKitModal } from '../components/DeliveryKitModal';
 
 // Chain of Evidence builder (Inspector 内に常設マウント)
 const ProcessBundleComposer = lazy(() =>
@@ -571,6 +573,17 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const [inspectorCertId, setInspectorCertId] = useState<string | null>(null);
   const [inspectorTab, setInspectorTab] = useState<'overview' | 'chain'>('overview');
 
+  // ── One-Click Delivery Kit States & Hook ──
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [calculatedHash, setCalculatedHash] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { promote } = usePromoteCertificate();
+
+  const mutate = useCallback(() => {
+    setRefreshKey((prev) => prev + 1);
+  }, []);
+
   // ── URL → state (初回マウント & popstate)
   useEffect(() => {
     const sync = () => {
@@ -634,7 +647,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     setPage(0);
     setHasMore(true);
     setCerts([]);
-  }, [searchQuery, activeProjectId, showArchived, trustFilter, sortBy]);
+  }, [searchQuery, activeProjectId, showArchived, trustFilter, sortBy, refreshKey]);
 
   /* ━━━━━━━━━━━━━━━━ Data fetch ━━━━━━━━━━━━━━━━ */
   useEffect(() => {
@@ -714,7 +727,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     return () => {
       cancelled = true;
     };
-  }, [user, isStudio, showArchived, searchQuery, activeProjectId, trustFilter, sortBy, page]);
+  }, [user, isStudio, showArchived, searchQuery, activeProjectId, trustFilter, sortBy, page, refreshKey]);
 
   const visibleCerts = useMemo(
     () => (showArchived ? certs : certs.filter((c) => !c.is_archived)),
@@ -1463,6 +1476,24 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
             }}
           />
         </>
+      )}
+
+      {modalOpen && selectedFile && (
+        <DeliveryKitModal
+          file={selectedFile}
+          fileHash={calculatedHash}
+          isOpen={modalOpen}
+          onComplete={async (payload) => {
+            try {
+              await promote(payload, selectedFile);
+              toast.success("証明書の発行が完了しました");
+              mutate(); // 一覧のリロード
+            } catch (e) {
+              toast.error("証明書の登録に失敗しました");
+            }
+          }}
+          onClose={() => setModalOpen(false)}
+        />
       )}
 
       {/* ─────────── THE INSPECTOR (right slide-in drawer) ─────────── */}
