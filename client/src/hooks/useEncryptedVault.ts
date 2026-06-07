@@ -206,6 +206,9 @@ export function useEncryptedVault(): UseEncryptedVaultReturn {
 
       // ── Step 4: ファイル読み込み → 暗号化 ──────────────────────────
       setPhase('encrypting');
+      /* ── UI Yield: 暗号化の重い処理の前にメインスレッドを解放しアニメーションを滑らかにする ── */
+      await new Promise((r) => setTimeout(r, 50));
+
       let plainBuffer: ArrayBuffer = await file.arrayBuffer();
       const encryptedBlob = await encryptAndConcat(plainBuffer, key, salt, iv);
 

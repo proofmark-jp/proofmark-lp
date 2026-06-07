@@ -82,15 +82,17 @@ function EphemeralPassword({ password }: { password: string }) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(password);
-      setCopied(true);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => setCopied(false), 2500);
-    } catch {
-      /* クリップボードへのアクセスが拒否された場合は何もしない */
-    }
+  const handleCopy = useCallback(() => {
+    // モバイルSafari等の制約を回避するため、非同期コールバックに混ぜず同期的に発火させる
+    navigator.clipboard.writeText(password)
+      .then(() => {
+        setCopied(true);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => setCopied(false), 2500);
+      })
+      .catch(() => {
+        /* クリップボードへのアクセスが拒否された場合は何もしない */
+      });
   }, [password]);
 
   useEffect(() => {
@@ -177,8 +179,9 @@ function ProgressBar({ value }: { value: number }) {
    MAIN MODAL INNER COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 
-function DeliveryKitModalInner({ file, fileHash, onClose, onComplete }: DeliveryKitModalProps) {
+function DeliveryKitModalInner({
   file,
+  fileHash,
   onClose,
   onComplete,
 }: DeliveryKitModalProps) {

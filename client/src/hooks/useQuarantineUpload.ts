@@ -100,6 +100,20 @@ export function useQuarantineUpload(): UseQuarantineUploadReturn {
     };
   }, []);
 
+  /* ── タブ閉じ警告: 処理中の不意な離脱を防ぐ ── */
+  useEffect(() => {
+    if (phase === 'requesting-url' || phase === 'uploading') {
+      const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        e.preventDefault();
+        e.returnValue = ''; // 必須
+      };
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+      };
+    }
+  }, [phase]);
+
   const abort = useCallback(() => {
     controllerRef.current?.abort();
     setPhase('cancelled');
