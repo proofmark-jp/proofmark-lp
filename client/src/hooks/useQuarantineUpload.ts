@@ -19,6 +19,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 /* ═══════════════════════════════════════════════════════════════
    CONSTANTS
@@ -135,9 +136,16 @@ export function useQuarantineUpload(): UseQuarantineUploadReturn {
            Step 1: Signed URL 取得
            POST /api/upload-url
         ──────────────────────────────────────────────────── */
+        /* ── Supabase 認証トークン取得 ── */
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token ?? '';
+
         const urlRes = await fetch(QUARANTINE_URL_ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+          },
           body: JSON.stringify({
             filename: `vault_${Date.now()}.bin`,
             contentType: VAULT_CONTENT_TYPE,
@@ -177,6 +185,7 @@ export function useQuarantineUpload(): UseQuarantineUploadReturn {
           headers: {
             'Content-Type': VAULT_CONTENT_TYPE,
             'Content-Length': String(encryptedBlob.size),
+            ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
           },
           body: encryptedBlob,
           signal,

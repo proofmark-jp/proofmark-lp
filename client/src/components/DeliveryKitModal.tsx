@@ -50,12 +50,14 @@ export interface DeliveryKitModalProps {
   onClose: () => void;
   /**
    * アップロード完了後のコールバック。
-   * quarantinePath と平文パスワードを渡す（クライアントへの別途伝達用）。
+   * quarantinePath, password, clientName, fileHash を渡す（クライアントへの別途伝達用）。
    */
-  onComplete?: (result: {
+  onComplete?: (payload: {
     quarantinePath: string;
     bucket: string;
     password: string;
+    clientName: string;
+    fileHash: string;
   }) => void;
 }
 
@@ -186,6 +188,15 @@ function DeliveryKitModalInner({
   const [deliveredPassword, setDeliveredPassword] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
 
+  /* ── Body Scroll Lock: モーダル展開中はボディのスクロールを封印 ── */
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+
   /* ── 処理開始 ── */
   const handleStart = useCallback(async () => {
     if (hasStarted) return;
@@ -204,9 +215,23 @@ function DeliveryKitModalInner({
 
     if (uploadResult) {
       setDeliveredPassword(vaultResult.password);
+
+      // ファイルの SHA-256 を計算して onComplete に渡す
+      let fileHash = '';
+      try {
+        const buf = await file.arrayBuffer();
+        const digest = await crypto.subtle.digest('SHA-256', buf);
+        fileHash = Array.from(new Uint8Array(digest))
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('');
+      } catch { /* ハッシュ計算に失敗しても送信結果は維持する */ }
+
       onComplete?.({
-        ...uploadResult,
+        quarantinePath: uploadResult.quarantinePath,
+        bucket: uploadResult.bucket,
         password: vaultResult.password,
+        clientName: clientName.trim(),
+        fileHash,
       });
     }
   }, [hasStarted, file, clientName, vault, upload, onComplete]);

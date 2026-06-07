@@ -180,6 +180,17 @@ export function useEncryptedVault(): UseEncryptedVaultReturn {
   }, []);
 
   const encrypt = useCallback(async (file: File): Promise<VaultResult | null> => {
+    /* ── ガードレール: 150MB 超のファイルはメモリパンクを防ぐため早期リジェクト ── */
+    const MAX_BYTES = 150 * 1024 * 1024; // 150 MB
+    if (file.size > MAX_BYTES) {
+      setPhase('error');
+      setError(
+        `ファイルサイズが上限（150MB）を超えています（${(file.size / 1024 / 1024).toFixed(1)} MB）。` +
+        'より小さなファイルを選択してください。',
+      );
+      return null;
+    }
+
     setPhase('generating-key');
     setError(null);
 
