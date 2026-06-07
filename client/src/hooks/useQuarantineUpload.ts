@@ -185,7 +185,6 @@ export function useQuarantineUpload(): UseQuarantineUploadReturn {
           headers: {
             'Content-Type': VAULT_CONTENT_TYPE,
             'Content-Length': String(encryptedBlob.size),
-            ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
           },
           body: encryptedBlob,
           signal,

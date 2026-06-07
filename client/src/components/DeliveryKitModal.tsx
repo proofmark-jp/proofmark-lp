@@ -46,6 +46,7 @@ import { useQuarantineUpload } from '../hooks/useQuarantineUpload';
 export interface DeliveryKitModalProps {
   /** 暗号化して送信するファイル */
   file: File;
+  fileHash: string | null; // ★追加: 親からすでに計算済みのハッシュを受け取る
   /** モーダルを閉じるコールバック */
   onClose: () => void;
   /**
@@ -176,7 +177,7 @@ function ProgressBar({ value }: { value: number }) {
    MAIN MODAL INNER COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 
-function DeliveryKitModalInner({
+function DeliveryKitModalInner({ file, fileHash, onClose, onComplete }: DeliveryKitModalProps) {
   file,
   onClose,
   onComplete,
@@ -231,7 +232,7 @@ function DeliveryKitModalInner({
         bucket: uploadResult.bucket,
         password: vaultResult.password,
         clientName: clientName.trim(),
-        fileHash,
+        fileHash: fileHash || "", // ★修正: Propsで受け取った本物のハッシュを渡す
       });
     }
   }, [hasStarted, file, clientName, vault, upload, onComplete]);
