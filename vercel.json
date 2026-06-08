@@ -107,6 +107,10 @@
     {
       "path": "/api/cron/upsell-warning",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/gc",
+      "schedule": "0 2 * * *"
     }
   ]
 }
