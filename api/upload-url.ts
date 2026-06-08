@@ -1,129 +1,171 @@
 /**
- * api/upload-url.ts — Quarantine Signed Upload URL Issuer
+ * api/upload-url.ts — The Titanium Gate (Phase 2.6)
  *
- * - proofmark-originals/quarantine/{userId}/{uuid}.{ext} のみ発行
- * - 本番領域 (certificates/) には絶対に発行しない
- * - 期限切れの quarantine は別ジョブで掃除する (TTL 24h を後段で運用)
+ * - Aggregate Payload Bomb Defense (Total Batch Size Limit)
+ * - Spot Guest VIP Route (Unauthenticated Checkout Bypass)
+ * - Edge Runtime / Array Multiplexer / Pre-Quota Check
  */
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
-import { randomUUID } from 'crypto';
-import { requireUser, methodGuard, json, HttpError } from './_lib/server.js';
+export const config = { runtime: 'edge' };
 
-const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, '');
-const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-
-const supabaseAdmin = createClient(
-  supabaseUrl || 'https://dummy.supabase.co',
-  serviceRoleKey || 'dummy',
-  {
-    auth: { autoRefreshToken: false, persistSession: false },
-    global: { fetch: (...args) => fetch(...args as Parameters<typeof fetch>) },
-  },
-);
-
-/** quarantine では「あらゆる形式」を許す。本番領域 (shareable) でのみ画像種別を絞る方針に変更。 */
-const ALLOWED_CONTENT_TYPES_HINT: ReadonlyArray<string> = [
-  'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
-  'image/heic', 'image/heif',
-  'application/pdf', 'application/zip', 'application/octet-stream',
-  'video/mp4', 'video/webm',
-];
+import { getAuthenticatedUserId, json, supabaseAdmin } from './_shared.js';
+import { Redis } from '@upstash/redis';
+import { Ratelimit } from '@upstash/ratelimit';
 
 const BUCKET = 'proofmark-originals';
 const QUARANTINE_PREFIX = 'quarantine';
-const SIGNED_URL_TTL_SEC = 60 * 10; // 10 min (大型ファイル想定で十分な余裕)
-const MAX_DECLARED_SIZE = 500 * 1024 * 1024; // 500MB
+const SIGNED_URL_TTL_SEC = 60 * 15; // 15 min
+const MAX_DECLARED_SIZE = 500 * 1024 * 1024; // 1ファイルの最大 (500MB)
+const MAX_BATCH_SIZE = 150; // 1リクエストの最大枚数
+const MAX_TOTAL_BATCH_BYTES = 2 * 1024 * 1024 * 1024; // 🚨 防衛線: 1リクエストの合計最大 (2GB)
 
-interface UploadUrlBody {
-  filename?: string;
-  fileName?: string;   // クライアント送信キー名 (CertificateUpload.c2pa-patch.tsx)
-  contentType?: string;
-  mimeType?: string;   // クライアント送信キー名 (CertificateUpload.c2pa-patch.tsx)
-  /** クライアントが申告するサイズ。大きすぎる場合は早期 reject。 */
-  size?: number;
-  fileSize?: number;   // クライアント送信キー名 (CertificateUpload.c2pa-patch.tsx)
+const ALLOWED_EXTENSIONS = new Set([
+  'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'heic', 'heif',
+  'pdf', 'zip', 'mp4', 'webm', 'bin'
+]);
+
+interface FileRequest {
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-  if (!methodGuard(req, res, ['POST'])) return;
+interface UploadUrlBody {
+  items?: FileRequest[];
+  proofMode?: string; // 🚨 Spot判定用に追加
+  // 後方互換用
+  fileName?: string; filename?: string;
+  mimeType?: string; contentType?: string;
+  fileSize?: number; size?: number;
+}
+
+class HttpError extends Error {
+  constructor(public status: number, message: string) { super(message); }
+}
+
+function getSafeExtension(filename: string): string {
+  const parts = (filename || '').split('.');
+  if (parts.length < 2) return 'bin';
+  const ext = parts.pop()!.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return ALLOWED_EXTENSIONS.has(ext) ? ext : 'bin';
+}
+
+export default async function handler(request: Request): Promise<Response> {
+  if (request.method !== 'POST') return json(405, { error: 'Method not allowed' });
+
+  // 1. Edge Rate Limiting (IPベースのスパム防衛)
+  try {
+    const redis = new Redis({
+      url: process.env.KV_REST_API_URL || '',
+      token: process.env.KV_REST_API_TOKEN || '',
+    });
+    const ratelimit = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(5, '10 s'),
+      analytics: true,
+    });
+    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+    const { success } = await ratelimit.limit(`pm_url_${ip}`);
+    if (!success) return json(429, { error: 'Too many requests. Please wait.' });
+  } catch (e) { console.warn('[RateLimit bypass]', e); }
 
   try {
-    const user = await requireUser(req);
-    const body = (req.body ?? {}) as UploadUrlBody;
-    // クライアント送信キーと旧キーの両方を受け付ける
-    const filename = (body.fileName ?? body.filename ?? '').toString();
-    const contentType = (body.mimeType ?? body.contentType ?? '').toString();
-    const declaredSize = Number.isFinite(body.fileSize) ? Number(body.fileSize)
-                       : Number.isFinite(body.size)     ? Number(body.size) : 0;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      json(res, 500, { error: 'サーバーの設定エラー（環境変数）' });
-      return;
-    }
-    if (!filename) {
-      json(res, 400, { error: 'filename は必須です' });
-      return;
-    }
-    if (!contentType) {
-      json(res, 400, { error: 'contentType は必須です' });
-      return;
-    }
-    // 警告のみ。MIME 偽装は最終的に create.ts の stat で検出する。
-    if (!ALLOWED_CONTENT_TYPES_HINT.includes(contentType)) {
-      // ハードリジェクトしない（将来の拡張を阻害しないため）
-    }
-    if (declaredSize < 0 || declaredSize > MAX_DECLARED_SIZE) {
-      json(res, 413, { error: 'declared size out of range (0 .. 500MB)' });
-      return;
+    // 2. Body Parsing & Normalization
+    const body = (await request.json()) as UploadUrlBody;
+    const items: FileRequest[] = Array.isArray(body.items) ? body.items : [];
+    if (items.length === 0) {
+      const singleName = body.fileName || body.filename;
+      const singleMime = body.mimeType || body.contentType;
+      const singleSize = body.fileSize ?? body.size ?? 0;
+      if (singleName && singleMime) {
+        items.push({ fileName: singleName.toString(), mimeType: singleMime.toString(), fileSize: Number(singleSize) });
+      }
     }
 
-    const ext = (filename.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) || 'bin';
+    if (items.length === 0) throw new HttpError(400, 'No valid files requested');
+    if (items.length > MAX_BATCH_SIZE) throw new HttpError(413, `Cannot request more than ${MAX_BATCH_SIZE} URLs at once`);
 
-    // --- 🚨 AUP Defense Line (フィッシング・マルウェア配布の防止) ---
-    const DANGEROUS_EXTS = ['html', 'htm', 'js', 'mjs', 'svg', 'exe', 'sh', 'bat', 'cmd', 'php', 'ps1', 'vbs'];
-    if (DANGEROUS_EXTS.includes(ext)) {
-      json(res, 403, {
-        error: 'セキュリティ保護のため、このファイル形式は直接アップロードできません。ZIP等に圧縮してからご利用ください。',
-      });
-      return;
-    }
-    // ---------------------------------------------------------------
+    const isSpot = body.proofMode === 'spot';
 
-    const uuid = randomUUID();
-    const quarantinePath = `${QUARANTINE_PREFIX}/${user.id}/${uuid}.${ext}`;
-
-    const { data, error } = await supabaseAdmin.storage
-      .from(BUCKET)
-      .createSignedUploadUrl(quarantinePath);
-
-    if (error || !data) {
-      json(res, 500, {
-        error: 'アップロードURLの発行に失敗しました',
-        details: error?.message ?? null,
-      });
-      return;
+    // 3. Auth & Spot Guest Bypass
+    let userId = '';
+    try {
+      userId = await getAuthenticatedUserId(request);
+    } catch (err) {
+      // 🚨 ファウンダー防衛: ゲストSpotの場合は認証エラーを許容し、一時的な匿名IDを付与する
+      if (isSpot) {
+        userId = `guest_spot_${crypto.randomUUID()}`;
+      } else {
+        throw new HttpError(401, 'Unauthorized to upload');
+      }
     }
 
-    json(res, 200, {
+    // 4. Pre-Quota Defense (Spot以外の場合のみ残機チェック)
+    if (!isSpot) {
+      const { data: profile } = await supabaseAdmin.from('profiles').select('plan_tier').eq('id', userId).maybeSingle();
+      const planTier = profile?.plan_tier ?? 'free';
+      
+      let limit = 3;
+      if (planTier === 'business') limit = 1000;
+      else if (planTier === 'studio') limit = 150;
+      else if (planTier === 'creator') limit = 30;
+
+      const { count } = await supabaseAdmin
+        .from('certificates')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .neq('proof_mode', 'spot')
+        .gte('created_at', new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' })).toISOString().substring(0, 8) + '01T00:00:00Z');
+
+      const used = count || 0;
+      if (used + items.length > limit) {
+        throw new HttpError(403, `Monthly limit exceeded. Plan: ${planTier}, Used: ${used}, Requested: ${items.length}, Limit: ${limit}`);
+      }
+    }
+
+    // 5. Aggregate Size Defense (The 75GB Bomb Defusal)
+    let totalBatchSize = 0;
+    const results = await Promise.all(items.map(async (item) => {
+      if (item.fileSize < 0 || item.fileSize > MAX_DECLARED_SIZE) {
+        throw new HttpError(413, `File size out of bounds for ${item.fileName}`);
+      }
+      
+      // 🚨 合計サイズストッパー (2GBを超えたら即死)
+      totalBatchSize += item.fileSize;
+      if (totalBatchSize > MAX_TOTAL_BATCH_BYTES) {
+        throw new HttpError(413, `Total batch size exceeds the 2GB maximum limit.`);
+      }
+
+      const ext = getSafeExtension(item.fileName);
+      const uuid = crypto.randomUUID();
+      const quarantinePath = `${QUARANTINE_PREFIX}/${userId}/${uuid}.${ext}`;
+
+      const { data, error } = await supabaseAdmin.storage
+        .from(BUCKET)
+        .createSignedUploadUrl(quarantinePath);
+
+      if (error || !data) throw new HttpError(500, `Failed to sign URL for ${item.fileName}`);
+
+      return {
+        fileName: item.fileName,
+        signedUrl: data.signedUrl,
+        quarantinePath,
+        bucket: BUCKET
+      };
+    }));
+
+    return json(200, {
       success: true,
-      // 直接 PUT する URL (Supabase が発行する一意 URL)
-      signedUrl: data.signedUrl,
-      // 後で create.ts に渡す内部パス。bucket を含めない (内部 SDK で move するため)
-      bucket: BUCKET,
-      quarantinePath,
       ttlSeconds: SIGNED_URL_TTL_SEC,
+      urls: results,
+      // 旧式UI後方互換用
+      signedUrl: results[0].signedUrl,
+      quarantinePath: results[0].quarantinePath,
+      bucket: results[0].bucket
     });
-  } catch (err) {
-    if (err instanceof HttpError) {
-      json(res, err.status, { error: err.message });
-      return;
-    }
-    json(res, 500, {
-      error: 'Internal Server Error',
-      details: err instanceof Error ? err.message : String(err),
-    });
+
+  } catch (err: any) {
+    const status = err instanceof HttpError ? err.status : 500;
+    return json(status, { error: err.message || 'Internal Server Error' });
   }
 }
