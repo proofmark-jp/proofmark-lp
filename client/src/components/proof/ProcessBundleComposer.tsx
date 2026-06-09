@@ -35,9 +35,11 @@ import {
   animate,
 } from 'framer-motion';
 import {
+  AlertCircle,
   CheckCircle2,
   ChevronDown,
   CloudLightning,
+  ExternalLink,
   ImagePlus,
   Layers3,
   Loader2,
@@ -47,6 +49,7 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  Zap,
 } from 'lucide-react';
 // CloudAll is not in lucide-react — use CheckCircle2 alias for uploaded state
 const CloudAll = CheckCircle2;
@@ -123,7 +126,7 @@ type WorkspaceStep = ProcessBundleDraftStep & {
   isRoot?: boolean;
   thumbUrl?: string;         // 軽量サムネイル (Evolution Scrub 用)
   sameTimestamp?: boolean;   // Confidence Indicator: lastModified 衝突フラグ
-  uploadState: 'idle' | 'fetching_url' | 'uploading' | 'uploaded' | 'error';
+  uploadState?: 'idle' | 'fetching_url' | 'uploading' | 'uploaded' | 'error';
   thumbBlob?: Blob;
   quarantinePath?: string;
   thumbQuarantinePath?: string;
@@ -199,6 +202,25 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
   /* ── Evolution Scrub ── */
   const [scrubIndex, setScrubIndex] = useState(0);
 
+  // 🚨 Quota & Upsell States
+  const [quota, setQuota] = useState<{ plan: string; limit: number; used: number; remaining: number } | null>(null);
+  const [upsellIntent, setUpsellIntent] = useState<{ needed: number; targetPlan: string; currentRemaining: number } | null>(null);
+
+  // 🚨 Fetch Quota on mount (401 Guest Fallback対応)
+  useEffect(() => {
+    const fetchQuota = async () => {
+      try {
+        const res = await fetch('/api/user/quota');
+        if (res.ok) {
+          setQuota(await res.json());
+        } else if (res.status === 401) {
+          setQuota({ plan: 'guest', limit: 3, used: 0, remaining: 3 });
+        }
+      } catch (e) { console.error(e); }
+    };
+    fetchQuota();
+  }, []);
+
   /* ── ref caches ── */
   const urlCacheRef = useRef<Map<string, string>>(new Map());
   const thumbCacheRef = useRef<Map<string, string>>(new Map());
@@ -233,6 +255,7 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
             sha256: certificate.sha256,
             hashState: 'verified',
             isRoot: true,
+            uploadState: 'uploaded',
           }]);
         }
         return;
@@ -290,6 +313,7 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
           sha256: s.sha256,
           hashState: 'verified',
           isRoot: true,
+          uploadState: 'uploaded',
         })));
         return;
       }
@@ -304,6 +328,7 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
           sha256: certificate.sha256,
           hashState: 'verified',
           isRoot: true,
+          uploadState: 'uploaded',
         }]);
       }
     };
@@ -312,6 +337,8 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
     loadExistingChain().finally(() => { if (isMounted) setIsHydrating(false); });
     return () => { isMounted = false; };
   }, [certificate]);
+
+
 
   /* ── stable preview URL helper ── */
   const getPreviewUrl = useCallback((stepId: string, file?: File): string | undefined => {
@@ -402,6 +429,22 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
     }
   };
 
+  /* ── attachThumb helper (for replaced images) ── */
+  const attachThumb = useCallback(async (stepId: string, file: File) => {
+    try {
+      const thumb = await generateThumb(file);
+      setSteps(cur => {
+        const target = cur.find(s => s.id === stepId);
+        if (!target) return cur;
+        const updated = { ...target, thumbUrl: thumb.url, thumbBlob: thumb.blob, uploadState: 'fetching_url' as const };
+        fetchUploadUrls([updated]);
+        return cur.map(s => s.id === stepId ? updated : s);
+      });
+    } catch (e) {
+      console.error('Thumbnail generation failed', e);
+    }
+  }, []); // fetchUploadUrls is not strictly needed in deps if defined in same scope, but ensure no lint errors.
+
   /* ── add files at a specific insertion index ── */
   const addFilesAtIndex = useCallback(async (files: FileList | File[], insertAt: number) => {
     const fileArray = Array.from(files).filter((f) => f.type.startsWith('image/')).sort((a, b) => a.lastModified - b.lastModified);
@@ -412,11 +455,18 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
     const uniqueFiles = fileArray.filter(f => !existingKeys.has(`${f.name}-${f.size}-${f.lastModified}`));
     if (uniqueFiles.length === 0) return;
 
-    // スマート・アップセル
-    const totalAfterAdd = steps.length + uniqueFiles.length;
-    if (totalAfterAdd > 150) {
-      alert('システムの物理上限（150枚）を超えるため追加できません。');
+    const needed = steps.length + uniqueFiles.length;
+    if (needed > 150) {
+      alert("システムの物理上限（150枚）を超えるため追加できません。");
       return;
+    }
+    
+    // 🚨 Smart Upsell Logic
+    if (quota && needed > quota.remaining) {
+      let targetPlan = 'creator';
+      if (needed > 30) targetPlan = 'studio';
+      setUpsellIntent({ needed, targetPlan, currentRemaining: quota.remaining });
+      return; // 処理を中断してModalを表示
     }
 
     const modifiedTimes = uniqueFiles.map((f) => f.lastModified);
@@ -499,6 +549,8 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
   function updateStep(id: string, patch: Partial<WorkspaceStep>) {
     setSteps((cur) => cur.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }
+
+
 
   function removeStep(id: string) {
     const url = urlCacheRef.current.get(id);
@@ -958,6 +1010,60 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
           {message}
         </div>
       )}
+
+      {/* 🚨 Smart Upsell Modal */}
+      <AnimatePresence>
+        {upsellIntent && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              className="bg-[#07061A] border border-white/10 rounded-2xl p-6 md:p-8 max-w-md w-full shadow-2xl relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-[#00D4AA]" />
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+                  <Zap className="w-5 h-5 text-purple-400" />
+                </div>
+                <h3 className="text-xl font-bold text-white">アップグレードが必要です</h3>
+              </div>
+              
+              <p className="text-gray-300 text-sm mb-4 leading-relaxed">
+                現在の残り枠（{upsellIntent.currentRemaining}枚）に対して、<strong className="text-white">{upsellIntent.needed}枚</strong> の証明書を発行しようとしています。
+                全工程を連結するには、<strong className="text-[#00D4AA] capitalize">{upsellIntent.targetPlan} プラン</strong> へのアップグレードが必要です。
+              </p>
+              
+              <div className="bg-[#121124] rounded-lg p-3 mb-6 border border-purple-500/30 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-purple-200">
+                  決済は別タブで開きます。<strong>決済完了後、この画面に戻ればそのまま続きから再開できます。</strong>
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <a
+                  href={`/pricing?plan=${upsellIntent.targetPlan}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setUpsellIntent(null)}
+                  className="w-full py-3 rounded-lg bg-gradient-to-r from-purple-600 to-[#00D4AA] text-white font-bold tracking-wide hover:scale-[1.02] transition-transform flex items-center justify-center gap-2"
+                >
+                  <Zap className="w-4 h-4" />
+                  {upsellIntent.targetPlan} にアップグレード <ExternalLink className="w-4 h-4 opacity-50" />
+                </a>
+                <button
+                  onClick={() => setUpsellIntent(null)}
+                  className="w-full py-3 rounded-lg bg-white/5 text-gray-400 font-medium hover:bg-white/10 transition-colors"
+                >
+                  今はやめておく（枚数を減らす）
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
