@@ -205,6 +205,8 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Ghost Upload Concurrency Pool
   const activeUploads = useRef(0);
+  // 🚨 Ghost Upload Abort Controllers (通信の生殺与奪を握る監視室)
+  const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
   /* ── derived ── */
   const readyCount = useMemo(
@@ -457,22 +459,37 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
       toProcess.forEach(async (item) => {
         activeUploads.current++;
         setSteps(cur => cur.map(s => s.id === item.id ? { ...s, uploadState: 'uploading' as const } : s));
+
+        // 🚨 AbortControllerの生成と登録
+        const controller = new AbortController();
+        abortControllersRef.current.set(item.id, controller);
+
         let retryCount = 0;
         let success = false;
-        while (retryCount < 3 && !success) {
+        let isAborted = false;
+
+        while (retryCount < 3 && !success && !isAborted) {
           try {
             await Promise.all([
-              fetch(item.signedUrl!, { method: 'PUT', body: item.file }),
-              item.thumbSignedUrl ? fetch(item.thumbSignedUrl, { method: 'PUT', body: item.thumbBlob }) : Promise.resolve()
+              fetch(item.signedUrl!, { method: 'PUT', body: item.file, signal: controller.signal }),
+              item.thumbSignedUrl ? fetch(item.thumbSignedUrl, { method: 'PUT', body: item.thumbBlob, signal: controller.signal }) : Promise.resolve()
             ]);
             success = true;
             setSteps(cur => cur.map(s => s.id === item.id ? { ...s, uploadState: 'uploaded' as const } : s));
-          } catch {
+          } catch (e: any) {
+            // 🚨 強制切断された場合はエラーにせず静かに終了する
+            if (e.name === 'AbortError') {
+              isAborted = true;
+              break;
+            }
             retryCount++;
             if (retryCount >= 3) setSteps(cur => cur.map(s => s.id === item.id ? { ...s, uploadState: 'error' as const } : s));
             else await new Promise(res => setTimeout(res, retryCount * 500));
           }
         }
+
+        // 処理完了後に監視室から削除
+        abortControllersRef.current.delete(item.id);
         activeUploads.current--;
       });
     };
@@ -488,6 +505,13 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
     if (url) { URL.revokeObjectURL(url); urlCacheRef.current.delete(id); }
     const turl = thumbCacheRef.current.get(id);
     if (turl) { URL.revokeObjectURL(turl); thumbCacheRef.current.delete(id); }
+
+    // 🚨 通信の強制切断 (Phantom Upload Leakの防止)
+    if (abortControllersRef.current.has(id)) {
+      abortControllersRef.current.get(id)?.abort();
+      abortControllersRef.current.delete(id);
+    }
+
     setSteps((cur) => cur.filter((s) => s.id !== id));
   }
 
