@@ -1,9 +1,9 @@
 /**
- * api/certificates/create.ts — The Bulletproof Nervous System (Absolute Perfect Version)
+ * api/certificates/create.ts — The Bulletproof Nervous System (Array Multiplexer)
  *
  * - Bulk Operations (O(1) DB calls for verification & insertion)
  * - 44-Byte Encryption Overhead Forgiveness
- * - Strict Path Traversal & ReDoS Defense
+ * - Strict Path Traversal & CPU Starvation Defense
  * - Vault Persistence for Private Proofs (Anti-CS Fire)
  */
 
@@ -14,8 +14,8 @@ import { resolveC2paForPersistence } from '../_lib/c2pa-validate.js';
 import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
 
-const MAX_DECLARED_SIZE = 500 * 1024 * 1024; // 500MB
-const MAX_CHAIN_LENGTH = 150; // 1リクエストの最大チェーン数（ReDoS/ペイロード爆撃防御）
+const MAX_CHAIN_LENGTH = 150; // 1リクエストの最大チェーン数
+const MAX_JSON_PAYLOAD_BYTES = 2 * 1024 * 1024; // 2MB (CPU Starvation Defense)
 const ORIGINALS_BUCKET = 'proofmark-originals';
 const PUBLIC_BUCKET = 'proofmark-public';
 const QUARANTINE_PREFIX = 'quarantine';
@@ -37,7 +37,7 @@ interface CertificateItem {
   stepIndex?: number;
 }
 
-interface CreateBody extends Partial<CertificateItem> {
+interface CreateBody {
   bundleId?: string;
   items?: CertificateItem[];
 }
@@ -46,7 +46,6 @@ class HttpError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
-// 🛡️ サニタイズ関数（パストラバーサル＆制御文字の無効化）
 function clampFileName(name: string): string {
   const stripped = (name ?? '').replace(/[\u0000-\u001f\u007f/\\]+/g, '_').trim();
   return stripped.length > 240 ? stripped.slice(0, 240) : stripped || 'untitled';
@@ -58,13 +57,10 @@ function safeExt(name: string): string {
 }
 
 function assertSafeQuarantinePath(path: string, userId: string, mode: ProofMode): void {
-  // 🚨 パストラバーサル絶対防衛
   if (path.includes('..') || path.includes('./') || path.includes('//')) {
     throw new HttpError(400, 'Path traversal detected');
   }
-  
-  if (mode === 'spot') return; // Spotは別途Stripe側で権限検証
-  
+  if (mode === 'spot') return;
   const parts = path.split('/');
   if (parts.length < 3 || parts[0] !== QUARANTINE_PREFIX || parts[1] !== userId) {
     throw new HttpError(403, 'Quarantine ownership mismatch');
@@ -74,7 +70,7 @@ function assertSafeQuarantinePath(path: string, userId: string, mode: ProofMode)
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
-  // 1. RateLimit
+  // 1. Edge Rate Limiting
   try {
     const redis = new Redis({
       url: process.env.KV_REST_API_URL || '',
@@ -90,23 +86,24 @@ export default async function handler(request: Request): Promise<Response> {
     if (!success) return json(429, { error: 'Too many requests.' });
   } catch (e) { console.warn('[RateLimit bypass]', e); }
 
-  // 2. Parse Body & Validate Payload Size
+  // 2. CPU Starvation Defense (巨大JSONによるEdgeフリーズ攻撃の遮断)
   let body: CreateBody;
   try {
-    body = (await request.json()) as CreateBody;
+    const rawText = await request.text();
+    if (rawText.length > MAX_JSON_PAYLOAD_BYTES) {
+      return json(413, { error: 'Payload too large (JSON exceeds 2MB)' });
+    }
+    body = JSON.parse(rawText) as CreateBody;
   } catch {
     return json(400, { error: 'Invalid JSON body' });
   }
 
-  const isBundle = Array.isArray(body.items);
-  const items = isBundle ? body.items! : [body as CertificateItem];
-  
-  // 🚨 無制限ペイロードインジェクションの遮断
+  const items = Array.isArray(body.items) ? body.items : [];
   if (items.length === 0 || items.length > MAX_CHAIN_LENGTH) {
     return json(413, { error: `Chain length must be between 1 and ${MAX_CHAIN_LENGTH}` });
   }
 
-  const bundleId = body.bundleId || (items.length > 1 ? crypto.randomUUID() : null);
+  const bundleId = body.bundleId || crypto.randomUUID();
 
   // 3. Auth
   let userId = '';
@@ -123,7 +120,7 @@ export default async function handler(request: Request): Promise<Response> {
   const planTier = profile?.plan_tier ?? 'free';
 
   try {
-    // 4. 【N+1問題の撲滅】 O(1) Bulk Duplicate Check
+    // 4. O(1) Bulk Duplicate Check
     const shas = items.map(i => i.sha256);
     const { data: dupes } = await supabaseAdmin.from('certificates').select('sha256').in('sha256', shas);
     if (dupes && dupes.length > 0) {
@@ -148,7 +145,7 @@ export default async function handler(request: Request): Promise<Response> {
       const statSize = (entry.metadata as any)?.size ?? 0;
       const statMime = (entry.metadata as any)?.mimetype ?? null;
 
-      // 🚨【44-Byte Forgiveness】 WebCryptoオーバーヘッド許容
+      // 44-Byte Forgiveness (WebCrypto Overhead)
       if (mode === 'private' || mode === 'spot') {
         const diff = statSize - item.file_size;
         if (diff < 0 || diff > 128) {
@@ -158,7 +155,7 @@ export default async function handler(request: Request): Promise<Response> {
         if (statSize !== item.file_size) throw new HttpError(409, 'Shareable proof size mismatch');
       }
 
-      // C2PA 解決
+      // C2PA 解析
       let c2paParsed = null;
       if (item.c2paManifest) {
         c2paParsed = typeof item.c2paManifest === 'string' ? JSON.parse(item.c2paManifest) : item.c2paManifest;
@@ -182,7 +179,6 @@ export default async function handler(request: Request): Promise<Response> {
         const { data: pubUrl } = supabaseAdmin.storage.from(PUBLIC_BUCKET).getPublicUrl(publicPath);
         publicImageUrl = pubUrl.publicUrl;
       } else {
-        // 🚨【CS炎上対策】 Privateモードの実体を破棄せず Vault (金庫) へ退避
         storagePath = `${userId || 'spot'}/vault/${certId}.${ext}`;
         await supabaseAdmin.storage.from(ORIGINALS_BUCKET).move(item.quarantinePath, storagePath);
       }
@@ -204,21 +200,18 @@ export default async function handler(request: Request): Promise<Response> {
         file_size: statSize,
         c2pa_manifest: c2paParsed,
         metadata_json: { ...((item.metadataJson as any) || {}), upload_pipeline: 'quarantine-bulk.v3' },
-        is_asset_purged: false // Vaultに退避したため実体は存在する
+        is_asset_purged: false
       });
     }));
 
-    // 6. DB Bulk Insert (The Titanium Skeleton)
+    // 6. Bulk Insert
     const { data: insertedData, error: insertError } = await supabaseAdmin
       .from('certificates')
       .insert(dbRecords)
       .select('*');
 
-    // 🚨【TOCTOU / レースコンディション絶対防衛】 PostgreSQL側のUNIQUEエラーを補足
     if (insertError) {
-      if (insertError.code === '23505') {
-        throw new HttpError(409, 'A concurrent request already registered this certificate (UNIQUE violation).');
-      }
+      if (insertError.code === '23505') throw new HttpError(409, 'Concurrent request conflict (UNIQUE violation).');
       console.error('[DB Insert Error]', insertError);
       throw new HttpError(500, 'Database transaction failed');
     }
@@ -227,14 +220,11 @@ export default async function handler(request: Request): Promise<Response> {
       success: true,
       bundleId: bundleId,
       certificates: insertedData,
-      verifyUrl: `${getOrigin(request)}/cert/${insertedData![insertedData!.length - 1].public_verify_token}`,
-      certificate: insertedData![insertedData!.length - 1], 
-      id: insertedData![insertedData!.length - 1].id
+      verifyUrl: `${getOrigin(request)}/cert/${insertedData![insertedData!.length - 1].public_verify_token}`
     });
 
   } catch (err: any) {
     console.error('[Bulk Promote Error]', err);
-    // ※ エラー時の残存ファイル(ゾンビ)は、システム設計上 Phase 1.5 のGCバッチに回収を委譲する(Eventual Consistency)
     const status = err instanceof HttpError ? err.status : 500;
     return json(status, { error: err.message || 'Unknown error during promotion' });
   }

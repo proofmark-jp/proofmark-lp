@@ -37,15 +37,19 @@ import {
 import {
   CheckCircle2,
   ChevronDown,
+  CloudLightning,
   ImagePlus,
   Layers3,
   Loader2,
   Lock,
+  RefreshCw,
   Shield,
   Sparkles,
   Trash2,
   Upload,
 } from 'lucide-react';
+// CloudAll is not in lucide-react — use CheckCircle2 alias for uploaded state
+const CloudAll = CheckCircle2;
 import { createProcessBundle } from '../../lib/proofmark-api';
 import type {
   BundleStepType,
@@ -61,6 +65,7 @@ import type { HashRequest, HashResponse } from '../../workers/hashWorker';
 const THUMB_MAX_PX = 200; // Canvas サムネイル最大幅/高さ
 const SEAL_THRESHOLD = 200; // Slide to Seal — この px 以上でシール確定
 const FLICK_VELOCITY_THRESHOLD = 400; // Flick-to-Trash — この速度 (px/s) 以上で削除
+const MAX_CONCURRENT_UPLOADS = 5;
 
 /* ═══════════════════════════════════════════════════════════════
    HELPERS
@@ -83,7 +88,7 @@ function guessStepType(name: string): BundleStepType {
  * Canvas を用いて File → 軽量サムネイル Blob URL を生成。
  * Evolution Scrub 用。アンマウント時は呼び出し元が revokeObjectURL すること。
  */
-async function generateThumb(file: File): Promise<string> {
+async function generateThumb(file: File): Promise<{ url: string, blob: Blob }> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const srcUrl = URL.createObjectURL(file);
@@ -92,14 +97,13 @@ async function generateThumb(file: File): Promise<string> {
       const w = Math.round(img.width * scale);
       const h = Math.round(img.height * scale);
       const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
+      canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
       if (!ctx) { URL.revokeObjectURL(srcUrl); reject(new Error('no ctx')); return; }
       ctx.drawImage(img, 0, 0, w, h);
       canvas.toBlob((blob) => {
         URL.revokeObjectURL(srcUrl);
-        if (blob) resolve(URL.createObjectURL(blob));
+        if (blob) resolve({ url: URL.createObjectURL(blob), blob });
         else reject(new Error('blob null'));
       }, 'image/webp', 0.7);
     };
@@ -119,6 +123,12 @@ type WorkspaceStep = ProcessBundleDraftStep & {
   isRoot?: boolean;
   thumbUrl?: string;         // 軽量サムネイル (Evolution Scrub 用)
   sameTimestamp?: boolean;   // Confidence Indicator: lastModified 衝突フラグ
+  uploadState: 'idle' | 'fetching_url' | 'uploading' | 'uploaded' | 'error';
+  thumbBlob?: Blob;
+  quarantinePath?: string;
+  thumbQuarantinePath?: string;
+  signedUrl?: string;
+  thumbSignedUrl?: string;
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -193,6 +203,8 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
   const urlCacheRef = useRef<Map<string, string>>(new Map());
   const thumbCacheRef = useRef<Map<string, string>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Ghost Upload Concurrency Pool
+  const activeUploads = useRef(0);
 
   /* ── derived ── */
   const readyCount = useMemo(
@@ -200,7 +212,7 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
     [steps],
   );
   const allVerified = useMemo(() => steps.every((s) => s.hashState === 'verified'), [steps]);
-  const canSubmit = !!certificate && steps.length > 0 && !submitting && allVerified && !sealed;
+  const canSubmit = !!certificate && steps.length > 0 && !submitting && allVerified && !sealed && steps.every(s => s.isRoot || s.uploadState === 'uploaded');
 
   /* ── hydrate chain from parent certificate ── */
   useEffect(() => {
@@ -345,77 +357,127 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
     });
   }, []);
 
-  /* ── generate thumb and update step ── */
-  const attachThumb = useCallback(async (stepId: string, file: File) => {
+  /* ── processInChunks helper (OOM Defense) ── */
+  async function processInChunks<T, R>(items: T[], chunkSize: number, processor: (item: T) => Promise<R>): Promise<R[]> {
+    const results: R[] = [];
+    for (let i = 0; i < items.length; i += chunkSize) {
+      const chunk = items.slice(i, i + chunkSize);
+      const chunkResults = await Promise.all(chunk.map(processor));
+      results.push(...chunkResults);
+    }
+    return results;
+  }
+
+  /* ── fetchUploadUrls ── */
+  const fetchUploadUrls = async (newSteps: WorkspaceStep[]) => {
     try {
-      const thumb = await generateThumb(file);
-      thumbCacheRef.current.set(stepId, thumb);
-      setSteps((cur) => cur.map((s) => s.id === stepId ? { ...s, thumbUrl: thumb } : s));
-    } catch { /* silent — scrub still works without thumb */ }
-  }, []);
+      const payloadItems = newSteps.flatMap(s => [
+        { fileName: s.file!.name, mimeType: s.file!.type, fileSize: s.file!.size },
+        { fileName: `thumb_${s.id}.webp`, mimeType: 'image/webp', fileSize: s.thumbBlob?.size ?? 0 }
+      ]);
+      const res = await fetch('/api/upload-url', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: payloadItems, proofMode: isPublic ? 'shareable' : 'private' })
+      });
+      if (!res.ok) throw new Error('Failed to get upload URLs.');
+      const { urls } = await res.json();
+      setSteps(cur => cur.map(s => {
+        const target = newSteps.find(ns => ns.id === s.id);
+        if (!target) return s;
+        const oIdx = payloadItems.findIndex(p => p.fileName === target.file!.name);
+        const tIdx = payloadItems.findIndex(p => p.fileName === `thumb_${target.id}.webp`);
+        return {
+          ...s,
+          signedUrl: urls[oIdx]?.signedUrl,
+          quarantinePath: urls[oIdx]?.quarantinePath,
+          thumbSignedUrl: urls[tIdx]?.signedUrl,
+          thumbQuarantinePath: urls[tIdx]?.quarantinePath,
+          uploadState: 'idle' as const
+        };
+      }));
+    } catch {
+      setSteps(cur => cur.map(s => newSteps.some(ns => ns.id === s.id) ? { ...s, uploadState: 'error' as const } : s));
+    }
+  };
 
   /* ── add files at a specific insertion index ── */
-  const addFilesAtIndex = useCallback(
-    (files: FileList | File[], insertAt: number) => {
-      const fileArray = Array.from(files)
-        .filter((f) => f.type.startsWith('image/'))
-        .sort((a, b) => a.lastModified - b.lastModified);
+  const addFilesAtIndex = useCallback(async (files: FileList | File[], insertAt: number) => {
+    const fileArray = Array.from(files).filter((f) => f.type.startsWith('image/')).sort((a, b) => a.lastModified - b.lastModified);
+    if (fileArray.length === 0) return;
 
-      if (fileArray.length === 0) {
-        setMessage('※ PSDやCLIPなどの作業ファイルは直接証明できません。PNGやJPEGに書き出してください。');
-        return;
-      }
+    // 重複ファイルの完全排除
+    const existingKeys = new Set(steps.map(s => s.file ? `${s.file.name}-${s.file.size}-${s.file.lastModified}` : ''));
+    const uniqueFiles = fileArray.filter(f => !existingKeys.has(`${f.name}-${f.size}-${f.lastModified}`));
+    if (uniqueFiles.length === 0) return;
 
-      const duplicates = fileArray.filter((f) =>
-        steps.some((s) => s.file && s.file.name === f.name && s.file.size === f.size),
-      );
-      if (duplicates.length > 0) {
-        setMessage(`「${duplicates.map((f) => f.name).join(', ')}」はすでに追加済みです。同じ画像の重複登録はブロックされました。`);
-        return;
-      }
+    // スマート・アップセル
+    const totalAfterAdd = steps.length + uniqueFiles.length;
+    if (totalAfterAdd > 150) {
+      alert('システムの物理上限（150枚）を超えるため追加できません。');
+      return;
+    }
 
-      // Confidence Indicator: lastModified が同一の場合フラグを立てる
-      const modifiedTimes = fileArray.map((f) => f.lastModified);
-      const hasDuplicateTimestamps =
-        new Set(modifiedTimes).size !== modifiedTimes.length ||
-        steps.some((s) => s.file && modifiedTimes.includes(s.file.lastModified));
+    const modifiedTimes = uniqueFiles.map((f) => f.lastModified);
+    const hasDuplicateTimestamps = new Set(modifiedTimes).size !== modifiedTimes.length || steps.some((s) => s.file && modifiedTimes.includes(s.file.lastModified));
 
-      const newSteps: WorkspaceStep[] = fileArray.map((file) => {
-        const id = crypto.randomUUID();
-        const baseName = fileBaseName(file.name);
-        const step: WorkspaceStep = {
-          id,
-          stepType: guessStepType(file.name),
-          title: baseName || '途中工程',
-          note: '',
-          file,
-          previewUrl: getPreviewUrl(id, file),
-          hashState: 'idle' as const,
-          sameTimestamp: hasDuplicateTimestamps,
-        };
-        return step;
-      });
+    let newSteps: WorkspaceStep[] = uniqueFiles.map((file) => ({
+      id: crypto.randomUUID(), stepType: guessStepType(file.name), title: fileBaseName(file.name) || '途中工程', note: '',
+      file, previewUrl: getPreviewUrl(crypto.randomUUID(), file), hashState: 'idle' as const, uploadState: 'fetching_url' as const, sameTimestamp: hasDuplicateTimestamps,
+    }));
 
-      setSteps((cur) => {
-        const copy = [...cur];
-        copy.splice(insertAt, 0, ...newSteps);
-        return copy;
-      });
+    // OOM防衛: 同時にCanvasを開くのは3枚まで（チャンク処理）
+    newSteps = await processInChunks(newSteps, 3, async (s) => {
+      try {
+        const thumb = await generateThumb(s.file!);
+        return { ...s, thumbUrl: thumb.url, thumbBlob: thumb.blob };
+      } catch { return s; }
+    });
 
-      newSteps.forEach((s) => {
-        if (s.file) {
-          computeHash(s.id, s.file);
-          attachThumb(s.id, s.file);
-        }
-      });
-    },
-    [steps, getPreviewUrl, computeHash, attachThumb],
-  );
+    setSteps((cur) => { const copy = [...cur]; copy.splice(insertAt, 0, ...newSteps); return copy; });
+
+    newSteps.forEach((s) => computeHash(s.id, s.file!));
+    fetchUploadUrls(newSteps);
+  }, [steps, getPreviewUrl, computeHash]);
 
   const addFilesAsSteps = useCallback(
     (files: FileList | File[]) => addFilesAtIndex(files, steps.length),
     [addFilesAtIndex, steps.length],
   );
+
+  // Ghost Upload Watcher
+  useEffect(() => {
+    const processUploadQueue = async () => {
+      // 🚨 無限ループ防衛: 'error' は含めない
+      const readyItems = steps.filter(s => !s.isRoot && s.hashState === 'verified' && s.signedUrl && s.uploadState === 'idle');
+      if (readyItems.length === 0) return;
+      const availableSlots = MAX_CONCURRENT_UPLOADS - activeUploads.current;
+      if (availableSlots <= 0) return;
+
+      const toProcess = readyItems.slice(0, availableSlots);
+      toProcess.forEach(async (item) => {
+        activeUploads.current++;
+        setSteps(cur => cur.map(s => s.id === item.id ? { ...s, uploadState: 'uploading' as const } : s));
+        let retryCount = 0;
+        let success = false;
+        while (retryCount < 3 && !success) {
+          try {
+            await Promise.all([
+              fetch(item.signedUrl!, { method: 'PUT', body: item.file }),
+              item.thumbSignedUrl ? fetch(item.thumbSignedUrl, { method: 'PUT', body: item.thumbBlob }) : Promise.resolve()
+            ]);
+            success = true;
+            setSteps(cur => cur.map(s => s.id === item.id ? { ...s, uploadState: 'uploaded' as const } : s));
+          } catch {
+            retryCount++;
+            if (retryCount >= 3) setSteps(cur => cur.map(s => s.id === item.id ? { ...s, uploadState: 'error' as const } : s));
+            else await new Promise(res => setTimeout(res, retryCount * 500));
+          }
+        }
+        activeUploads.current--;
+      });
+    };
+    processUploadQueue();
+  }, [steps]);
 
   function updateStep(id: string, patch: Partial<WorkspaceStep>) {
     setSteps((cur) => cur.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -463,26 +525,34 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
     [addFilesAsSteps],
   );
 
-  /* ── submit (preserved contract) ── */
+  /* ── submit (Array Multiplexer 対応) ── */
   async function submit() {
     if (!certificate) return;
-    const prepared = steps.filter((step) =>
-      step.isRoot ? !!step.sha256 && step.title.trim() : !!step.file && step.title.trim(),
-    );
     setSubmitting(true); setMessage(null); setResult(null);
     try {
-      const response = await createProcessBundle({
-        certificateId: certificate.id,
-        title, description, isPublic, steps: prepared,
+      const payload = {
+        bundleId: crypto.randomUUID(),
+        items: steps.filter(s => !s.isRoot).map((s, idx) => ({
+          quarantinePath: s.quarantinePath,
+          thumbnailPath: s.thumbQuarantinePath,
+          sha256: s.sha256,
+          title: s.title,
+          proofMode: isPublic ? 'shareable' : 'private',
+          file_name: s.file!.name,
+          file_size: s.file!.size,
+          stepIndex: idx
+        }))
+      };
+      const res = await fetch('/api/certificates/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
-      setResult({
-        chainDepth: response.chainDepth,
-        chainHeadSha256: response.chainHeadSha256,
-        certificateId: response.certificateId,
-      });
+      if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
+      const data = await res.json();
+      setResult({ chainDepth: steps.length, chainHeadSha256: steps[steps.length - 1].sha256 ?? null, certificateId: data.certificateId || data.certificates?.[0]?.bundle_id || 'unknown' });
       setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへリダイレクトします...');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Chain of Evidence の保存に失敗しました');
+      setMessage(error instanceof Error ? error.message : '保存に失敗しました');
     } finally {
       setSubmitting(false);
     }
@@ -827,6 +897,14 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
                   ハッシュ計算中...
                 </span>
               )}
+              
+              {/* 🚨 追加: クラウド同期中（Ghost Upload待ち）の表示 */}
+              {allVerified && !steps.every(s => s.isRoot || s.uploadState === 'uploaded') && (
+                <span className="ml-2 text-xs text-[#00D4AA] animate-pulse">
+                  <CloudLightning className="inline w-3 h-3 mr-1" />
+                  クラウド同期中...
+                </span>
+              )}
             </div>
           </div>
 
@@ -938,7 +1016,7 @@ function TimelineCard({
       exit={{ opacity: 0, scale: 0.85, y: -20 }}
       transition={{ type: 'spring', stiffness: 300, damping: 28 }}
       className={`
-        relative w-[190px] md:w-[210px] rounded-2xl border backdrop-blur-md
+        relative w-[190px] md:w-[210px] rounded-2xl border backdrop-blur-md touch-pan-y
         transition-[border-color,box-shadow] duration-300 shrink-0 group/card cursor-grab active:cursor-grabbing
         bg-white/5
         ${isSilentAnchor
@@ -1083,10 +1161,19 @@ function TimelineCard({
               onKeyDown={(e) => { if (e.key === 'Enter') setEditingTitle(false); }}
             />
           ) : (
-            <p
-              className="text-xs font-bold text-white truncate cursor-text hover:text-[#00D4AA] transition-colors"
-              onClick={() => !sealed && setEditingTitle(true)}
-            >{step.title}</p>
+            <div className="flex items-center justify-between mb-1 min-w-0 flex-1">
+              <p
+                className="text-xs font-bold text-white truncate cursor-text hover:text-[#00D4AA] transition-colors min-w-0 flex-1"
+                onClick={() => !sealed && setEditingTitle(true)}
+              >{step.title}</p>
+              {!step.isRoot && step.uploadState === 'uploading' && <CloudLightning className="w-3 h-3 text-[#00D4AA] animate-pulse ml-2 shrink-0" />}
+              {!step.isRoot && step.uploadState === 'uploaded' && <CloudAll className="w-3 h-3 text-[#00D4AA] ml-2 shrink-0" />}
+              {!step.isRoot && step.uploadState === 'error' && (
+                <button onClick={() => onUpdate(step.id, { uploadState: 'idle' })} title="アップロード再試行" className="ml-2 shrink-0">
+                  <RefreshCw className="w-3 h-3 text-[#FF4D4D]" />
+                </button>
+              )}
+            </div>
           )}
 
           {editingNote ? (
