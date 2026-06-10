@@ -7,7 +7,16 @@
  * - Vault Persistence for Private Proofs (Anti-CS Fire)
  */
 
-export const config = { runtime: 'edge' };
+// 🚨 Vercel / Next.js の 413 Payload Too Large エラーを回避するため、
+// JSONボディの受信上限をデフォルトの 1MB から 10MB に引き上げる
+export const config = {
+  runtime: 'edge',
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
 
 import { getAuthenticatedUserId, getOrigin, json, supabaseAdmin } from '../_shared.js';
 import { resolveC2paForPersistence } from '../_lib/c2pa-validate.js';
