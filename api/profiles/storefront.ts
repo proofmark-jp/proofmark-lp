@@ -55,8 +55,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  const usernameRaw = (req.query.username as string | undefined) ?? '';
-  const username = usernameRaw.trim();
+  const usernameRaw = req.query.username;
+  if (!usernameRaw || typeof usernameRaw !== 'string') {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+  const username = usernameRaw.trim().toLowerCase();
   if (!USERNAME_RE.test(username)) {
     json(res, 400, { error: 'username_invalid', reqId: log.ctx.reqId });
     return;
@@ -98,10 +101,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const projects = projectsRes.data ?? [];
     const certificates = certsRes.data ?? [];
 
-    // CDN 5min, browser 60s, stale-while-revalidate 1h
+    // 🚨 Vercel Edge Cache (CDN) を有効化し、DBへのDDoSを物理遮断する
+    // s-maxage=60: エッジサーバーで60秒間キャッシュ
+    // stale-while-revalidate=300: 古いキャッシュを返しつつ、裏で非同期に再取得
     res.setHeader(
-      'cache-control',
-      'public, max-age=60, s-maxage=300, stale-while-revalidate=3600',
+      'Cache-Control',
+      'public, s-maxage=60, stale-while-revalidate=300'
     );
     res.setHeader('vary', 'Accept-Encoding, Accept');
 

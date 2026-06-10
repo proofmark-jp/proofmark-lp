@@ -531,13 +531,14 @@ export default function PublicProfile() {
   useEffect(() => {
     let active = true;
     if (!username) return;
+    const safeUsername = username.toLowerCase();
 
     async function loadPortfolio() {
       try {
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
-          .ilike('username', username)
+          .eq('username', safeUsername)
           .maybeSingle();
 
         if (profileError || !profile) {

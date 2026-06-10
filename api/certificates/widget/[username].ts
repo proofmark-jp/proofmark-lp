@@ -40,7 +40,7 @@ export default async function handler(request: Request) {
   const profileResponse = await supabaseAdmin
     .from('profiles')
     .select('*')
-    .ilike('username', username)
+    .eq('username', username.toLowerCase())
     .maybeSingle();
 
   if (!profileResponse.data) {
