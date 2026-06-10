@@ -19,9 +19,9 @@
  */
 
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { useRoute } from 'wouter';
+import { Link, useRoute } from 'wouter';
 import { motion } from 'framer-motion';
-import { ArrowDownToLine, Layers3, ShieldCheck } from 'lucide-react';
+import { ArrowDownToLine, Layers3, ShieldCheck, Sparkles, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 import { VerifiedStudioHeader } from '../components/storefront/VerifiedStudioHeader';
@@ -341,27 +341,63 @@ function EmptyGrid() {
 }
 
 function NotFoundState({ username }: { username: string }) {
+  const safeUsername = username ? username.trim() : 'unknown';
+  
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0e27] text-[#f0f0fa]">
-      <div className="text-center max-w-md px-6">
-        <ArrowDownToLine className="w-8 h-8 mx-auto text-[#a0a0c0] mb-3" aria-hidden="true" />
-        <h1 className="font-display font-extrabold text-[28px] tracking-tight">
-          Storefront が見つかりません
+    <div className="min-h-screen bg-[#0a0e27] flex flex-col items-center justify-center gap-10 px-6 text-center relative overflow-hidden">
+      
+      <motion.div
+        className="absolute top-[-10%] left-[-10%] w-[460px] h-[460px] bg-[#6C3EF4] opacity-[0.10] blur-[110px] rounded-full pointer-events-none"
+        style={{ willChange: 'opacity' }}
+        animate={{ opacity: [0.08, 0.14, 0.08] }}
+        transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute bottom-[10%] right-[-10%] w-[340px] h-[340px] bg-[#00D4AA] opacity-[0.10] blur-[90px] rounded-full pointer-events-none"
+        style={{ willChange: 'opacity' }}
+        animate={{ opacity: [0.07, 0.13, 0.07] }}
+        transition={{ duration: 8, delay: 0.6, repeat: Infinity, ease: 'easeInOut' }}
+      />
+
+      <div className="relative z-10 flex flex-col items-center max-w-lg">
+        
+        <div className="w-24 h-24 rounded-[2rem] bg-[#151d2f] border border-[#2a2a4e] flex items-center justify-center mb-8 shadow-[0_0_50px_rgba(108,62,244,0.15)] relative group cursor-default">
+          <div className="absolute inset-0 bg-[#6C3EF4]/10 rounded-[2rem] blur-2xl opacity-100" />
+          <Sparkles className="w-12 h-12 text-[#6C3EF4] relative z-10 animate-pulse"/>
+        </div>
+
+        
+        <h1 className="text-3xl font-black text-[#f0f0fa] tracking-tight mb-4 leading-tight">
+          @{safeUsername} は、<br />まだ誰のものでもありません。
         </h1>
-        <p className="mt-2 text-[13px] text-[#a0a0c0]">
-          @{username || '—'} のプロフィールは公開されていないか、存在しません。
-          URL をご確認ください。
+        <p className="text-[#a0a0c0] text-sm md:text-base leading-relaxed mb-12">
+          このクリエイターID（Storefront URL）は現在取得可能です。<br className="hidden sm:block" />
+          ProofMarkで、あなたの創作を保護する最初のステップを踏み出しませんか？
         </p>
-        <a
-          href="/"
-          className="mt-6 inline-flex items-center gap-1.5 rounded-[calc(0.65rem-2px)] px-4 py-2 text-[13px] font-semibold"
-          style={{
-            background: 'linear-gradient(135deg, #6c3ef4 0%, #00d4aa 100%)',
-            color: '#0a0e27',
-          }}
-        >
-          ProofMark トップへ
-        </a>
+
+        
+        <div className="w-full p-8 rounded-[2rem] bg-gradient-to-br from-[#151d2f] to-[#0a0e27] border border-[#2a2a4e] shadow-2xl relative overflow-hidden group">
+          <div className="absolute inset-0 bg-gradient-to-r from-[#6C3EF4]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+          
+          <h2 className="text-lg font-bold text-[#f0f0fa] mb-3">あなただけの証拠、あなただけのID。</h2>
+          <p className="text-[#a0a0c0] text-xs sm:text-sm mb-8 leading-relaxed">
+            作品の改ざん不能な「制作事実」を、一生消えない記録として。<br />
+            今なら、このIDを確保してすぐに始められます。
+          </p>
+          
+          <div className="flex flex-col gap-4 relative z-50">
+            <Link href={`/auth?mode=signup&username=${safeUsername}`}>
+              <button className="w-full bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white py-4 rounded-xl font-black tracking-tight shadow-[0_10px_25px_rgba(108,62,244,0.3)] hover:shadow-[0_15px_35px_rgba(108,62,244,0.5)] hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer">
+                このIDで無料で始める
+              </button>
+            </Link>
+            <Link href="/">
+              <button className="w-full py-2 text-xs font-bold text-[#a0a0c0] hover:text-white transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                <ArrowLeft className="w-4 h-4"/> ProofMark トップへ
+              </button>
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );
