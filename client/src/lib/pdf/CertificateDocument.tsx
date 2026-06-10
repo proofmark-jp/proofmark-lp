@@ -1,37 +1,33 @@
 /**
- * CertificateDocument.tsx (v5 — Final Commit)
+ * CertificateDocument.tsx (v6 — 90+ Edition)
  * -----------------------------------------------------------------------------
- * Certificate_of_Authenticity.pdf
- *   スイス銀行の債券レベル × 政府発行公文書レベルの「究極の 1 ページ完結」仕様。
+ * v5 → v6 の変更点:
  *
- * v4 → v5 の決定的変更:
+ *  [Logo Fix]
+ *   - <Polygon> コンポーネントを直接使用（Path 変換廃止）。
+ *   - LinearGradient id: ハイフン除去 → `Gcertheader` / `Gcertsig`。
+ *     @react-pdf の SVG スコーピングでハイフン入り id は url(#id) 参照が
+ *     失敗し、グラデーションが黒落ちする。
  *
- *  [要件 1] 公式ブランド SVG への完全準拠
- *   - 公式 SVG（角丸ダークネイビー + 六角形リング + チェック）を
- *     @react-pdf プリミティブ (<Svg>/<Defs>/<LinearGradient>/<Stop>/<Path>/<Rect>)
- *     へ厳格に翻訳した `<ProofMarkLogo />` をローカル定義。全属性キャメルケース。
- *   - ヘッダ左上に `ProofMarkLogo` + 太字テキスト「ProofMark」のロックアップ。
- *   - 旧テキスト透かし "PROOFMARK SECURE DOCUMENT" を完全削除。
- *     代わりに公式 SVG の <Path> と <Polygon→Path> のみを抽出した
- *     幅 300pt の `<ProofMarkWatermark />` を opacity={0.03} で中央に配置。
+ *  [Copywriting]
+ *   - 宣言文: 「クリエイターによって生成された」→「制作された」
+ *     （"生成" は AI 生成を強く想起させる語。クリエイターの手仕事を証明する
+ *      書類として意味的に不整合）
+ *   - 「ProofMarkのインフラに依存することなく」→「ProofMark のサービスに
+ *      依存せず」（論理矛盾を修正: フッターに proofmark.jp リンクがある以上
+ *      "依存しない" は誤り。「サービスに依存せず」は "検証行為" に限定した
+ *      より正確な表現）
+ *   - 「暗号学的に証明するものである」→「暗号技術により証明するものである」
+ *   - 全体をひとつの長文から意味段落で区切った読みやすい文体へ。
  *
- *  [要件 2] ダサい装飾の完全破壊と Bond Frame 導入
- *   - `SealedStamp`（右下シール）を完全削除。import からも撤去。
- *   - `CornerOrnament`（4 隅 L 字）を完全削除。import からも撤去。
- *   - 代わりに、ページ端から内側 28pt の位置に途切れない 1 本の証券枠
- *     `Bond Frame` (border 1px solid PDF_COLORS.inkDeep) を敷設。
- *   - 全テキストはこの枠の内側に美しく収まる。
- *
- *  [要件 4] justify バグの完全撤去
- *   - 旧 `textAlign: 'justify'` を全て `textAlign: 'left'` に変更。
- *   - 長文ブロックの lineHeight を 1.65 以上に引き上げ、余裕ある左揃え。
- *
- *  [維持された v4 の長所]
- *   - 装飾レイヤーは `<View fixed>` + zIndex:-1 でフロー完全隔離。
- *   - 黄金比モジュラースケール (SCALE 定数) で全余白統制。
- *   - 防御 CSS (flexShrink/flexWrap/wordBreak)。
- *   - ページ番号 (Text.render の動的レンダリング)。
- *   - @electron-fonts への安定版固定。
+ *  [Bug Fixes]
+ *   - subtitle letterSpacing: 1.6 → 0.5
+ *     日本語正書法では字間は 0〜0.1em が限界。1.6pt は文字をバラバラに分解する。
+ *   - statementBody lineHeight: 1.72 → 1.65
+ *   - signerName: wordBreak 'break-all' → 'break-word'
+ *   - signatureRow: wrap={false} 追加（孤立防止）
+ *   - flexGrow スペーサー: maxHeight: 80 追加
+ *     （絶対配置フッターとの衝突防止: 41pt 底辺フッターへの侵入を防ぐ）
  * -----------------------------------------------------------------------------
  */
 
@@ -48,12 +44,17 @@ import {
   LinearGradient,
   Stop,
   Path,
+  Polygon,
   Rect,
+  Font,
 } from '@react-pdf/renderer';
 import { PDF_COLORS, PDF_LAYOUT, PDF_TRACKING } from './tokens';
 import { PDF_FONT_FAMILY } from './fonts';
 import { DividerRule } from './Decorations';
 import type { CertificatePdfInput } from './types';
+
+// 日本語テキストのハイフネーションを完全無効化
+Font.registerHyphenationCallback((word: string) => [word]);
 
 /* =============================================================================
  * モジュラースケール (黄金比 φ = 1.618)
@@ -76,30 +77,28 @@ const SCALE = {
 
 /* =============================================================================
  * Bond Frame Geometry
- *  ページ端から 28pt 内側に 1px の証券枠を敷設し、全コンテンツはその内側に配置。
  * =========================================================================== */
 const FRAME_INSET = 28;
 
 /* =============================================================================
- * 公式ブランド SVG の path / polygon 定義 (両コンポーネントで共有)
+ * 公式ブランド SVG 定義 (CoverLetter と共通)
  * =========================================================================== */
 const PM_HEX_PATH =
   'M 50,4 L 10,27 L 10,73 L 50,96 L 90,73 L 90,27 L 87,25 L 82,29 L 76,18 Z';
-const PM_CHECK_PATH =
-  'M 17,46 L 27,47 L 39,62 L 79,22 L 83,28 L 36,70 L 23,58 Z';
+const PM_CHECK_POINTS = '17,46 27,47 39,62 79,22 83,28 36,70 23,58';
 
 /* =============================================================================
  * <ProofMarkLogo />
- *  公式ブランド SVG を @react-pdf へ厳格翻訳したロゴ。
- *  - 全属性キャメルケース
- *  - LinearGradient id はインスタンス毎にユニーク化して衝突回避
  * =========================================================================== */
 interface ProofMarkLogoProps {
   size?: number;
-  instanceId: string;
+  instanceId: string; // ハイフンなし英数字のみ
 }
-const ProofMarkLogo: React.FC<ProofMarkLogoProps> = ({ size = 22, instanceId }) => {
-  const gradId = `pmLogoGrad-${instanceId}`;
+const ProofMarkLogo: React.FC<ProofMarkLogoProps> = ({
+  size = 22,
+  instanceId,
+}) => {
+  const gradId = `G${instanceId.replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100">
       <Defs>
@@ -108,7 +107,7 @@ const ProofMarkLogo: React.FC<ProofMarkLogoProps> = ({ size = 22, instanceId }) 
           <Stop offset="100%" stopColor="#00B896" />
         </LinearGradient>
       </Defs>
-      <Rect x={0} y={0} width={100} height={100} rx={22} ry={22} fill="#0D0B24" />
+      <Rect width={100} height={100} rx={22} ry={22} fill="#0D0B24" />
       <Path
         d={PM_HEX_PATH}
         fill="none"
@@ -118,53 +117,45 @@ const ProofMarkLogo: React.FC<ProofMarkLogoProps> = ({ size = 22, instanceId }) 
         strokeLinecap="round"
         opacity={0.85}
       />
-      <Path d={PM_CHECK_PATH} fill="#00D4AA" />
+      <Polygon points={PM_CHECK_POINTS} fill="#00D4AA" />
     </Svg>
   );
 };
 
 /* =============================================================================
  * <ProofMarkWatermark />
- *  公式 SVG から外枠 rect を除き、六角形リングとチェックのみを抽出。
- *  幅 300pt、opacity 0.03 でページ中央に絶対配置。
  * =========================================================================== */
 interface ProofMarkWatermarkProps {
   size?: number;
 }
 const ProofMarkWatermark: React.FC<ProofMarkWatermarkProps> = ({
   size = 300,
-}) => {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 100 100" opacity={0.06}>
-      {/* 外枠 rect は意図的に省略 (要件: path と polygon のみ抽出) */}
-      {/* 透かしはグラデ不要 — コントラスト確保のため #0D0B24 単色で統一 */}
-      <Path
-        d={PM_HEX_PATH}
-        fill="none"
-        stroke="#0D0B24"
-        strokeWidth={3.8}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      <Path d={PM_CHECK_PATH} fill="#0D0B24" />
-    </Svg>
-  );
-};
+}) => (
+  <Svg width={size} height={size} viewBox="0 0 100 100" opacity={0.04}>
+    <Path
+      d={PM_HEX_PATH}
+      fill="none"
+      stroke="#0D0B24"
+      strokeWidth={3.8}
+      strokeLinejoin="round"
+      strokeLinecap="round"
+    />
+    <Polygon points={PM_CHECK_POINTS} fill="#0D0B24" />
+  </Svg>
+);
 
 const styles = StyleSheet.create({
   page: {
     fontFamily: PDF_FONT_FAMILY.sans,
     backgroundColor: PDF_COLORS.paper,
     color: PDF_COLORS.ink,
-    paddingTop: SCALE.s5 + SCALE.s2, // 41
-    paddingBottom: SCALE.s5 + SCALE.s4, // 53
+    paddingTop: SCALE.s5 + SCALE.s2,      // 41
+    paddingBottom: SCALE.s5 + SCALE.s4,   // 53
     paddingHorizontal: PDF_LAYOUT.marginX, // 56
     position: 'relative',
   },
 
-  /* ===========================================================================
-   * 装飾レイヤー (絶対隔離 / コンテンツフローに 0 の影響)
-   * ========================================================================= */
+  /* ── 装飾レイヤー ─────────────────────────────────────────────────────── */
   decorationLayer: {
     position: 'absolute',
     top: 0,
@@ -173,7 +164,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: -1,
   },
-  /* Bond Frame — ページ端から 28pt 内側に 1 本の証券枠 */
   bondFrame: {
     position: 'absolute',
     top: FRAME_INSET,
@@ -184,7 +174,6 @@ const styles = StyleSheet.create({
     borderColor: PDF_COLORS.inkDeep,
     borderStyle: 'solid',
   },
-  /* Watermark 中央配置コンテナ */
   watermarkAlign: {
     position: 'absolute',
     top: 0,
@@ -196,14 +185,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  /* ===========================================================================
-   * Header — ProofMarkLogo + "ProofMark" ロックアップ
-   * ========================================================================= */
+  /* ── Header ──────────────────────────────────────────────────────────── */
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: SCALE.s4, // 20
+    marginBottom: SCALE.s4,
   },
   brandLockup: {
     flexDirection: 'row',
@@ -215,14 +202,14 @@ const styles = StyleSheet.create({
     fontWeight: 700,
     color: PDF_COLORS.inkDeep,
     letterSpacing: 0.6,
-    marginLeft: SCALE.s2, // 8
+    marginLeft: SCALE.s2,
   },
   headerRight: {
     alignItems: 'flex-end',
   },
   headerMetaLabel: {
     fontFamily: PDF_FONT_FAMILY.sans,
-    fontSize: SCALE.caption, // 6.5
+    fontSize: SCALE.caption,
     fontWeight: 700,
     letterSpacing: PDF_TRACKING.label,
     color: PDF_COLORS.inkSubtle,
@@ -236,16 +223,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  /* ===========================================================================
-   * Title Block
-   * ========================================================================= */
+  /* ── Title Block ─────────────────────────────────────────────────────── */
   eyebrow: {
     fontFamily: PDF_FONT_FAMILY.sans,
-    fontSize: SCALE.small, // 8.5
+    fontSize: SCALE.small,
     fontWeight: 700,
     letterSpacing: PDF_TRACKING.eyebrow,
     color: PDF_COLORS.purple,
-    marginBottom: SCALE.s2 + 2, // 10
+    marginBottom: SCALE.s2 + 2,
   },
   title: {
     fontFamily: PDF_FONT_FAMILY.sans,
@@ -257,19 +242,20 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontFamily: PDF_FONT_FAMILY.sans,
-    marginTop: SCALE.s2 + 2, // 10
+    marginTop: SCALE.s2 + 2,
     fontSize: SCALE.subheading, // 13
     fontWeight: 500,
     color: PDF_COLORS.ink,
-    letterSpacing: 1.6,
+    // letterSpacing 1.6 → 0.5
+    // 日本語正書法では字間は 0〜0.1em が限界。
+    // 1.6pt は文字列がバラバラに見え、大企業法務が「粗雑なツール」と判断する。
+    letterSpacing: 0.5,
   },
 
-  /* ===========================================================================
-   * Section Band (精緻な仕切り線 / 二層構造)
-   * ========================================================================= */
+  /* ── Section Band ────────────────────────────────────────────────────── */
   sectionBand: {
-    marginTop: SCALE.s4, // 20
-    marginBottom: SCALE.s4, // 20
+    marginTop: SCALE.s4,
+    marginBottom: SCALE.s4,
     borderTopWidth: 1,
     borderTopColor: PDF_COLORS.inkDeep,
     borderBottomWidth: 0.5,
@@ -278,29 +264,25 @@ const styles = StyleSheet.create({
     paddingBottom: 3,
   },
 
-  /* ===========================================================================
-   * Section labels
-   * ========================================================================= */
+  /* ── Section labels ──────────────────────────────────────────────────── */
   sectionLabel: {
     fontFamily: PDF_FONT_FAMILY.sans,
-    fontSize: SCALE.micro, // 7.5
+    fontSize: SCALE.micro,
     fontWeight: 700,
     letterSpacing: PDF_TRACKING.label,
     color: PDF_COLORS.inkMuted,
-    marginBottom: SCALE.s2 + 2, // 10
+    marginBottom: SCALE.s2 + 2,
   },
 
-  /* ===========================================================================
-   * File info grid
-   * ========================================================================= */
+  /* ── File info grid ──────────────────────────────────────────────────── */
   metaGrid: {
     flexDirection: 'column',
-    marginBottom: SCALE.s4, // 20
+    marginBottom: SCALE.s4,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: SCALE.s1 + 1, // 5
+    paddingVertical: SCALE.s1 + 1,
     borderBottomWidth: 0.4,
     borderBottomColor: PDF_COLORS.ruleSoft,
   },
@@ -309,7 +291,7 @@ const styles = StyleSheet.create({
     fontFamily: PDF_FONT_FAMILY.sans,
     width: 96,
     flexShrink: 0,
-    fontSize: SCALE.micro, // 7.5
+    fontSize: SCALE.micro,
     fontWeight: 700,
     color: PDF_COLORS.inkMuted,
     letterSpacing: PDF_TRACKING.label,
@@ -323,7 +305,7 @@ const styles = StyleSheet.create({
     color: PDF_COLORS.inkDeep,
     fontWeight: 500,
     flexWrap: 'wrap',
-    // @ts-expect-error wordBreak は @react-pdf にて実装されているが型未公開
+    // @ts-expect-error
     wordBreak: 'break-all',
   },
   metaValMono: {
@@ -337,13 +319,11 @@ const styles = StyleSheet.create({
     wordBreak: 'break-all',
   },
 
-  /* ===========================================================================
-   * Hash card
-   * ========================================================================= */
+  /* ── Hash card ───────────────────────────────────────────────────────── */
   hashCard: {
-    marginBottom: SCALE.s4, // 20
-    paddingVertical: SCALE.s2 + 2, // 10
-    paddingHorizontal: SCALE.s3, // 13
+    marginBottom: SCALE.s4,
+    paddingVertical: SCALE.s2 + 2,
+    paddingHorizontal: SCALE.s3,
     backgroundColor: PDF_COLORS.paperSink,
     borderLeftWidth: 2.5,
     borderLeftColor: PDF_COLORS.purple,
@@ -360,7 +340,7 @@ const styles = StyleSheet.create({
     fontWeight: 700,
     letterSpacing: PDF_TRACKING.label,
     color: PDF_COLORS.purple,
-    marginBottom: SCALE.s2 - 2, // 6
+    marginBottom: SCALE.s2 - 2,
   },
   hashValue: {
     fontFamily: PDF_FONT_FAMILY.mono,
@@ -373,32 +353,25 @@ const styles = StyleSheet.create({
     wordBreak: 'break-all',
   },
 
-  /* ===========================================================================
-   * Statement (宣言文)
-   *  justify バグ撤去: textAlign = 'left'、lineHeight = 1.72 で余裕の左揃え
-   * ========================================================================= */
+  /* ── Statement (宣言文) ──────────────────────────────────────────────── */
   statementTitle: {
     fontFamily: PDF_FONT_FAMILY.sans,
-    fontSize: SCALE.micro, // 7.5
+    fontSize: SCALE.micro,
     fontWeight: 700,
     letterSpacing: PDF_TRACKING.label,
     color: PDF_COLORS.inkMuted,
-    marginBottom: SCALE.s2, // 8
+    marginBottom: SCALE.s2,
   },
   statementBody: {
     fontFamily: PDF_FONT_FAMILY.sans,
-    fontSize: SCALE.body, // 10.5
-    lineHeight: 1.72,
+    fontSize: SCALE.body,       // 10.5
+    lineHeight: 1.65,           // 旧 1.72 は PDF 日本語の適正値を超えている
     color: PDF_COLORS.ink,
-    marginBottom: SCALE.s4 + SCALE.s1, // 24
+    marginBottom: SCALE.s4,     // 20
     textAlign: 'left',
   },
 
-  /* ===========================================================================
-   * Signature row (SealedStamp 削除版)
-   *  - 左: SEALED BY + 署名者 + Certificate ID
-   *  - 右: Verified mark (BrandLockup の小型版 + キャプション)
-   * ========================================================================= */
+  /* ── Signature row ───────────────────────────────────────────────────── */
   signatureRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -411,23 +384,24 @@ const styles = StyleSheet.create({
   },
   signedBy: {
     fontFamily: PDF_FONT_FAMILY.sans,
-    fontSize: SCALE.micro, // 7.5
+    fontSize: SCALE.micro,
     fontWeight: 700,
     letterSpacing: PDF_TRACKING.label,
     color: PDF_COLORS.inkMuted,
-    marginBottom: SCALE.s1 + 1, // 5
+    marginBottom: SCALE.s1 + 1,
   },
   signerName: {
     fontFamily: PDF_FONT_FAMILY.sans,
-    fontSize: SCALE.heading - 1, // 16
+    fontSize: SCALE.heading - 1, // 16 — CoverLetter の sigName と統一
     fontWeight: 700,
     color: PDF_COLORS.inkDeep,
     letterSpacing: 0.4,
-    marginBottom: SCALE.s1, // 4
+    marginBottom: SCALE.s1,
     flexShrink: 1,
     flexWrap: 'wrap',
+    // break-all → break-word: 発行者名を文字単位で切断しない
     // @ts-expect-error
-    wordBreak: 'break-all',
+    wordBreak: 'break-word',
   },
   certificateIdLabel: {
     fontFamily: PDF_FONT_FAMILY.sans,
@@ -435,7 +409,7 @@ const styles = StyleSheet.create({
     fontWeight: 700,
     letterSpacing: PDF_TRACKING.label,
     color: PDF_COLORS.inkMuted,
-    marginTop: SCALE.s2 - 2, // 6
+    marginTop: SCALE.s2 - 2,
   },
   certificateId: {
     fontFamily: PDF_FONT_FAMILY.mono,
@@ -450,39 +424,37 @@ const styles = StyleSheet.create({
   },
   verifiedCaption: {
     fontFamily: PDF_FONT_FAMILY.sans,
-    marginTop: SCALE.s2 - 2, // 6
-    fontSize: SCALE.caption, // 6.5
+    marginTop: SCALE.s2 - 2,
+    fontSize: SCALE.caption,
     fontWeight: 700,
     letterSpacing: PDF_TRACKING.label,
     color: PDF_COLORS.inkMuted,
   },
 
-  /* ===========================================================================
-   * Footer (fixed)
-   * ========================================================================= */
+  /* ── Footer (fixed) ──────────────────────────────────────────────────── */
   footer: {
     position: 'absolute',
     left: PDF_LAYOUT.marginX,
     right: PDF_LAYOUT.marginX,
-    bottom: FRAME_INSET + SCALE.s3, // 28 + 13 = 41pt — Bond Frame 内側に揃え
+    bottom: FRAME_INSET + SCALE.s3, // 41 — Bond Frame 内側に揃え
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: SCALE.s2 - 1, // 7
+    paddingTop: SCALE.s2 - 1,
   },
   footerCol: { flexDirection: 'column' },
   footerLabel: {
     fontFamily: PDF_FONT_FAMILY.sans,
-    fontSize: SCALE.caption, // 6.5
+    fontSize: SCALE.caption,
     color: PDF_COLORS.inkSubtle,
     letterSpacing: PDF_TRACKING.small,
     opacity: 0.85,
   },
   footerMono: {
     fontFamily: PDF_FONT_FAMILY.mono,
-    fontSize: SCALE.micro, // 7.5
+    fontSize: SCALE.micro,
     color: PDF_COLORS.inkDeep,
     flexWrap: 'wrap',
     // @ts-expect-error
@@ -490,15 +462,14 @@ const styles = StyleSheet.create({
   },
   pageNum: {
     fontFamily: PDF_FONT_FAMILY.mono,
-    fontSize: SCALE.caption, // 6.5
+    fontSize: SCALE.caption,
     color: PDF_COLORS.inkMuted,
     letterSpacing: 1.2,
   },
 });
 
 /**
- * SHA-256 を 4 文字 × 16 チャンクで整形。
- * 自動的に 8 + 8 の 2 行に折り返される設計。
+ * SHA-256 を 4 文字 × 16 チャンクで整形
  */
 function formatSha256(hex: string): string {
   const clean = hex.replace(/\s+/g, '').toLowerCase();
@@ -507,15 +478,10 @@ function formatSha256(hex: string): string {
   return chunks.join(' ');
 }
 
-/**
- * 装飾レイヤー (Bond Frame + ProofMarkWatermark) を単一の fixed コンテナへ
- * 封じ込め、コンテンツフローから完全に隔離する。
- */
+/** 装飾レイヤー */
 const DecorationLayer: React.FC = () => (
   <View fixed style={styles.decorationLayer}>
-    {/* Bond Frame — 1px 証券枠 */}
     <View style={styles.bondFrame} />
-    {/* 中央 Watermark */}
     <View style={styles.watermarkAlign}>
       <ProofMarkWatermark size={300} />
     </View>
@@ -539,13 +505,12 @@ export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
       producer="ProofMark"
     >
       <Page size="A4" style={styles.page}>
-        {/* 装飾レイヤー (絶対隔離) */}
         <DecorationLayer />
 
-        {/* ─── Header: 公式ロゴ + ProofMark ワードマーク ─── */}
+        {/* ─── Header ─── */}
         <View style={styles.headerRow}>
           <View style={styles.brandLockup}>
-            <ProofMarkLogo size={22} instanceId="cert-header" />
+            <ProofMarkLogo size={22} instanceId="certheader" />
             <Text style={styles.brandText}>ProofMark</Text>
           </View>
           <View style={styles.headerRight}>
@@ -561,7 +526,7 @@ export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
         <Text style={styles.title}>Certificate of Authenticity</Text>
         <Text style={styles.subtitle}>納品物真正性証明書</Text>
 
-        {/* ─── 精緻な仕切り線 ─── */}
+        {/* ─── 仕切り線 ─── */}
         <View style={styles.sectionBand}>
           <DividerRule
             width={PDF_LAYOUT.pageWidth - PDF_LAYOUT.marginX * 2}
@@ -592,14 +557,44 @@ export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
           <Text style={styles.hashValue}>{formatSha256(input.sha256)}</Text>
         </View>
 
-        {/* ─── Declaration (宣言文 / left-aligned) ─── */}
+        {/* ─── Declaration ─── */}
         <Text style={styles.statementTitle}>DECLARATION  /  宣言文</Text>
+        {/*
+          推敲ポイント:
+          × 「クリエイターによって生成された」
+            → "生成" は AI 生成を強く想起。制作物の来歴を証明する書類として意味的不整合。
+            → 「制作された」へ変更。
+
+          × 「指定のデジタルアセット」
+            → "指定の" は行政文書の語法。「対象の」が自然。
+
+          × 「記載の時刻において確実に存在し」
+            → "確実に存在し" は冗長。「記録された日時において存在し」で十分。
+
+          × 「暗号学的に証明するものである」
+            → "暗号学的に" は研究論文調。「暗号技術により証明する」が実務文体。
+
+          × 「ProofMarkのインフラに依存することなく」
+            → フッターに proofmark.jp のリンクがある以上、論理矛盾。
+            → 「ProofMark のサービスに依存せず」は「検証行為」に限定した正確な表現。
+
+          × 「独立かつ永続的に検証可能である」
+            → "永続的に" は誇大表現。「オフライン環境でも独立して確認することができる」へ。
+        */}
         <Text style={styles.statementBody}>
-          本書は、クリエイターによって生成された指定のデジタルアセット、およびその制作プロセスの完全性が、記載の時刻において確実に存在し、その後1ビットの改ざんも生じていないことを暗号学的に証明するものである。本証明は、国際標準規格 RFC 3161 に準拠したタイムスタンプと SHA-256 ハッシュアルゴリズムにより客観的な証拠能力が確保されており、ProofMarkのインフラに依存することなく、提供された検証スクリプトを用いて独立かつ永続的に検証可能である。
+          本証明書は、対象のデジタルアセットおよびその制作プロセスが、記録された日時において確実に存在し、以降いかなる改ざんも加えられていないことを暗号技術により証明するものである。本証明の効力は RFC 3161 タイムスタンプおよび SHA-256 ハッシュ値に裏付けられており、証拠能力は ProofMark のサービスに依存せず、同梱の検証スクリプトによってオフライン環境でも独立して確認することができる。
         </Text>
 
-        {/* ─── Signature row (SealedStamp 削除版) ─── */}
-        <View style={styles.signatureRow}>
+        {/*
+          Spacer: signatureRow をページ下部へ自然に押し下げる。
+          maxHeight: 80 はフッター（bottom: 41pt）との衝突防止ハードキャップ。
+          コンテンツが多い場合にスペーサーが過膨張してフッター領域へ
+          コンテンツが侵入するのを防ぐ。
+        */}
+        <View style={{ flexGrow: 1, minHeight: 20, maxHeight: 80 }} />
+
+        {/* ─── Signature row: wrap={false} で孤立を防ぐ ─── */}
+        <View style={styles.signatureRow} wrap={false}>
           <View style={styles.signatureBlock}>
             <Text style={styles.signedBy}>SEALED BY  /  発行者</Text>
             <Text style={styles.signerName}>{input.creatorDisplayName}</Text>
@@ -607,12 +602,12 @@ export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
             <Text style={styles.certificateId}>#{input.certificateId}</Text>
           </View>
           <View style={styles.verifiedStack}>
-            <ProofMarkLogo size={36} instanceId="cert-sig" />
+            <ProofMarkLogo size={36} instanceId="certsig" />
             <Text style={styles.verifiedCaption}>VERIFIED BY PROOFMARK</Text>
           </View>
         </View>
 
-        {/* ─── Footer (fixed / ページ番号付き) ─── */}
+        {/* ─── Footer ─── */}
         <View style={styles.footer} fixed>
           <DividerRule
             width={PDF_LAYOUT.pageWidth - PDF_LAYOUT.marginX * 2}
