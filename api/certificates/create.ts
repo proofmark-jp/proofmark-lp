@@ -209,7 +209,7 @@ export default async function handler(request: Request): Promise<Response> {
       dbRecords.push({
         id: certId,
         user_id: userId || null,
-        bundle_id: bundleId,
+        process_bundle_id: bundleId,
         step_index: item.stepIndex ?? index,
         title: item.title,
         proof_mode: mode,
