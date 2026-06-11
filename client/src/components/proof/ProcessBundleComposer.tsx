@@ -931,9 +931,17 @@ export function ProcessBundleComposer({
         c2paManifest: null, // Magic ModeではC2PAは未対応とする
       };
 
+      // JWT取得 — /api/certificates/create への認証ヘッダーに使用
+      const { data: sessionData } = await supabase.auth.getSession();
+      const jwtToken = sessionData.session?.access_token;
+      if (!jwtToken) throw new Error('認証セッションが切れました。再度ログインしてください。');
+
       const res = await fetch('/api/certificates/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${jwtToken}`,
+        },
         body: JSON.stringify(payload),
       });
 
@@ -944,16 +952,14 @@ export function ProcessBundleComposer({
 
       const data = await res.json();
       const certificateId = data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown';
-
       // 🚨 バックグラウンドで商用TSA（タイムスタンプ）を打刻するトリガーを引く
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData.session?.access_token && certificateId !== 'unknown') {
+      if (jwtToken && certificateId !== 'unknown') {
          sessionStorage.setItem('tsa_syncing_' + certificateId, 'true');
          fetch('/api/timestamp', {
            method: 'POST',
            headers: {
              'Content-Type': 'application/json',
-             Authorization: `Bearer ${sessionData.session.access_token}`,
+             Authorization: `Bearer ${jwtToken}`,
            },
            body: JSON.stringify({ certId: certificateId, hash: headStep.sha256 }),
            keepalive: true,
@@ -998,18 +1004,14 @@ export function ProcessBundleComposer({
       };
 
       const { data: authData } = await supabase.auth.getSession();
-      const token = authData.session?.access_token;
-      if (!token) throw new Error('認証セッションが切れました。再度ログインしてください。');
-
-      const { data: authData } = await supabase.auth.getSession();
-      const token = authData.session?.access_token;
-      if (!token) throw new Error('認証セッションが切れました。再度ログインしてください。');
+      const jwtToken = authData.session?.access_token;
+      if (!jwtToken) throw new Error('認証セッションが切れました。再度ログインしてください。');
 
       const res = await fetch('/api/certificates/create', { 
         method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
+          Authorization: `Bearer ${jwtToken}` 
         }, 
         body: JSON.stringify(payload) 
       });
