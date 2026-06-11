@@ -131,7 +131,7 @@ export default async function handler(request: Request): Promise<Response> {
   try {
     // 4. O(1) Bulk Duplicate Check
     const shas = items.map(i => i.sha256);
-    const { data: dupes } = await supabaseAdmin.from('certificates').select('sha256').in('sha256', shas);
+    const { data: dupes } = await supabaseAdmin.from('certificates').select('sha256, certified_at').in('sha256', shas);
     if (dupes && dupes.length > 0) {
       throw new HttpError(409, `Duplicate certificate(s) exists for sha256: ${dupes.map(d => d.sha256).join(', ')}`);
     }
@@ -204,11 +204,16 @@ export default async function handler(request: Request): Promise<Response> {
         public_verify_token: crypto.randomUUID(),
         storage_path: storagePath,
         public_image_url: publicImageUrl,
-        file_name: safeFileName,
+        original_filename: safeFileName,
         mime_type: statMime || item.mime_type,
         file_size: statSize,
         c2pa_manifest: c2paParsed,
-        metadata_json: { ...((item.metadataJson as any) || {}), upload_pipeline: 'quarantine-bulk.v3' },
+        metadata: {
+          ...((item.metadataJson as any) || {}),
+          upload_pipeline: 'quarantine-bulk.v3',
+          bundle_id: bundleId,
+          step_index: item.stepIndex ?? index
+        },
         is_asset_purged: false
       });
     }));
