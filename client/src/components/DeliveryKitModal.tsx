@@ -35,6 +35,9 @@ import {
   ShieldOff,
   X,
   Loader2,
+  Zap,
+  AlertCircle,
+  ExternalLink,
 } from 'lucide-react';
 import { useEncryptedVault } from '../hooks/useEncryptedVault';
 import { useQuarantineUpload } from '../hooks/useQuarantineUpload';
@@ -250,6 +253,12 @@ function DeliveryKitModalInner({
 
   const isCompleted = activeUploadPhase === 'done' && !!deliveredPassword;
   const hasError = vault.error || upload.error;
+  const isQuotaError = !!(upload.error && (
+    upload.error.toLowerCase().includes('limit') ||
+    upload.error.toLowerCase().includes('quota') ||
+    upload.error.toLowerCase().includes('exceeded') ||
+    upload.error.includes('403')
+  ));
 
   /* ── State-Driven Micro-copy ── */
   const microCopy = (() => {
@@ -454,7 +463,7 @@ function DeliveryKitModalInner({
               )}
 
               {/* ── Error state ── */}
-              {hasError && !isProcessing && !isCompleted && (
+              {hasError && !isQuotaError && !isProcessing && !isCompleted && (
                 <motion.div
                   key="error"
                   initial={{ opacity: 0, y: 8 }}
@@ -507,7 +516,7 @@ function DeliveryKitModalInner({
             )}
 
             {/* ── Retry (error state) ── */}
-            {hasError && !isCompleted && (
+            {hasError && !isQuotaError && !isCompleted && (
               <div className="flex gap-3">
                 <button
                   type="button"
@@ -541,6 +550,68 @@ function DeliveryKitModalInner({
               </span>
             </div>
           </div>
+
+          {/* 🚨 Smart Upsell Modal Overlay */}
+          <AnimatePresence>
+            {isQuotaError && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 z-[10000] flex items-center justify-center p-6 bg-[#07061A]/95 backdrop-blur-md rounded-3xl"
+              >
+                <motion.div
+                  initial={{ scale: 0.9, y: 15 }}
+                  animate={{ scale: 1, y: 0 }}
+                  exit={{ scale: 0.9, y: 15 }}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+                      <Zap className="w-5 h-5 text-purple-400 animate-pulse" />
+                    </div>
+                    <h3 className="text-lg font-bold text-white">アップグレードが必要です</h3>
+                  </div>
+                  
+                  <p className="text-gray-300 text-xs mb-4 leading-relaxed">
+                    月間の証明書発行上限（クオータ）に達したため、アップロードがブロックされました。
+                    引き続き証明書・Evidence Packの発行を行うには、<strong>Creator / Studio プラン</strong> へのアップグレードが必要です。
+                  </p>
+                  
+                  <div className="bg-[#121124] rounded-xl p-3.5 mb-6 border border-purple-500/20 flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-purple-200 leading-normal">
+                      決済は別タブで安全に行われます。<strong>決済完了後、この画面に戻ればそのままアップロードを再開できます。</strong>
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <a
+                      href="/pricing?plan=creator"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-[#00D4AA] text-white text-xs font-bold tracking-wide hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(108,62,244,0.3)]"
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      プランをアップグレード <ExternalLink className="w-3.5 h-3.5 opacity-50" />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        upload.reset();
+                        vault.reset();
+                        setHasStarted(false);
+                        setDeliveredPassword(null);
+                      }}
+                      className="w-full py-3 rounded-xl bg-white/5 text-gray-400 text-xs font-medium hover:bg-white/10 transition-colors"
+                    >
+                      キャンセルして戻る
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.div>
     </>

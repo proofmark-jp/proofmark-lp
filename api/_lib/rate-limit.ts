@@ -33,7 +33,7 @@ const QUOTA_MAP: Record<string, number> = {
     light:    30,  // legacy alias for creator
     studio:   150,
     business: 150,
-    admin:    300, // 🚨 Infinity(無制限)を廃止。万が一の暴走・乗っ取りを防ぐためのハードリミット
+    admin:    99999, // 🚨 adminの場合、上限を無制限（99999）として扱う
 };
 
 /** @deprecated 後方互換のために残す。新規コードは QUOTA_MAP を使うこと。 */

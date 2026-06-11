@@ -106,7 +106,8 @@ export default async function handler(request: Request): Promise<Response> {
       const planTier = profile?.plan_tier ?? 'free';
       
       let limit = 3;
-      if (planTier === 'business') limit = 1000;
+      if (planTier === 'admin') limit = 99999;
+      else if (planTier === 'business') limit = 1000;
       else if (planTier === 'studio') limit = 150;
       else if (planTier === 'creator') limit = 30;
 

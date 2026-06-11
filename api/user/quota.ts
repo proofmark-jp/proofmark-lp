@@ -46,7 +46,8 @@ export default async function handler(request: Request): Promise<Response> {
     
     // プラン別上限の定義
     let limit = 3;
-    if (plan === 'business') limit = 1000;
+    if (plan === 'admin') limit = 99999;
+    else if (plan === 'business') limit = 1000;
     else if (plan === 'studio') limit = 150;
     else if (plan === 'creator') limit = 30;
 

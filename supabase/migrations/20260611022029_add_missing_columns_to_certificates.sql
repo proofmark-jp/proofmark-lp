@@ -9,6 +9,9 @@ ALTER TABLE certificates
   ADD COLUMN IF NOT EXISTS proof_mode TEXT,
   ADD COLUMN IF NOT EXISTS visibility TEXT,
   ADD COLUMN IF NOT EXISTS sha256 TEXT;
+  ADD COLUMN IF NOT EXISTS tsa_url TEXT,
+  ADD COLUMN IF NOT EXISTS tsr_token_base64 TEXT,
+  ADD COLUMN IF NOT EXISTS certified_at TIMESTAMPTZ;
 
 -- 🚨 脳内キャッシュの強制リフレッシュ（必須）
 NOTIFY pgrst, 'reload schema';
