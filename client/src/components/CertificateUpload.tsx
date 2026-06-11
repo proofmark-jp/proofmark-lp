@@ -727,10 +727,11 @@ function ChainOverlay({
   initialFiles: File[];
   onClose: () => void;
 }) {
+  // 🚨 欠落していた超重要パーツ：SSRを回避し、安全に全画面展開するためのフラグ
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true); // 🚨 SSRを回避し、クライアント側でのみPortalを起動するためのフラグ
+    setMounted(true); // クライアント側でDOMが準備完了したサイン
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
@@ -740,16 +741,16 @@ function ChainOverlay({
 
   const overlayContent = (
     <div
-      className="fixed inset-0 z-[99999] overflow-y-auto"
+      className="fixed inset-0 overflow-y-auto"
       style={{
         position: 'fixed',
         top: 0,
         left: 0,
         width: '100vw',
         height: '100vh',
-        background: 'rgba(7,6,26,0.95)',
-        backdropFilter: 'blur(12px)',
-        zIndex: 99999,
+        background: 'rgba(7,6,26,0.96)',
+        backdropFilter: 'blur(16px)',
+        zIndex: 999999, // 限界突破
       }}
     >
       <motion.div
@@ -801,8 +802,8 @@ function ChainOverlay({
     </div>
   );
 
-  // 🚨 究極の脱出装置 (React Portal): mountedがtrueになった直後に document.body に強制マウント
-  if (!mounted || typeof document === 'undefined') return null;
+  // 🚨 mounted が true になるまで（＝安全な状態になるまで）Portalを発動させない
+  if (!mounted) return null;
   return createPortal(overlayContent, document.body);
 }
 
