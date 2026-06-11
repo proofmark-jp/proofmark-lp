@@ -901,34 +901,25 @@ export function ProcessBundleComposer({
 
       // Fix 2: stepsRef.current で最終状態を安全に読み取る
       const targets = stepsRef.current.filter((s) => !s.isRoot && s.file);
-      const headStep = targets[targets.length - 1]; // 🚨 最後の工程（HEAD）を主役にする
+      const headStep = targets[targets.length - 1];
 
-      // 🚨 バックエンドが解釈できる「単発証明＋チェーン情報」のフラットな構造に直す
       const payload = {
-        quarantinePath: headStep.quarantinePath,
-        sha256: headStep.sha256,
+        bundleId: crypto.randomUUID(),
         title: title || headStep.title || 'Chain of Evidence',
-        proofMode: isPublic ? 'shareable' : 'private',
-        visibility: isPublic ? 'public' : 'private',
-        file_name: headStep.file!.name,
-        file_size: headStep.file!.size,
-        mime_type: headStep.file!.type || 'application/octet-stream',
-        metadataJson: {
-          original_filename: headStep.file!.name,
-          original_size: headStep.file!.size,
-          is_preview_compressed: false,
-          bundle_id: crypto.randomUUID(),
-          bundle_description: description,
-          chain_depth: targets.length,
-          // 途中工程のハッシュ履歴をメタデータ内に格納して数学的に証明する
-          chain_history: targets.map((s, idx) => ({
-             stepIndex: idx,
-             sha256: s.sha256,
-             title: s.title,
-             isHead: idx === targets.length - 1
-          }))
-        },
-        c2paManifest: null, // Magic ModeではC2PAは未対応とする
+        description: description,
+        items: targets.map((s, idx) => ({
+          quarantinePath: s.quarantinePath,
+          thumbnailPath: s.thumbQuarantinePath,
+          sha256: s.sha256,
+          title: s.title,
+          proofMode: isPublic ? 'shareable' : 'private',
+          visibility: isPublic ? 'public' : 'private',
+          file_name: s.file!.name,
+          file_size: s.file!.size,
+          mime_type: s.file!.type || 'application/octet-stream',
+          stepIndex: idx,
+          isHead: idx === targets.length - 1
+        }))
       };
 
       // JWT取得 — /api/certificates/create への認証ヘッダーに使用
@@ -989,17 +980,24 @@ export function ProcessBundleComposer({
     if (!certificate) return;
     setSubmitting(true); setMessage(null); setResult(null);
     try {
+      const targets = stepsRef.current.filter((s) => !s.isRoot && s.file);
+      if (targets.length === 0) throw new Error('追加する工程がありません。');
+      const headStep = targets[targets.length - 1];
+
       const payload = {
-        bundleId: crypto.randomUUID(),
-        items: steps.filter(s => !s.isRoot).map((s, idx) => ({
+        bundleId: certificate.process_bundle_id || crypto.randomUUID(),
+        items: targets.map((s, idx) => ({
           quarantinePath: s.quarantinePath,
           thumbnailPath: s.thumbQuarantinePath,
           sha256: s.sha256,
           title: s.title,
           proofMode: isPublic ? 'shareable' : 'private',
+          visibility: isPublic ? 'public' : 'private',
           file_name: s.file!.name,
           file_size: s.file!.size,
-          stepIndex: idx
+          mime_type: s.file!.type || 'application/octet-stream',
+          stepIndex: idx,
+          isHead: idx === targets.length - 1
         }))
       };
 

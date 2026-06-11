@@ -145,7 +145,6 @@ interface CertRecord {
     visibility: string | null;
     public_image_url: string | null;
     storage_path: string | null;
-    original_filename: string | null;
     file_name: string | null;
     certified_at: string | null;
     proven_at: string | null;
@@ -351,7 +350,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             const { data, error } = await admin
                 .from('certificates')
-                .select('id, user_id, title, sha256, proof_mode, visibility, public_image_url, storage_path, original_filename, file_name, certified_at, proven_at, created_at, timestamp_token, tsa_provider, tsa_url, team_id, c2pa_manifest, file_size')
+                .select('id, user_id, title, sha256, proof_mode, visibility, public_image_url, storage_path, file_name, certified_at, proven_at, created_at, timestamp_token, tsa_provider, tsa_url, team_id, c2pa_manifest, file_size')
                 .eq('id', certParam)
                 .maybeSingle();
 
@@ -415,9 +414,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (downloadKind === 'auth' && cert) {
             const sha256 = cert.sha256 ?? '';
             const verifyUrl = `https://proofmark.jp/cert/${cert.id}`;
-            const rawName = (cert.original_filename && cert.original_filename !== 'unknown_file')
-                ? cert.original_filename
-                : (cert.file_name || 'asset.bin');
+            const rawName = cert.file_name || 'asset.bin';
             const baseFile = safeFilename(rawName, 'asset.bin');
             const jstTime = formatJst(cert.certified_at ?? cert.proven_at ?? cert.created_at);
             const humanSize = formatBytes(cert.file_size);
