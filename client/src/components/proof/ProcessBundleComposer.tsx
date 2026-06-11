@@ -625,7 +625,7 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
       });
       if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
       const data = await res.json();
-      setResult({ chainDepth: steps.length, chainHeadSha256: steps[steps.length - 1].sha256 ?? null, certificateId: data.certificateId || data.certificates?.[0]?.bundle_id || 'unknown' });
+      setResult({ chainDepth: steps.length, chainHeadSha256: steps[steps.length - 1].sha256 ?? null, certificateId: data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown' });
       setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへリダイレクトします...');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '保存に失敗しました');

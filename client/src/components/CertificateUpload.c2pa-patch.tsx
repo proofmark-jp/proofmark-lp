@@ -320,7 +320,8 @@ export default function CertificateUpload() {
       }
 
       const result = await res.json();
-      const certId = result.certificate.id;
+      const certId = result.certificates?.[0]?.id || result.certificate?.id;
+      if (!certId) throw new Error("証明書のIDが取得できませんでした。");
 
       // --- Fire and Forget TSA Trigger (バックグラウンド自動付与) ---
       // ユーザーの画面遷移をブロックしないようawaitせず、keepaliveでブラウザに確実な送信を担保させる
@@ -615,7 +616,7 @@ export default function CertificateUpload() {
             setDeliveryModalFile(null);
             setDeliveryFileHash(null);
 
-            const certId = res.certificate?.id || (res as any).id;
+            const certId = (res as any).certificates?.[0]?.id || res.certificate?.id || (res as any).id;
 
             if (!certId || typeof certId !== 'string') {
               throw new Error("証明書は作成されましたが、IDの取得に失敗しました。ダッシュボードをリロードしてください。");
