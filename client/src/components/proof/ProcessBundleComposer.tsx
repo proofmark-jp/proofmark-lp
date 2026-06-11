@@ -898,24 +898,35 @@ export function ProcessBundleComposer({
       let finalSteps: WorkspaceStep[] = [];
       setSteps((cur) => { finalSteps = cur; return cur; });
 
+      const targets = finalSteps.filter((s) => !s.isRoot && s.file);
+      const headStep = targets[targets.length - 1]; // 🚨 最後の工程（HEAD）を主役にする
+
+      // 🚨 バックエンドが解釈できる「単発証明＋チェーン情報」のフラットな構造に直す
       const payload = {
-        bundleId: crypto.randomUUID(),
-        title,
-        description,
-        items: finalSteps
-          .filter((s) => !s.isRoot && s.file)
-          .map((s, idx) => ({
-            quarantinePath: s.quarantinePath,
-            thumbnailPath: s.thumbQuarantinePath,
-            sha256: s.sha256,
-            title: s.title,
-            proofMode: isPublic ? 'shareable' : 'private',
-            file_name: s.file!.name,
-            file_size: s.file!.size,
-            stepIndex: idx,
-            // HEAD フラグ（完成品識別）
-            isHead: idx === finalSteps.filter((x) => !x.isRoot && x.file).length - 1,
-          })),
+        quarantinePath: headStep.quarantinePath,
+        sha256: headStep.sha256,
+        title: title || headStep.title || 'Chain of Evidence',
+        proofMode: isPublic ? 'shareable' : 'private',
+        visibility: isPublic ? 'public' : 'private',
+        file_name: headStep.file!.name,
+        file_size: headStep.file!.size,
+        mime_type: headStep.file!.type || 'application/octet-stream',
+        metadataJson: {
+          original_filename: headStep.file!.name,
+          original_size: headStep.file!.size,
+          is_preview_compressed: false,
+          bundle_id: crypto.randomUUID(),
+          bundle_description: description,
+          chain_depth: targets.length,
+          // 途中工程のハッシュ履歴をメタデータ内に格納して数学的に証明する
+          chain_history: targets.map((s, idx) => ({
+             stepIndex: idx,
+             sha256: s.sha256,
+             title: s.title,
+             isHead: idx === targets.length - 1
+          }))
+        },
+        c2paManifest: null, // Magic ModeではC2PAは未対応とする
       };
 
       const res = await fetch('/api/certificates/create', {
@@ -923,14 +934,33 @@ export function ProcessBundleComposer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || '証明書の台帳記録に失敗しました。');
+      }
 
       const data = await res.json();
       const certificateId = data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown';
 
+      // 🚨 バックグラウンドで商用TSA（タイムスタンプ）を打刻するトリガーを引く
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session?.access_token && certificateId !== 'unknown') {
+         sessionStorage.setItem('tsa_syncing_' + certificateId, 'true');
+         fetch('/api/timestamp', {
+           method: 'POST',
+           headers: {
+             'Content-Type': 'application/json',
+             Authorization: `Bearer ${sessionData.session.access_token}`,
+           },
+           body: JSON.stringify({ certId: certificateId, hash: headStep.sha256 }),
+           keepalive: true,
+         }).catch(err => console.error('[Background TSA] Failed to trigger:', err));
+      }
+
       setResult({
-        chainDepth: payload.items.length,
-        chainHeadSha256: finalSteps[finalSteps.length - 1]?.sha256 ?? null,
+        chainDepth: targets.length,
+        chainHeadSha256: headStep.sha256 ?? null,
         certificateId,
       });
       setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへリダイレクトします...');
