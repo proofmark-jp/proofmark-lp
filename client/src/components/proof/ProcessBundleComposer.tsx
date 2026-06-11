@@ -64,6 +64,7 @@ import type {
 } from '../../lib/proofmark-types';
 import type { HashRequest, HashResponse } from '../../workers/hashWorker';
 import { compressProcessStepImage } from '../../lib/image-compression';
+import { supabase } from '../../lib/supabase';
 
 /* ═══════════════════════════════════════════════════════════════
    CONSTANTS
@@ -262,6 +263,10 @@ export function ProcessBundleComposer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeUploads = useRef(0);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+
+  /* ── Fix 2: stepsRef — always-current snapshot, safe in async contexts ── */
+  const stepsRef = useRef<WorkspaceStep[]>(steps);
+  useEffect(() => { stepsRef.current = steps; }, [steps]);
 
   /* ── derived ── */
   const readyCount = useMemo(
@@ -512,23 +517,24 @@ export function ProcessBundleComposer({
     return results;
   }
 
-  /* ── fetchUploadUrls (API 400エラー修復版) ── */
+  /* ── fetchUploadUrls (Fix 1: deferred スキップ廃止 / Fix 3: 並列数3チャンク処理) ── */
   const fetchUploadUrls = useCallback(async (newSteps: WorkspaceStep[]) => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) throw new Error('No token');
 
-      // 🚨 直列で1件ずつAPIを叩く (Bulk配列による 400 Bad Request を回避)
-      for (const s of newSteps) {
-        if (s.deferred || !s.file) continue;
-
-        let origUrl, origPath, thumbUrl, thumbPath;
+      // Fix 1: s.deferred のスキップ条件を除去し、!s.file のみでスキップ
+      // Fix 3: processInChunks (並列数 3) で Vercel タイムアウトを防ぎつつ Supabase レートリミットも回避
+      const eligible = newSteps.filter((s) => !!s.file);
+      await processInChunks(eligible, 3, async (s) => {
+        let origUrl: string | undefined, origPath: string | undefined;
+        let thumbUrl: string | undefined, thumbPath: string | undefined;
 
         // 1. 原本URLの取得
         const res1 = await fetch('/api/upload-url', {
           method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ filename: s.file.name, contentType: s.file.type || 'application/octet-stream', size: s.file.size })
+          body: JSON.stringify({ filename: s.file!.name, contentType: s.file!.type || 'application/octet-stream', size: s.file!.size })
         });
         if (!res1.ok) throw new Error('Original URL fetch failed');
         const data1 = await res1.json();
@@ -548,7 +554,7 @@ export function ProcessBundleComposer({
           }
         }
 
-        // State更新 (1件ずつ確実に反映)
+        // State更新 (チャンク内の各件が完了次第反映)
         setSteps(cur => cur.map(c => c.id === s.id ? {
           ...c,
           signedUrl: origUrl,
@@ -558,7 +564,7 @@ export function ProcessBundleComposer({
           uploadState: 'idle' as const,
           deferred: false,
         } : c));
-      }
+      });
     } catch (err) {
       console.error('Upload URL fetch error:', err);
       setSteps(cur => cur.map(s => newSteps.some(ns => ns.id === s.id) ? { ...s, uploadState: 'error' as const } : s));
@@ -742,9 +748,8 @@ export function ProcessBundleComposer({
    * 各 iteration で setTimeout 10ms の Yield を必ず挟む（OOM + RAF 阻害対策）。
    */
   const runHybridCompression = useCallback(async (): Promise<WorkspaceStep[]> => {
-    // 現在の steps スナップショットを取得（state の関数形 setter で同期参照）
-    let snapshot: WorkspaceStep[] = [];
-    setSteps((cur) => { snapshot = cur; return cur; });
+    // Fix 2: stepsRef.current で安全・瞬時に最新スナップショットを取得
+    const snapshot = stepsRef.current;
 
     if (snapshot.length < 2) return snapshot;
 
@@ -856,10 +861,8 @@ export function ProcessBundleComposer({
         caption: 'クラウドへ安全に転送中...',
       });
 
-      // 最新スナップショットを取得
-      let latest: WorkspaceStep[] = [];
-      setSteps((cur) => { latest = cur; return cur; });
-      const toUpload = latest.filter((s) => !s.isRoot && s.file);
+      // Fix 2: stepsRef.current で最新スナップショットを安全に取得
+      const toUpload = stepsRef.current.filter((s) => !s.isRoot && s.file);
       await fetchUploadUrls(toUpload);
 
       // 4. Ghost Upload Watcher が deferred 解除を検知してアップロード開始
@@ -868,9 +871,8 @@ export function ProcessBundleComposer({
       const TIMEOUT_MS = 120_000;
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        let current: WorkspaceStep[] = [];
-        setSteps((cur) => { current = cur; return cur; });
-        const targets = current.filter((s) => !s.isRoot && s.file);
+        // Fix 2: stepsRef.current でポーリング中の最新状態を安全に読み取る
+        const targets = stepsRef.current.filter((s) => !s.isRoot && s.file);
         const done = targets.every((s) => s.uploadState === 'uploaded');
         const failed = targets.some((s) => s.uploadState === 'error');
 
@@ -895,10 +897,8 @@ export function ProcessBundleComposer({
         caption: '証拠チェーンを台帳へ書き込み中...',
       });
 
-      let finalSteps: WorkspaceStep[] = [];
-      setSteps((cur) => { finalSteps = cur; return cur; });
-
-      const targets = finalSteps.filter((s) => !s.isRoot && s.file);
+      // Fix 2: stepsRef.current で最終状態を安全に読み取る
+      const targets = stepsRef.current.filter((s) => !s.isRoot && s.file);
       const headStep = targets[targets.length - 1]; // 🚨 最後の工程（HEAD）を主役にする
 
       // 🚨 バックエンドが解釈できる「単発証明＋チェーン情報」のフラットな構造に直す
