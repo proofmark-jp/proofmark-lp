@@ -99,11 +99,16 @@ export default async function handler(request: Request): Promise<Response> {
   let body: CreateBody;
   try {
     const rawText = await request.text();
-    if (rawText.length > MAX_JSON_PAYLOAD_BYTES) {
-      return json(413, { error: 'Payload too large (JSON exceeds 2MB)' });
+    
+    // 🚨 診断パッチ: 実際に送られてきたサイズをログに出力する
+    console.log(`[Diagnostic] Received Payload Size: ${rawText.length} bytes`);
+
+    // 🚨 一時的に自陣の制限を 10MB に引き上げて様子を見る
+    if (rawText.length > 10 * 1024 * 1024) { 
+      return json(413, { error: `Payload too large (JSON is ${rawText.length} bytes)` });
     }
     body = JSON.parse(rawText) as CreateBody;
-  } catch {
+  } catch (e) {
     return json(400, { error: 'Invalid JSON body' });
   }
 
