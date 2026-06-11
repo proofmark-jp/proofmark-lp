@@ -1,21 +1,24 @@
 /**
- * ProcessBundleComposer.tsx — Auto-Resolving Timeline v2
- * ─────────────────────────────────────────────────────────
- * Drop-in replacement. Props contract: { certificate: CertificateRecord | null }
- * は完全維持。
+ * ProcessBundleComposer.tsx — Auto-Resolving Timeline v3 (Hybrid Payload)
+ * ────────────────────────────────────────────────────────────────────────
+ * Drop-in 拡張。Props 契約は完全後方互換:
  *
- * 新機能:
- *  1. Global Dropzone + lastModified 自動ソート + Confidence Indicator (Pulse)
- *  2. Silent Anchor — 完成品カード右下に Lock + Teal Glow
- *  3. Reorder.Group (framer-motion) によるフルード並び替え +
- *     Flick-to-Trash (velocity.y > 400px/s)
- *  4. Evolution Scrub — 軽量 Canvas サムネイル(200px) でパラパラ漫画
- *  5. Slide to Seal — drag="x" スライダー → vibrate → sealed Freeze → submit
+ *   { certificate: CertificateRecord | null }                ← v2 までの呼び出し
+ *   { certificate: null, initialFiles: File[], onComplete? } ← v3 Magic Mode
  *
- * hashWorker.ts への変更:
- *  既存 HashRequest / HashResponse シグネチャ完全再利用。
- *  onmessage プロトコルは一切変更なし。
- *  computeHash の実装のみ Worker 呼び出しへ切り替え（進捗表示のため）。
+ * v3 で追加された 1 つの責務:
+ *  - `initialFiles` を起点に「証明書を持たないまま」タイムラインを開始可能。
+ *  - Slide to Seal の瞬間に【ハイブリッド圧縮】を直列実行:
+ *      index 0 .. length-2 → compressProcessStepImage で WebP 軽量化
+ *      index length-1 (HEAD/完成品) → 絶対無変換
+ *    その後、既存の Hash Worker + Ghost Upload + バルク送信フローへ合流する。
+ *
+ * 不変条件 (1 ミリも壊さない):
+ *  - hashWorker.ts への通信プロトコル
+ *  - Reorder.Group / framer-motion の挙動と layoutId
+ *  - 既存の certificate ベース・ハイドレーション
+ *  - Ghost Upload Watcher の concurrency / abort 制御
+ *  - Smart Upsell / Quota 表示
  */
 
 import {
@@ -50,8 +53,8 @@ import {
   Trash2,
   Upload,
   Zap,
+  Wand2,
 } from 'lucide-react';
-// CloudAll is not in lucide-react — use CheckCircle2 alias for uploaded state
 const CloudAll = CheckCircle2;
 import { createProcessBundle } from '../../lib/proofmark-api';
 import type {
@@ -60,15 +63,19 @@ import type {
   ProcessBundleDraftStep,
 } from '../../lib/proofmark-types';
 import type { HashRequest, HashResponse } from '../../workers/hashWorker';
+import { compressProcessStepImage } from '../../lib/image-compression';
 
 /* ═══════════════════════════════════════════════════════════════
    CONSTANTS
    ═══════════════════════════════════════════════════════════════ */
 
-const THUMB_MAX_PX = 200; // Canvas サムネイル最大幅/高さ
-const SEAL_THRESHOLD = 200; // Slide to Seal — この px 以上でシール確定
-const FLICK_VELOCITY_THRESHOLD = 400; // Flick-to-Trash — この速度 (px/s) 以上で削除
+const THUMB_MAX_PX = 200;
+const SEAL_THRESHOLD = 200;
+const FLICK_VELOCITY_THRESHOLD = 400;
 const MAX_CONCURRENT_UPLOADS = 5;
+
+/** 圧縮ループでの強制 Yield (ms)。compressProcessStepImage 内部の Yield と二重防衛。 */
+const COMPRESSION_YIELD_MS = 10;
 
 /* ═══════════════════════════════════════════════════════════════
    HELPERS
@@ -87,10 +94,6 @@ function guessStepType(name: string): BundleStepType {
   return 'other';
 }
 
-/**
- * Canvas を用いて File → 軽量サムネイル Blob URL を生成。
- * Evolution Scrub 用。アンマウント時は呼び出し元が revokeObjectURL すること。
- */
 async function generateThumb(file: File): Promise<{ url: string, blob: Blob }> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -121,21 +124,23 @@ async function generateThumb(file: File): Promise<{ url: string, blob: Blob }> {
 
 type WorkspaceStep = ProcessBundleDraftStep & {
   hashState: 'idle' | 'hashing' | 'verified';
-  hashProgress?: number; // 0.0–1.0
+  hashProgress?: number;
   sha256?: string;
   isRoot?: boolean;
-  thumbUrl?: string;         // 軽量サムネイル (Evolution Scrub 用)
-  sameTimestamp?: boolean;   // Confidence Indicator: lastModified 衝突フラグ
+  thumbUrl?: string;
+  sameTimestamp?: boolean;
   uploadState?: 'idle' | 'fetching_url' | 'uploading' | 'uploaded' | 'error';
   thumbBlob?: Blob;
   quarantinePath?: string;
   thumbQuarantinePath?: string;
   signedUrl?: string;
   thumbSignedUrl?: string;
+  /** v3: Magic Mode で投入された初期ステップ。Slide to Seal まで Ghost Upload を保留する */
+  deferred?: boolean;
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   WORKER POOL — hashWorker をシングルトン管理
+   WORKER POOL — hashWorker をシングルトン管理 (変更禁止領域)
    ═══════════════════════════════════════════════════════════════ */
 
 let _workerInstance: Worker | null = null;
@@ -169,10 +174,33 @@ function getWorker(): Worker {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   v3: Compression Progress State
+   ═══════════════════════════════════════════════════════════════ */
+
+type CompressionProgress = {
+  phase: 'idle' | 'compressing' | 'rehashing' | 'uploading' | 'submitting' | 'done';
+  current: number;
+  total: number;
+  caption: string;
+};
+
+/* ═══════════════════════════════════════════════════════════════
    COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 
-export function ProcessBundleComposer({ certificate }: { certificate: CertificateRecord | null }) {
+export interface ProcessBundleComposerProps {
+  certificate: CertificateRecord | null;
+  /** v3 Magic Mode: CertificateUpload から渡される初期工程ファイル列。最後の要素が HEAD */
+  initialFiles?: File[];
+  /** v3 Magic Mode: 完了時のコールバック（成功遷移は composer 内部で行う） */
+  onComplete?: () => void;
+}
+
+export function ProcessBundleComposer({
+  certificate,
+  initialFiles,
+  onComplete,
+}: ProcessBundleComposerProps) {
   /* ── core state ── */
   const [title, setTitle] = useState('Chain of Evidence');
   const [description, setDescription] = useState(
@@ -202,20 +230,27 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
   /* ── Evolution Scrub ── */
   const [scrubIndex, setScrubIndex] = useState(0);
 
-  // 🚨 Quota & Upsell States
+  /* ── v3: Magic Mode 判定 ── */
+  const magicMode = useMemo(
+    () => !certificate && Array.isArray(initialFiles) && initialFiles.length >= 2,
+    [certificate, initialFiles],
+  );
+
+  /* ── v3: 圧縮 → ハッシュ → アップロード → 送信 の段階表示 ── */
+  const [compression, setCompression] = useState<CompressionProgress>({
+    phase: 'idle', current: 0, total: 0, caption: '',
+  });
+
+  // Quota & Upsell
   const [quota, setQuota] = useState<{ plan: string; limit: number; used: number; remaining: number } | null>(null);
   const [upsellIntent, setUpsellIntent] = useState<{ needed: number; targetPlan: string; currentRemaining: number } | null>(null);
 
-  // 🚨 Fetch Quota on mount (401 Guest Fallback対応)
   useEffect(() => {
     const fetchQuota = async () => {
       try {
         const res = await fetch('/api/user/quota');
-        if (res.ok) {
-          setQuota(await res.json());
-        } else if (res.status === 401) {
-          setQuota({ plan: 'guest', limit: 3, used: 0, remaining: 3 });
-        }
+        if (res.ok) setQuota(await res.json());
+        else if (res.status === 401) setQuota({ plan: 'guest', limit: 3, used: 0, remaining: 3 });
       } catch (e) { console.error(e); }
     };
     fetchQuota();
@@ -225,9 +260,7 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
   const urlCacheRef = useRef<Map<string, string>>(new Map());
   const thumbCacheRef = useRef<Map<string, string>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // Ghost Upload Concurrency Pool
   const activeUploads = useRef(0);
-  // 🚨 Ghost Upload Abort Controllers (通信の生殺与奪を握る監視室)
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
   /* ── derived ── */
@@ -236,10 +269,94 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
     [steps],
   );
   const allVerified = useMemo(() => steps.every((s) => s.hashState === 'verified'), [steps]);
-  const canSubmit = !!certificate && steps.length > 0 && !submitting && allVerified && !sealed && steps.every(s => s.isRoot || s.uploadState === 'uploaded');
+  const allUploaded = useMemo(
+    () => steps.every((s) => s.isRoot || s.uploadState === 'uploaded'),
+    [steps],
+  );
+  /**
+   * canSubmit の判定:
+   *  - 通常モード: allVerified && allUploaded
+   *  - Magic Mode: 圧縮〜送信は Slide to Seal が起点で内部実行するため、
+   *    allVerified のみで開放（uploadState は seal 後に走る）。
+   */
+  const canSubmit = magicMode
+    ? steps.length >= 2 && !submitting && allVerified && !sealed
+    : !!certificate && steps.length > 0 && !submitting && allVerified && !sealed && allUploaded;
 
-  /* ── hydrate chain from parent certificate ── */
+  /* ═════════════════════════════════════════════════════════════
+     v3: Magic Mode — initialFiles から steps を構築（既存 hydrate と排他）
+     ═════════════════════════════════════════════════════════════ */
   useEffect(() => {
+    if (!magicMode || !initialFiles) return;
+    let isMounted = true;
+
+    const seedFromFiles = async () => {
+      // 重複除去（同一名/サイズ/lastModified）
+      const seen = new Set<string>();
+      const unique = initialFiles.filter((f) => {
+        const k = `${f.name}-${f.size}-${f.lastModified}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+
+      // initialFiles の配列順を保持する（CertificateUpload 側で dropzone 順を尊重）
+      // 既存 addFilesAtIndex の lastModified ソートは適用しない。
+      const baseSteps: WorkspaceStep[] = unique.map((f) => ({
+        id: crypto.randomUUID(),
+        stepType: guessStepType(f.name),
+        title: fileBaseName(f.name) || '途中工程',
+        note: '',
+        file: f,
+        previewUrl: undefined,
+        hashState: 'idle',
+        uploadState: 'idle',
+        deferred: true, // ← Ghost Upload を保留
+      }));
+
+      if (!isMounted) return;
+      setSteps(baseSteps);
+      setIsHydrating(false);
+
+      // サムネ生成 + プレビュー URL（直列で OOM 回避）
+      for (const step of baseSteps) {
+        if (!isMounted) break;
+        // preview URL
+        const purl = URL.createObjectURL(step.file!);
+        urlCacheRef.current.set(step.id, purl);
+        // thumb
+        let thumb: { url: string; blob: Blob } | null = null;
+        try { thumb = await generateThumb(step.file!); } catch { /* skip */ }
+        if (!isMounted) {
+          if (thumb) URL.revokeObjectURL(thumb.url);
+          break;
+        }
+        setSteps((cur) => cur.map((s) =>
+          s.id === step.id
+            ? { ...s, previewUrl: purl, thumbUrl: thumb?.url, thumbBlob: thumb?.blob }
+            : s,
+        ));
+        // 直列 + Yield (OOM 防衛)
+        await new Promise((r) => setTimeout(r, COMPRESSION_YIELD_MS));
+      }
+
+      // 既存 Hash Worker で並列ハッシュを走らせる（worker 側で順次処理）
+      baseSteps.forEach((s) => computeHash(s.id, s.file!));
+    };
+
+    setSteps([]);
+    setIsHydrating(true);
+    seedFromFiles();
+    return () => { isMounted = false; };
+    // computeHash は安定参照
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [magicMode, initialFiles]);
+
+  /* ═════════════════════════════════════════════════════════════
+     既存: certificate ベース・ハイドレーション (Magic Mode 時はスキップ)
+     ═════════════════════════════════════════════════════════════ */
+  useEffect(() => {
+    if (magicMode) return; // ← v3: Magic Mode は排他
     if (!certificate) return;
 
     let isMounted = true;
@@ -336,9 +453,7 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
     setSteps([]);
     loadExistingChain().finally(() => { if (isMounted) setIsHydrating(false); });
     return () => { isMounted = false; };
-  }, [certificate]);
-
-
+  }, [certificate, magicMode]);
 
   /* ── stable preview URL helper ── */
   const getPreviewUrl = useCallback((stepId: string, file?: File): string | undefined => {
@@ -398,7 +513,7 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
   }
 
   /* ── fetchUploadUrls ── */
-  const fetchUploadUrls = async (newSteps: WorkspaceStep[]) => {
+  const fetchUploadUrls = useCallback(async (newSteps: WorkspaceStep[]) => {
     try {
       const payloadItems = newSteps.flatMap(s => [
         { fileName: s.file!.name, mimeType: s.file!.type, fileSize: s.file!.size },
@@ -421,13 +536,14 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
           quarantinePath: urls[oIdx]?.quarantinePath,
           thumbSignedUrl: urls[tIdx]?.signedUrl,
           thumbQuarantinePath: urls[tIdx]?.quarantinePath,
-          uploadState: 'idle' as const
+          uploadState: 'idle' as const,
+          deferred: false, // ← Magic Mode 終結後はゴーストアップロードへ流す
         };
       }));
     } catch {
       setSteps(cur => cur.map(s => newSteps.some(ns => ns.id === s.id) ? { ...s, uploadState: 'error' as const } : s));
     }
-  };
+  }, [isPublic]);
 
   /* ── attachThumb helper (for replaced images) ── */
   const attachThumb = useCallback(async (stepId: string, file: File) => {
@@ -437,20 +553,20 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
         const target = cur.find(s => s.id === stepId);
         if (!target) return cur;
         const updated = { ...target, thumbUrl: thumb.url, thumbBlob: thumb.blob, uploadState: 'fetching_url' as const };
-        fetchUploadUrls([updated]);
+        // Magic Mode 中は upload URL を取得しない（seal 時に一括取得）
+        if (!target.deferred) fetchUploadUrls([updated]);
         return cur.map(s => s.id === stepId ? updated : s);
       });
     } catch (e) {
       console.error('Thumbnail generation failed', e);
     }
-  }, []); // fetchUploadUrls is not strictly needed in deps if defined in same scope, but ensure no lint errors.
+  }, [fetchUploadUrls]);
 
-  /* ── add files at a specific insertion index ── */
+  /* ── add files at a specific insertion index (通常モード用) ── */
   const addFilesAtIndex = useCallback(async (files: FileList | File[], insertAt: number) => {
     const fileArray = Array.from(files).filter((f) => f.type.startsWith('image/')).sort((a, b) => a.lastModified - b.lastModified);
     if (fileArray.length === 0) return;
 
-    // 重複ファイルの完全排除
     const existingKeys = new Set(steps.map(s => s.file ? `${s.file.name}-${s.file.size}-${s.file.lastModified}` : ''));
     const uniqueFiles = fileArray.filter(f => !existingKeys.has(`${f.name}-${f.size}-${f.lastModified}`));
     if (uniqueFiles.length === 0) return;
@@ -460,13 +576,12 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
       alert("システムの物理上限（150枚）を超えるため追加できません。");
       return;
     }
-    
-    // 🚨 Smart Upsell Logic
-    if (quota && needed > quota.remaining) {
+
+    if (quota && needed > quota.remaining && !magicMode) {
       let targetPlan = 'creator';
       if (needed > 30) targetPlan = 'studio';
       setUpsellIntent({ needed, targetPlan, currentRemaining: quota.remaining });
-      return; // 処理を中断してModalを表示
+      return;
     }
 
     const modifiedTimes = uniqueFiles.map((f) => f.lastModified);
@@ -474,10 +589,12 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
 
     let newSteps: WorkspaceStep[] = uniqueFiles.map((file) => ({
       id: crypto.randomUUID(), stepType: guessStepType(file.name), title: fileBaseName(file.name) || '途中工程', note: '',
-      file, previewUrl: getPreviewUrl(crypto.randomUUID(), file), hashState: 'idle' as const, uploadState: 'fetching_url' as const, sameTimestamp: hasDuplicateTimestamps,
+      file, previewUrl: getPreviewUrl(crypto.randomUUID(), file), hashState: 'idle' as const,
+      uploadState: magicMode ? 'idle' as const : 'fetching_url' as const,
+      sameTimestamp: hasDuplicateTimestamps,
+      deferred: magicMode,
     }));
 
-    // OOM防衛: 同時にCanvasを開くのは3枚まで（チャンク処理）
     newSteps = await processInChunks(newSteps, 3, async (s) => {
       try {
         const thumb = await generateThumb(s.file!);
@@ -488,19 +605,24 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
     setSteps((cur) => { const copy = [...cur]; copy.splice(insertAt, 0, ...newSteps); return copy; });
 
     newSteps.forEach((s) => computeHash(s.id, s.file!));
-    fetchUploadUrls(newSteps);
-  }, [steps, getPreviewUrl, computeHash]);
+    if (!magicMode) fetchUploadUrls(newSteps);
+  }, [steps, getPreviewUrl, computeHash, quota, magicMode, fetchUploadUrls]);
 
   const addFilesAsSteps = useCallback(
     (files: FileList | File[]) => addFilesAtIndex(files, steps.length),
     [addFilesAtIndex, steps.length],
   );
 
-  // Ghost Upload Watcher
+  /* ── Ghost Upload Watcher (Magic Mode の deferred は除外) ── */
   useEffect(() => {
     const processUploadQueue = async () => {
-      // 🚨 無限ループ防衛: 'error' は含めない
-      const readyItems = steps.filter(s => !s.isRoot && s.hashState === 'verified' && s.signedUrl && s.uploadState === 'idle');
+      const readyItems = steps.filter(s =>
+        !s.isRoot &&
+        !s.deferred &&                        // ← v3: deferred は seal までスキップ
+        s.hashState === 'verified' &&
+        s.signedUrl &&
+        s.uploadState === 'idle'
+      );
       if (readyItems.length === 0) return;
       const availableSlots = MAX_CONCURRENT_UPLOADS - activeUploads.current;
       if (availableSlots <= 0) return;
@@ -510,7 +632,6 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
         activeUploads.current++;
         setSteps(cur => cur.map(s => s.id === item.id ? { ...s, uploadState: 'uploading' as const } : s));
 
-        // 🚨 AbortControllerの生成と登録
         const controller = new AbortController();
         abortControllersRef.current.set(item.id, controller);
 
@@ -527,18 +648,13 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
             success = true;
             setSteps(cur => cur.map(s => s.id === item.id ? { ...s, uploadState: 'uploaded' as const } : s));
           } catch (e: any) {
-            // 🚨 強制切断された場合はエラーにせず静かに終了する
-            if (e.name === 'AbortError') {
-              isAborted = true;
-              break;
-            }
+            if (e.name === 'AbortError') { isAborted = true; break; }
             retryCount++;
             if (retryCount >= 3) setSteps(cur => cur.map(s => s.id === item.id ? { ...s, uploadState: 'error' as const } : s));
             else await new Promise(res => setTimeout(res, retryCount * 500));
           }
         }
 
-        // 処理完了後に監視室から削除
         abortControllersRef.current.delete(item.id);
         activeUploads.current--;
       });
@@ -550,20 +666,16 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
     setSteps((cur) => cur.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }
 
-
-
   function removeStep(id: string) {
     const url = urlCacheRef.current.get(id);
     if (url) { URL.revokeObjectURL(url); urlCacheRef.current.delete(id); }
     const turl = thumbCacheRef.current.get(id);
     if (turl) { URL.revokeObjectURL(turl); thumbCacheRef.current.delete(id); }
 
-    // 🚨 通信の強制切断 (Phantom Upload Leakの防止)
     if (abortControllersRef.current.has(id)) {
       abortControllersRef.current.get(id)?.abort();
       abortControllersRef.current.delete(id);
     }
-
     setSteps((cur) => cur.filter((s) => s.id !== id));
   }
 
@@ -601,7 +713,220 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
     [addFilesAsSteps],
   );
 
-  /* ── submit (Array Multiplexer 対応) ── */
+  /* ═════════════════════════════════════════════════════════════
+     v3: Hybrid Payload — Slide to Seal 起点の圧縮 → 再ハッシュ → upload → submit
+     ═════════════════════════════════════════════════════════════ */
+
+  /**
+   * 直列圧縮ループ。indices [0..length-2] のみ圧縮、length-1 は触らない。
+   * 各 iteration で setTimeout 10ms の Yield を必ず挟む（OOM + RAF 阻害対策）。
+   */
+  const runHybridCompression = useCallback(async (): Promise<WorkspaceStep[]> => {
+    // 現在の steps スナップショットを取得（state の関数形 setter で同期参照）
+    let snapshot: WorkspaceStep[] = [];
+    setSteps((cur) => { snapshot = cur; return cur; });
+
+    if (snapshot.length < 2) return snapshot;
+
+    const lastIndex = snapshot.length - 1;
+    const targetIndices: number[] = [];
+    for (let i = 0; i <= lastIndex - 1; i++) {
+      // root（既存証明書）は触らない方針。Magic Mode では root は無いが、防御的に除外
+      if (!snapshot[i].isRoot && snapshot[i].file) targetIndices.push(i);
+    }
+
+    setCompression({
+      phase: 'compressing',
+      current: 0,
+      total: targetIndices.length,
+      caption: '証拠データを最適化中...',
+    });
+
+    const updated: WorkspaceStep[] = [...snapshot];
+
+    for (let k = 0; k < targetIndices.length; k++) {
+      const idx = targetIndices[k];
+      const step = updated[idx];
+      const originalFile = step.file!;
+
+      // ── 1. 圧縮 (内部でも EXIF/Yield/メタ剥離が走る) ──────────
+      let compressed: File;
+      try {
+        compressed = await compressProcessStepImage(originalFile);
+      } catch (err) {
+        // 失敗時は原本でフォールバック（チェーン全体を壊さない）
+        console.warn('[HybridPayload] compression failed; fallback to original', err);
+        compressed = originalFile;
+      }
+
+      // ── 2. ステップを差し替え（hash はやり直し、prev preview を破棄） ─
+      const newPreviewUrl = URL.createObjectURL(compressed);
+      const oldPreview = urlCacheRef.current.get(step.id);
+      if (oldPreview) URL.revokeObjectURL(oldPreview);
+      urlCacheRef.current.set(step.id, newPreviewUrl);
+
+      updated[idx] = {
+        ...step,
+        file: compressed,
+        previewUrl: newPreviewUrl,
+        hashState: 'idle',
+        sha256: undefined,
+        hashProgress: 0,
+      };
+
+      // state にも即時反映（UI 進捗）
+      setSteps((cur) => cur.map((s) => s.id === step.id ? updated[idx] : s));
+
+      setCompression((p) => ({
+        ...p,
+        current: k + 1,
+        caption: `証拠データを最適化中... (${k + 1}/${targetIndices.length})`,
+      }));
+
+      // ── 3. 直列の強制 Yield (compress 内部の Yield と二重防衛) ──
+      await new Promise((r) => setTimeout(r, COMPRESSION_YIELD_MS));
+    }
+
+    return updated;
+  }, []);
+
+  /**
+   * 圧縮後の steps に対して、Hash Worker で再ハッシュ → 完了を await する。
+   */
+  const reHashAfterCompression = useCallback(async (postCompress: WorkspaceStep[]) => {
+    setCompression({
+      phase: 'rehashing',
+      current: 0,
+      total: postCompress.length,
+      caption: 'ハッシュ値を再計算中...',
+    });
+
+    const promises = postCompress
+      .filter((s) => !s.isRoot && s.file && s.hashState !== 'verified')
+      .map((s) => computeHash(s.id, s.file!));
+
+    await Promise.all(promises);
+
+    // 進捗インクリメント（cosmetic）
+    setCompression((p) => ({ ...p, current: p.total }));
+  }, [computeHash]);
+
+  /**
+   * Magic Mode 用 Submit:
+   *   compress → rehash → fetchUploadUrls → wait uploads → POST create
+   */
+  async function submitMagic() {
+    if (!magicMode) return;
+    setSubmitting(true);
+    setMessage(null);
+    setResult(null);
+
+    try {
+      // 1. Hybrid Compression
+      const postCompress = await runHybridCompression();
+
+      // 2. Re-hash compressed steps
+      await reHashAfterCompression(postCompress);
+
+      // 3. Fetch upload URLs (deferred 解除)
+      setCompression({
+        phase: 'uploading',
+        current: 0,
+        total: postCompress.length,
+        caption: 'クラウドへ安全に転送中...',
+      });
+
+      // 最新スナップショットを取得
+      let latest: WorkspaceStep[] = [];
+      setSteps((cur) => { latest = cur; return cur; });
+      const toUpload = latest.filter((s) => !s.isRoot && s.file);
+      await fetchUploadUrls(toUpload);
+
+      // 4. Ghost Upload Watcher が deferred 解除を検知してアップロード開始
+      //    全アップロード完了まで待機（タイムアウト 2 分）
+      const startedAt = Date.now();
+      const TIMEOUT_MS = 120_000;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        let current: WorkspaceStep[] = [];
+        setSteps((cur) => { current = cur; return cur; });
+        const targets = current.filter((s) => !s.isRoot && s.file);
+        const done = targets.every((s) => s.uploadState === 'uploaded');
+        const failed = targets.some((s) => s.uploadState === 'error');
+
+        if (done) break;
+        if (failed) throw new Error('一部のアップロードに失敗しました。再試行してください。');
+        if (Date.now() - startedAt > TIMEOUT_MS) {
+          throw new Error('アップロードがタイムアウトしました。ネットワークを確認してください。');
+        }
+
+        // 完了数を進捗に反映
+        const completed = targets.filter((s) => s.uploadState === 'uploaded').length;
+        setCompression((p) => ({ ...p, current: completed, total: targets.length }));
+
+        await new Promise((r) => setTimeout(r, 250));
+      }
+
+      // 5. Submit metadata (既存の /api/certificates/create バルク送信)
+      setCompression({
+        phase: 'submitting',
+        current: 0,
+        total: 1,
+        caption: '証拠チェーンを台帳へ書き込み中...',
+      });
+
+      let finalSteps: WorkspaceStep[] = [];
+      setSteps((cur) => { finalSteps = cur; return cur; });
+
+      const payload = {
+        bundleId: crypto.randomUUID(),
+        title,
+        description,
+        items: finalSteps
+          .filter((s) => !s.isRoot && s.file)
+          .map((s, idx) => ({
+            quarantinePath: s.quarantinePath,
+            thumbnailPath: s.thumbQuarantinePath,
+            sha256: s.sha256,
+            title: s.title,
+            proofMode: isPublic ? 'shareable' : 'private',
+            file_name: s.file!.name,
+            file_size: s.file!.size,
+            stepIndex: idx,
+            // HEAD フラグ（完成品識別）
+            isHead: idx === finalSteps.filter((x) => !x.isRoot && x.file).length - 1,
+          })),
+      };
+
+      const res = await fetch('/api/certificates/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
+
+      const data = await res.json();
+      const certificateId = data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown';
+
+      setResult({
+        chainDepth: payload.items.length,
+        chainHeadSha256: finalSteps[finalSteps.length - 1]?.sha256 ?? null,
+        certificateId,
+      });
+      setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへリダイレクトします...');
+      setCompression({ phase: 'done', current: 1, total: 1, caption: '完了' });
+      onComplete?.();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '保存に失敗しました');
+      setCompression({ phase: 'idle', current: 0, total: 0, caption: '' });
+      // seal を解除して再試行可能にする
+      setSealed(false);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  /* ── submit (既存: certificate ベース) ── */
   async function submit() {
     if (!certificate) return;
     setSubmitting(true); setMessage(null); setResult(null);
@@ -702,9 +1027,9 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
   }
 
   /* ══════════════════════════════════════════════════════════════
-     RENDER: NO CERTIFICATE
+     RENDER: NO CERTIFICATE & NOT Magic Mode
      ══════════════════════════════════════════════════════════════ */
-  if (!certificate) {
+  if (!certificate && !magicMode) {
     return (
       <section className="w-full bg-[#0F0F11] border border-white/10 rounded-3xl p-6 md:p-8">
         <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-5 text-sm text-[#A8A0D8]">
@@ -715,7 +1040,7 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
   }
 
   /* ══════════════════════════════════════════════════════════════
-     RENDER: AUTO-RESOLVING TIMELINE WORKSPACE
+     RENDER: TIMELINE WORKSPACE
      ══════════════════════════════════════════════════════════════ */
   return (
     <section
@@ -730,6 +1055,24 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
       onDragLeave={onGlobalDragLeave}
       onDrop={sealed ? undefined : onGlobalDrop}
     >
+      {/* ── v3: Magic Mode Banner ── */}
+      {magicMode && !sealed && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 flex items-center gap-3 px-4 py-3 rounded-2xl"
+          style={{
+            background: 'linear-gradient(135deg, rgba(108,62,244,0.12), rgba(0,212,170,0.08))',
+            border: '1px solid rgba(108,62,244,0.30)',
+          }}
+        >
+          <Wand2 className="w-4 h-4 text-[#BC78FF] shrink-0" />
+          <span className="text-sm text-[#D4D0F4] leading-relaxed">
+            <strong className="text-white">Magic Mode</strong> ・ 最後の <strong className="text-[#00D4AA]">HEAD（完成品）</strong> はオリジナル画質のまま、途中工程は封印時に WebP へ自動最適化されます。
+          </span>
+        </motion.div>
+      )}
+
       {/* ── Sealed Freeze Banner ── */}
       <AnimatePresence>
         {sealed && (
@@ -740,6 +1083,45 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
           >
             <Lock className="w-4 h-4 text-[#00D4AA] shrink-0" />
             <span className="text-sm font-bold text-[#00D4AA]">タイムラインがシールされました — 提出待機中</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── v3: Compression Progress (Slide to Seal 後の段階表示) ── */}
+      <AnimatePresence>
+        {compression.phase !== 'idle' && compression.phase !== 'done' && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="mb-4 rounded-2xl border border-[#6C3EF4]/30 bg-[#6C3EF4]/10 px-4 py-3"
+          >
+            <div className="flex items-center gap-3">
+              <Loader2 className="w-4 h-4 text-[#BC78FF] animate-spin shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-bold text-white truncate">{compression.caption}</span>
+                  {compression.total > 0 && (
+                    <span className="text-[11px] font-mono text-[#A8A0D8] tabular-nums shrink-0 ml-3">
+                      {compression.current} / {compression.total}
+                    </span>
+                  )}
+                </div>
+                {/* 進捗バー: width のみ。compositor で走るので main thread ブロック中も滑らかに見える */}
+                <div className="h-1 rounded-full overflow-hidden bg-white/5">
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ background: 'linear-gradient(90deg, #6C3EF4, #00D4AA)' }}
+                    animate={{
+                      width: compression.total > 0
+                        ? `${Math.min(100, (compression.current / compression.total) * 100)}%`
+                        : '40%',
+                    }}
+                    transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  />
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -759,8 +1141,12 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
       {isHydrating && (
         <div className="flex flex-col items-center justify-center py-20 md:py-28 rounded-3xl border border-white/5 bg-white/5 backdrop-blur-md animate-pulse">
           <Loader2 className="w-8 h-8 text-[#00D4AA] animate-spin mb-4" />
-          <div className="text-sm font-bold text-white tracking-widest uppercase">Restoring Timeline...</div>
-          <div className="text-xs text-[#A8A0D8]/60 mt-2">過去の証明データを安全に復元しています</div>
+          <div className="text-sm font-bold text-white tracking-widest uppercase">
+            {magicMode ? 'Loading Timeline...' : 'Restoring Timeline...'}
+          </div>
+          <div className="text-xs text-[#A8A0D8]/60 mt-2">
+            {magicMode ? '工程ファイルをタイムラインに展開しています' : '過去の証明データを安全に復元しています'}
+          </div>
         </div>
       )}
 
@@ -836,7 +1222,7 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
             >
               {steps.map((step, index) => {
                 const isSilentAnchor = step.isRoot && index === steps.length - 1 && steps.length > 1;
-                const isFirst = index === 0;
+                const isHead = !step.isRoot && index === steps.length - 1 && steps.length > 1;
                 const isLast = index === steps.length - 1;
 
                 return (
@@ -846,6 +1232,7 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
                       index={index}
                       totalSteps={steps.length}
                       isSilentAnchor={!!isSilentAnchor}
+                      isHead={isHead}
                       sealed={sealed}
                       onUpdate={updateStep}
                       onRemove={removeStep}
@@ -865,7 +1252,6 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
                       }}
                     />
 
-                    {/* Chain connector */}
                     {!isLast && (
                       <div className="flex items-center shrink-0 px-1">
                         <ChainConnector verified={
@@ -973,9 +1359,8 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
                   ハッシュ計算中...
                 </span>
               )}
-              
-              {/* 🚨 追加: クラウド同期中（Ghost Upload待ち）の表示 */}
-              {allVerified && !steps.every(s => s.isRoot || s.uploadState === 'uploaded') && (
+              {/* 通常モードのクラウド同期表示。Magic Mode では seal 後に進捗バーで表現するため出さない */}
+              {!magicMode && allVerified && !allUploaded && (
                 <span className="ml-2 text-xs text-[#00D4AA] animate-pulse">
                   <CloudLightning className="inline w-3 h-3 mr-1" />
                   クラウド同期中...
@@ -990,13 +1375,16 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
               onSealed={() => {
                 setSealed(true);
                 navigator.vibrate?.(40);
-                submit();
+                if (magicMode) submitMagic();
+                else submit();
               }}
             />
           ) : (
             <div className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-white/5 border border-white/10">
               {submitting
-                ? <><Loader2 className="w-4 h-4 animate-spin text-[#00D4AA]" /><span className="text-sm text-[#A8A0D8]">Chain of Evidence を保存中...</span></>
+                ? <><Loader2 className="w-4 h-4 animate-spin text-[#00D4AA]" /><span className="text-sm text-[#A8A0D8]">
+                    {magicMode ? (compression.caption || '処理中...') : 'Chain of Evidence を保存中...'}
+                  </span></>
                 : <><Layers3 className="w-4 h-4 text-[#00D4AA]" /><span className="text-sm text-[#00D4AA] font-bold">封印済み — 保存完了後に自動遷移します</span></>
               }
             </div>
@@ -1011,7 +1399,7 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
         </div>
       )}
 
-      {/* 🚨 Smart Upsell Modal */}
+      {/* Smart Upsell Modal */}
       <AnimatePresence>
         {upsellIntent && (
           <motion.div
@@ -1029,19 +1417,16 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
                 </div>
                 <h3 className="text-xl font-bold text-white">アップグレードが必要です</h3>
               </div>
-              
               <p className="text-gray-300 text-sm mb-4 leading-relaxed">
                 現在の残り枠（{upsellIntent.currentRemaining}枚）に対して、<strong className="text-white">{upsellIntent.needed}枚</strong> の証明書を発行しようとしています。
                 全工程を連結するには、<strong className="text-[#00D4AA] capitalize">{upsellIntent.targetPlan} プラン</strong> へのアップグレードが必要です。
               </p>
-              
               <div className="bg-[#121124] rounded-lg p-3 mb-6 border border-purple-500/30 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
                 <p className="text-xs text-purple-200">
                   決済は別タブで開きます。<strong>決済完了後、この画面に戻ればそのまま続きから再開できます。</strong>
                 </p>
               </div>
-
               <div className="flex flex-col gap-3">
                 <a
                   href={`/pricing?plan=${upsellIntent.targetPlan}`}
@@ -1072,7 +1457,6 @@ export function ProcessBundleComposer({ certificate }: { certificate: Certificat
    SUB-COMPONENTS
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Chain Connector ── */
 function ChainConnector({ verified }: { verified: boolean }) {
   return (
     <div className="flex items-center justify-center w-8 shrink-0">
@@ -1092,12 +1476,12 @@ function ChainConnector({ verified }: { verified: boolean }) {
   );
 }
 
-/* ── Timeline Card ── */
 function TimelineCard({
   step,
   index,
   totalSteps,
   isSilentAnchor,
+  isHead,
   sealed,
   onUpdate,
   onRemove,
@@ -1107,6 +1491,7 @@ function TimelineCard({
   index: number;
   totalSteps: number;
   isSilentAnchor: boolean;
+  isHead: boolean;
   sealed: boolean;
   onUpdate: (id: string, patch: Partial<WorkspaceStep>) => void;
   onRemove: (id: string) => void;
@@ -1115,7 +1500,6 @@ function TimelineCard({
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingNote, setEditingNote] = useState(false);
 
-  // Flick-to-Trash velocity detection
   const handleDragEnd = (_: any, info: { velocity: { y: number } }) => {
     if (sealed || step.isRoot) return;
     if (Math.abs(info.velocity.y) > FLICK_VELOCITY_THRESHOLD) {
@@ -1124,12 +1508,11 @@ function TimelineCard({
   };
 
   const isOrigin = index === 0;
-  const badgeIcon = isOrigin ? '🎨' : isSilentAnchor ? '' : '📝';
-  const badgeLabel = isOrigin ? '起点' : isSilentAnchor ? '' : '途中工程';
-  const badgeColor = isOrigin ? '#F59E0B' : isSilentAnchor ? '#00D4AA' : '#818CF8';
-  const badgeBg = isOrigin ? 'rgba(245,158,11,0.12)' : 'rgba(129,140,248,0.12)';
+  const badgeIcon = isOrigin ? '🎨' : isSilentAnchor ? '' : isHead ? '🏁' : '📝';
+  const badgeLabel = isOrigin ? '起点' : isSilentAnchor ? '' : isHead ? 'HEAD (完成品)' : '途中工程';
+  const badgeColor = isOrigin ? '#F59E0B' : (isSilentAnchor || isHead) ? '#00D4AA' : '#818CF8';
+  const badgeBg = isHead ? 'rgba(0,212,170,0.12)' : isOrigin ? 'rgba(245,158,11,0.12)' : 'rgba(129,140,248,0.12)';
 
-  // Confidence Indicator colors
   const confidencePulse = step.sameTimestamp;
 
   return (
@@ -1149,7 +1532,7 @@ function TimelineCard({
         relative w-[190px] md:w-[210px] rounded-2xl border backdrop-blur-md touch-pan-y
         transition-[border-color,box-shadow] duration-300 shrink-0 group/card cursor-grab active:cursor-grabbing
         bg-white/5
-        ${isSilentAnchor
+        ${isSilentAnchor || isHead
           ? 'border-[#00D4AA]/30 shadow-[0_0_30px_rgba(0,212,170,0.12)]'
           : step.hashState === 'hashing'
             ? 'border-[#6C3EF4]/50 shadow-[0_0_25px_rgba(108,62,244,0.15)]'
@@ -1157,11 +1540,10 @@ function TimelineCard({
               ? 'border-[#00D4AA]/20 hover:border-[#00D4AA]/40'
               : 'border-white/10 hover:border-white/20'
         }
-        ${confidencePulse && !isSilentAnchor ? 'animate-confidence-pulse' : ''}
+        ${confidencePulse && !isSilentAnchor && !isHead ? 'animate-confidence-pulse' : ''}
       `}
     >
-      {/* ── Confidence Indicator pulse ring ── */}
-      {confidencePulse && !isSilentAnchor && (
+      {confidencePulse && !isSilentAnchor && !isHead && (
         <motion.div
           className="absolute -inset-px rounded-2xl pointer-events-none"
           animate={{ borderColor: ['#F59E0B', '#00D4AA', '#F59E0B'] }}
@@ -1189,10 +1571,8 @@ function TimelineCard({
           </div>
         )}
 
-        {/* Hash state overlay */}
         {step.hashState === 'hashing' && (
           <div className="absolute inset-0 bg-[#07061A]/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
-            {/* Circular progress */}
             <div className="relative w-12 h-12">
               <svg className="absolute inset-0 -rotate-90" viewBox="0 0 48 48">
                 <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(108,62,244,0.15)" strokeWidth="3" />
@@ -1214,12 +1594,10 @@ function TimelineCard({
           </div>
         )}
 
-        {/* Verified bottom bar */}
         {step.hashState === 'verified' && (
           <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#6C3EF4] via-[#00D4AA] to-[#6C3EF4] opacity-70" />
         )}
 
-        {/* Top badges */}
         <div className="absolute top-2 inset-x-2 flex items-center justify-between gap-1 z-10 min-w-0">
           <div className="flex items-center gap-1 shrink-0">
             <div className="w-6 h-6 rounded-lg bg-[#07061A]/80 backdrop-blur-sm flex items-center justify-center border border-white/10 shrink-0">
@@ -1248,29 +1626,32 @@ function TimelineCard({
           )}
         </div>
 
-        {/* Silent Anchor: Lock glow — right bottom */}
-        {isSilentAnchor && (
+        {/* Silent Anchor: Lock glow — right bottom (Magic Mode の HEAD にも同じ装飾) */}
+        {(isSilentAnchor || isHead) && (
           <div className="absolute bottom-2 right-2 z-20">
             <motion.div
               animate={{ boxShadow: ['0 0 10px rgba(0,212,170,0.4)', '0 0 24px rgba(0,212,170,0.8)', '0 0 10px rgba(0,212,170,0.4)'] }}
               transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
               className="w-8 h-8 rounded-xl bg-[#00D4AA]/20 border border-[#00D4AA]/40 flex items-center justify-center"
+              title={isHead ? 'HEAD: オリジナル画質を保持' : '原本アンカー'}
             >
               <Lock className="w-4 h-4 text-[#00D4AA]" />
             </motion.div>
           </div>
         )}
 
-        {/* Delete & Replace (non-root, non-anchor) */}
         {!step.isRoot && !sealed && totalSteps > 1 && (
           <button
             onClick={(e) => { e.stopPropagation(); onRemove(step.id); }}
             className="absolute bottom-2 right-2 w-7 h-7 rounded-lg bg-[#07061A]/80 backdrop-blur-sm border border-white/10 flex items-center justify-center text-[#A8A0D8]/50 hover:text-[#FF4D4D] hover:border-[#FF4D4D]/30 transition-colors opacity-0 group-hover/thumb:opacity-100"
+            style={{ // HEAD は Lock グロウと位置がぶつかるため hover 時のみ表示
+              ...(isHead ? { right: 'auto', left: 8 } : {}),
+            }}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         )}
-        {step.previewUrl && !step.isRoot && !sealed && (
+        {step.previewUrl && !step.isRoot && !sealed && !isHead && (
           <label className="absolute bottom-2 left-2 w-7 h-7 rounded-lg bg-[#07061A]/80 backdrop-blur-sm border border-white/10 flex items-center justify-center text-[#A8A0D8]/50 hover:text-[#00D4AA] hover:border-[#00D4AA]/30 transition-colors opacity-0 group-hover/thumb:opacity-100 cursor-pointer">
             <Upload className="w-3.5 h-3.5" />
             <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onReplace(f); }} />
@@ -1278,7 +1659,6 @@ function TimelineCard({
         )}
       </div>
 
-      {/* Info row */}
       {!isSilentAnchor && (
         <div className="px-3 py-2.5">
           {editingTitle ? (
@@ -1331,9 +1711,13 @@ function TimelineCard({
             </div>
           )}
 
-          {/* Flick hint */}
+          {/* HEAD はオリジナル保持ヒント、それ以外は flick hint */}
           {!step.isRoot && !sealed && (
-            <p className="mt-1.5 text-[8px] text-white/20 font-medium">↕ フリックで削除</p>
+            isHead ? (
+              <p className="mt-1.5 text-[8px] text-[#00D4AA]/60 font-bold tracking-wide">★ オリジナル画質保持</p>
+            ) : (
+              <p className="mt-1.5 text-[8px] text-white/20 font-medium">↕ フリックで削除</p>
+            )
           )}
         </div>
       )}
@@ -1341,7 +1725,6 @@ function TimelineCard({
   );
 }
 
-/* ── Evolution Scrub ── */
 function EvolutionScrub({
   steps,
   scrubIndex,
@@ -1362,7 +1745,6 @@ function EvolutionScrub({
         Evolution Scrub — 工程 {scrubIndex + 1} / {steps.length}
       </div>
       <div className="flex items-center gap-4">
-        {/* Thumbnail preview */}
         <AnimatePresence mode="wait">
           <motion.div
             key={scrubIndex}
@@ -1376,7 +1758,6 @@ function EvolutionScrub({
           </motion.div>
         </AnimatePresence>
 
-        {/* Slider */}
         <div className="flex-1 flex flex-col gap-2">
           <input
             type="range"
@@ -1399,11 +1780,10 @@ function EvolutionScrub({
   );
 }
 
-/* ── Slide to Seal ── */
 function SlideToSeal({ disabled, onSealed }: { disabled: boolean; onSealed: () => void }) {
   const TRACK_W = 280;
   const KNOB_W = 52;
-  const MAX_X = TRACK_W - KNOB_W - 8; // 8px = right padding
+  const MAX_X = TRACK_W - KNOB_W - 8;
   const x = useMotionValue(0);
   const sealed = useRef(false);
 
@@ -1429,7 +1809,6 @@ function SlideToSeal({ disabled, onSealed }: { disabled: boolean; onSealed: () =
         className="relative h-[56px] rounded-2xl border border-white/10 overflow-hidden flex items-center px-2"
         aria-label="スライドして封印"
       >
-        {/* Track label */}
         <motion.div
           style={{ opacity: labelOpacity }}
           className="absolute inset-0 flex items-center justify-center gap-2 pointer-events-none select-none"
@@ -1438,7 +1817,6 @@ function SlideToSeal({ disabled, onSealed }: { disabled: boolean; onSealed: () =
           <span className="text-sm font-bold text-[#A8A0D8]/60 tracking-wide">スライドして Chain of Evidence を封印</span>
         </motion.div>
 
-        {/* Draggable knob */}
         <motion.div
           drag="x"
           dragConstraints={{ left: 0, right: MAX_X }}
