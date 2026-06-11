@@ -727,8 +727,10 @@ function ChainOverlay({
   initialFiles: File[];
   onClose: () => void;
 }) {
-  // ESC で閉じる
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true); // 🚨 SSRを回避し、クライアント側でのみPortalを起動するためのフラグ
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
@@ -737,24 +739,26 @@ function ChainOverlay({
   }, [onClose]);
 
   const overlayContent = (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.22, ease: EASE }}
-      className="fixed inset-0 z-[120] overflow-y-auto"
-      style={{ 
+    <div
+      className="fixed inset-0 z-[99999] overflow-y-auto"
+      style={{
         position: 'fixed',
         top: 0,
         left: 0,
         width: '100vw',
         height: '100vh',
-        zIndex: 9999,
-        background: 'rgba(7,6,26,0.95)', 
-        backdropFilter: 'blur(12px)' 
+        background: 'rgba(7,6,26,0.95)',
+        backdropFilter: 'blur(12px)',
+        zIndex: 99999,
       }}
     >
-      <div className="min-h-full px-4 py-8 md:px-8 md:py-12">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        transition={{ duration: 0.3, ease: EASE }}
+        className="min-h-full px-4 py-8 md:px-8 md:py-12"
+      >
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -793,15 +797,13 @@ function ChainOverlay({
             onComplete={() => { /* composer が自前で navigate するため no-op */ }}
           />
         </div>
-      </div>
-    </motion.div>
+      </motion.div>
+    </div>
   );
 
-  // 🚨 究極の脱出装置 (React Portal): 親要素の overflow: hidden を無視して最前面に強制描画
-  if (typeof document !== 'undefined') {
-    return createPortal(overlayContent, document.body);
-  }
-  return null;
+  // 🚨 究極の脱出装置 (React Portal): mountedがtrueになった直後に document.body に強制マウント
+  if (!mounted || typeof document === 'undefined') return null;
+  return createPortal(overlayContent, document.body);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
