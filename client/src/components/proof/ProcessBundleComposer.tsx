@@ -517,59 +517,61 @@ export function ProcessBundleComposer({
     return results;
   }
 
-  /* ── fetchUploadUrls (Fix 1: deferred スキップ廃止 / Fix 3: 並列数3チャンク処理) ── */
+  /* 🚨 究極の洗練: クラウド破産(429)を防ぐバルク(一括)リクエストの完全復活 */
   const fetchUploadUrls = useCallback(async (newSteps: WorkspaceStep[]) => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) throw new Error('No token');
 
-      // Fix 1: s.deferred のスキップ条件を除去し、!s.file のみでスキップ
-      // Fix 3: processInChunks (並列数 3) で Vercel タイムアウトを防ぎつつ Supabase レートリミットも回避
-      const eligible = newSteps.filter((s) => !!s.file);
-      await processInChunks(eligible, 3, async (s) => {
-        let origUrl: string | undefined, origPath: string | undefined;
-        let thumbUrl: string | undefined, thumbPath: string | undefined;
+      // 1. ファイルが存在するステップを抽出（deferredフラグは無視して一斉処理）
+      const targets = newSteps.filter((s) => !!s.file);
+      if (targets.length === 0) return;
 
-        // 1. 原本URLの取得
-        const res1 = await fetch('/api/upload-url', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ filename: s.file!.name, contentType: s.file!.type || 'application/octet-stream', size: s.file!.size })
-        });
-        if (!res1.ok) throw new Error('Original URL fetch failed');
-        const data1 = await res1.json();
-        origUrl = data1.signedUrl;
-        origPath = data1.quarantinePath;
-
-        // 2. サムネURLの取得 (存在する場合のみ)
+      // 2. 150枚の工程(最大300リクエスト)を「1つの配列」に圧縮（ペイロードの構築）
+      const payloadItems = targets.flatMap((s) => {
+        const items = [
+          { fileName: s.file!.name, mimeType: s.file!.type || 'application/octet-stream', fileSize: s.file!.size }
+        ];
         if (s.thumbBlob) {
-          const res2 = await fetch('/api/upload-url', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ filename: `thumb_${s.id}.webp`, contentType: 'image/webp', size: s.thumbBlob.size })
-          });
-          if (res2.ok) {
-            const data2 = await res2.json();
-            thumbUrl = data2.signedUrl;
-            thumbPath = data2.quarantinePath;
-          }
+          items.push({ fileName: `thumb_${s.id}.webp`, mimeType: 'image/webp', fileSize: s.thumbBlob.size });
         }
-
-        // State更新 (チャンク内の各件が完了次第反映)
-        setSteps(cur => cur.map(c => c.id === s.id ? {
-          ...c,
-          signedUrl: origUrl,
-          quarantinePath: origPath,
-          thumbSignedUrl: thumbUrl,
-          thumbQuarantinePath: thumbPath,
-          uploadState: 'idle' as const,
-          deferred: false,
-        } : c));
+        return items;
       });
+
+      // 3. バルクエンドポイントへ「1回だけ」通信する（429レートリミットを物理的に回避）
+      const res = await fetch('/api/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ items: payloadItems, proofMode: isPublic ? 'shareable' : 'private' })
+      });
+
+      if (!res.ok) throw new Error('Bulk URL fetch failed');
+      const { urls } = await res.json();
+
+      // 4. 取得したURL群を各ステップにマッピングしてStateを更新
+      setSteps(cur => cur.map(s => {
+        const target = targets.find(t => t.id === s.id);
+        if (!target) return s;
+
+        const origIdx = payloadItems.findIndex(p => p.fileName === target.file!.name);
+        const thumbIdx = payloadItems.findIndex(p => p.fileName === `thumb_${target.id}.webp`);
+
+        return {
+          ...s,
+          signedUrl: urls[origIdx]?.signedUrl,
+          quarantinePath: urls[origIdx]?.quarantinePath,
+          thumbSignedUrl: thumbIdx !== -1 ? urls[thumbIdx]?.signedUrl : undefined,
+          thumbQuarantinePath: thumbIdx !== -1 ? urls[thumbIdx]?.quarantinePath : undefined,
+          uploadState: 'idle' as const,
+          deferred: false, // 🚨 ゴーストアップロードを許可し、一気にクラウドへ流し込む
+        };
+      }));
     } catch (err) {
       console.error('Upload URL fetch error:', err);
       setSteps(cur => cur.map(s => newSteps.some(ns => ns.id === s.id) ? { ...s, uploadState: 'error' as const } : s));
     }
-  }, []);
+  }, [isPublic]);
 
   /* ── attachThumb helper (for replaced images) ── */
   const attachThumb = useCallback(async (stepId: string, file: File) => {
