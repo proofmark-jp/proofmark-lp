@@ -218,11 +218,11 @@ export default async function handler(request: Request): Promise<Response> {
         public_verify_token: crypto.randomUUID(),
         storage_path: storagePath,
         public_image_url: publicImageUrl,
-        original_filename: safeFileName,
+        file_name: safeFileName,
         mime_type: statMime || item.mime_type,
         file_size: statSize,
         c2pa_manifest: c2paParsed,
-        metadata: {
+        metadata_json: {
           ...((item.metadataJson as any) || {}),
           upload_pipeline: 'quarantine-bulk.v3',
           bundle_id: bundleId,
