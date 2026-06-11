@@ -743,7 +743,16 @@ function ChainOverlay({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.22, ease: EASE }}
       className="fixed inset-0 z-[120] overflow-y-auto"
-      style={{ background: 'rgba(7,6,26,0.92)', backdropFilter: 'blur(12px)' }}
+      style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        zIndex: 9999,
+        background: 'rgba(7,6,26,0.95)', 
+        backdropFilter: 'blur(12px)' 
+      }}
     >
       <div className="min-h-full px-4 py-8 md:px-8 md:py-12">
         <div className="max-w-6xl mx-auto">
