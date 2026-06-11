@@ -49,6 +49,7 @@ interface CertificateItem {
 interface CreateBody {
   bundleId?: string;
   items?: CertificateItem[];
+  quarantinePath?: string;
 }
 
 class HttpError extends Error {
@@ -112,9 +113,17 @@ export default async function handler(request: Request): Promise<Response> {
     return json(400, { error: 'Invalid JSON body' });
   }
 
-  const items = Array.isArray(body.items) ? body.items : [];
+  // 👑 Dashboard(単一) と Composer(複数) の両方のフォーマットを吸収する
+  let items: CertificateItem[] = [];
+  if (Array.isArray(body.items)) {
+    items = body.items; // Composerからの配列
+  } else if (body.quarantinePath) {
+    items = [body as unknown as CertificateItem]; // Dashboardからの単一オブジェクトを配列に包む
+  }
+
+  // 🚨 エラーコードを 413 から 400 に修正（インフラエラーとの混同を防ぐ）
   if (items.length === 0 || items.length > MAX_CHAIN_LENGTH) {
-    return json(413, { error: `Chain length must be between 1 and ${MAX_CHAIN_LENGTH}` });
+    return json(400, { error: `Invalid payload or chain length (must be 1-${MAX_CHAIN_LENGTH})` });
   }
 
   const bundleId = body.bundleId || crypto.randomUUID();
