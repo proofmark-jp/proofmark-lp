@@ -147,7 +147,6 @@ interface CertRecord {
     storage_path: string | null;
     file_name: string | null;
     certified_at: string | null;
-    proven_at: string | null;
     created_at: string | null;
     timestamp_token: string | null;
     tsa_provider: string | null;
@@ -350,7 +349,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             const { data, error } = await admin
                 .from('certificates')
-                .select('id, user_id, title, sha256, proof_mode, visibility, public_image_url, storage_path, file_name, certified_at, proven_at, created_at, timestamp_token, tsa_provider, tsa_url, team_id, c2pa_manifest, file_size')
+                .select('id, user_id, title, sha256, proof_mode, visibility, public_image_url, storage_path, file_name, certified_at, created_at, timestamp_token, tsa_provider, tsa_url, team_id, c2pa_manifest, file_size')
                 .eq('id', certParam)
                 .maybeSingle();
 
@@ -416,7 +415,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const verifyUrl = `https://proofmark.jp/cert/${cert.id}`;
             const rawName = cert.file_name || 'asset.bin';
             const baseFile = safeFilename(rawName, 'asset.bin');
-            const jstTime = formatJst(cert.certified_at ?? cert.proven_at ?? cert.created_at);
+            const jstTime = formatJst(cert.certified_at ?? cert.created_at);
             const humanSize = formatBytes(cert.file_size);
             const displayCreatorName = profileRecord?.display_name ?? profileRecord?.username ?? 'ProofMark Creator';
 
@@ -547,7 +546,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 proof_mode: cert.proof_mode,
                 visibility: cert.visibility,
                 certified_at: cert.certified_at,
-                proven_at: cert.proven_at,
                 created_at: cert.created_at,
                 tsa_provider: cert.tsa_provider,
                 tsa_url: cert.tsa_url,

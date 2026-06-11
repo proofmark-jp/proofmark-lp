@@ -904,8 +904,17 @@ export function ProcessBundleComposer({
       const headStep = targets[targets.length - 1];
 
       const payload = {
-        bundleId: crypto.randomUUID(),
+        // メイン証明書用のルートプロパティ
+        quarantinePath: headStep.quarantinePath,
+        sha256: headStep.sha256,
         title: title || headStep.title || 'Chain of Evidence',
+        proofMode: isPublic ? 'shareable' : 'private',
+        visibility: isPublic ? 'public' : 'private',
+        file_name: headStep.file!.name,
+        file_size: headStep.file!.size,
+        mime_type: headStep.file!.type || 'application/octet-stream',
+        // バンドル用のプロパティ
+        bundleId: crypto.randomUUID(),
         description: description,
         items: targets.map((s, idx) => ({
           quarantinePath: s.quarantinePath,
@@ -919,7 +928,8 @@ export function ProcessBundleComposer({
           mime_type: s.file!.type || 'application/octet-stream',
           stepIndex: idx,
           isHead: idx === targets.length - 1
-        }))
+        })),
+        c2paManifest: null
       };
 
       // JWT取得 — /api/certificates/create への認証ヘッダーに使用
@@ -985,6 +995,16 @@ export function ProcessBundleComposer({
       const headStep = targets[targets.length - 1];
 
       const payload = {
+        // 既存証明書を更新するためのルートプロパティ
+        quarantinePath: headStep.quarantinePath,
+        sha256: headStep.sha256,
+        title: title || headStep.title || 'Chain of Evidence',
+        proofMode: isPublic ? 'shareable' : 'private',
+        visibility: isPublic ? 'public' : 'private',
+        file_name: headStep.file!.name,
+        file_size: headStep.file!.size,
+        mime_type: headStep.file!.type || 'application/octet-stream',
+        // バンドル用のプロパティ
         bundleId: certificate.process_bundle_id || crypto.randomUUID(),
         items: targets.map((s, idx) => ({
           quarantinePath: s.quarantinePath,
