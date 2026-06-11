@@ -41,6 +41,7 @@ import type { C2paManifest } from '../lib/c2pa-schema';
 import { DeliveryKitModal } from './DeliveryKitModal';
 import { usePromoteCertificate } from '../hooks/usePromoteCertificate';
 import { ProcessBundleComposer } from './proof/ProcessBundleComposer';
+import { createPortal } from 'react-dom';
 
 async function requestUploadUrl(file: File, token: string) {
   const res = await fetch('/api/upload-url', {
@@ -717,9 +718,6 @@ export default function CertificateUpload() {
 
 /* ═══════════════════════════════════════════════════════════════════
    ChainOverlay — Chain of Evidence をフルスクリーンで展開する薄いラッパ
-   ─────────────────────────────────────────────────────────────────
-   既存の Reorder / Framer Motion を持つ ProcessBundleComposer をそのまま
-   フルスクリーンに乗せる。閉じる動線は右上のクローズボタンのみ。
    ═══════════════════════════════════════════════════════════════════ */
 
 function ChainOverlay({
@@ -729,7 +727,7 @@ function ChainOverlay({
   initialFiles: File[];
   onClose: () => void;
 }) {
-  // ESC で閉じる（ただし合成中は閉じない: composer 側の guard で吸収）
+  // ESC で閉じる
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -738,7 +736,7 @@ function ChainOverlay({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  return (
+  const overlayContent = (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -780,7 +778,6 @@ function ChainOverlay({
             </button>
           </div>
 
-          {/* certificate は null。initialFiles を渡して Magic Mode で起動する */}
           <ProcessBundleComposer
             certificate={null}
             initialFiles={initialFiles}
@@ -790,6 +787,12 @@ function ChainOverlay({
       </div>
     </motion.div>
   );
+
+  // 🚨 究極の脱出装置 (React Portal): 親要素の overflow: hidden を無視して最前面に強制描画
+  if (typeof document !== 'undefined') {
+    return createPortal(overlayContent, document.body);
+  }
+  return null;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
