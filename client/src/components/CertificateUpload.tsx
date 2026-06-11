@@ -2,20 +2,20 @@
  * CertificateUpload.c2pa-patch.tsx — Phase 10 + Magic Dropzone (改修版)
  *
  * 改修点 (Magic Dropzone / Intelligent Routing):
- *   - `useDropzone` の maxFiles 制限を解除、`multiple: true` に変更。
- *   - onDrop に投げ込まれたファイル数で分岐:
- *       1 枚 → 既存 Single Proof フロー（圧縮なし・無変換）
- *       2 枚以上 → Chain of Evidence へ自動ルーティング
- *           - Free / 未ログイン → 中断 + ChainUpsell バナー
- *           - Creator (creator/light) → 最大 10 枚 (超過は切り捨て + 警告)
- *           - Studio / Business / Admin → 最大 150 枚 (超過は切り捨て + 警告)
- *           - 制限通過したファイルを ProcessBundleComposer にフルスクリーンで渡す
+ * - `useDropzone` の maxFiles 制限を解除、`multiple: true` に変更。
+ * - onDrop に投げ込まれたファイル数で分岐:
+ * 1 枚 → 既存 Single Proof フロー（圧縮なし・無変換）
+ * 2 枚以上 → Chain of Evidence へ自動ルーティング
+ * - Free / 未ログイン → 中断 + ChainUpsell バナー
+ * - Creator (creator/light) → 最大 10 枚 (超過は切り捨て + 警告)
+ * - Studio / Business / Admin → 最大 150 枚 (超過は切り捨て + 警告)
+ * - 制限通過したファイルを ProcessBundleComposer にフルスクリーンで渡す
  *
  * 不変条件 (一切壊さない):
- *   - C2PA Lazy Activation (probeC2paMagic / useC2pa)
- *   - DeliveryKitModal / promote フロー
- *   - Framer Motion による Dimmer / パルスボーダー / 枠発光
- *   - Free / 未ログインの C2PA Upsell
+ * - C2PA Lazy Activation (probeC2paMagic / useC2pa)
+ * - DeliveryKitModal / promote フロー
+ * - Framer Motion による Dimmer / パルスボーダー / 枠発光
+ * - Free / 未ログインの C2PA Upsell
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -288,10 +288,6 @@ export default function CertificateUpload() {
     }
 
     // ─── Composer をフルスクリーンで起動 ───────────────────────────
-    //
-    // ファイル配列の「最後の 1 枚」が HEAD (完成品) として扱われる。
-    // ProcessBundleComposer 側でハイブリッド圧縮が掛かるのは
-    // index 0 .. length-2 のみ。
     setBundleInitialFiles(accepted);
   }, [canUseChain, chainLimit, planTier, ingestSingleFile]);
 
@@ -419,7 +415,6 @@ export default function CertificateUpload() {
     onDrop,
     accept: dropzoneAccept,
     multiple: true,
-    // maxFiles を撤廃: 上限はプラン側ロジックで動的に判定する
   });
 
   const computedPhase = shellError ? 'error' : (isProcessing || c2paSignal === 'analysing') ? 'active' : windowDragActive ? 'hover' : 'idle';
@@ -566,7 +561,7 @@ export default function CertificateUpload() {
               </button>
             </div>
 
-            {/* 既存の Proof Mode 選択 (元コードから論理を維持) */}
+            {/* 既存の Proof Mode 選択 */}
             <div className="space-y-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-[#00D4AA]" /> 証明モードの選択
@@ -727,11 +722,10 @@ function ChainOverlay({
   initialFiles: File[];
   onClose: () => void;
 }) {
-  // 🚨 欠落していた超重要パーツ：SSRを回避し、安全に全画面展開するためのフラグ
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true); // クライアント側でDOMが準備完了したサイン
+    setMounted(true);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
@@ -739,6 +733,7 @@ function ChainOverlay({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // SSR回避・Portal用のコンテンツ
   const overlayContent = (
     <div
       className="fixed inset-0 overflow-y-auto"
@@ -748,9 +743,9 @@ function ChainOverlay({
         left: 0,
         width: '100vw',
         height: '100vh',
+        zIndex: 2147483647, // CSSの限界突破
         background: 'rgba(7,6,26,0.96)',
-        backdropFilter: 'blur(16px)',
-        zIndex: 999999, // 限界突破
+        backdropFilter: 'blur(16px)'
       }}
     >
       <motion.div
@@ -758,52 +753,34 @@ function ChainOverlay({
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
         transition={{ duration: 0.3, ease: EASE }}
-        className="min-h-full px-4 py-8 md:px-8 md:py-12"
+        className="min-h-full px-4 py-8 md:px-8 md:py-12 relative z-10"
       >
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                style={{
-                  background: 'rgba(0,212,170,0.12)',
-                  border: '1px solid rgba(0,212,170,0.35)',
-                  color: PM.success,
-                }}
-              >
-                <Layers3 className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-2xl flex items-center justify-center bg-[#00D4AA]/10 border border-[#00D4AA]/30">
+                <Layers3 className="w-5 h-5 text-[#00D4AA]" />
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.24em] text-[#A8A0D8]/70 font-bold">
-                  Chain of Evidence Studio
-                </p>
-                <h2 className="text-lg md:text-xl font-black text-white tracking-tight">
-                  {initialFiles.length} 工程を時系列に連結する
-                </h2>
+                <p className="text-[11px] uppercase tracking-[0.24em] text-[#A8A0D8]/70 font-bold">Chain of Evidence Studio</p>
+                <h2 className="text-lg md:text-xl font-black text-white tracking-tight">{initialFiles.length} 工程を時系列に連結する</h2>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-[#A8A0D8] hover:text-white border border-[#1C1A38] hover:border-[#6C3EF4]/40 rounded-xl transition-all"
-              title="閉じる (ESC)"
-            >
-              <X className="w-4 h-4" />
-              閉じる
+            <button onClick={onClose} className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-[#A8A0D8] hover:text-white border border-[#1C1A38] hover:border-[#6C3EF4]/40 rounded-xl transition-all">
+              <X className="w-4 h-4" /> 閉じる
             </button>
           </div>
-
           <ProcessBundleComposer
             certificate={null}
             initialFiles={initialFiles}
-            onComplete={() => { /* composer が自前で navigate するため no-op */ }}
+            onComplete={() => {}}
           />
         </div>
       </motion.div>
     </div>
   );
 
-  // 🚨 mounted が true になるまで（＝安全な状態になるまで）Portalを発動させない
-  if (!mounted) return null;
+  if (!mounted || typeof document === 'undefined') return null;
   return createPortal(overlayContent, document.body);
 }
 
