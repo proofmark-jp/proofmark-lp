@@ -512,38 +512,58 @@ export function ProcessBundleComposer({
     return results;
   }
 
-  /* ── fetchUploadUrls ── */
+  /* ── fetchUploadUrls (API 400エラー修復版) ── */
   const fetchUploadUrls = useCallback(async (newSteps: WorkspaceStep[]) => {
     try {
-      const payloadItems = newSteps.flatMap(s => [
-        { fileName: s.file!.name, mimeType: s.file!.type, fileSize: s.file!.size },
-        { fileName: `thumb_${s.id}.webp`, mimeType: 'image/webp', fileSize: s.thumbBlob?.size ?? 0 }
-      ]);
-      const res = await fetch('/api/upload-url', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: payloadItems, proofMode: isPublic ? 'shareable' : 'private' })
-      });
-      if (!res.ok) throw new Error('Failed to get upload URLs.');
-      const { urls } = await res.json();
-      setSteps(cur => cur.map(s => {
-        const target = newSteps.find(ns => ns.id === s.id);
-        if (!target) return s;
-        const oIdx = payloadItems.findIndex(p => p.fileName === target.file!.name);
-        const tIdx = payloadItems.findIndex(p => p.fileName === `thumb_${target.id}.webp`);
-        return {
-          ...s,
-          signedUrl: urls[oIdx]?.signedUrl,
-          quarantinePath: urls[oIdx]?.quarantinePath,
-          thumbSignedUrl: urls[tIdx]?.signedUrl,
-          thumbQuarantinePath: urls[tIdx]?.quarantinePath,
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('No token');
+
+      // 🚨 直列で1件ずつAPIを叩く (Bulk配列による 400 Bad Request を回避)
+      for (const s of newSteps) {
+        if (s.deferred || !s.file) continue;
+
+        let origUrl, origPath, thumbUrl, thumbPath;
+
+        // 1. 原本URLの取得
+        const res1 = await fetch('/api/upload-url', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ filename: s.file.name, contentType: s.file.type || 'application/octet-stream', size: s.file.size })
+        });
+        if (!res1.ok) throw new Error('Original URL fetch failed');
+        const data1 = await res1.json();
+        origUrl = data1.signedUrl;
+        origPath = data1.quarantinePath;
+
+        // 2. サムネURLの取得 (存在する場合のみ)
+        if (s.thumbBlob) {
+          const res2 = await fetch('/api/upload-url', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ filename: `thumb_${s.id}.webp`, contentType: 'image/webp', size: s.thumbBlob.size })
+          });
+          if (res2.ok) {
+            const data2 = await res2.json();
+            thumbUrl = data2.signedUrl;
+            thumbPath = data2.quarantinePath;
+          }
+        }
+
+        // State更新 (1件ずつ確実に反映)
+        setSteps(cur => cur.map(c => c.id === s.id ? {
+          ...c,
+          signedUrl: origUrl,
+          quarantinePath: origPath,
+          thumbSignedUrl: thumbUrl,
+          thumbQuarantinePath: thumbPath,
           uploadState: 'idle' as const,
-          deferred: false, // ← Magic Mode 終結後はゴーストアップロードへ流す
-        };
-      }));
-    } catch {
+          deferred: false,
+        } : c));
+      }
+    } catch (err) {
+      console.error('Upload URL fetch error:', err);
       setSteps(cur => cur.map(s => newSteps.some(ns => ns.id === s.id) ? { ...s, uploadState: 'error' as const } : s));
     }
-  }, [isPublic]);
+  }, []);
 
   /* ── attachThumb helper (for replaced images) ── */
   const attachThumb = useCallback(async (stepId: string, file: File) => {
@@ -1529,7 +1549,7 @@ function TimelineCard({
       exit={{ opacity: 0, scale: 0.85, y: -20 }}
       transition={{ type: 'spring', stiffness: 300, damping: 28 }}
       className={`
-        relative w-[190px] md:w-[210px] rounded-2xl border backdrop-blur-md touch-pan-y
+        relative w-[150px] sm:w-[190px] md:w-[210px] rounded-2xl border backdrop-blur-md touch-pan-y
         transition-[border-color,box-shadow] duration-300 shrink-0 group/card cursor-grab active:cursor-grabbing
         bg-white/5
         ${isSilentAnchor || isHead
@@ -1781,19 +1801,32 @@ function EvolutionScrub({
 }
 
 function SlideToSeal({ disabled, onSealed }: { disabled: boolean; onSealed: () => void }) {
-  const TRACK_W = 280;
-  const KNOB_W = 52;
-  const MAX_X = TRACK_W - KNOB_W - 8;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [trackWidth, setTrackWidth] = useState(280);
   const x = useMotionValue(0);
   const sealed = useRef(false);
 
+  // 🚨 画面幅に合わせてスライダーの長さを動的に計算（モバイル対応）
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) setTrackWidth(containerRef.current.offsetWidth);
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  const KNOB_W = 52;
+  const MAX_X = Math.max(0, trackWidth - KNOB_W - 8);
+
   const trackBg = useTransform(x, [0, MAX_X], ['rgba(255,255,255,0.05)', 'rgba(0,212,170,0.18)']);
   const knobBg = useTransform(x, [0, MAX_X], ['#6C3EF4', '#00D4AA']);
-  const labelOpacity = useTransform(x, [0, MAX_X * 0.4], [1, 0]);
+  const labelOpacity = useTransform(x, [0, MAX_X * 0.5], [1, 0]);
 
   const handleDragEnd = () => {
     if (sealed.current) return;
-    if (x.get() >= MAX_X - 10) {
+    // 🚨 80% まで引けば確定 (スマホの適当なフリックでも発火するUXの魔法)
+    if (x.get() >= MAX_X * 0.8) {
       sealed.current = true;
       animate(x, MAX_X, { type: 'spring', stiffness: 400, damping: 28 });
       onSealed();
@@ -1803,18 +1836,20 @@ function SlideToSeal({ disabled, onSealed }: { disabled: boolean; onSealed: () =
   };
 
   return (
-    <div className={`transition-opacity duration-300 ${disabled ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+    <div className={`transition-opacity duration-300 w-full max-w-md mx-auto ${disabled ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
       <motion.div
+        ref={containerRef}
         style={{ background: trackBg }}
-        className="relative h-[56px] rounded-2xl border border-white/10 overflow-hidden flex items-center px-2"
-        aria-label="スライドして封印"
+        className="relative h-[56px] w-full rounded-2xl border border-white/10 overflow-hidden flex items-center px-1"
       >
         <motion.div
           style={{ opacity: labelOpacity }}
-          className="absolute inset-0 flex items-center justify-center gap-2 pointer-events-none select-none"
+          className="absolute inset-0 flex items-center justify-center gap-2 pointer-events-none select-none px-4"
         >
-          <Layers3 className="w-4 h-4 text-[#A8A0D8]/60" />
-          <span className="text-sm font-bold text-[#A8A0D8]/60 tracking-wide">スライドして Chain of Evidence を封印</span>
+          <Layers3 className="w-4 h-4 text-[#A8A0D8]/60 shrink-0" />
+          <span className="text-xs md:text-sm font-bold text-[#A8A0D8]/60 tracking-wide truncate">
+            スライドして封印 (Seal)
+          </span>
         </motion.div>
 
         <motion.div
@@ -1825,12 +1860,12 @@ function SlideToSeal({ disabled, onSealed }: { disabled: boolean; onSealed: () =
           style={{ x, background: knobBg }}
           onDragEnd={handleDragEnd}
           whileDrag={{ scale: 1.08 }}
-          className="relative z-10 w-[52px] h-10 rounded-xl flex items-center justify-center cursor-grab active:cursor-grabbing shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
+          className="relative z-10 w-[52px] h-[48px] rounded-xl flex items-center justify-center cursor-grab active:cursor-grabbing shadow-[0_4px_16px_rgba(0,0,0,0.3)] shrink-0"
         >
           <Lock className="w-4 h-4 text-white" />
         </motion.div>
       </motion.div>
-      <p className="mt-2 text-[10px] text-[#A8A0D8]/30 text-center font-medium">
+      <p className="mt-2 text-[10px] text-[#A8A0D8]/40 text-center font-medium">
         右端まで引いて封印 — 確定後は変更不可
       </p>
     </div>
