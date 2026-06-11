@@ -1,9 +1,10 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useRoute, useLocation, Link } from 'wouter';
 import { QRCodeSVG } from 'qrcode.react';
 import {
     CheckCircle, Clock, ShieldCheck, Image as ImageIcon, Copy, Check, FileText,
     Lock, ShieldAlert, Flag, Package, Gavel, Sparkles, ChevronRight, Layers3,
+    RefreshCw,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import * as Tooltip from '@radix-ui/react-tooltip';
@@ -42,6 +43,82 @@ export default function CertificatePage() {
     const { user, profile, signOut } = useAuth();
 
     const isOwner = user && user.id === cert?.user_id;
+
+    // ═══════════════════════════════════════════════
+    //   Lazy-Sync: TSA Auto-Sync Engine
+    // ═══════════════════════════════════════════════
+    type TsaStatus = 'idle' | 'syncing' | 'synced' | 'failed';
+    const [tsaStatus, setTsaStatus] = useState<TsaStatus>('idle');
+    const tsaPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const triggerTsaSync = useCallback(async (certId: string, sha256: string) => {
+        setTsaStatus('syncing');
+        try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData.session?.access_token;
+            if (!token) { setTsaStatus('failed'); return; }
+
+            const isSyncingFromStore = sessionStorage.getItem('tsa_syncing_' + certId) === 'true';
+
+            if (!isSyncingFromStore) {
+                // Fire timestamp request (not awaited for result)
+                fetch('/api/timestamp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ certId, hash: sha256 }),
+                    keepalive: true,
+                }).catch(() => {});
+            }
+
+            // Poll Supabase for certified_at (3s intervals, max 10 attempts)
+            let attempts = 0;
+            if (tsaPollRef.current) clearInterval(tsaPollRef.current);
+            tsaPollRef.current = setInterval(async () => {
+                attempts++;
+                try {
+                    const { data } = await supabase.from('certificates')
+                        .select('certified_at')
+                        .eq('id', certId).single();
+                    if (data?.certified_at) {
+                        if (tsaPollRef.current) clearInterval(tsaPollRef.current);
+                        tsaPollRef.current = null;
+                        setCert((prev: any) => prev ? ({ ...prev, certified_at: data.certified_at }) : prev);
+                        setTsaStatus('synced');
+                        sessionStorage.removeItem('tsa_syncing_' + certId);
+                    } else if (attempts >= 10) {
+                        if (tsaPollRef.current) clearInterval(tsaPollRef.current);
+                        tsaPollRef.current = null;
+                        setTsaStatus('failed');
+                        sessionStorage.removeItem('tsa_syncing_' + certId);
+                    }
+                } catch {
+                    // polling failure — continue until max attempts
+                }
+            }, 3000);
+        } catch {
+            setTsaStatus('failed');
+            sessionStorage.removeItem('tsa_syncing_' + certId);
+        }
+    }, []);
+
+    const handleRetry = useCallback(() => {
+        if (!cert || !isOwner || cert.certified_at) return;
+        triggerTsaSync(cert.id, cert.sha256);
+    }, [cert?.id, cert?.sha256, isOwner, cert?.certified_at, triggerTsaSync]);
+
+    // Auto-trigger on mount when owner + no timestamp
+    useEffect(() => {
+        if (!cert || !isOwner || cert.certified_at || tsaStatus !== 'idle') return;
+        if (!cert.sha256) return;
+        triggerTsaSync(cert.id, cert.sha256);
+    }, [cert?.id, isOwner, cert?.certified_at, cert?.sha256, tsaStatus, triggerTsaSync]);
+
+    // Cleanup polling on unmount
+    useEffect(() => {
+        return () => {
+            if (tsaPollRef.current) clearInterval(tsaPollRef.current);
+        };
+    }, []);
 
     const handleReportAbuse = () => {
         const subject = encodeURIComponent(`【通報】違法・悪質なコンテンツについて (ID: ${cert?.id})`);
@@ -260,6 +337,15 @@ export default function CertificatePage() {
                 @keyframes pm-shimmer {
                   0%   { transform: translateX(-120%) skewX(-12deg); }
                   100% { transform: translateX(220%)  skewX(-12deg); }
+                }
+
+                /* ───────── Lazy-Sync: amber timestamp pulse ───────── */
+                @keyframes pm-tsa-pulse {
+                  0%, 100% { opacity: 0.7; box-shadow: 0 0 0 0 rgba(240,187,56,0.5); }
+                  50%      { opacity: 1;   box-shadow: 0 0 0 8px rgba(240,187,56,0); }
+                }
+                .pm-tsa-syncing {
+                  animation: pm-tsa-pulse 2s ease-in-out infinite;
                 }
                 .pm-shimmer-host { position: relative; overflow: hidden; isolation: isolate; }
                 .pm-shimmer-host::after {
@@ -573,10 +659,14 @@ export default function CertificatePage() {
                                         >
                                             {new Date(cert.created_at).toLocaleString('ja-JP')}
                                         </p>
-                                        {cert?.certified_at && (
+                                        {/* ═══ Lazy-Sync: 3-State RFC3161 Badge ═══ */}
+                                        {cert?.certified_at ? (
                                             <motion.div
                                                 className="mt-2 flex items-center space-x-1.5 text-[#00D4AA] bg-[#00D4AA]/10 border border-[#00D4AA]/30 px-3 py-1 rounded-full w-fit print:bg-teal-50 print:border-teal-200 print:text-teal-700"
+                                                initial={tsaStatus === 'synced' ? { scale: 0.8, opacity: 0 } : false}
                                                 animate={{
+                                                    scale: 1,
+                                                    opacity: 1,
                                                     boxShadow: [
                                                         '0 0 0 0 rgba(0,212,170,0.5)',
                                                         '0 0 0 6px rgba(0,212,170,0)',
@@ -590,7 +680,29 @@ export default function CertificatePage() {
                                                     RFC3161 Verified
                                                 </span>
                                             </motion.div>
-                                        )}
+                                        ) : tsaStatus === 'syncing' ? (
+                                            <div className="mt-2 flex items-center space-x-1.5 text-[#F0BB38] bg-[#F0BB38]/10 border border-[#F0BB38]/30 px-3 py-1 rounded-full w-fit pm-tsa-syncing">
+                                                <motion.div
+                                                    animate={{ rotate: 360 }}
+                                                    transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                                                >
+                                                    <RefreshCw className="w-3.5 h-3.5" />
+                                                </motion.div>
+                                                <span className="text-[10px] font-black tracking-widest uppercase">
+                                                    Timestamping...
+                                                </span>
+                                            </div>
+                                        ) : tsaStatus === 'failed' && isOwner ? (
+                                            <button
+                                                onClick={handleRetry}
+                                                className="mt-2 flex items-center space-x-1.5 text-[#A8A0D8] hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 px-3 py-1 rounded-full w-fit transition-all cursor-pointer group"
+                                            >
+                                                <RefreshCw className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-500" />
+                                                <span className="text-[10px] font-bold tracking-widest uppercase">
+                                                    Retry Timestamp
+                                                </span>
+                                            </button>
+                                        ) : null}
                                         <p className="text-[10px] sm:text-xs text-[#A8A0D8] mt-1 print:text-gray-500">改ざん不能な技術で真正性が担保されています</p>
                                     </div>
 

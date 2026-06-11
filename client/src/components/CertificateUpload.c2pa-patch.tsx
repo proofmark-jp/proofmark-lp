@@ -324,6 +324,7 @@ export default function CertificateUpload() {
 
       // --- Fire and Forget TSA Trigger (バックグラウンド自動付与) ---
       // ユーザーの画面遷移をブロックしないようawaitせず、keepaliveでブラウザに確実な送信を担保させる
+      sessionStorage.setItem('tsa_syncing_' + certId, 'true');
       fetch('/api/timestamp', {
         method: 'POST',
         headers: {

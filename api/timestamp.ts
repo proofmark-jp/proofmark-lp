@@ -52,17 +52,27 @@ function requireEnv(name: string): string {
 // ──────────────────────────────────────────────────────────────────────────
 // 1. Rate Limit (Upstash Redis — Fail-open)
 // ──────────────────────────────────────────────────────────────────────────
+let redis: Redis | null = null;
 let ratelimit: Ratelimit | null = null;
+let certRatelimit: Ratelimit | null = null;
 try {
-    const redis = new Redis({
+    redis = new Redis({
         url: process.env.KV_REST_API_URL || '',
         token: process.env.KV_REST_API_TOKEN || '',
     });
+    // Per-user: 20 req/min (既存)
     ratelimit = new Ratelimit({
         redis,
-        limiter: Ratelimit.slidingWindow(20, '1 m'), // 1分間に20回まで
+        limiter: Ratelimit.slidingWindow(20, '1 m'),
         analytics: true,
         prefix: 'ratelimit_ts',
+    });
+    // Per-certificate: 1 req/60s (Lazy-Sync 防衛線)
+    certRatelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.fixedWindow(1, '60 s'),
+        analytics: false,
+        prefix: 'ratelimit_ts_cert',
     });
 } catch (error) {
     console.error('[RateLimit] Initialization failed:', error);
@@ -139,7 +149,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || 'unknown';
 
-    // --- Rate Limit Check (Upstash Redis) ---
+    // --- Rate Limit Check: Per-User (Upstash Redis) ---
     if (ratelimit) {
         try {
             const { success, reset } = await ratelimit.limit(`${userId}:${ip}`);
@@ -151,6 +161,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } catch (limitError) {
             // Fail-open: Redis障害時はクラッシュさせず通過させる
             console.error('[RateLimit] Error:', limitError);
+        }
+    }
+
+    // --- Rate Limit Check: Per-Certificate Cooldown (Lazy-Sync 防衛線) ---
+    if (certRatelimit) {
+        try {
+            const { success: certSuccess } = await certRatelimit.limit(body.certId);
+            if (!certSuccess) {
+                res.setHeader('Retry-After', '60');
+                return res.status(429).json({ error: 'Certificate timestamp already in progress', reqId });
+            }
+        } catch (limitError) {
+            // Fail-open
+            console.error('[RateLimit:cert] Error:', limitError);
         }
     }
 
