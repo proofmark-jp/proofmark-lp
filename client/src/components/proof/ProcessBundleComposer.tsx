@@ -996,9 +996,22 @@ export function ProcessBundleComposer({
           stepIndex: idx
         }))
       };
-      const res = await fetch('/api/certificates/create', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+
+      const { data: authData } = await supabase.auth.getSession();
+      const token = authData.session?.access_token;
+      if (!token) throw new Error('認証セッションが切れました。再度ログインしてください。');
+
+      const { data: authData } = await supabase.auth.getSession();
+      const token = authData.session?.access_token;
+      if (!token) throw new Error('認証セッションが切れました。再度ログインしてください。');
+
+      const res = await fetch('/api/certificates/create', { 
+        method: 'POST', 
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        }, 
+        body: JSON.stringify(payload) 
       });
       if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
       const data = await res.json();
