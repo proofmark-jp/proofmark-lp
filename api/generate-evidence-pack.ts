@@ -1,6 +1,6 @@
 /**
  * GET /api/generate-evidence-pack?cert=<UUID>
- *      OR
+ * OR
  * GET /api/generate-evidence-pack?spot=<sessionId>&staging=<uuid>
  *
  * In-Browser ZIP Assembly Architecture (v4)
@@ -10,12 +10,12 @@
  * 用いてPDF生成・ZIP組み立て・ダウンロードの全重労働を担う。
  *
  * レスポンス形式: application/json — EvidencePackPayload
- *   • filename     : ZIPのファイル名
- *   • pdfMeta      : フロントのPDF生成に必要な certInput / coverInput
- *   • files        : ZIPに含める各ファイル記述子の配列
- *     - type:"text"   → content: 文字列のまま
- *     - type:"base64" → content: Base64文字列 (バイナリを安全に転送)
- *     - type:"url"    → url: 署名付きURL (ブラウザがfetchして追加)
+ * • filename     : ZIPのファイル名
+ * • pdfMeta      : フロントのPDF生成に必要な certInput / coverInput
+ * • files        : ZIPに含める各ファイル記述子の配列
+ * - type:"text"   → content: 文字列のまま
+ * - type:"base64" → content: Base64文字列 (バイナリを安全に転送)
+ * - type:"url"    → url: 署名付きURL (ブラウザがfetchして追加)
  *
  * 既存 invariants (Auth/Spot分岐, 権限チェック, RateLimit, Plan Guard) 完全維持。
  */
@@ -129,11 +129,10 @@ try {
 const C2PA_HARD_CAP_BYTES = 10 * 1024;
 const TSA_CA_FETCH_TIMEOUT_MS = 3_000;
 const TSA_CA_TTL_MS = 6 * 60 * 60 * 1000;
-// 原画signed URLの有効期間: PDF生成などに時間がかかることを考慮して300秒
 const SIGNED_URL_EXPIRY_SEC = 300;
 
 // ─────────────────────────────────────────────────────────
-// DB Record Interfaces
+// DB Record Interfaces (🚨 監査により実在しないカラムを完全切除)
 // ─────────────────────────────────────────────────────────
 
 interface CertRecord {
@@ -151,7 +150,6 @@ interface CertRecord {
     timestamp_token: string | null;
     tsa_provider: string | null;
     tsa_url: string | null;
-    team_id: string | null;
     c2pa_manifest: Record<string, unknown> | null;
     file_size?: number | null;
 }
@@ -198,7 +196,7 @@ function safeC2paJson(raw: Record<string, unknown> | null): { json: string; byte
 }
 
 // ─────────────────────────────────────────────────────────
-// Helpers: verify scripts (unchanged)
+// Helpers: verify scripts
 // ─────────────────────────────────────────────────────────
 
 function buildVerifyShellScript(): string {
@@ -267,7 +265,7 @@ function buildVerifyPython(): string {
 }
 
 // ─────────────────────────────────────────────────────────
-// Helpers: TSA CA bundle cache (process-local LRU=1, TTL 6h)
+// Helpers: TSA CA bundle cache
 // ─────────────────────────────────────────────────────────
 
 let tsaCaCache: { ca: Buffer; tsa: Buffer; expiresAt: number } | null = null;
@@ -313,7 +311,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!methodGuard(req, res, ['GET'])) return;
 
-    // --- Rate Limit Check ---
     if (ratelimit) {
         const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || '127.0.0.1';
         try {
@@ -347,9 +344,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (!UUID.test(certParam)) throw new HttpError(400, 'cert must be a UUID');
             const user = await tryUser(req);
 
+            // 🚨 監査対応: 存在しない旧カラムを .select() から完全削除
             const { data, error } = await admin
                 .from('certificates')
-                .select('id, user_id, title, sha256, proof_mode, visibility, public_image_url, storage_path, file_name, certified_at, created_at, timestamp_token, tsa_provider, tsa_url, team_id, c2pa_manifest, file_size')
+                .select('id, user_id, title, sha256, proof_mode, visibility, public_image_url, storage_path, file_name, certified_at, created_at, timestamp_token, tsa_provider, tsa_url, c2pa_manifest, file_size')
                 .eq('id', certParam)
                 .maybeSingle();
 
@@ -359,18 +357,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             const isPublic = visibility === 'public' || visibility === 'unlisted';
             let isAuthorized = isPublic || (!!user && user.id === data.user_id);
-            if (!isAuthorized && !!user && data.team_id) {
-                const { data: member } = await admin
-                    .from('team_members')
-                    .select('role')
-                    .eq('team_id', data.team_id)
-                    .eq('user_id', user.id)
-                    .maybeSingle();
-                if (member) isAuthorized = true;
-            }
+            
+            // 🚨 監査対応: team_id カラム削除に伴う権限デッドロックのブロックを除去
             if (!isAuthorized) throw new HttpError(403, 'Not authorized');
 
-            // --- Plan Tier Check (Monetization Guard) ---
             if (data.user_id) {
                 const { data: profile } = await admin
                     .from('profiles')
@@ -413,17 +403,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (downloadKind === 'auth' && cert) {
             const sha256 = cert.sha256 ?? '';
             const verifyUrl = `https://proofmark.jp/cert/${cert.id}`;
-            const rawName = cert.file_name || 'asset.bin';
-            const baseFile = safeFilename(rawName, 'asset.bin');
+            // 🚨 監査対応: original_filename を排除し file_name に一本化
+            const baseFile = safeFilename(cert.file_name, 'asset.bin');
+            // 🚨 監査対応: proven_at を排除し certified_at / created_at でハンドリング
             const jstTime = formatJst(cert.certified_at ?? cert.created_at);
             const humanSize = formatBytes(cert.file_size);
             const displayCreatorName = profileRecord?.display_name ?? profileRecord?.username ?? 'ProofMark Creator';
 
-            // --- c2pa ---
             const c2paBlob = safeC2paJson(cert.c2pa_manifest);
             const c2paIncluded = c2paBlob !== null;
 
-            // --- chain of evidence ---
             let chainIncluded = false;
             try {
                 const chainBuffer = await buildChainOfEvidence(admin, cert.id, { log });
@@ -439,11 +428,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 log.warn({ event: 'chain.build_failed', message: String((err as Error)?.message ?? err) });
             }
 
-            // --- legal guide PDF ---
             const legalPdf = await getLegalCopyrightPdf(log);
             const legalGuideIncluded = legalPdf !== null;
 
-            // --- original file (shareable) — signed URL for browser fetch ---
             let originalIncluded = false;
             if (cert.proof_mode === 'shareable' && cert.storage_path) {
                 try {
@@ -471,7 +458,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 }
             }
 
-            // --- fileTree (for Cover Letter PDF) ---
             const fileTree: Array<{ name: string; size: string; description?: string }> = [
                 { name: 'Cover_Letter.pdf', size: '—', description: 'ProofMark Client Hand-off Letter (PDF)' },
                 { name: 'Certificate_of_Authenticity.pdf', size: '—', description: 'Cryptographic Certificate of Authenticity (PDF)' },
@@ -488,7 +474,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 { name: 'freetsa-tsa.crt', size: '—', description: 'FreeTSA TSA Certificate' },
             ];
 
-            // --- pdfMeta ---
             const certInput: PdfMetaCertInput = {
                 certificateId: cert.id,
                 creatorDisplayName: displayCreatorName,
@@ -502,11 +487,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             };
             pdfMeta = { certInput, coverInput: { ...certInput, fileTree } };
 
-            // --- Static files ---
             files.push({ name: 'hash.txt', type: 'text', content: `SHA256= ${sha256}\n` });
 
             if (cert.timestamp_token) {
-                // cert.timestamp_token はDBにBase64で保存されているためそのまま渡す
                 files.push({ name: 'timestamp.tsr', type: 'base64', content: cert.timestamp_token });
             } else {
                 files.push({
@@ -539,6 +522,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             files.push({ name: 'verify.sh', type: 'text', content: buildVerifyShellScript() });
             files.push({ name: 'verify.py', type: 'text', content: buildVerifyPython() });
 
+            // 🚨 監査対応: メタデータJSONの旧プロパティを完全消去
             const meta = {
                 certificate_id: cert.id,
                 title: cert.title ?? null,
@@ -557,7 +541,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             };
             files.push({ name: 'metadata.json', type: 'text', content: JSON.stringify(meta, null, 2) });
 
-            // --- TSA CA certs ---
             const caBundle = await fetchTsaCa();
             if (caBundle) {
                 files.push({ name: 'freetsa-ca.crt', type: 'base64', content: caBundle.ca.toString('base64') });
@@ -576,11 +559,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const baseFile = safeFilename(spotOrder.filename, 'artwork.bin');
             const jstTime = formatJst(spotOrder.paid_at);
 
-            // --- legal guide PDF ---
             const legalPdf = await getLegalCopyrightPdf(log);
             const legalGuideIncluded = legalPdf !== null;
 
-            // --- fileTree ---
             const fileTree: Array<{ name: string; size: string; description?: string }> = [
                 { name: 'Cover_Letter.pdf', size: '—', description: 'ProofMark Spot Client Hand-off Letter (PDF)' },
                 { name: 'Certificate_of_Authenticity.pdf', size: '—', description: 'Cryptographic Certificate of Authenticity (PDF)' },
@@ -594,7 +575,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 { name: 'freetsa-tsa.crt', size: '—', description: 'FreeTSA TSA Certificate' },
             ];
 
-            // --- pdfMeta ---
             const certInput: PdfMetaCertInput = {
                 certificateId: spotOrder.staging_id,
                 creatorDisplayName: spotOrder.email ?? 'ProofMark Spot Creator',
@@ -608,10 +588,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             };
             pdfMeta = { certInput, coverInput: { ...certInput, fileTree } };
 
-            // --- Static files ---
             files.push({ name: 'hash.txt', type: 'text', content: `SHA256= ${sha256}\n` });
 
-            // Spot timestamp.tsr はプライベートバケット → サーバー側で全量DLしてbase64化
             try {
                 const { data: tsrBlob, error: tsrErr } = await admin
                     .storage
@@ -667,7 +645,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 ),
             });
 
-            // --- TSA CA certs ---
             const caBundle = await fetchTsaCa();
             if (caBundle) {
                 files.push({ name: 'freetsa-ca.crt', type: 'base64', content: caBundle.ca.toString('base64') });
@@ -677,7 +654,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             throw new HttpError(500, 'Invalid download kind');
         }
 
-        // ── Return JSON Payload ──────────────────────────────────
         const payload: EvidencePackPayload = {
             filename: evidencePackName,
             pdfMeta: pdfMeta!,

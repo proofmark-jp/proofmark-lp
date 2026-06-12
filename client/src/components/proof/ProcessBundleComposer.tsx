@@ -904,7 +904,7 @@ export function ProcessBundleComposer({
       const headStep = targets[targets.length - 1];
 
       const payload = {
-        // メイン証明書用のルートプロパティ
+        // --- Root Properties (HEADの情報を送信し、これを本体としてPromoteさせる) ---
         quarantinePath: headStep.quarantinePath,
         sha256: headStep.sha256,
         title: title || headStep.title || 'Chain of Evidence',
@@ -913,22 +913,24 @@ export function ProcessBundleComposer({
         file_name: headStep.file!.name,
         file_size: headStep.file!.size,
         mime_type: headStep.file!.type || 'application/octet-stream',
-        // バンドル用のプロパティ
-        bundleId: crypto.randomUUID(),
-        description: description,
-        items: targets.map((s, idx) => ({
-          quarantinePath: s.quarantinePath,
-          thumbnailPath: s.thumbQuarantinePath,
-          sha256: s.sha256,
-          title: s.title,
-          proofMode: isPublic ? 'shareable' : 'private',
-          visibility: isPublic ? 'public' : 'private',
-          file_name: s.file!.name,
-          file_size: s.file!.size,
-          mime_type: s.file!.type || 'application/octet-stream',
-          stepIndex: idx,
-          isHead: idx === targets.length - 1
-        })),
+        // --- Merkle Rollup (過去の全工程のハッシュ履歴をメタデータに封入) ---
+        metadataJson: {
+          original_filename: headStep.file!.name,
+          original_size: headStep.file!.size,
+          is_preview_compressed: false,
+          bundle_id: crypto.randomUUID(),
+          bundle_description: description,
+          chain_depth: targets.length,
+          chain_history: targets.map((s, idx) => ({
+             stepIndex: idx,
+             sha256: s.sha256,
+             title: s.title,
+             isHead: idx === targets.length - 1,
+             // サムネイルなどのパスが必要な場合はここに含める
+             thumbnailPath: s.thumbQuarantinePath,
+             quarantinePath: s.quarantinePath
+          }))
+        },
         c2paManifest: null
       };
 
@@ -995,7 +997,6 @@ export function ProcessBundleComposer({
       const headStep = targets[targets.length - 1];
 
       const payload = {
-        // 既存証明書を更新するためのルートプロパティ
         quarantinePath: headStep.quarantinePath,
         sha256: headStep.sha256,
         title: title || headStep.title || 'Chain of Evidence',
@@ -1004,21 +1005,22 @@ export function ProcessBundleComposer({
         file_name: headStep.file!.name,
         file_size: headStep.file!.size,
         mime_type: headStep.file!.type || 'application/octet-stream',
-        // バンドル用のプロパティ
-        bundleId: certificate.process_bundle_id || crypto.randomUUID(),
-        items: targets.map((s, idx) => ({
-          quarantinePath: s.quarantinePath,
-          thumbnailPath: s.thumbQuarantinePath,
-          sha256: s.sha256,
-          title: s.title,
-          proofMode: isPublic ? 'shareable' : 'private',
-          visibility: isPublic ? 'public' : 'private',
-          file_name: s.file!.name,
-          file_size: s.file!.size,
-          mime_type: s.file!.type || 'application/octet-stream',
-          stepIndex: idx,
-          isHead: idx === targets.length - 1
-        }))
+        metadataJson: {
+          original_filename: headStep.file!.name,
+          original_size: headStep.file!.size,
+          is_preview_compressed: false,
+          bundle_id: certificate.process_bundle_id || crypto.randomUUID(),
+          chain_depth: targets.length,
+          chain_history: targets.map((s, idx) => ({
+             stepIndex: idx,
+             sha256: s.sha256,
+             title: s.title,
+             isHead: idx === targets.length - 1,
+             thumbnailPath: s.thumbQuarantinePath,
+             quarantinePath: s.quarantinePath
+          }))
+        },
+        c2paManifest: null
       };
 
       const { data: authData } = await supabase.auth.getSession();
