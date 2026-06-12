@@ -358,7 +358,7 @@ export function ProcessBundleComposer({
   }, [magicMode, initialFiles]);
 
   /* ═════════════════════════════════════════════════════════════
-     既存: certificate ベース・ハイドレーション (Magic Mode 時はスキップ)
+     既存: certificate ベース・ハイドレーション (The Merkle Rollup 対応版)
      ═════════════════════════════════════════════════════════════ */
   useEffect(() => {
     if (magicMode) return; // ← v3: Magic Mode は排他
@@ -366,80 +366,80 @@ export function ProcessBundleComposer({
 
     let isMounted = true;
     const loadExistingChain = async () => {
-      if (!certificate.process_bundle_id) {
+
+      // 👑 1. The Merkle Rollup アーキテクチャからの復元 (最優先・高速)
+      const meta = certificate.metadata_json as any;
+      if (meta && meta.chain_history && Array.isArray(meta.chain_history) && meta.chain_history.length > 0) {
         if (isMounted) {
-          setSteps([{
-            id: `root-${certificate.id}`,
+          const loadedSteps = meta.chain_history.map((ch: any, idx: number) => ({
+            id: `chain-${certificate.id}-${idx}`,
             stepType: 'other',
-            title: certificate.title || '原本 (Base Layer)',
-            note: '証明書として登録済みの原本データ',
-            previewUrl: certificate.public_image_url || undefined,
-            sha256: certificate.sha256,
+            title: ch.title || `工程 ${idx + 1}`,
+            note: '',
+            // HEAD（完成品）のみ公開画像URLを当て、途中工程はUIでハッシュ情報のみを表示させる
+            previewUrl: ch.isHead ? certificate.public_image_url : undefined,
+            sha256: ch.sha256,
             hashState: 'verified',
             isRoot: true,
             uploadState: 'uploaded',
-          }]);
+          }));
+          setSteps(loadedSteps);
         }
         return;
       }
 
-      let fetchedSteps: any[] | null = null;
-
-      if (certificate.public_verify_token) {
-        try {
-          const res = await fetch(
-            `/api/certificates/public/${certificate.public_verify_token}?t=${Date.now()}`,
-            { headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }, cache: 'no-store' },
-          );
-          if (res.ok) {
-            const data = await res.json();
-            const traverse = (obj: any) => {
-              if (fetchedSteps) return;
-              if (Array.isArray(obj) && obj.length > 0 && typeof obj[0] === 'object') {
-                if ('step_type' in obj[0] || 'sha256' in obj[0] || 'stepType' in obj[0]) {
-                  fetchedSteps = obj; return;
-                }
-              }
-              if (obj && typeof obj === 'object') for (const key in obj) traverse(obj[key]);
-            };
-            traverse(data);
-          }
-        } catch (e) { console.error('Public API fetch failed:', e); }
-      }
-
-      if (!fetchedSteps && typeof window !== 'undefined') {
-        try {
-          const url = import.meta.env.VITE_SUPABASE_URL;
-          const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-          if (url && key) {
-            const res = await fetch(
-              `${url}/rest/v1/process_bundle_steps?bundle_id=eq.${certificate.process_bundle_id}&select=*`,
-              { headers: { apikey: key, Authorization: `Bearer ${key}` } },
-            );
+      // ── 2. 過去のレガシーアーキテクチャ (process_bundle_steps) からの復元 ──
+      if (certificate.process_bundle_id) {
+        let fetchedSteps: any[] | null = null;
+        if (certificate.public_verify_token) {
+          try {
+            const res = await fetch(`/api/certificates/public/${certificate.public_verify_token}?t=${Date.now()}`, { headers: { 'Cache-Control': 'no-cache' } });
             if (res.ok) {
               const data = await res.json();
-              if (Array.isArray(data) && data.length > 0) fetchedSteps = data;
+              const traverse = (obj: any) => {
+                if (fetchedSteps) return;
+                if (Array.isArray(obj) && obj.length > 0 && typeof obj[0] === 'object') {
+                  if ('step_type' in obj[0] || 'sha256' in obj[0] || 'stepType' in obj[0]) { fetchedSteps = obj; return; }
+                }
+                if (obj && typeof obj === 'object') for (const key in obj) traverse(obj[key]);
+              };
+              traverse(data);
             }
-          }
-        } catch (e) { console.error('Direct Supabase fetch failed:', e); }
+          } catch (e) { console.error('Public API fetch failed:', e); }
+        }
+
+        if (!fetchedSteps && typeof window !== 'undefined') {
+          try {
+            const url = import.meta.env.VITE_SUPABASE_URL;
+            const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+            if (url && key) {
+              const res = await fetch(`${url}/rest/v1/process_bundle_steps?bundle_id=eq.${certificate.process_bundle_id}&select=*`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+              if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data) && data.length > 0) fetchedSteps = data;
+              }
+            }
+          } catch (e) { console.error('Direct Supabase fetch failed:', e); }
+        }
+
+        if (fetchedSteps && Array.isArray(fetchedSteps) && fetchedSteps.length > 0 && isMounted) {
+          const sorted = [...fetchedSteps].sort((a, b) => (a.step_index || 0) - (b.step_index || 0));
+          setSteps(sorted.map((s) => ({
+            id: `root-${s.id}`,
+            stepType: s.step_type || s.stepType || 'other',
+            title: s.title || '過去の工程',
+            note: s.description || s.note || '',
+            previewUrl: s.preview_url || s.previewUrl || s.image_url || certificate.public_image_url,
+            sha256: s.sha256,
+            hashState: 'verified',
+            isRoot: true,
+            uploadState: 'uploaded',
+          })));
+          return;
+        }
       }
 
-      if (fetchedSteps && Array.isArray(fetchedSteps) && fetchedSteps.length > 0 && isMounted) {
-        const sorted = [...fetchedSteps].sort((a, b) => (a.step_index || 0) - (b.step_index || 0));
-        setSteps(sorted.map((s) => ({
-          id: `root-${s.id}`,
-          stepType: s.step_type || s.stepType || 'other',
-          title: s.title || '過去の工程',
-          note: s.description || s.note || '',
-          previewUrl: s.preview_url || s.previewUrl || s.image_url || certificate.public_image_url,
-          sha256: s.sha256,
-          hashState: 'verified',
-          isRoot: true,
-          uploadState: 'uploaded',
-        })));
-        return;
-      }
-
+      // ── 3. Absolute Fallback (単一証明書) ──
       if (isMounted) {
         setSteps([{
           id: `root-${certificate.id}`,
