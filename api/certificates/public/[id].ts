@@ -34,18 +34,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 🚨 The Merkle Rollup (JSONB) から直接バンドルオブジェクトをインメモリ構築 (DBアクセスゼロ)
     if (meta && meta.chain_history && Array.isArray(meta.chain_history)) {
+      // フロントエンドのUIが期待する step の形式にマッピングする
+      const mappedSteps = meta.chain_history.map((step: any, idx: number) => ({
+        id: `virtual-step-${idx}`,
+        step_index: step.stepIndex ?? idx,
+        step_type: step.isHead ? 'final' : (step.stepType || 'other'),
+        title: step.title || `Step ${idx + 1}`,
+        description: '',
+        preview_url: null, // Zero-copyのためURLは返さず、UI側でハッシュ表示へのフォールバックを促す
+        sha256: step.sha256,
+        is_head: step.isHead
+      }));
+
       bundle = {
         id: meta.bundle_id || certificate.process_bundle_id || certificate.id,
-        chain_head_sha256: certificate.sha256,
+        title: meta.bundle_description || certificate.title || 'Chain of Evidence',
+        description: meta.bundle_description || '',
+        created_at: certificate.created_at,
+        evidence_mode: 'shareable',
         chain_depth: meta.chain_depth || meta.chain_history.length,
+        chain_head_sha256: certificate.sha256,
         status: 'issued',
+        steps: mappedSteps, // 🚨 UIクラッシュを防ぐための配列
         chain_summary: {
           isValid: true,
-          steps: meta.chain_history.map((step: any) => ({
-            stepIndex: step.stepIndex,
-            title: step.title,
-            sha256: step.sha256,
-            isHead: step.isHead
+          steps: mappedSteps.map((s: any) => ({
+            stepIndex: s.step_index,
+            title: s.title,
+            sha256: s.sha256,
+            isHead: s.is_head
           }))
         }
       };
