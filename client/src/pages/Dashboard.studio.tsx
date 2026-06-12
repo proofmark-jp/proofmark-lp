@@ -2926,52 +2926,11 @@ interface ProcessBundleStep {
 }
 
 function EvidenceChainViewer({ cert }: { cert: CertRow }) {
-  const [steps, setSteps] = useState<ProcessBundleStep[]>([]);
-  const [loading, setLoading] = useState(false);
+  // 🚨 DB通信を完全排除し、The Merkle Rollup の JSONB を直接パースする
+  const meta = ((cert as any).metadata_json || cert.metadata) as any;
+  const chainHistory = meta?.chain_history || [];
 
-  useEffect(() => {
-    let active = true;
-    const fetchTimeline = async () => {
-      const bundleId = (cert as any).process_bundle_id;
-      if (!bundleId) {
-        setSteps([]);
-        return;
-      }
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('process_bundle_steps')
-          .select('*')
-          .eq('bundle_id', bundleId)
-          .order('step_index', { ascending: true });
-
-        if (error) throw error;
-        if (active) {
-          setSteps((data as ProcessBundleStep[]) || []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch timeline steps:', err);
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-
-    fetchTimeline();
-    return () => {
-      active = false;
-    };
-  }, [cert]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 py-4 text-white/40 justify-center">
-        <Loader2 className="w-4 h-4 animate-spin text-[#6C3EF4]" />
-        <span className="text-xs font-mono">Fetching timeline history...</span>
-      </div>
-    );
-  }
-
-  if (steps.length === 0) {
+  if (!chainHistory || chainHistory.length === 0) {
     return null;
   }
 
@@ -2980,33 +2939,30 @@ function EvidenceChainViewer({ cert }: { cert: CertRow }) {
       <div className="flex items-center gap-2 mb-3">
         <History className="w-4 h-4 text-[#00D4AA]" />
         <h4 className="text-xs font-mono uppercase tracking-[0.2em] text-[#00D4AA]">
-          Evidence Timeline ({steps.length} Steps)
+          The Merkle Rollup ({chainHistory.length} Steps)
         </h4>
       </div>
 
       <div className="relative pl-4 border-l border-white/10 space-y-4">
-        {steps.map((step) => {
-          const color = STEP_TYPE_COLORS[step.step_type] || '#A8A0D8';
-          const label = STEP_TYPE_LABELS[step.step_type] || step.step_type;
+        {chainHistory.map((step: any, idx: number) => {
+          // JSONBのデータ型に合わせてプロパティをマッピング
+          const sType = step.isHead ? 'final' : (step.stepType || 'other');
+          const color = STEP_TYPE_COLORS[sType] || '#A8A0D8';
+          const label = STEP_TYPE_LABELS[sType] || sType;
           
           return (
-            <div key={step.id} className="relative group">
+            <div key={idx} className="relative group">
               <div 
                 className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full border border-[#07061A]"
                 style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}` }}
               />
               
               <div className="flex items-start gap-3">
-                {step.preview_url && (
-                  <div className="w-10 h-10 rounded-lg overflow-hidden border border-white/10 shrink-0 bg-black/40">
-                    <img src={step.preview_url} alt="" className="w-full h-full object-cover" />
-                  </div>
-                )}
-                
+                {/* JSONBにはプレビューURLを含めないため、画像サムネイルは省略しハッシュ証明に特化 */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-bold text-white group-hover:text-[#00D4AA] transition-colors">
-                      {step.title}
+                      {step.title || (step.isHead ? 'HEAD (完成品)' : `工程 ${idx + 1}`)}
                     </span>
                     <span 
                       className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded tracking-wider"
@@ -3016,17 +2972,14 @@ function EvidenceChainViewer({ cert }: { cert: CertRow }) {
                     </span>
                   </div>
                   
-                  {step.description && (
+                  {step.note && (
                     <p className="text-[11px] text-white/50 mt-0.5 leading-relaxed">
-                      {step.description}
+                      {step.note}
                     </p>
                   )}
                   
                   <div className="flex items-center gap-3 mt-1 text-[9px] font-mono text-white/30">
-                    <span>SHA-256: {step.sha256.slice(0, 8)}…{step.sha256.slice(-6)}</span>
-                    {step.created_at && (
-                      <span>{new Date(step.created_at).toLocaleDateString()}</span>
-                    )}
+                    <span>SHA-256: {step.sha256?.slice(0, 8)}…{step.sha256?.slice(-6)}</span>
                   </div>
                 </div>
               </div>
@@ -3408,7 +3361,7 @@ function toCertificateRecord(cert: CertRow): CertificateRecord {
     height_px: null,
     badge_tier: 'basic',
     process_bundle_id: null,
-    metadata_json: cert.metadata ?? null,
+    metadata_json: (cert as any).metadata_json ?? cert.metadata ?? null,
     proven_at: cert.certified_at ?? cert.created_at,
     created_at: cert.created_at,
   };
