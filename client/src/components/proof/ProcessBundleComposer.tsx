@@ -130,9 +130,9 @@ async function generateThumb(file: File): Promise<{ url: string, blob: Blob }> {
 
 /** Fork-on-Write 判定用: steps の「形」を 1 文字列に圧縮するシグネチャ。 */
 function stepsSignature(steps: WorkspaceStep[]): string {
-  // タイトルとメモの変更も検知し、Fork-on-Write (Draftへの降格) を確実に発火させる
-  return steps.map((s, i) => `${i}:${s.id}:${s.sha256 ?? ''}:${s.title}:${s.note ?? ''}`).join('|');
+  return steps.map((s, i) => `${i}:${s.id}:${s.sha256 ?? ''}`).join('|');
 }
+
 
 /* ═══════════════════════════════════════════════════════════════
    EXTENDED STEP TYPE — adds hash state for UI
@@ -276,8 +276,7 @@ export function ProcessBundleComposer({
   /** Revert ボタンで封印状態の steps に巻き戻す */
   const handleRevertToSealed = useCallback(() => {
     if (!sealedStepsSnapshot) return;
-    setSteps(structuredClone ? structuredClone(sealedStepsSnapshot) : JSON.parse(JSON.stringify(sealedStepsSnapshot)));
-    // currentSignature が sealedSignatureSnapshot と一致 → sealed が自動で true に
+    setSteps(sealedStepsSnapshot.map(step => ({ ...step })));
   }, [sealedStepsSnapshot]);
 
   /** Verified Badge 表示中のリヴィジョン番号 (将来は API から取得) */
@@ -722,10 +721,6 @@ export function ProcessBundleComposer({
   }
 
   function removeStep(id: string) {
-    const url = urlCacheRef.current.get(id);
-    if (url) { URL.revokeObjectURL(url); urlCacheRef.current.delete(id); }
-    const turl = thumbCacheRef.current.get(id);
-    if (turl) { URL.revokeObjectURL(turl); thumbCacheRef.current.delete(id); }
     if (abortControllersRef.current.has(id)) {
       abortControllersRef.current.get(id)?.abort();
       abortControllersRef.current.delete(id);
@@ -776,7 +771,9 @@ export function ProcessBundleComposer({
     const lastIndex = snapshot.length - 1;
     const targetIndices: number[] = [];
     for (let i = 0; i <= lastIndex - 1; i++) {
-      if (!snapshot[i].isRoot && snapshot[i].file) targetIndices.push(i);
+      if (!snapshot[i].isRoot && snapshot[i].file && snapshot[i].uploadState !== 'uploaded') {
+        targetIndices.push(i);
+      }
     }
 
     setCompression({
@@ -845,7 +842,7 @@ export function ProcessBundleComposer({
 
       let latest: WorkspaceStep[] = [];
       setSteps((cur) => { latest = cur; return cur; });
-      const toUpload = latest.filter((s) => !s.isRoot && s.file);
+      const toUpload = latest.filter((s) => !s.isRoot && s.file && s.uploadState !== 'uploaded');
       await fetchUploadUrls(toUpload);
 
       const startedAt = Date.now();
@@ -1240,6 +1237,7 @@ export function ProcessBundleComposer({
                           file, previewUrl: newUrl,
                           title: fileBaseName(file.name) || step.title,
                           hashState: 'idle',
+                          uploadState: 'idle',
                         });
                         computeHash(step.id, file);
                         attachThumb(step.id, file);
@@ -1403,7 +1401,7 @@ export function ProcessBundleComposer({
                   const sig = stepsSignature(steps);
                   setSealedSignatureSnapshot(sig);
                   // 🚀 Upgrade 2: Time-Travel Revert — steps のディープコピーを保存
-                  setSealedStepsSnapshot(JSON.parse(JSON.stringify(steps)));
+                  setSealedStepsSnapshot(steps.map(step => ({ ...step })));
                   navigator.vibrate?.(40);
                   if (magicMode) submitMagic();
                   else submit();
