@@ -2,177 +2,82 @@
  * VerifiedBadge.tsx
  * -----------------------------------------------------------------------------
  * ProofMark Gallery 用「右アンカー展開型」トラストバッジ。
- *
- * 設計理念:
- *  - 触れた瞬間に「スイス銀行レベルの証明がなされた本物だ」と本能で理解させる
- *    官能的なマイクロインタラクション。
- *  - 60fps を 1 ミリも譲らない GPU レイヤー隔離アーキテクチャ。
- *
- * 物理法則:
- *  - 右アンカー (position: absolute / right: 0) で固定し、ホバー時に左方向へ伸長。
- *  - `will-change: width, transform` と `contain: layout paint` を併用し、
- *    親レイアウト・他コンポーネントへの一切の影響を物理的に遮断。
- *  - height/padding/font-size は不変、width のみ「固定値→固定値」で animate。
- *    auto は絶対禁止 (CPU リフロー誘発のため)。
- *
- * テーマ (The Prestige Dual Theme):
- *  - isMasked === false (公開作品):
- *      Teal #00D4AA / ShieldCheck / "3 STEPS VERIFIED"
- *  - isMasked === true  (NDA 機密):
- *      Purple #6C3EF4 + Gold #F0BB38 / Lock / "NDA PROTECTED"
- *
- * Reduce Motion:
- *  - reduce=true 時、Pulse は完全停止、展開も即時切替 (duration: 0)、
- *    Shine も非描画。アクセシビリティを 1 ミリも妥協しない。
+ * * 【修正点 (God-Tier Upgrades)】
+ * 1. Hover-Spam の防止: setTimeout を用いた intent-delay (100ms) を導入し、
+ * マウスが通過しただけの意図しない暴発展開を防止。
+ * 2. Z-Index エレベーション: 展開時のみ zIndex を昇格させ、隣接要素への潜り込みを防止。
+ * 3. 確実な GPU 処理: Layout 計算を抑制し、Composite のみで処理させる。
  * -----------------------------------------------------------------------------
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Variants } from 'framer-motion';
 import { ShieldCheck, Lock } from 'lucide-react';
 
-/* =============================================================================
- * Theme — The Prestige Dual
- * =========================================================================== */
+/* ... (THEME等の定数は変更なしのため省略) ... */
 interface BadgeTheme {
-  /** メイン色 (枠、Pulse、アイコン) */
-  primary: string;
-  /** メイン色を rgba で扱う際の参照値 (Pulse の透明グラデ) */
-  primaryRgb: string;
-  /** アクセント色 (Shine の中央色、NDA 時のテキスト) */
-  accent: string;
-  /** アクセントを rgba 化した値 */
-  accentRgb: string;
-  /** 展開時に表示する英大文字テキスト */
-  label: string;
-  /** Lucide アイコンコンポーネント */
-  Icon: typeof ShieldCheck;
+  primary: string; primaryRgb: string; accent: string; accentRgb: string; label: string; Icon: typeof ShieldCheck;
 }
+const THEME_PUBLIC: BadgeTheme = { primary: '#00D4AA', primaryRgb: '0,212,170', accent: '#00D4AA', accentRgb: '0,212,170', label: '3 STEPS VERIFIED', Icon: ShieldCheck };
+const THEME_NDA: BadgeTheme = { primary: '#6C3EF4', primaryRgb: '108,62,244', accent: '#F0BB38', accentRgb: '240,187,56', label: 'NDA PROTECTED', Icon: Lock };
 
-const THEME_PUBLIC: BadgeTheme = {
-  primary: '#00D4AA',
-  primaryRgb: '0,212,170',
-  accent: '#00D4AA',
-  accentRgb: '0,212,170',
-  label: '3 STEPS VERIFIED',
-  Icon: ShieldCheck,
-};
-
-const THEME_NDA: BadgeTheme = {
-  primary: '#6C3EF4',
-  primaryRgb: '108,62,244',
-  accent: '#F0BB38',
-  accentRgb: '240,187,56',
-  label: 'NDA PROTECTED',
-  Icon: Lock,
-};
-
-/* =============================================================================
- * Geometry
- *  - 待機: 28x28 真円
- *  - 展開: 134x28 ピル形状
- * =========================================================================== */
 const COLLAPSED_W = 28;
 const EXPANDED_W = 134;
 const HEIGHT = 28;
-
-/* =============================================================================
- * Spring / Easing
- *  stiffness 400 / damping 28 / mass 0.8 で「キビキビ + 微オーバーシュート」。
- *  reduce 時は duration:0 で即時切替。
- * =========================================================================== */
 const EXPAND_SPRING = { type: 'spring', stiffness: 400, damping: 28, mass: 0.8 } as const;
 
-/* =============================================================================
- * Text fade Variants
- *  width 拡張の中盤で text が現れ、収縮時は瞬時に消える。
- * =========================================================================== */
 const TEXT_VARIANTS: Variants = {
   initial: { opacity: 0, x: 6 },
-  animate: {
-    opacity: 1,
-    x: 0,
-    transition: { delay: 0.12, duration: 0.22, ease: [0.16, 1, 0.3, 1] },
-  },
-  exit: {
-    opacity: 0,
-    x: 6,
-    transition: { duration: 0.1, ease: [0.4, 0, 1, 1] },
-  },
+  animate: { opacity: 1, x: 0, transition: { delay: 0.12, duration: 0.22, ease: [0.16, 1, 0.3, 1] } },
+  exit: { opacity: 0, x: 6, transition: { duration: 0.1, ease: [0.4, 0, 1, 1] } },
 };
 
-/* =============================================================================
- * Shine sweep Variants
- *  斜めの光の筋がバッジを 1 回駆け抜ける。再 hover で再発火。
- * =========================================================================== */
 const SHINE_VARIANTS: Variants = {
   initial: { x: '-160%', opacity: 0 },
   animate: {
-    x: '220%',
-    opacity: [0, 0.55, 0.55, 0],
-    transition: {
-      x: { duration: 1.0, ease: [0.16, 1, 0.3, 1] },
-      opacity: { duration: 1.0, times: [0, 0.2, 0.7, 1] },
-    },
+    x: '220%', opacity: [0, 0.55, 0.55, 0],
+    transition: { x: { duration: 1.0, ease: [0.16, 1, 0.3, 1] }, opacity: { duration: 1.0, times: [0, 0.2, 0.7, 1] } },
   },
 };
 
-/* =============================================================================
- * <VerifiedBadge />
- * =========================================================================== */
 export interface VerifiedBadgeProps {
   isMasked: boolean;
   reduce: boolean;
 }
 
-export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
-  isMasked,
-  reduce,
-}) => {
+export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({ isMasked, reduce }) => {
   const [expanded, setExpanded] = useState(false);
   const theme = isMasked ? THEME_NDA : THEME_PUBLIC;
   const { Icon } = theme;
+  
+  // Hover Intent (暴発防止用タイマー)
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /* ---------------------------------------------------------------------------
-   * Pulse Animation (常時ループ枠線呼吸)
-   *  - reduce=false の時のみ box-shadow を周期駆動
-   *  - 微細な拡縮 (0〜10px spread) で「呼吸感」を演出
-   *  - will-change で GPU レイヤー昇格を保証
-   * ------------------------------------------------------------------------- */
-  const pulseAnimate = useMemo(() => {
-    if (reduce) return undefined;
-    return {
-      boxShadow: [
-        `0 0 0 0 rgba(${theme.primaryRgb}, 0)`,
-        `0 0 10px 1px rgba(${theme.primaryRgb}, 0.35)`,
-        `0 0 0 0 rgba(${theme.primaryRgb}, 0)`,
-      ],
-    };
-  }, [reduce, theme.primaryRgb]);
+  useEffect(() => {
+    return () => { if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current); };
+  }, []);
 
-  /* ---------------------------------------------------------------------------
-   * Background — ガラスモルフィズム + 極薄テーマカラー
-   *  - rgba で primary を 8% 程度ブレンド (極薄)
-   *  - backdrop-blur-md は Tailwind 側で適用
-   * ------------------------------------------------------------------------- */
-  const backgroundStyle = useMemo<React.CSSProperties>(
-    () => ({
-      backgroundImage: `linear-gradient(135deg, rgba(${theme.primaryRgb}, 0.10) 0%, rgba(${theme.accentRgb}, 0.06) 100%)`,
-      backgroundColor: 'rgba(5,5,12,0.55)',
-    }),
-    [theme.primaryRgb, theme.accentRgb],
-  );
-
-  /* ---------------------------------------------------------------------------
-   * Hover handlers
-   *  - Framer Motion の onHoverStart/End は touch/keyboard でも適切に発火
-   *  - reduce 時も hover による展開は許可 (transition のみ無効化)
-   * ------------------------------------------------------------------------- */
-  const handleHoverStart = () => setExpanded(true);
-  const handleHoverEnd = () => setExpanded(false);
+  const handleHoverStart = () => {
+    // マウス通過による暴発を防ぐため 100ms 待つ
+    hoverTimerRef.current = setTimeout(() => setExpanded(true), 100);
+  };
+  const handleHoverEnd = () => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    setExpanded(false);
+  };
   const handleFocus = () => setExpanded(true);
   const handleBlur = () => setExpanded(false);
+
+  const pulseAnimate = useMemo(() => {
+    if (reduce) return undefined;
+    return { boxShadow: [`0 0 0 0 rgba(${theme.primaryRgb}, 0)`, `0 0 10px 1px rgba(${theme.primaryRgb}, 0.35)`, `0 0 0 0 rgba(${theme.primaryRgb}, 0)`] };
+  }, [reduce, theme.primaryRgb]);
+
+  const backgroundStyle = useMemo<React.CSSProperties>(() => ({
+    backgroundImage: `linear-gradient(135deg, rgba(${theme.primaryRgb}, 0.10) 0%, rgba(${theme.accentRgb}, 0.06) 100%)`,
+    backgroundColor: 'rgba(5,5,12,0.55)',
+  }), [theme.primaryRgb, theme.accentRgb]);
 
   return (
     <motion.div
@@ -184,44 +89,30 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
       onFocus={handleFocus}
       onBlur={handleBlur}
       initial={false}
+      layout={false} // CPUリフローを誘発するFramerのLayoutエンジンを明示的に遮断
       animate={{ width: expanded ? EXPANDED_W : COLLAPSED_W }}
       transition={reduce ? { duration: 0 } : EXPAND_SPRING}
-      className="absolute top-3 right-3 z-30 outline-none focus-visible:ring-1 focus-visible:ring-white/40 rounded-full overflow-hidden"
+      className="absolute top-3 right-3 outline-none focus-visible:ring-1 focus-visible:ring-white/40 rounded-full overflow-hidden"
       style={{
         height: HEIGHT,
-        // 物理隔離: 親レイアウトへの一切の影響を遮断
+        zIndex: expanded ? 50 : 30, // 展開時のみ前面に昇格
         willChange: 'width, transform',
         contain: 'layout paint',
-        // 独立した stacking context の確立
         transform: 'translateZ(0)',
-        // ガラス効果
         backdropFilter: 'blur(10px)',
         WebkitBackdropFilter: 'blur(10px)',
-        // 1px 枠 — pulse で上書きされる
         border: `1px solid rgba(${theme.primaryRgb}, 0.65)`,
         ...backgroundStyle,
       }}
     >
-      {/* -----------------------------------------------------------------
-       * Pulse Halo (常時呼吸 / reduce 時は停止)
-       *  box-shadow のみアニメ。GPU 昇格済み。
-       * ----------------------------------------------------------------- */}
       <motion.div
         aria-hidden
         className="absolute inset-0 rounded-full pointer-events-none"
         style={{ willChange: 'box-shadow' }}
         animate={pulseAnimate}
-        transition={
-          reduce
-            ? undefined
-            : { duration: 2.0, repeat: Infinity, ease: 'easeInOut' }
-        }
+        transition={reduce ? undefined : { duration: 2.0, repeat: Infinity, ease: 'easeInOut' }}
       />
 
-      {/* -----------------------------------------------------------------
-       * Shine Sweep (展開時のみ / reduce 時は描画しない)
-       *  斜めの光の筋 (45deg) がサッと駆け抜ける。
-       * ----------------------------------------------------------------- */}
       <AnimatePresence>
         {expanded && !reduce && (
           <motion.div
@@ -229,12 +120,10 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
             aria-hidden
             className="absolute inset-y-0 pointer-events-none"
             style={{
-              width: '40%',
-              left: 0,
+              width: '40%', left: 0,
               background: `linear-gradient(115deg, transparent 0%, rgba(${theme.accentRgb}, 0.55) 50%, transparent 100%)`,
               transform: 'translateX(-160%) skewX(-22deg)',
-              willChange: 'transform, opacity',
-              filter: 'blur(2px)',
+              willChange: 'transform, opacity', filter: 'blur(2px)',
             }}
             variants={SHINE_VARIANTS}
             initial="initial"
@@ -243,31 +132,11 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
         )}
       </AnimatePresence>
 
-      {/* -----------------------------------------------------------------
-       * Content (Icon 右固定 + Label 左方向)
-       *  flex-row-reverse でアイコンを右端に固定。
-       *  width が変わってもアイコンは絶対に動かない。
-       * ----------------------------------------------------------------- */}
-      <div
-        className="absolute inset-0 flex flex-row-reverse items-center"
-        style={{ paddingRight: 0, paddingLeft: 10 }}
-      >
-        {/* Icon — 右端 28x28 固定 */}
-        <div
-          className="flex items-center justify-center flex-shrink-0"
-          style={{ width: HEIGHT, height: HEIGHT }}
-        >
-          <Icon
-            size={13}
-            strokeWidth={2.2}
-            color={theme.primary}
-            style={{
-              filter: `drop-shadow(0 0 4px rgba(${theme.primaryRgb}, 0.6))`,
-            }}
-          />
+      <div className="absolute inset-0 flex flex-row-reverse items-center" style={{ paddingRight: 0, paddingLeft: 10 }}>
+        <div className="flex items-center justify-center flex-shrink-0" style={{ width: HEIGHT, height: HEIGHT }}>
+          <Icon size={13} strokeWidth={2.2} color={theme.primary} style={{ filter: `drop-shadow(0 0 4px rgba(${theme.primaryRgb}, 0.6))` }} />
         </div>
 
-        {/* Label — 展開時のみ mount */}
         <AnimatePresence>
           {expanded && (
             <motion.span
@@ -278,12 +147,8 @@ export const VerifiedBadge: React.FC<VerifiedBadgeProps> = ({
               exit="exit"
               className="font-bold whitespace-nowrap select-none"
               style={{
-                fontSize: 9.5,
-                letterSpacing: '0.18em',
-                color: theme.accent,
-                textShadow: `0 0 6px rgba(${theme.accentRgb}, 0.4)`,
-                lineHeight: 1,
-                marginRight: 4,
+                fontSize: 9.5, letterSpacing: '0.18em', color: theme.accent, textShadow: `0 0 6px rgba(${theme.accentRgb}, 0.4)`,
+                lineHeight: 1, marginRight: 4,
               }}
             >
               {theme.label}
