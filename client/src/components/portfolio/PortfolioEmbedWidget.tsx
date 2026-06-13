@@ -31,6 +31,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import FounderBadge from '../FounderBadge';
+import VerifiedBadge from '../ui/VerifiedBadge';
 
 /* ───────────────── Public types (UNCHANGED) ───────────────── */
 
@@ -785,12 +786,8 @@ function CertificateCard({
           )}
         </a>
 
-        {/* breathing verified badge floats top-right of media */}
-        {settings.showBadges && (
-          <div className="pointer-events-none absolute right-5 top-5">
-            <BreathingBadge reduce={reduce} />
-          </div>
-        )}
+        {/* 🚀 Global Deployment: VerifiedBadge.tsx */}
+        <VerifiedBadge isMasked={item.visibility !== 'public'} reduce={reduce} />
 
         {/* soft purple halo (dark only) */}
         {!theme.isLight && (

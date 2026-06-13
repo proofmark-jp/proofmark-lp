@@ -10,9 +10,10 @@
  *   4. 配色は CSS 変数 + ハードコード hex (Manus DNA) のみ。
  */
 
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Eye, Hash, Layers3, Lock, ShieldCheck, Sparkles, Wand2 } from 'lucide-react';
+import VerifiedBadge from '../ui/VerifiedBadge';
 import {
   deriveTsaTier,
   deriveC2paVault,
@@ -59,6 +60,7 @@ interface Props {
 const NDA_VISIBILITY = new Set(['unlisted', 'private']);
 
 export function StorefrontProofCard({ cert, chainOk, ndaMode = 'masked', isOwner = false, onOpenAudit }: Props) {
+  const reduce = useReducedMotion() ?? false;
   const isMasked = NDA_VISIBILITY.has(cert.visibility ?? 'public') || ndaMode !== 'open';
   const ndaToken = isMasked ? NDA_TOKENS[ndaMode] : NDA_TOKENS.open;
   const tsa = deriveTsaTier({
@@ -99,57 +101,28 @@ export function StorefrontProofCard({ cert, chainOk, ndaMode = 'masked', isOwner
         href={`/cert/${cert.id}`}
         className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4AA] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0e27]"
       >
-        {/* ── Visual ─────────────────────────────────────────── */}
-        <div className="relative aspect-[4/3] bg-[#0a0e27] overflow-hidden">
-          {!isMasked && cert.public_image_url ? (
-            <img
-              src={cert.public_image_url}
-              alt={cert.title}
-              loading="lazy"
-              decoding="async"
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-            />
-          ) : isOwner && cert.public_image_url ? (
-            <TranslucentVault imageUrl={cert.public_image_url} />
-          ) : isOwner ? (
-            <OwnerVault c2pa={c2pa} c2paVault={c2paVault} />
-          ) : (
-            <TheVault c2pa={c2pa} c2paVault={c2paVault} />
-          )}
+        {/* ── Visual wrapper (relative for badge positioning) ── */}
+        <div className="relative">
+          <div className="aspect-[4/3] bg-[#0a0e27] overflow-hidden rounded-t-[calc(0.65rem+1px)]">
+            {!isMasked && cert.public_image_url ? (
+              <img
+                src={cert.public_image_url}
+                alt={cert.title}
+                loading="lazy"
+                decoding="async"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+              />
+            ) : isOwner && cert.public_image_url ? (
+              <TranslucentVault imageUrl={cert.public_image_url} />
+            ) : isOwner ? (
+              <OwnerVault c2pa={c2pa} c2paVault={c2paVault} />
+            ) : (
+              <TheVault c2pa={c2pa} c2paVault={c2paVault} />
+            )}
+          </div>
 
-          {/* TSA 階層バッジ */}
-          <span
-            className="absolute top-3 right-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-            style={{
-              color: tsa.color,
-              background: tsa.bg,
-              border: `1px solid ${tsa.border}`,
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)',
-            }}
-            title={tsa.description}
-          >
-            <ShieldCheck className="w-3 h-3" aria-hidden="true" />
-            {tsa.short}
-          </span>
-
-          {/* NDA バッジ */}
-          {isMasked && (
-            <span
-              className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-              style={{
-                color: '#FFD966',
-                background: 'rgba(255,217,102,0.12)',
-                border: '1px solid rgba(255,217,102,0.40)',
-                backdropFilter: 'blur(6px)',
-                WebkitBackdropFilter: 'blur(6px)',
-              }}
-              title={ndaToken.description}
-            >
-              <Lock className="w-2.5 h-2.5" aria-hidden="true" />
-              {ndaToken.label}
-            </span>
-          )}
+          {/* 🚀 Global Deployment: VerifiedBadge.tsx */}
+          <VerifiedBadge isMasked={isMasked} reduce={reduce} />
         </div>
 
         {/* ── Body ────────────────────────────────────────── */}

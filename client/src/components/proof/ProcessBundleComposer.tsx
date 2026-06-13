@@ -43,6 +43,7 @@ import {
   useMotionValue,
   useTransform,
   animate,
+  useReducedMotion,
 } from 'framer-motion';
 import {
   AlertCircle,
@@ -241,37 +242,36 @@ export function ProcessBundleComposer({
   const [scrubIndex, setScrubIndex] = useState(0);
 
   /* ─────────────────────────────────────────────────────────────
-   * 🚀 Upgrade 1: Derived State — Zero-Jitter Sealed Architecture
-   *
-   * 旧来の `sealed` boolean + Fork-on-Write useEffect を完全廃棄。
-   * 封印時点のシグネチャをスナップショットとして保持し、現在の
-   * `currentSignature` と比較することで Sealed / Draft / ForkedDraft を
-   * シングルレンダで瞬時に判定する。Reactのダブルレンダリングを撲滅。
+   * 🚀 Upgrade 1: Derived State — Zero-Jitter Sealed Architecture (Dual-State)
    * ─────────────────────────────────────────────────────────────
    */
 
-  /** 封印時点のシグネチャ。null = Draft 状態 */
+  /** 封印時点の画像ハッシュシグネチャ。null = Draft 状態 */
   const [sealedSignatureSnapshot, setSealedSignatureSnapshot] = useState<string | null>(null);
+  /** 封印時点のメタデータシグネチャ。null = Draft 状態 */
+  const [sealedMetaSignatureSnapshot, setSealedMetaSignatureSnapshot] = useState<string | null>(null);
 
-  /** 常に steps の最新形状を 1 文字列で表現 */
-  const currentSignature = useMemo(() => stepsSignature(steps), [steps]);
+  /** 画像シグネチャ: 画像ハッシュ監視 */
+  const currentSignature = useMemo(() => steps.map(s => `${s.id}:${s.sha256 ?? ''}`).join('|'), [steps]);
 
-  /** Sealed: 封印後に一切の変更がない純粋な封印状態 */
+  /** メタデータシグネチャ: 各ステップのタイトル・ノートと全体のタイトル・説明文 */
+  const currentMetaSignature = useMemo(() => {
+    return steps.map(s => `${s.title}:${s.note ?? ''}`).join('|') + `|${title}|${description}`;
+  }, [steps, title, description]);
+
+  /** Sealed: 封印後に画像変更がない状態 */
   const sealed = sealedSignatureSnapshot !== null && sealedSignatureSnapshot === currentSignature;
 
-  /** ForkedDraft: 封印後に編集が加えられ、新リヴィジョンへ派生した状態 */
+  /** ForkedDraft: 封印後に画像変更（追加/削除/並び替え/画像差し替え）があった状態 */
   const isForkedDraft = sealedSignatureSnapshot !== null && sealedSignatureSnapshot !== currentSignature;
 
-  /* ─────────────────────────────────────────────────────────────
-   * 🚀 Upgrade 2: Time-Travel Revert — Git Checkout for Creators
-   *
-   * 封印完了時に steps のディープコピーを保存。isForkedDraft 時に
-   * Revert ボタンから呼び出すことで瞬時に Sealed 状態へ巻き戻す。
-   * ─────────────────────────────────────────────────────────────
-   */
+  /** hasUnsavedMeta: テキストの未保存変更がある状態 */
+  const hasUnsavedMeta = sealedMetaSignatureSnapshot !== null && sealedMetaSignatureSnapshot !== currentMetaSignature;
 
-  /** 封印完了時点の steps のディープコピー（Revert 用） */
+  /** 封印完了時点のスナップショット退避（Revert 用） */
   const [sealedStepsSnapshot, setSealedStepsSnapshot] = useState<WorkspaceStep[] | null>(null);
+  const [sealedTitleSnapshot, setSealedTitleSnapshot] = useState<string>('');
+  const [sealedDescriptionSnapshot, setSealedDescriptionSnapshot] = useState<string>('');
 
   /** Revert ボタンで封印状態の steps に巻き戻す */
   const handleRevertToSealed = useCallback(() => {
@@ -279,7 +279,94 @@ export function ProcessBundleComposer({
     setSteps(sealedStepsSnapshot.map(step => ({ ...step })));
   }, [sealedStepsSnapshot]);
 
-  /** Verified Badge 表示中のリヴィジョン番号 (将来は API から取得) */
+  /** テキストの未保存変更を取り消す（Revert Meta） */
+  const handleRevertMetadata = useCallback(() => {
+    if (!sealedStepsSnapshot) return;
+    setSteps((cur) =>
+      cur.map((s) => {
+        const snap = sealedStepsSnapshot.find((snapStep) => snapStep.id === s.id);
+        if (snap) {
+          return { ...s, title: snap.title, note: snap.note };
+        }
+        return s;
+      })
+    );
+    setTitle(sealedTitleSnapshot);
+    setDescription(sealedDescriptionSnapshot);
+  }, [sealedStepsSnapshot, sealedTitleSnapshot, sealedDescriptionSnapshot]);
+
+  /** テキストの変更をSupabaseに保存（TSA消費なし・SELECT->Merge->UPDATE による競合防止） */
+  const handleSaveMetadata = async () => {
+    if (!certificate) return;
+    setSubmitting(true);
+    setMessage(null);
+    try {
+      // 1. 最新の metadata_json を Supabase から直接 SELECT し、他者との競合を防ぐ
+      const { data: latestCert, error: fetchErr } = await supabase
+        .from('certificates')
+        .select('metadata_json')
+        .eq('id', certificate.id)
+        .single();
+
+      if (fetchErr) throw fetchErr;
+
+      const currentMeta = { ...(latestCert?.metadata_json as any || {}) };
+
+      // 2. 基本情報をマージ
+      currentMeta.title = title;
+      currentMeta.description = description;
+
+      // 3. chain_history 内のテキストデータも安全にマージ
+      if (Array.isArray(currentMeta.chain_history)) {
+        currentMeta.chain_history = currentMeta.chain_history.map((histStep: any) => {
+          const match = steps.find(
+            (s) => s.id === histStep.id || s.id === `root-${histStep.id}` || s.sha256 === histStep.sha256
+          );
+          if (match) {
+            return {
+              ...histStep,
+              title: match.title,
+              description: match.note || '',
+            };
+          }
+          return histStep;
+        });
+      }
+
+      // 4. 安全にマージした metadata_json を UPDATE
+      const { error: updateErr } = await supabase
+        .from('certificates')
+        .update({
+          title,
+          description,
+          metadata_json: currentMeta,
+        })
+        .eq('id', certificate.id);
+
+      if (updateErr) throw updateErr;
+
+      // 5. ローカルの状態を更新
+      const metaSig = steps.map(s => `${s.title}:${s.note ?? ''}`).join('|') + `|${title}|${description}`;
+      setSealedMetaSignatureSnapshot(metaSig);
+      setSealedStepsSnapshot(steps.map(step => ({ ...step })));
+      setSealedTitleSnapshot(title);
+      setSealedDescriptionSnapshot(description);
+
+      // 元の証明書プロップスも同期
+      certificate.title = title;
+      (certificate as any).description = description;
+      certificate.metadata_json = currentMeta;
+
+      setMessage('テキストの変更を保存しました。');
+    } catch (err) {
+      console.error('Metadata update failed:', err);
+      setMessage(err instanceof Error ? err.message : '保存に失敗しました');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  /* ── Verified Badge 表示中のリヴィジョン番号 (将来は API から取得) ── */
   const [revisionLabel, setRevisionLabel] = useState<string>('v1');
 
   /* ── Magic Mode 判定 ── */
@@ -501,6 +588,22 @@ export function ProcessBundleComposer({
     loadExistingChain().finally(() => { if (isMounted) setIsHydrating(false); });
     return () => { isMounted = false; };
   }, [certificate, magicMode]);
+
+  // ハイドレーション完了（かつハッシュ完了）時に初期スナップショットを記録する
+  useEffect(() => {
+    if (!isHydrating && steps.length > 0 && sealedSignatureSnapshot === null) {
+      const allDone = steps.every(s => s.isRoot || s.hashState === 'verified');
+      if (allDone) {
+        const sig = steps.map(s => `${s.id}:${s.sha256 ?? ''}`).join('|');
+        const metaSig = steps.map(s => `${s.title}:${s.note ?? ''}`).join('|') + `|${title}|${description}`;
+        setSealedSignatureSnapshot(sig);
+        setSealedMetaSignatureSnapshot(metaSig);
+        setSealedStepsSnapshot(steps.map(step => ({ ...step })));
+        setSealedTitleSnapshot(title);
+        setSealedDescriptionSnapshot(description);
+      }
+    }
+  }, [isHydrating, steps, title, description, sealedSignatureSnapshot]);
 
   /* ── stable preview URL ── */
   const getPreviewUrl = useCallback((stepId: string, file?: File): string | undefined => {
@@ -1397,11 +1500,13 @@ export function ProcessBundleComposer({
                 disabled={!canSubmit}
                 onSealed={() => {
                   if (steps.length === 0) return; // 虚無の送信バグ防止
-                  // 🚀 Upgrade 1: Derived State — スナップショットをセット
-                  const sig = stepsSignature(steps);
+                  const sig = steps.map(s => `${s.id}:${s.sha256 ?? ''}`).join('|');
                   setSealedSignatureSnapshot(sig);
-                  // 🚀 Upgrade 2: Time-Travel Revert — steps のディープコピーを保存
+                  const metaSig = steps.map(s => `${s.title}:${s.note ?? ''}`).join('|') + `|${title}|${description}`;
+                  setSealedMetaSignatureSnapshot(metaSig);
                   setSealedStepsSnapshot(steps.map(step => ({ ...step })));
+                  setSealedTitleSnapshot(title);
+                  setSealedDescriptionSnapshot(description);
                   navigator.vibrate?.(40);
                   if (magicMode) submitMagic();
                   else submit();
@@ -1467,6 +1572,53 @@ export function ProcessBundleComposer({
                 headSha={result?.chainHeadSha256 ?? null}
                 onViewCert={result?.certificateId ? () => setLocation(`/cert/${result.certificateId}`) : undefined}
               />
+
+              {/* Smart Meta Toolbar — floating toolbar for unsaved text metadata */}
+              <AnimatePresence>
+                {hasUnsavedMeta && !isForkedDraft && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 24 }}
+                    className="mt-3 overflow-hidden rounded-2xl border border-[#00D4AA]/20 bg-[#0d0b24]/80 backdrop-blur-md px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3"
+                    style={{
+                      boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-white/90">📝 テキストの未保存変更</span>
+                      <motion.div
+                        animate={{ opacity: [0.3, 1, 0.3] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                        className="w-1.5 h-1.5 rounded-full bg-[#00D4AA]"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                      <button
+                        type="button"
+                        onClick={handleRevertMetadata}
+                        disabled={submitting}
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white/60 hover:text-white hover:bg-white/5 disabled:opacity-40 disabled:pointer-events-none transition-all"
+                      >
+                        取り消す
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveMetadata}
+                        disabled={submitting}
+                        className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-[#0d0b24] bg-[#00D4AA] hover:bg-[#00c59e] active:scale-95 disabled:opacity-50 transition-all font-bold flex items-center gap-1.5"
+                        style={{
+                          boxShadow: '0 0 12px rgba(0, 212, 170, 0.35)',
+                        }}
+                      >
+                        {submitting && <Loader2 className="w-3 h-3 animate-spin" />}
+                        <span>変更を保存 (TSA消費なし)</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
         </AnimatePresence>

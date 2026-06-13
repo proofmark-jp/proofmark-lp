@@ -6,12 +6,13 @@ import {
     Lock, ShieldAlert, Flag, Package, Gavel, Sparkles, ChevronRight, Layers3,
     RefreshCw,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useAuth } from '../hooks/useAuth';
 import EvidencePackDownloadButton from '@/components/EvidencePackDownloadButton';
 import Navbar from '../components/Navbar';
 import SEO from '../components/SEO';
+import VerifiedBadge from '../components/ui/VerifiedBadge';
 import type { ProcessBundlePublic } from '../lib/proofmark-types';
 import { getProcessBundleByVerifyToken } from '../lib/proofmark-api';
 import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
@@ -31,6 +32,7 @@ export default function CertificatePage() {
     const [match, params] = useRoute('/cert/:id');
     const id = match && params ? params.id : null;
     const [, setLocation] = useLocation();
+    const reduce = useReducedMotion() ?? false;
 
     const [cert, setCert] = useState<any>(null);
     const [bundle, setBundle] = useState<ProcessBundlePublic | null>(null);
@@ -542,7 +544,7 @@ export default function CertificatePage() {
                         <div className="flex flex-col md:flex-row gap-10 print:flex-row print:gap-8 print:items-center">
 
                             {/* 左側: アートワーク or SEALED Stamp */}
-                            <div className="w-full md:w-2/5 flex-shrink-0 print:w-[38%]">
+                            <div className="w-full md:w-2/5 flex-shrink-0 print:w-[38%] relative">
                                 <div
                                     className="aspect-square w-full rounded-2xl flex flex-col items-center justify-center overflow-hidden relative shadow-inner print:border-gray-300 print:bg-gray-50 print:shadow-none group"
                                     style={{
@@ -590,6 +592,8 @@ export default function CertificatePage() {
                                         <SealedStampVault />
                                     )}
                                 </div>
+
+                                <VerifiedBadge isMasked={cert.visibility !== 'public'} reduce={reduce} />
                             </div>
 
                             {/* 右側: data */}

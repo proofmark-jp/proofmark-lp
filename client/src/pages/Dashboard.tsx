@@ -20,6 +20,8 @@ import Navbar from "../components/Navbar";
 import FounderBadge from "../components/FounderBadge";
 import { ProcessBundleComposer } from "../components/proof/ProcessBundleComposer";
 import type { CertificateRecord } from "../lib/proofmark-types";
+import { useReducedMotion } from "framer-motion";
+import VerifiedBadge from "../components/ui/VerifiedBadge";
 import VisibilityToggle from "../components/VisibilityToggle";
 import type { Certificate } from "../lib/types";
 import {
@@ -533,6 +535,9 @@ export default function Dashboard() {
             copiedId={copiedId}
             formatDate={formatDate}
             truncateHash={truncateHash}
+            isAtLeastCreator={isAtLeastCreator}
+            isAtLeastStudio={isAtLeastStudio}
+            navigate={navigate}
           />
         ) : (
           <div style={styles.grid}>
@@ -550,6 +555,9 @@ export default function Dashboard() {
                 onOpenChain={(c) => setComposerCert(c as unknown as CertificateRecord)}
                 formatDate={formatDate}
                 truncateHash={truncateHash}
+                isAtLeastCreator={isAtLeastCreator}
+                isAtLeastStudio={isAtLeastStudio}
+                navigate={navigate}
               />
             ))}
           </div>
@@ -758,34 +766,40 @@ interface RowActions {
   onOpenChain: (c: Certificate) => void;
   formatDate: (iso: string) => string;
   truncateHash: (hash: string) => string;
+  isAtLeastCreator: boolean;
+  isAtLeastStudio: boolean;
+  navigate: (to: string) => void;
 }
 
 function CertCard(
   props: RowActions & { cert: Certificate; user: any; copied: boolean }
 ) {
-  const { cert, user, copied, formatDate, truncateHash } = props;
+  const { cert, user, copied, formatDate, truncateHash, isAtLeastCreator, isAtLeastStudio, navigate } = props;
+  const reduce = useReducedMotion() ?? false;
 
   return (
     <article style={styles.card} className="pm-card" aria-label={cert.file_name || "Untitled"}>
-      <div style={styles.thumbWrap}>
-        {cert.proof_mode === "shareable" &&
-        cert.public_image_url &&
-        (cert.visibility === "public" || (user && user.id === (cert as any).user_id)) ? (
-          <img
-            src={cert.public_image_url}
-            alt={cert.original_filename || cert.file_name || "Artwork"}
-            style={styles.thumbImg}
-            loading="lazy"
-          />
-        ) : (
-          <div style={styles.thumbPlaceholder}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="3" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="M21 15l-5-5L5 21" />
-            </svg>
-          </div>
-        )}
+      <div style={{ position: 'relative', width: '100%' }}>
+        <div style={styles.thumbWrap}>
+          {cert.proof_mode === "shareable" &&
+          cert.public_image_url &&
+          (cert.visibility === "public" || (user && user.id === (cert as any).user_id)) ? (
+            <img
+              src={cert.public_image_url}
+              alt={cert.original_filename || cert.file_name || "Artwork"}
+              style={styles.thumbImg}
+              loading="lazy"
+            />
+          ) : (
+            <div style={styles.thumbPlaceholder}>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="3" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path d="M21 15l-5-5L5 21" />
+              </svg>
+            </div>
+          )}
+        </div>
 
         <button
           onClick={(e) => {
@@ -813,15 +827,10 @@ function CertCard(
           {!isAtLeastCreator && <span style={{ fontSize: 8, position: 'absolute', bottom: -2, right: -2 }}>🔒</span>}
         </button>
 
-        <div style={styles.trustBadgeSlot}>
-          <TrustBadge cert={cert} />
-        </div>
-
-        {cert.is_archived && (
-          <div style={styles.archivedRibbon}>
-            <Archive className="w-3 h-3" /> Archived
-          </div>
-        )}
+        <VerifiedBadge
+          isMasked={cert.visibility !== 'public' && !(user && user.id === (cert as any).user_id)}
+          reduce={reduce}
+        />
       </div>
 
       <div style={styles.cardBody}>
@@ -927,7 +936,7 @@ function CertCard(
 function CertList(
   props: RowActions & { certs: Certificate[]; copiedId: string | null }
 ) {
-  const { certs, copiedId, formatDate, truncateHash } = props;
+  const { certs, copiedId, formatDate, truncateHash, isAtLeastCreator, isAtLeastStudio, navigate } = props;
   return (
     <div style={styles.tableWrap} role="table" aria-label="証明書一覧">
       <div style={styles.tableHead} role="row">

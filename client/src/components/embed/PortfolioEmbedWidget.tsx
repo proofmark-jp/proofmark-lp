@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { ExternalLink, Layers3, Lock, ShieldCheck, ShieldAlert, Sparkles } from 'lucide-react';
 import FounderBadge from '../FounderBadge';
+import { useReducedMotion } from 'framer-motion';
+import VerifiedBadge from '../ui/VerifiedBadge';
 
 export type PortfolioWidgetTheme = 'dark' | 'light';
 export type PortfolioWidgetLayout = 'grid' | 'list' | 'compact';
@@ -156,6 +158,7 @@ function SecurePlaceholder({ hash, isLight }: { hash: string; isLight?: boolean 
 function CertificateCard({ item, settings, priority }: { item: WidgetCertificate; settings: PortfolioWidgetSettings; priority?: boolean; }) {
   const title = item.title || 'Untitled proof';
   const isLight = settings.theme === 'light';
+  const reduce = useReducedMotion() ?? false;
 
   return (
     <article className={['group overflow-hidden rounded-[1.6rem] border shadow-[0_10px_60px_rgba(0,0,0,0.22)] backdrop-blur-md transition-transform duration-300 hover:-translate-y-1',
@@ -171,6 +174,9 @@ function CertificateCard({ item, settings, priority }: { item: WidgetCertificate
           ) : <SecurePlaceholder hash={item.hash} isLight={isLight} />}
         </a>
         {!isLight && <div className="pointer-events-none absolute inset-x-8 top-8 h-20 rounded-full bg-[#6C3EF4]/[0.18] blur-3xl" />}
+
+        {/* 🚀 Global Deployment: VerifiedBadge.tsx */}
+        <VerifiedBadge isMasked={item.visibility !== 'public'} reduce={reduce} />
       </div>
 
       <div className="px-5 pb-5">
