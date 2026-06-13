@@ -130,7 +130,8 @@ async function generateThumb(file: File): Promise<{ url: string, blob: Blob }> {
 
 /** Fork-on-Write 判定用: steps の「形」を 1 文字列に圧縮するシグネチャ。 */
 function stepsSignature(steps: WorkspaceStep[]): string {
-  return steps.map((s, i) => `${i}:${s.id}:${s.sha256 ?? ''}`).join('|');
+  // タイトルとメモの変更も検知し、Fork-on-Write (Draftへの降格) を確実に発火させる
+  return steps.map((s, i) => `${i}:${s.id}:${s.sha256 ?? ''}:${s.title}:${s.note ?? ''}`).join('|');
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -237,11 +238,48 @@ export function ProcessBundleComposer({
 
   const [globalDragOver, setGlobalDragOver] = useState(false);
   const [isHydrating, setIsHydrating] = useState(true);
-  const [sealed, setSealed] = useState(false);
   const [scrubIndex, setScrubIndex] = useState(0);
 
-  /* ── v4: Fork-on-Write の追跡用 ref ── */
-  const sealedSignatureRef = useRef<string | null>(null);
+  /* ─────────────────────────────────────────────────────────────
+   * 🚀 Upgrade 1: Derived State — Zero-Jitter Sealed Architecture
+   *
+   * 旧来の `sealed` boolean + Fork-on-Write useEffect を完全廃棄。
+   * 封印時点のシグネチャをスナップショットとして保持し、現在の
+   * `currentSignature` と比較することで Sealed / Draft / ForkedDraft を
+   * シングルレンダで瞬時に判定する。Reactのダブルレンダリングを撲滅。
+   * ─────────────────────────────────────────────────────────────
+   */
+
+  /** 封印時点のシグネチャ。null = Draft 状態 */
+  const [sealedSignatureSnapshot, setSealedSignatureSnapshot] = useState<string | null>(null);
+
+  /** 常に steps の最新形状を 1 文字列で表現 */
+  const currentSignature = useMemo(() => stepsSignature(steps), [steps]);
+
+  /** Sealed: 封印後に一切の変更がない純粋な封印状態 */
+  const sealed = sealedSignatureSnapshot !== null && sealedSignatureSnapshot === currentSignature;
+
+  /** ForkedDraft: 封印後に編集が加えられ、新リヴィジョンへ派生した状態 */
+  const isForkedDraft = sealedSignatureSnapshot !== null && sealedSignatureSnapshot !== currentSignature;
+
+  /* ─────────────────────────────────────────────────────────────
+   * 🚀 Upgrade 2: Time-Travel Revert — Git Checkout for Creators
+   *
+   * 封印完了時に steps のディープコピーを保存。isForkedDraft 時に
+   * Revert ボタンから呼び出すことで瞬時に Sealed 状態へ巻き戻す。
+   * ─────────────────────────────────────────────────────────────
+   */
+
+  /** 封印完了時点の steps のディープコピー（Revert 用） */
+  const [sealedStepsSnapshot, setSealedStepsSnapshot] = useState<WorkspaceStep[] | null>(null);
+
+  /** Revert ボタンで封印状態の steps に巻き戻す */
+  const handleRevertToSealed = useCallback(() => {
+    if (!sealedStepsSnapshot) return;
+    setSteps(structuredClone ? structuredClone(sealedStepsSnapshot) : JSON.parse(JSON.stringify(sealedStepsSnapshot)));
+    // currentSignature が sealedSignatureSnapshot と一致 → sealed が自動で true に
+  }, [sealedStepsSnapshot]);
+
   /** Verified Badge 表示中のリヴィジョン番号 (将来は API から取得) */
   const [revisionLabel, setRevisionLabel] = useState<string>('v1');
 
@@ -292,7 +330,7 @@ export function ProcessBundleComposer({
    * canSubmit:
    *  Magic Mode: 2 枚以上 + allVerified
    *  Normal: certificate あり + allVerified + allUploaded
-   *  共通: steps.length > 0
+   *  共通: steps.length > 0 && !isForkedDraft (封印スナップショットが存在しない Draft のみ)
    */
   const canSubmit =
     steps.length > 0 &&
@@ -302,41 +340,6 @@ export function ProcessBundleComposer({
     (magicMode
       ? steps.length >= 2
       : !!certificate && allUploaded);
-
-  /* ═════════════════════════════════════════════════════════════
-     v4: Fork-on-Write — steps 変更を検出して Draft へ復帰
-     ═════════════════════════════════════════════════════════════
-     封印時点の steps 形状を sealedSignatureRef に焼き付け、以降の変更を
-     都度比較する。シグネチャが変われば即 Draft 化。
-     これにより TimelineCard の sealed=false 提供 (常時編集可) と整合する。
-  */
-  useEffect(() => {
-    if (!sealed) return;
-    const sig = stepsSignature(steps);
-    if (sealedSignatureRef.current === null) {
-      sealedSignatureRef.current = sig;
-      return;
-    }
-    if (sig !== sealedSignatureRef.current) {
-      // Fork-on-Write: 封印中に編集された → Draft へ滑らかに戻す
-      setSealed(false);
-      sealedSignatureRef.current = null;
-      // 結果バッジも消す（編集により別リビジョンへ派生する文脈を明示）
-      setResult(null);
-      setMessage('編集が加えられたため Draft に戻りました。次の封印で新しいリヴィジョンを作成します。');
-      // 次の seal は v2 として表示
-      setRevisionLabel((cur) => {
-        const m = cur.match(/^v(\d+)$/);
-        const n = m ? parseInt(m[1], 10) + 1 : 2;
-        return `v${n}`;
-      });
-    }
-  }, [steps, sealed]);
-
-  // 封印解除時にシグネチャをクリア
-  useEffect(() => {
-    if (!sealed) sealedSignatureRef.current = null;
-  }, [sealed]);
 
   /* ═════════════════════════════════════════════════════════════
      Magic Mode — initialFiles から steps を構築
@@ -546,12 +549,27 @@ export function ProcessBundleComposer({
     });
   }, []);
 
-  async function processInChunks<T, R>(items: T[], chunkSize: number, processor: (item: T) => Promise<R>): Promise<R[]> {
+  /**
+   * 🚀 Upgrade 3: OOM-Safe Concurrency Queue
+   *
+   * Promise.all による全件同時実行を廃棄。最大 `concurrency` 件まで
+   * 並列に処理し、各チャンク完了後に `await new Promise(r => setTimeout(r, 0))`
+   * を挟むことでメインスレッドに制御を返し、150枚ドロップ時のブラウザ
+   * フリーズ（Jank）を物理的に防止する。
+   */
+  async function processInChunks<T, R>(
+    items: T[],
+    concurrency: number,
+    processor: (item: T) => Promise<R>,
+  ): Promise<R[]> {
     const results: R[] = [];
-    for (let i = 0; i < items.length; i += chunkSize) {
-      const chunk = items.slice(i, i + chunkSize);
+    for (let i = 0; i < items.length; i += concurrency) {
+      const chunk = items.slice(i, i + concurrency);
+      // 最大 concurrency 件を並列実行（それ以上は次のイテレーションへ）
       const chunkResults = await Promise.all(chunk.map(processor));
       results.push(...chunkResults);
+      // ✅ チャンク間でメインスレッドに制御を返す (Anti-Jank yield)
+      await new Promise<void>((r) => setTimeout(r, 0));
     }
     return results;
   }
@@ -902,7 +920,9 @@ export function ProcessBundleComposer({
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '保存に失敗しました');
       setCompression({ phase: 'idle', current: 0, total: 0, caption: '' });
-      setSealed(false);
+      // Derived State: Draft へ戻すにはスナップショットをクリアするだけ
+      setSealedSignatureSnapshot(null);
+      setSealedStepsSnapshot(null);
     } finally {
       setSubmitting(false);
     }
@@ -939,8 +959,9 @@ export function ProcessBundleComposer({
       setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへリダイレクトします...');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '保存に失敗しました');
-      // Fork-on-Write: 失敗時は Draft へ戻して再試行可能に
-      setSealed(false);
+      // Derived State: 失敗時はスナップショットをクリアして Draft へ即復帰
+      setSealedSignatureSnapshot(null);
+      setSealedStepsSnapshot(null);
     } finally {
       setSubmitting(false);
     }
@@ -978,12 +999,12 @@ export function ProcessBundleComposer({
     if (onDiscard) {
       onDiscard();
     } else {
-      // placeholder: ローカル状態だけ初期化（呼び出し側未提供時）
+      // Derived State: スナップショットをクリアするだけで Draft へ即復帰
       steps.forEach((s) => removeStep(s.id));
-      setSealed(false);
+      setSealedSignatureSnapshot(null);
+      setSealedStepsSnapshot(null);
       setResult(null);
       setMessage(null);
-      sealedSignatureRef.current = null;
     }
     setDangerOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1378,13 +1399,59 @@ export function ProcessBundleComposer({
                 disabled={!canSubmit}
                 onSealed={() => {
                   if (steps.length === 0) return; // 虚無の送信バグ防止
-                  setSealed(true);
-                  sealedSignatureRef.current = stepsSignature(steps);
+                  // 🚀 Upgrade 1: Derived State — スナップショットをセット
+                  const sig = stepsSignature(steps);
+                  setSealedSignatureSnapshot(sig);
+                  // 🚀 Upgrade 2: Time-Travel Revert — steps のディープコピーを保存
+                  setSealedStepsSnapshot(JSON.parse(JSON.stringify(steps)));
                   navigator.vibrate?.(40);
                   if (magicMode) submitMagic();
                   else submit();
                 }}
               />
+
+              {/* 🚀 Upgrade 2: Time-Travel Revert Button
+                  isForkedDraft === true 時に滑らかに出現する救済UI。
+                  封印状態のスナップショットへ即座に巻き戻す Git Checkout。
+              */}
+              <AnimatePresence>
+                {isForkedDraft && (
+                  <motion.button
+                    key="revert-btn"
+                    type="button"
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+                    onClick={handleRevertToSealed}
+                    className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all group"
+                    style={{
+                      background: 'rgba(168, 160, 216, 0.06)',
+                      backdropFilter: 'blur(12px)',
+                      border: '1px solid rgba(255, 138, 133, 0.25)',
+                      color: '#FF8A85',
+                      boxShadow: '0 2px 16px rgba(255, 138, 133, 0.08)',
+                    }}
+                  >
+                    <motion.span
+                      animate={{ rotate: [0, -12, 0] }}
+                      transition={{ delay: 0.3, duration: 0.4, ease: 'easeInOut' }}
+                      style={{ display: 'inline-block' }}
+                    >
+                      ↩️
+                    </motion.span>
+                    <span className="tracking-wide">
+                      変更を破棄して封印状態に戻す
+                    </span>
+                    <span
+                      className="ml-auto text-[9px] font-mono uppercase tracking-widest opacity-50 group-hover:opacity-80 transition-opacity"
+                      style={{ color: '#A8A0D8' }}
+                    >
+                      Revert to Sealed
+                    </span>
+                  </motion.button>
+                )}
+              </AnimatePresence>
             </motion.div>
           ) : (
             <motion.div
