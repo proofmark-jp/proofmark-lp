@@ -31,3 +31,11 @@ status: Accepted
 ## 4. Next Actions (次なる防衛線)
 - **非同期フォールバックの徹底（Pull型アーキテクチャ）:** クラウド（Vercel）から Mac mini へWebhookを投げる設計は禁止する。必ず Mac mini 側のエージェントが、定期的に Supabase のキューを「取得（Pull）」しに行く設計とする。これにより、Mac mini が数時間オフラインになっても、キューが溜まるだけでシステム全体はダウンしない。
 - **UI側での遅延表現:** C2PA署名などの処理は即時完了しない前提に立ち、ユーザーのUI上には「The Merkle Rollupの記録完了。C2PA公式署名は現在バックグラウンドで処理中です」と表示させ、SLA（即時性の保証）を意図的に放棄する。
+
+
+## 🔗 Connected Nodes
+- [[Mac-Mini-Topology]]
+- [[Agent-DevOps]]
+- [[Agent-Sales]]
+- [[Agent-SecOps]]
+- [[Inbox]]

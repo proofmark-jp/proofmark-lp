@@ -43,3 +43,8 @@ Vercelのグローバルダウン、またはSupabaseがホストされている
 
 *   **Idempotent Sync (冪等な同期):**
     *   フロントエンド（IndexedDB）から送られてくる未処理のペイロードが、障害明けに一斉にバックエンドに再送される。APIは必ず「ハッシュ値の重複チェック」を行い、二重登録を無視する冪等性（Idempotency）を厳格に維持する。
+
+
+## 🔗 Connected Nodes
+- [[ADR-006-Adopt-Optimistic-UI-and-Local-First-State]]
+- [[Agent-DevOps]]

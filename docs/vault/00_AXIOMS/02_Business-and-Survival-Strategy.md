@@ -21,3 +21,9 @@ ProofMarkは「個人・副業（Solo/Side-Hustle）」で運営されるSaaSで
 ## 3. Agentic Pre-Training (AI稼働前のデータ蓄積)
 - Mac mini 上の擬似社員（AI営業・AIサポート）が自律稼働を開始するまでの期間は、ファウンダー自身が手動で泥臭くX（Twitter）の「AI疑惑で苦しむクリエイター」へコンタクトを取る。
 - ユーザーのつまづきポイント（エラーログ）や、返信率の高かった営業文面を収集し、これらを将来のAIエージェントのプロンプト（SOP）の学習データとして蓄積する。
+
+
+## 🔗 Connected Nodes
+- [[02_Stripe-FinOps]]
+- [[ADR-003-Deprecate-Free-Tier-Storage]]
+- [[Stripe-Billing-Flow]]

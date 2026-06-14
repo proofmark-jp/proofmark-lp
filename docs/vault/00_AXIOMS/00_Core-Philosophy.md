@@ -36,3 +36,9 @@ ProofMarkのすべてのコード、インフラ設計、UI/UXは、以下の絶
 - C2PA (Content Credentials) は「競合」ではなく「内包すべき来歴レイヤー（シェル）」として扱う。
 - ユーザーから送信された C2PA データを破壊せず、`Evidence Pack` 内に `c2pa.json` として安全に同梱する（パススルー型）。
 - ※ 将来的なMCP/Mac mini環境での署名者昇格（Issuer）を見据え、C2PA解析ロジックは常にクライアントサイド（Web Worker）にオフロードし、サーバーのCPUを保護する。
+
+
+## 🔗 Connected Nodes
+- [[01_The-Solo-Sniper-Roadmap]]
+- [[01_Infrastructure-Defenses]]
+- [[01_Terms-and-Policies]]
