@@ -7,3 +7,15 @@ dist
 .env.development.local
 .env.*.local
 .env*.local
+# =========================================
+# Obsidian Vault (The Blueprint) Ignores
+# =========================================
+# 作業状態（ノイズ）のコミットを防止
+docs/vault/.obsidian/workspace.json
+docs/vault/.obsidian/workspace-mobile.json
+docs/vault/.obsidian/core-plugins-migration.json
+docs/vault/.obsidian/graph.json
+
+# キャッシュや一時ファイルの除外
+docs/vault/.obsidian/cache/
+.DS_Store
