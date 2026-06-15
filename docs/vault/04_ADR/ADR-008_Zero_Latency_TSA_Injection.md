@@ -1,4 +1,4 @@
-# ADR-007: The Zero-Latency Backbone (TSA Certificate In-Memory Injection)
+# ADR-008: The Zero-Latency Backbone (TSA Certificate In-Memory Injection)
 
 ## 1. Context & Executive Summary (背景と目的)
 ProofMarkは、Vercel Serverless Functionsを用いた限界費用ゼロのSaaSインフラを構築している。
