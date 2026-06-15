@@ -112,6 +112,8 @@ function guessStepType(name: string): BundleStepType {
 }
 
 async function generateThumb(file: File): Promise<{ url: string, blob: Blob }> {
+  // ③ Main Thread Freeze 防衛: メインスレッドを一度Yieldしてからキャンバス処理に入る
+  await new Promise(r => setTimeout(r, 10));
   return new Promise((resolve, reject) => {
     const img = new Image();
     const srcUrl = URL.createObjectURL(file);
@@ -409,6 +411,8 @@ export function ProcessBundleComposer({
       }
 
       setMessage('✓ テキストの変更を保存しました (TSA 非消費)。');
+      // ④ Ghost Message 防衛: 3秒後に自動消去
+      setTimeout(() => setMessage(null), 3000);
     } catch (err) {
       console.error('[handleSaveMetadata] failed:', err);
       setMessage(err instanceof Error ? err.message : 'メタデータの保存に失敗しました');
@@ -761,13 +765,14 @@ export function ProcessBundleComposer({
         const target = cur.find(s => s.id === stepId);
         if (!target) return cur;
         const updated = { ...target, thumbUrl: thumb.url, thumbBlob: thumb.blob, uploadState: 'fetching_url' as const };
-        if (!target.deferred) fetchUploadUrls([updated]);
+        // ① Self-DDoS 防衛: ここでは fetchUploadUrls を呼ばない。
+        //    URL取得はaddFilesAsSteps / handleSubmit のバルク処理に一本化する。
         return cur.map(s => s.id === stepId ? updated : s);
       });
     } catch (e) {
       console.error('Thumbnail generation failed', e);
     }
-  }, [fetchUploadUrls]);
+  }, []);  // fetchUploadUrls 依存を除去
 
   const addFilesAtIndex = useCallback(async (files: FileList | File[], insertAt: number) => {
     const fileArray = Array.from(files).filter((f) => f.type.startsWith('image/')).sort((a, b) => a.lastModified - b.lastModified);
@@ -873,6 +878,11 @@ export function ProcessBundleComposer({
       abortControllersRef.current.get(id)?.abort();
       abortControllersRef.current.delete(id);
     }
+    // ② OOM 防衛: ステップ削除時にBlobURLを即座に解放してメモリリークを防ぐ
+    const previewUrl = urlCacheRef.current.get(id);
+    if (previewUrl) { URL.revokeObjectURL(previewUrl); urlCacheRef.current.delete(id); }
+    const thumbUrl = thumbCacheRef.current.get(id);
+    if (thumbUrl) { URL.revokeObjectURL(thumbUrl); thumbCacheRef.current.delete(id); }
     setSteps((cur) => cur.filter((s) => s.id !== id));
   }
 
