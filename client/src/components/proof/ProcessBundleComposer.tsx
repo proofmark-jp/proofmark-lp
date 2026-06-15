@@ -112,8 +112,9 @@ function guessStepType(name: string): BundleStepType {
 }
 
 async function generateThumb(file: File): Promise<{ url: string, blob: Blob }> {
-  // ③ Main Thread Freeze 防衛: メインスレッドを一度Yieldしてからキャンバス処理に入る
-  await new Promise(r => setTimeout(r, 10));
+  // 🚨 メインスレッドのブロッキングを防ぎ、UIフリーズを回避するための Yield
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
   return new Promise((resolve, reject) => {
     const img = new Image();
     const srcUrl = URL.createObjectURL(file);
