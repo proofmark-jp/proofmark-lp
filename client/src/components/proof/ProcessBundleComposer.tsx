@@ -83,7 +83,7 @@ import type { HashRequest, HashResponse } from '../../workers/hashWorker';
 import { compressProcessStepImage } from '../../lib/image-compression';
 import { supabase } from '../../lib/supabase';
 // ⭐ Upgrade ④: 新しく独立した VerifiedBadge コンポーネント
-import VerifiedBadge from './VerifiedBadge';
+import VerifiedBadge from '../ui/VerifiedBadge';
 
 /* ═══════════════════════════════════════════════════════════════
    CONSTANTS
