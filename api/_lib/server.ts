@@ -140,6 +140,45 @@ export function isAllowedOrigin(origin: string): boolean {
         .includes(origin);
 }
 
+// ── IP extraction (Single Source of Truth) ────────────────────────────────
+/**
+ * Vercelエンドポイント用の安全なIP取得関数。
+ *
+ * 優先度:
+ *   1. `x-real-ip`        — Vercelがインジェクトする単一IP。クライアントから偶造不能。
+ *   2. `x-forwarded-for` の末尾 (最後のエントリ) — クライアントが先頭に偶造値を挿入できるため、
+ *      左から最加工されたプロキシIPを追加する末尾値が最も信頼性が高い。
+ *   3. `socket.remoteAddress` — 従来のフォールバック。
+ *   4. `'127.0.0.1'` — 最終フォールバック。
+ *
+ * 絶対に `x-forwarded-for`の先頭 ([0]) を使用してはならない。
+ * クライアントが任意のIPを先頭に挿入してレートリミットを騰潤できる。
+ */
+export function getClientIp(req: VercelRequest): string {
+    // Priority 1: x-real-ip (Vercelが保証、偶造不能)
+    const realIp = req.headers['x-real-ip'];
+    if (realIp && typeof realIp === 'string' && realIp.trim()) {
+        return realIp.trim();
+    }
+
+    // Priority 2: x-forwarded-for の末尾値（最も信頼性の高いプロキシ追加値）
+    const fwd = req.headers['x-forwarded-for'];
+    if (fwd) {
+        const fwdStr = Array.isArray(fwd) ? fwd.join(',') : fwd;
+        const ips = fwdStr.split(',').map(s => s.trim()).filter(Boolean);
+        if (ips.length > 0) {
+            return ips[ips.length - 1]; // 末尾 = 最後に周りに追加されたトラストウァーシープロキシのIP
+        }
+    }
+
+    // Priority 3: ソケットプロキシアドレス
+    if (req.socket?.remoteAddress) {
+        return req.socket.remoteAddress;
+    }
+
+    return '127.0.0.1';
+}
+
 // ── audit-actor extractor ──────────────────────────────────────────────────
 export interface RequestActor {
     ip: string | null;
@@ -147,9 +186,7 @@ export interface RequestActor {
 }
 
 export function getRequestActor(req: VercelRequest): RequestActor {
-    const fwd = (req.headers['x-forwarded-for'] as string | undefined) ?? '';
-    const first = fwd.split(',')[0]?.trim() ?? null;
-    const ip = first || (req.socket?.remoteAddress ?? null);
+    const ip = getClientIp(req);
     const ua = (req.headers['user-agent'] as string | undefined) ?? null;
     return { ip: ip || null, userAgent: ua };
 }

@@ -8,9 +8,10 @@
 
 export const config = { runtime: 'edge' };
 
-import { getAuthenticatedUserId, json, supabaseAdmin } from './_shared.js';
+import { getAuthenticatedUserId, getClientIpFromEdgeRequest, json, supabaseAdmin } from './_shared.js';
 import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
+import { checkIpRateLimit } from './_lib/rate-limit.js';
 
 const BUCKET = 'proofmark-quarantine';
 const SIGNED_URL_TTL_SEC = 60 * 15; // 15 min
@@ -52,7 +53,18 @@ function getSafeExtension(filename: string): string {
 export default async function handler(request: Request): Promise<Response> {
   if (request.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
-  // 1. Edge Rate Limiting (IPベースのスパム防衛)
+  // 🚨 0. IP-Level Hourly Rate Limit (The Ironclad Fortress)
+  //    短時間スパイク防衛(ステップ1)の前段に、持続的DDoS/Botアタックへの
+  //    1時間スケール防衛線を構える。Fail-openなのでRedis障害でサービスは止まらない。
+  {
+    const ip = getClientIpFromEdgeRequest(request);
+    const allowed = await checkIpRateLimit(ip, 'upload');
+    if (!allowed) {
+      return json(429, { error: 'Too many requests from your IP. Please try again later.' });
+    }
+  }
+
+  // 1. Edge Rate Limiting (IPベースのスパイク防衛: 5req/10s)
   try {
     const redis = new Redis({
       url: process.env.KV_REST_API_URL || '',
@@ -63,7 +75,7 @@ export default async function handler(request: Request): Promise<Response> {
       limiter: Ratelimit.slidingWindow(5, '10 s'),
       analytics: true,
     });
-    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+    const ip = getClientIpFromEdgeRequest(request);
     const { success } = await ratelimit.limit(`pm_url_${ip}`);
     if (!success) return json(429, { error: 'Too many requests. Please wait.' });
   } catch (e) { console.warn('[RateLimit bypass]', e); }

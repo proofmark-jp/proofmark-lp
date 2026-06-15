@@ -1,5 +1,5 @@
 /**
- * api/_lib/rate-limit.ts — Phase 12.4
+ * api/_lib/rate-limit.ts — Phase 12.5
  *
  * 全プランの月次上限を Upstash Redis で物理ロック（Hard Limit）する。
  *
@@ -280,3 +280,69 @@ export async function rollbackIncrement(input: RateLimitInput): Promise<void> {
 
 // Internal exports for tests
 export const __test__ = { jstMonthRange };
+
+/* ═══════════════════════════════════════════════════════════════════
+   IP-Level DDoS / Bot Defense — The Ironclad Fortress (Phase 12.5)
+   ───────────────────────────────────────────────────────────────────
+   設計:
+     - キー: `ip_rl:<endpoint>:<ip>` (1時間スライディングウィンドウ)
+     - 制限: 1IPにつき1時間に最大 IP_HOURLY_LIMIT リクエスト
+     - TTL:  3600秒（1時間でキー自然消滅）
+     - NX:   既存TTLを上書きしない（upstashIncrementWithExpire と同一設計）
+     - Fail-open: Redis障害時はサービスを止めない
+   共有IPリスク: 50req/hは大学・オフィス共有IPでも誤検知しない絶妙なライン。
+   真の人間操作（1リクエスト ≒ 数分）では物理的に到達不能な閾値。
+   ═══════════════════════════════════════════════════════════════════ */
+
+const IP_HOURLY_LIMIT = 50;
+const IP_TTL_SECONDS = 3600; // 1 hour
+
+/**
+ * IPアドレスをキーとした1時間スライディングウィンドウのレートリミット。
+ *
+ * @param ip       クライアントIPアドレス（getClientIp / getClientIpFromEdgeRequest の戻り値）
+ * @param endpoint キー空間を分離するエンドポイント識別子
+ * @returns `true` = OK (通過), `false` = 超過 (即時 429 を返すこと)
+ */
+export async function checkIpRateLimit(
+    ip: string,
+    endpoint: 'upload' | 'create',
+): Promise<boolean> {
+    const cfg = getUpstashConfig();
+    if (!cfg) return true; // Fail-open: Upstash未設定環境ではスキップ
+
+    // XFF内の最初のIPのみ使用し、カンマ区切りの後続プロキシIPを無視する
+    const cleanIp = ip.split(',')[0].trim() || '127.0.0.1';
+    const key = `ip_rl:${endpoint}:${cleanIp}`;
+
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(new Error('upstash_timeout')), REDIS_FETCH_TIMEOUT_MS);
+    try {
+        const res = await fetch(`${cfg.url}/pipeline`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${cfg.token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify([
+                ['INCR', key],
+                ['EXPIRE', key, String(IP_TTL_SECONDS), 'NX'],
+            ]),
+            signal: ac.signal,
+        });
+
+        if (!res.ok) return true; // Fail-open: Upstash HTTP エラー
+
+        const data = (await res.json()) as Array<{ result?: number; error?: string }>;
+        const count = data?.[0]?.result;
+
+        if (typeof count !== 'number') return true; // Fail-open: 予期しないレスポンス
+
+        return count <= IP_HOURLY_LIMIT;
+    } catch {
+        // タイムアウト・ネットワーク障害 → Fail-open
+        return true;
+    } finally {
+        clearTimeout(timer);
+    }
+}

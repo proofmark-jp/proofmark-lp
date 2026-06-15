@@ -8,7 +8,7 @@
 
 export const config = { runtime: 'edge' };
 
-import { getAuthenticatedUserId, json, supabaseAdmin } from '../_shared.js';
+import { getAuthenticatedUserId, getClientIpFromEdgeRequest, json, supabaseAdmin } from '../_shared.js';
 import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
 
@@ -26,7 +26,7 @@ export default async function handler(request: Request): Promise<Response> {
       limiter: Ratelimit.slidingWindow(5, '10 s'),
       analytics: true,
     });
-    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+    const ip = getClientIpFromEdgeRequest(request);
     const { success } = await ratelimit.limit(`pm_quota_${ip}`);
     if (!success) return json(429, { error: 'Too many requests' });
   } catch (e) { console.warn('[RateLimit bypass]', e); }

@@ -32,6 +32,32 @@ export function getOrigin(request: Request) {
   return process.env.APP_URL || new URL(request.url).origin;
 }
 
+/**
+ * Edge Runtime (Web Request API) \u7528\u306e\u5b89\u5168\u306aIP\u53d6\u5f97\u95a2\u6570\u3002
+ *
+ * \u512a\u5148\u5ea6:
+ *   1. `x-real-ip`        \u2014 Vercel\u304c\u30a4\u30f3\u30b8\u30a7\u30af\u30c8\u3002\u30af\u30e9\u30a4\u30a2\u30f3\u30c8\u304b\u3089\u5076\u9020\u4e0d\u80fd\u3002
+ *   2. `x-forwarded-for` \u306e\u672b\u5c3e\u5024 \u2014 \u5076\u9020\u30ea\u30b9\u30af\u306e\u3042\u308b\u5148\u982d\u5024\u3067\u306f\u306a\u304f\u3001\u4fe1\u983c\u6027\u306e\u9ad8\u3044\u672b\u5c3e\u5024\u3002
+ *   3. `'127.0.0.1'` \u2014 \u6700\u7d42\u30d5\u30a9\u30fc\u30eb\u30d0\u30c3\u30af\u3002
+ *
+ * \u7d76\u5bfe\u306b `x-forwarded-for` \u306e\u5148\u982d ([0]) \u3092\u4f7f\u7528\u3057\u3066\u306f\u306a\u3089\u306a\u3044\u3002
+ * \u30af\u30e9\u30a4\u30a2\u30f3\u30c8\u304c\u4efb\u610f\u306eIP\u3092\u5148\u982d\u306b\u633f\u5165\u3057\u3066\u30ec\u30fc\u30c8\u30ea\u30df\u30c3\u30c8\u3092\u9a30\u6f64\u3067\u304d\u308b\u3002
+ */
+export function getClientIpFromEdgeRequest(request: Request): string {
+  // Priority 1: x-real-ip (Vercel\u304c\u4fdd\u8a3c\u3001\u5076\u9020\u4e0d\u80fd)
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp?.trim()) return realIp.trim();
+
+  // Priority 2: x-forwarded-for \u306e\u672b\u5c3e\u5024\uff08\u6700\u3082\u4fe1\u983c\u6027\u306e\u9ad8\u3044\u30d7\u30ed\u30ad\u30b7\u8ffd\u52a0\u5024\uff09
+  const fwd = request.headers.get('x-forwarded-for');
+  if (fwd) {
+    const ips = fwd.split(',').map(s => s.trim()).filter(Boolean);
+    if (ips.length > 0) return ips[ips.length - 1];
+  }
+
+  return '127.0.0.1';
+}
+
 export async function getAuthenticatedUserId(request: Request) {
   const authorization = request.headers.get('authorization');
   if (!authorization?.startsWith('Bearer ')) {

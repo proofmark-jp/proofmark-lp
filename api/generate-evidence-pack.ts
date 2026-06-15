@@ -26,6 +26,7 @@ import { Redis } from '@upstash/redis';
 import {
     HttpError,
     getAdminClient,
+    getClientIp,
     makeLogger,
     methodGuard,
     tryUser,
@@ -312,7 +313,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!methodGuard(req, res, ['GET'])) return;
 
     if (ratelimit) {
-        const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || '127.0.0.1';
+        const ip = getClientIp(req);
         try {
             const { success } = await ratelimit.limit(ip);
             if (!success) {

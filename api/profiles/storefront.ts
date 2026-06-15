@@ -13,7 +13,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
-import { getAdminClient, isAllowedOrigin, json, makeLogger, methodGuard } from '../_lib/server.js';
+import { getAdminClient, getClientIp, isAllowedOrigin, json, makeLogger, methodGuard } from '../_lib/server.js';
 
 let ratelimit: Ratelimit | null = null;
 try {
@@ -46,7 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (ratelimit) {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || '127.0.0.1';
+    const ip = getClientIp(req);
     try {
         const { success } = await ratelimit.limit(ip);
         if (!success) return json(res, 429, { error: 'too_many_requests', reqId: log.ctx.reqId });

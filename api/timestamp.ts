@@ -17,6 +17,7 @@ import { requestTimestampWithFallback } from './_lib/tsa.js';
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 import { incrementAndCheckCertIssue, rollbackIncrement } from './_lib/rate-limit.js';
+import { getClientIp } from './_lib/server.js';
 
 // ──────────────────────────────────────────────────────────────────────────
 // 0. Config
@@ -147,7 +148,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (userErr || !userData?.user) return res.status(401).json({ error: 'Invalid session', reqId });
     userId = userData.user.id;
 
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || 'unknown';
+    const ip = getClientIp(req);
 
     // --- Rate Limit Check: Per-User (Upstash Redis) ---
     if (ratelimit) {
