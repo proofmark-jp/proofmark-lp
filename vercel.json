@@ -5,9 +5,6 @@
     "api/get-evidence-payload.ts": {
       "maxDuration": 5
     },
-    "api/og.ts": {
-      "maxDuration": 10
-    },
     "api/generate-evidence-pack.ts": {
       "maxDuration": 300
     },
@@ -16,9 +13,6 @@
     },
     "api/webhooks/stripe.ts": {
       "maxDuration": 30
-    },
-    "api/cron/cleanup-spot-data.ts": {
-      "maxDuration": 60
     },
     "api/delivery.ts": {
       "maxDuration": 15
@@ -101,16 +95,8 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/cleanup-spot-data",
-      "schedule": "0 * * * *"
-    },
-    {
       "path": "/api/cron/upsell-warning",
       "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/cron/gc",
-      "schedule": "0 2 * * *"
     }
   ]
 }

@@ -64,23 +64,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           </div>
         `;
 
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${RESEND_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            from: 'ProofMark <noreply@proofmark.jp>',
-            to: userEmail,
-            subject: '【ProofMark】原本ファイルの保存期限があと3日です',
-            html: emailHtml
-          })
-        });
-        sentCount++;
+        try {
+          const response = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${RESEND_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              from: 'ProofMark <noreply@proofmark.jp>',
+              to: userEmail,
+              subject: '【ProofMark】原本ファイルの保存期限があと3日です',
+              html: emailHtml
+            })
+          });
+
+          if (!response.ok) {
+            const errBody = await response.text();
+            throw new Error(`Resend API response status: ${response.status} - ${errBody}`);
+          }
+
+          sentCount++;
+        } catch (err) {
+          console.error(`Failed to send email to ${userEmail} for certificate ${cert.id}:`, err);
+        }
       });
 
-      await Promise.all(sendPromises);
+      await Promise.allSettled(sendPromises);
       // 🚨 Resend APIのレートリミット防衛のため、チャンク間に1秒の待機を挟む
       if (i + CHUNK_SIZE < certs.length) {
         await new Promise(resolve => setTimeout(resolve, 1000));

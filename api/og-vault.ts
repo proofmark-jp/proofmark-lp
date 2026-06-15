@@ -338,47 +338,7 @@ function metaCell(label: string, value: string): string {
   `;
 }
 
-/* ─────────────────────────────────────────────
- *  Fallback Slab — Supabase 失敗時
- * ───────────────────────────────────────────── */
 
-function buildFallbackSlab(): ReturnType<typeof html> {
-    const sealDataUri = svgToDataUri(PM_SEAL_SVG);
-    return html(`
-    <div style="
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      width: ${WIDTH}px; height: ${HEIGHT}px;
-      background: ${PM.bg};
-      font-family: 'Noto Sans JP', sans-serif;
-      position: relative; overflow: hidden;
-    ">
-      <div style="
-        position: absolute; inset: 0;
-        background:
-          radial-gradient(circle at 22% 30%, rgba(108,62,244,0.30) 0%, rgba(0,0,0,0) 45%),
-          radial-gradient(circle at 78% 70%, rgba(0,212,170,0.20) 0%, rgba(0,0,0,0) 45%);
-      "></div>
-
-      <img src="${sealDataUri}" width="96" height="96" />
-      <div style="
-        display:flex; color: ${PM.textMain}; font-size: 72px; font-weight: 800;
-        margin-top: 28px; letter-spacing: -0.02em;
-      ">ProofMark</div>
-      <div style="
-        display:flex; color: ${PM.textMuted}; font-size: 30px; font-weight: 500;
-        margin-top: 12px; text-align: center;
-      ">AI時代の納品信頼インフラ</div>
-      <div style="
-        display:flex; margin-top: 28px;
-        padding: 12px 22px; border-radius: 999px;
-        background: rgba(0,212,170,0.08);
-        border: 1px solid rgba(0,212,170,0.30);
-        color: ${PM.success}; font-size: 20px; font-weight: 800;
-        letter-spacing: 0.10em; text-transform: uppercase;
-      ">RFC3161 · SHA-256 · INDEPENDENTLY VERIFIABLE</div>
-    </div>
-  `);
-}
 
 /* ─────────────────────────────────────────────
  *  Render pipeline
@@ -431,54 +391,57 @@ export default async function handler(
     }
 
     const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!id || !uuidRegex.test(id)) {
+        res.status(400).end('Bad Request: Invalid or missing certificate ID');
+        return;
+    }
 
     try {
         const [fonts, cert] = await Promise.all([
             loadProofmarkFonts(),
-            id ? fetchCertificateForOG(id) : Promise.resolve(null),
+            fetchCertificateForOG(id),
         ]);
 
-        const tree = cert
-            ? buildVaultSlab(toSlabInput(cert))
-            : buildFallbackSlab();
+        // 🚨 【絶対防衛線】証明書が見つからない場合は、計算を回さずに即死させる
+        if (!cert) {
+            // 方法A: 404を返す（SNSクローラーはデフォルトのサイトOGPを勝手に読み込むため問題なし）
+            res.status(404).end('Not Found');
+            return;
+            
+            // 方法B: もしどうしても自前のフォールバック画像を出したいなら、
+            // 動的生成ではなく public フォルダに置いた静的な og-fallback.png へリダイレクトする
+            // res.redirect(302, '/og-fallback.png');
+            // return;
+        }
 
+        // ここまで到達したということは、実在する証明書である
+        const tree = buildVaultSlab(toSlabInput(cert));
         const png = await renderPng(tree, fonts);
 
         res.setHeader('Content-Type', 'image/png');
         res.setHeader(
             'Cache-Control',
-            'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800',
+            'public, max-age=31536000, s-maxage=31536000, immutable',
         );
-        res.setHeader('X-ProofMark-OG', cert ? 'vault' : 'fallback');
+        res.setHeader('X-ProofMark-OG', 'vault');
         res.status(200).send(png);
     } catch (err) {
-        // ここで 500 を返すと SNS クローラに「画像なし」と判定されるため、
-        // 何が何でも 200 でフォールバック PNG を返す。
+        // 例外発生時は 1x1 の透明 PNG もしくはエラーを返却
         try {
-            const fonts = await loadProofmarkFonts();
-            const png = await renderPng(buildFallbackSlab(), fonts);
-            res.setHeader('Content-Type', 'image/png');
-            res.setHeader(
-                'Cache-Control',
-                // 失敗 OG は短めに (5min)
-                'public, max-age=300, s-maxage=300',
-            );
-            res.setHeader('X-ProofMark-OG', 'fallback-error');
-            res.status(200).send(png);
-        } catch (fatalErr) {
-            // フォント取得すら落ちた最悪ケース: 1x1 透明 PNG を返す
-            // (SNS クローラのリトライを許容)
             const transparent = Buffer.from(
                 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
                 'base64',
             );
             res.setHeader('Content-Type', 'image/png');
             res.setHeader('Cache-Control', 'no-store');
-            res.setHeader('X-ProofMark-OG', 'transparent');
+            res.setHeader('X-ProofMark-OG', 'transparent-error');
             res.status(200).send(transparent);
             // Vercel のログに残す
             // eslint-disable-next-line no-console
-            console.error('[og-vault] fatal', err, fatalErr);
+            console.error('[og-vault] fatal', err);
+        } catch (fatalErr) {
+            res.status(500).end('Internal Server Error');
         }
     }
 }
