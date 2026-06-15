@@ -12,8 +12,7 @@ import { getAuthenticatedUserId, json, supabaseAdmin } from './_shared.js';
 import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
 
-const BUCKET = 'proofmark-originals';
-const QUARANTINE_PREFIX = 'quarantine';
+const BUCKET = 'proofmark-quarantine';
 const SIGNED_URL_TTL_SEC = 60 * 15; // 15 min
 const MAX_DECLARED_SIZE = 500 * 1024 * 1024; // 1ファイルの最大 (500MB)
 const MAX_BATCH_SIZE = 150; // 1リクエストの最大枚数
@@ -139,7 +138,7 @@ export default async function handler(request: Request): Promise<Response> {
 
       const ext = getSafeExtension(item.fileName);
       const uuid = crypto.randomUUID();
-      const quarantinePath = `${QUARANTINE_PREFIX}/${userId}/${uuid}.${ext}`;
+      const quarantinePath = `${userId}/${uuid}.${ext}`;
 
       const { data, error } = await supabaseAdmin.storage
         .from(BUCKET)

@@ -25,9 +25,10 @@ import { Ratelimit } from '@upstash/ratelimit';
 
 const MAX_CHAIN_LENGTH = 150; // 1リクエストの最大チェーン数
 const MAX_JSON_PAYLOAD_BYTES = 2 * 1024 * 1024; // 2MB (CPU Starvation Defense)
+const QUARANTINE_BUCKET = 'proofmark-quarantine';
 const ORIGINALS_BUCKET = 'proofmark-originals';
 const PUBLIC_BUCKET = 'proofmark-public';
-const QUARANTINE_PREFIX = 'quarantine';
+const SPOT_EVIDENCE_BUCKET = 'spot-evidence';
 
 type ProofMode = 'private' | 'shareable' | 'spot';
 type Visibility = 'private' | 'unlisted' | 'public';
@@ -72,7 +73,7 @@ function assertSafeQuarantinePath(path: string, userId: string, mode: ProofMode)
   }
   if (mode === 'spot') return;
   const parts = path.split('/');
-  if (parts.length < 3 || parts[0] !== QUARANTINE_PREFIX || parts[1] !== userId) {
+  if (parts.length < 2 || parts[0] !== userId) {
     throw new HttpError(403, 'Quarantine ownership mismatch');
   }
 }
@@ -152,6 +153,7 @@ export default async function handler(request: Request): Promise<Response> {
 
     // 5. 並列 Quarantine Stat & Promote
     const dbRecords: any[] = [];
+    const pathsToDelete: string[] = [];
 
     await Promise.all(items.map(async (item, index) => {
       const mode = item.proofMode === 'shareable' ? 'shareable' : (item.proofMode === 'spot' ? 'spot' : 'private');
@@ -159,7 +161,7 @@ export default async function handler(request: Request): Promise<Response> {
 
       const nameToFetch = item.quarantinePath.split('/').pop()!;
       const parentDir = item.quarantinePath.slice(0, item.quarantinePath.lastIndexOf('/'));
-      const { data: qData, error: qErr } = await supabaseAdmin.storage.from(ORIGINALS_BUCKET).list(parentDir, { search: nameToFetch, limit: 1 });
+      const { data: qData, error: qErr } = await supabaseAdmin.storage.from(QUARANTINE_BUCKET).list(parentDir, { search: nameToFetch, limit: 1 });
       
       if (qErr || !qData || qData.length === 0) throw new HttpError(404, `Quarantine object not found: ${nameToFetch}`);
       const entry = qData.find((e) => e.name === nameToFetch);
@@ -192,18 +194,30 @@ export default async function handler(request: Request): Promise<Response> {
       const ext = safeExt(safeFileName);
       let storagePath = null;
       let publicImageUrl = null;
+      let isAssetPurged = false;
 
-      if (mode === 'shareable') {
-        const publicPath = `certificates/${certId}.${ext}`;
-        await supabaseAdmin.storage.from(ORIGINALS_BUCKET).copy(item.quarantinePath, publicPath, { destinationBucket: PUBLIC_BUCKET });
-        storagePath = `${userId || 'spot'}/certificates/${certId}.${ext}`;
-        await supabaseAdmin.storage.from(ORIGINALS_BUCKET).move(item.quarantinePath, storagePath);
-        
-        const { data: pubUrl } = supabaseAdmin.storage.from(PUBLIC_BUCKET).getPublicUrl(publicPath);
-        publicImageUrl = pubUrl.publicUrl;
+      const isPaidOrSpot = planTier !== 'free' || mode === 'spot';
+
+      if (isPaidOrSpot) {
+        if (mode === 'shareable') {
+          storagePath = `${userId}/certificates/${certId}.${ext}`;
+          await supabaseAdmin.storage.from(QUARANTINE_BUCKET).move(item.quarantinePath, storagePath, { destinationBucket: ORIGINALS_BUCKET });
+          
+          const { data: pubUrl } = supabaseAdmin.storage.from(ORIGINALS_BUCKET).getPublicUrl(storagePath);
+          publicImageUrl = pubUrl.publicUrl;
+        } else if (mode === 'private') {
+          storagePath = `${userId}/vault/${certId}.${ext}`;
+          await supabaseAdmin.storage.from(QUARANTINE_BUCKET).move(item.quarantinePath, storagePath, { destinationBucket: ORIGINALS_BUCKET });
+        } else if (mode === 'spot') {
+          storagePath = `spot/vault/${certId}.${ext}`;
+          await supabaseAdmin.storage.from(QUARANTINE_BUCKET).move(item.quarantinePath, storagePath, { destinationBucket: SPOT_EVIDENCE_BUCKET });
+        }
       } else {
-        storagePath = `${userId || 'spot'}/vault/${certId}.${ext}`;
-        await supabaseAdmin.storage.from(ORIGINALS_BUCKET).move(item.quarantinePath, storagePath);
+        // Free Tier Purge: Register to be deleted from storage after DB transaction success
+        storagePath = null;
+        publicImageUrl = null;
+        isAssetPurged = true;
+        pathsToDelete.push(item.quarantinePath);
       }
 
       dbRecords.push({
@@ -228,7 +242,7 @@ export default async function handler(request: Request): Promise<Response> {
           bundle_id: bundleId,
           step_index: item.stepIndex ?? index
         },
-        is_asset_purged: false
+        is_asset_purged: isAssetPurged
       });
     }));
 
@@ -242,6 +256,16 @@ export default async function handler(request: Request): Promise<Response> {
       if (insertError.code === '23505') throw new HttpError(409, 'Concurrent request conflict (UNIQUE violation).');
       console.error('[DB Insert Error]', insertError);
       throw new HttpError(500, 'Database transaction failed');
+    }
+
+    // 7. Purge Free Tier Assets from Quarantine Bucket
+    if (pathsToDelete.length > 0) {
+      const { error: purgeError } = await supabaseAdmin.storage
+        .from(QUARANTINE_BUCKET)
+        .remove(pathsToDelete);
+      if (purgeError) {
+        console.error('[Storage Purge Error]', purgeError);
+      }
     }
 
     return json(200, {
