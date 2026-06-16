@@ -23,7 +23,9 @@ export type CertificateRecord = {
   metadata_json: Record<string, unknown> | null;
   proven_at: string;
   created_at: string;
+  c2paSignal?: WidgetC2paSignal;
 };
+
 
 export type ProcessBundleDraftStep = {
   id: string;
@@ -82,3 +84,13 @@ export type PortfolioEmbedSettings = {
   showBundles: boolean;
   maxItems: number;
 };
+
+/** ADR-009: C2PA マニフェストから抽出するトラスト・シグナル */
+export interface WidgetC2paSignal {
+  hasC2pa: boolean;
+  isAiGenerated: boolean;
+  isHumanEdited: boolean;
+  generatorName: string | null;
+  signatureValid: boolean;
+}
+

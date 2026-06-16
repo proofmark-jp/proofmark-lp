@@ -66,6 +66,8 @@ const ArticleMonetization = lazy(() => import('./pages/ArticleMonetization'));
 const CertificatePage = lazy(() => import('./pages/CertificatePage'));
 const PublicProfile = lazy(() => import('./pages/PublicProfile'));
 const EmbedPortfolioPage = lazy(() => import('./pages/EmbedPortfolioPage'));
+const EmbedWidgetPage = lazy(() => import('./pages/embed/EmbedWidgetPage'));
+
 
 // ── settings ────────────────────────────────────────────────────────────
 const Settings = lazy(() => import('./pages/Settings'));
@@ -193,7 +195,9 @@ function Router(): JSX.Element {
       <Route path="/legal-resources" component={LegalResources as ComponentType} />
       <Route path="/trust-center" component={TrustCenter as ComponentType} />
       <Route path="/u/:username" component={PublicProfile as ComponentType} />
+      <Route path="/embed/widget/:id" component={EmbedWidgetPage as ComponentType} />
       <Route path="/embed/:username" component={EmbedPortfolioPage as ComponentType} />
+
       <Route path="/blog" component={BlogIndex as ComponentType} />
       <Route path="/blog/copyright" component={ArticleCopyright as ComponentType} />
       <Route path="/blog/monetization" component={ArticleMonetization as ComponentType} />
