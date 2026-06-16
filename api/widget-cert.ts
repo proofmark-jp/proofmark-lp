@@ -22,7 +22,7 @@ function getSupabase() {
 }
 
 const SELECT_COLS =
-  'id, title, public_image_url, public_verify_token, proven_at, c2pa_manifest';
+  'id, title, public_image_url, public_verify_token, certified_at, c2pa_manifest';
 
 export default async function handler(req: Request): Promise<Response> {
   const headers = { 'Content-Type': 'application/json' };

@@ -21,7 +21,7 @@ type CertificateLite = {
   title: string | null;
   public_image_url: string | null;
   public_verify_token: string | null;
-  proven_at: string | null;
+  certified_at: string | null;
   c2pa_manifest: unknown;
 };
 
@@ -325,10 +325,10 @@ export default function EmbedWidgetPage() {
                 <h3 className="text-[13.5px] font-bold text-white leading-snug truncate">
                   {state.cert.title || 'Untitled Work'}
                 </h3>
-                {state.cert.proven_at && (
+                {state.cert.certified_at && (
                   <div className="mt-0.5 text-[10.5px] text-white/40 tracking-wide">
                     Proven&nbsp;
-                    {new Date(state.cert.proven_at).toLocaleDateString(undefined, {
+                    {new Date(state.cert.certified_at).toLocaleDateString(undefined, {
                       year: 'numeric',
                       month: 'short',
                       day: 'numeric',
