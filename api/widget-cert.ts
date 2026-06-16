@@ -9,7 +9,6 @@
  *                stale-while-revalidate=86400 → 24時間はstaleでも即返す
  */
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
 /* ── Supabase client (Service Role) ── */
@@ -25,20 +24,32 @@ function getSupabase() {
 const SELECT_COLS =
   'id, title, public_image_url, public_verify_token, proven_at, c2pa_manifest';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: Request): Promise<Response> {
+  const headers = { 'Content-Type': 'application/json' };
+
   /* GET のみ許可 */
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return new Response(
+      JSON.stringify({ error: 'Method Not Allowed' }),
+      { status: 405, headers }
+    );
   }
 
-  const id = typeof req.query.id === 'string' ? req.query.id.trim() : null;
+  const url = new URL(req.url);
+  const id = url.searchParams.get('id')?.trim() || null;
   if (!id) {
-    return res.status(400).json({ error: 'Missing required query param: id' });
+    return new Response(
+      JSON.stringify({ error: 'Missing required query param: id' }),
+      { status: 400, headers }
+    );
   }
 
   const supabase = getSupabase();
   if (!supabase) {
-    return res.status(500).json({ error: 'Server misconfiguration' });
+    return new Response(
+      JSON.stringify({ error: 'Server misconfiguration' }),
+      { status: 500, headers }
+    );
   }
 
   /* id か public_verify_token のどちらでも引けるように or 条件 */
@@ -51,22 +62,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (error) {
     console.error('[widget-cert] supabase error:', error.message);
-    return res.status(500).json({ error: 'Internal Server Error' });
+    return new Response(
+      JSON.stringify({ error: 'Internal Server Error' }),
+      { status: 500, headers }
+    );
   }
 
   if (!data) {
-    return res.status(404).json({ error: 'Certificate not found' });
+    return new Response(
+      JSON.stringify({ error: 'Certificate not found' }),
+      { status: 404, headers }
+    );
   }
 
   /* Edge Cache: 証明書は immutable なので長めにキャッシュ */
-  res.setHeader(
-    'Cache-Control',
-    'public, s-maxage=3600, stale-while-revalidate=86400',
-  );
-  res.setHeader('Content-Type', 'application/json');
-
-  return res.status(200).json(data);
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+    },
+  });
 }
 
 export const config = { runtime: 'edge' };
-
