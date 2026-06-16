@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "public": true,
   "functions": {
     "api/get-evidence-payload.ts": {
       "maxDuration": 5
