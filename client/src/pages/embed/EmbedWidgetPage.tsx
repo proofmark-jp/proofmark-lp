@@ -1,21 +1,16 @@
 // client/src/pages/embed/EmbedWidgetPage.tsx
 /**
- * EmbedWidgetPage — ADR-009 Phase 2 (Data Injection + Trust UI)
+ * EmbedWidgetPage — ADR-009 Phase 2.5 (Edge Data Proxy)
  * ────────────────────────────────────────────────────────────────
- * - Vite + React + Wouter + Supabase (NOT Next.js)
- * - 隔離レイアウト (Anonymous, Auth Provider なし)
- * - Edge-friendly: 単一 SELECT のみ、Compute ゼロ依存
- * - CLS 防止のための固定高 Skeleton
- * - postMessage('PROOFMARK_WIDGET_RESIZE') を高さ変化のたびに再発火
+ * - Supabase への直接フェッチを廃止。/api/widget-cert?id= 経由に統一。
+ * - Vercel Edge がレスポンスをキャッシュ → バズ時も DB コネクション枯渇ゼロ。
+ * - WidgetShell の href を証明書の実 URL に修正。
+ * - Vite + React + Wouter (NOT Next.js)
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRoute } from 'wouter';
-import { supabase } from '../lib/supabase';
-import {
-  parseC2paManifest,
-  type WidgetC2paSignal,
-} from '../lib/c2pa-parser';
+import type { WidgetC2paSignal } from '../../lib/proofmark-types';
 
 /* ════════════════════════════════════════════════════════════════
    Types
@@ -36,6 +31,32 @@ type FetchState =
   | { status: 'ready'; cert: CertificateLite; signal: WidgetC2paSignal };
 
 /* ════════════════════════════════════════════════════════════════
+   C2PA manifest パーサ (ローカル実装 — 外部依存なし)
+   ════════════════════════════════════════════════════════════════ */
+
+function parseC2paManifest(raw: unknown): WidgetC2paSignal {
+  const empty: WidgetC2paSignal = {
+    hasC2pa: false,
+    isAiGenerated: false,
+    isHumanEdited: false,
+    generatorName: null,
+    signatureValid: false,
+  };
+  if (!raw || typeof raw !== 'object') return empty;
+  const m = raw as Record<string, unknown>;
+  return {
+    hasC2pa: true,
+    isAiGenerated:
+      typeof m.is_ai_generated === 'boolean' ? m.is_ai_generated : false,
+    isHumanEdited:
+      typeof m.is_human_edited === 'boolean' ? m.is_human_edited : false,
+    generatorName: typeof m.generator_name === 'string' ? m.generator_name : null,
+    signatureValid:
+      typeof m.signature_valid === 'boolean' ? m.signature_valid : false,
+  };
+}
+
+/* ════════════════════════════════════════════════════════════════
    Iframe resize sync helper
    ════════════════════════════════════════════════════════════════ */
 
@@ -46,10 +67,7 @@ function postResize() {
     document.body?.scrollHeight ?? 0,
   );
   try {
-    window.parent.postMessage(
-      { type: 'PROOFMARK_WIDGET_RESIZE', height: h },
-      '*',
-    );
+    window.parent.postMessage({ type: 'PROOFMARK_WIDGET_RESIZE', height: h }, '*');
   } catch {
     /* noop */
   }
@@ -87,10 +105,17 @@ function ProofChip({
   );
 }
 
-function WidgetShell({ children }: { children: React.ReactNode }) {
+/* ── WidgetShell: href を外部から注入できるように変更 ── */
+function WidgetShell({
+  children,
+  href,
+}: {
+  children: React.ReactNode;
+  href: string;
+}) {
   return (
     <a
-      href="https://proofmark.jp"
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       className="block w-full max-w-[420px] mx-auto rounded-2xl border border-white/10 bg-[#0F0F11] shadow-[0_4px_20px_rgba(0,0,0,0.35)] overflow-hidden text-white no-underline font-sans antialiased transition-[transform,box-shadow] duration-200 hover:shadow-[0_8px_28px_rgba(0,212,170,0.18)] hover:-translate-y-[1px]"
@@ -103,7 +128,7 @@ function WidgetShell({ children }: { children: React.ReactNode }) {
 
 function SkeletonWidget() {
   return (
-    <WidgetShell>
+    <WidgetShell href="https://proofmark.jp">
       <div className="animate-pulse">
         <div className="aspect-[16/10] w-full bg-white/[0.04]" />
         <div className="p-4 space-y-3">
@@ -121,7 +146,7 @@ function SkeletonWidget() {
 
 function NotFoundWidget() {
   return (
-    <WidgetShell>
+    <WidgetShell href="https://proofmark.jp">
       <div className="p-5 flex items-center gap-3">
         <div className="shrink-0 w-9 h-9 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center">
           <svg
@@ -159,14 +184,13 @@ function NotFoundWidget() {
    ════════════════════════════════════════════════════════════════ */
 
 export default function EmbedWidgetPage() {
-  // /embed/:id (Wouter)
-  const [, params] = useRoute<{ id: string }>('/embed/:id');
+  const [, params] = useRoute<{ id: string }>('/embed/widget/:id');
   const id = params?.id;
 
   const [state, setState] = useState<FetchState>({ status: 'loading' });
   const rootRef = useRef<HTMLDivElement>(null);
 
-  /* ─── 1) Fetch certificate ─── */
+  /* ─── 1) Fetch certificate via Edge Proxy (NOT direct Supabase) ─── */
   useEffect(() => {
     if (!id) {
       setState({ status: 'error', reason: 'not_found' });
@@ -174,52 +198,47 @@ export default function EmbedWidgetPage() {
     }
 
     let cancelled = false;
+
     const fetchCert = async () => {
       setState({ status: 'loading' });
 
-      // id か public_verify_token のどちらでも引けるように or 条件で検索
-      const { data, error } = await supabase
-        .from('certificates')
-        .select(
-          'id, title, public_image_url, public_verify_token, proven_at, c2pa_manifest',
-        )
-        .or(`id.eq.${id},public_verify_token.eq.${id}`)
-        .limit(1)
-        .maybeSingle();
+      try {
+        const res = await fetch(`/api/widget-cert?id=${encodeURIComponent(id)}`);
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      if (error || !data) {
-        setState({
-          status: 'error',
-          reason: error ? 'unknown' : 'not_found',
-        });
-        return;
+        if (res.status === 404) {
+          setState({ status: 'error', reason: 'not_found' });
+          return;
+        }
+        if (!res.ok) {
+          setState({ status: 'error', reason: 'unknown' });
+          return;
+        }
+
+        const data: CertificateLite = await res.json();
+        if (cancelled) return;
+
+        const signal = parseC2paManifest(data.c2pa_manifest);
+        setState({ status: 'ready', cert: data, signal });
+      } catch {
+        if (!cancelled) setState({ status: 'error', reason: 'unknown' });
       }
-
-      const signal = parseC2paManifest((data as CertificateLite).c2pa_manifest);
-      setState({
-        status: 'ready',
-        cert: data as CertificateLite,
-        signal,
-      });
     };
 
     fetchCert();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [id]);
 
   /* ─── 2) Resize sync to parent ─── */
   useEffect(() => {
-    // 初期高さを即送信
     postResize();
-    // 描画コミット直後にもう一度
     const raf = requestAnimationFrame(postResize);
 
     const ro =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => postResize()) : null;
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => postResize())
+        : null;
     if (ro && rootRef.current) ro.observe(rootRef.current);
     if (ro) ro.observe(document.documentElement);
 
@@ -261,28 +280,28 @@ export default function EmbedWidgetPage() {
         {signal.isHumanEdited && (
           <ProofChip
             tone="blue"
-            label={
-              signal.editorName
-                ? `Human Edited · ${signal.editorName}`
-                : 'Human Edited'
-            }
+            label="Human Edited"
             dotClass="bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.6)]"
           />
         )}
-        {!signal.signatureValid &&
-          !signal.isAiGenerated &&
-          !signal.isHumanEdited && (
-            <ProofChip
-              tone="slate"
-              label="Verified by ProofMark"
-              dotClass="bg-white/60"
-            />
-          )}
+        {!signal.signatureValid && !signal.isAiGenerated && !signal.isHumanEdited && (
+          <ProofChip
+            tone="slate"
+            label="Verified by ProofMark"
+            dotClass="bg-white/60"
+          />
+        )}
       </>
     );
   }, [state]);
 
-  /* ─── 4) Render ─── */
+  /* ─── 4) 証明書ページへのダイレクトリンク URL を構築 ─── */
+  const certHref =
+    state.status === 'ready'
+      ? `https://proofmark.jp/verify/${state.cert.public_verify_token ?? state.cert.id}`
+      : 'https://proofmark.jp';
+
+  /* ─── 5) Render ─── */
   return (
     <div
       ref={rootRef}
@@ -294,7 +313,7 @@ export default function EmbedWidgetPage() {
       {state.status === 'error' && <NotFoundWidget />}
 
       {state.status === 'ready' && (
-        <WidgetShell>
+        <WidgetShell href={certHref}>
           {/* Thumbnail */}
           <div className="relative aspect-[16/10] w-full overflow-hidden bg-[#0A0A0C]">
             {state.cert.public_image_url ? (
