@@ -10,7 +10,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRoute } from 'wouter';
-import type { WidgetC2paSignal } from '../../lib/proofmark-types';
+import { parseC2paManifest, type WidgetC2paSignal } from '../../lib/c2pa-parser';
 
 /* ════════════════════════════════════════════════════════════════
    Types
@@ -30,31 +30,6 @@ type FetchState =
   | { status: 'error'; reason: 'not_found' | 'unknown' }
   | { status: 'ready'; cert: CertificateLite; signal: WidgetC2paSignal };
 
-/* ════════════════════════════════════════════════════════════════
-   C2PA manifest パーサ (ローカル実装 — 外部依存なし)
-   ════════════════════════════════════════════════════════════════ */
-
-function parseC2paManifest(raw: unknown): WidgetC2paSignal {
-  const empty: WidgetC2paSignal = {
-    hasC2pa: false,
-    isAiGenerated: false,
-    isHumanEdited: false,
-    generatorName: null,
-    signatureValid: false,
-  };
-  if (!raw || typeof raw !== 'object') return empty;
-  const m = raw as Record<string, unknown>;
-  return {
-    hasC2pa: true,
-    isAiGenerated:
-      typeof m.is_ai_generated === 'boolean' ? m.is_ai_generated : false,
-    isHumanEdited:
-      typeof m.is_human_edited === 'boolean' ? m.is_human_edited : false,
-    generatorName: typeof m.generator_name === 'string' ? m.generator_name : null,
-    signatureValid:
-      typeof m.signature_valid === 'boolean' ? m.signature_valid : false,
-  };
-}
 
 /* ════════════════════════════════════════════════════════════════
    Iframe resize sync helper
