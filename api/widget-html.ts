@@ -1,5 +1,5 @@
 /**
- * api/widget-html.ts — ADR-009 Phase 3: Twitter Player Meta Injector (Fixed)
+ * api/widget-html.ts — ADR-009 Phase 3: Twitter Player Meta Injector (Fixed & Optimized)
  * ─────────────────────────────────────────────────────────────────────
  */
 
@@ -18,6 +18,19 @@ function getSupabase() {
   });
 }
 
+function escapeHtml(str: string): string {
+  return str.replace(/[&<>"']/g, (match) => {
+    const escape: Record<string, string> = { 
+        '&': '&amp;', 
+        '<': '&lt;', 
+        '>': '&gt;', 
+        '"': '&quot;', 
+        "'": '&#39;' 
+    };
+    return escape[match] || match;
+  });
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).end('Method Not Allowed');
@@ -28,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).end('Missing required query param: id');
   }
 
-  /* ── 1) 物理ファイルパスへの依存を捨て、自ホストから直接Fetchする ── */
+  /* ── 1) 自身のホスト名から index.html をFetchする ── */
   let html: string;
   try {
     const baseUrl = 'https://www.proofmark.jp';
@@ -42,14 +55,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).end('Failed to retrieve index.html via HTTP fetch.');
   }
 
-  /* ── 2) Supabase からデータ取得（型キャストエラー防衛） ── */
+  /* ── 2) Supabase から証明書のタイトルのみ取得 ── */
   const supabase = getSupabase();
   let title = 'ProofMark';
-  let image = 'https://www.proofmark.jp/og-image.png';
 
   if (supabase) {
     const isUuid = UUID_REGEX.test(id);
-    let query = supabase.from('certificates').select('title, public_image_url');
+    let query = supabase.from('certificates').select('title');
     
     if (isUuid) {
       query = query.or(`id.eq.${id},public_verify_token.eq.${id}`);
@@ -59,21 +71,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data } = await query.limit(1).maybeSingle();
 
-    if (data) {
-      if (data.title) title = data.title;
-      if (data.public_image_url) image = data.public_image_url;
+    if (data && data.title) {
+      title = data.title;
     }
   }
 
   /* ── 3) OGP / Twitter Player メタタグ注入 ── */
   const widgetUrl = `https://proofmark.jp/embed/widget/${id}`;
+  const vaultImageUrl = `https://www.proofmark.jp/api/og-vault?id=${id}`;
+  const escapedTitle = escapeHtml(title);
+
   const metaTags = `
     <meta name="twitter:card" content="player">
     <meta name="twitter:player" content="${widgetUrl}">
     <meta name="twitter:player:width" content="420">
     <meta name="twitter:player:height" content="180">
-    <meta property="og:title" content="ProofMark: ${title}">
-    <meta property="og:image" content="${image}">`;
+    <meta name="twitter:image" content="${vaultImageUrl}">
+    <meta property="og:title" content="ProofMark: ${escapedTitle}">
+    <meta property="og:image" content="${vaultImageUrl}">`;
 
   // 堅牢な正規表現置換（大文字小文字や属性付きのheadタグに対応）
   const injectedHtml = html.replace(/<head\b[^>]*>/i, (match) => `${match}${metaTags}`);
