@@ -1,18 +1,13 @@
 /**
- * api/widget-html.ts — ADR-009 Phase 3: Twitter Player Meta Injector (Refined)
+ * api/widget-html.ts — ADR-009 Phase 3: Twitter Player Meta Injector (Fixed)
  * ─────────────────────────────────────────────────────────────────────
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import fs from 'fs';
-import path from 'path';
 
 /* ── UUIDバリデーション用の正規表現 ── */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/* ── インメモリキャッシュ（ディスクI/O削減） ── */
-let cachedHtml: string | null = null;
 
 function getSupabase() {
   const url = process.env.SUPABASE_URL;
@@ -33,32 +28,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).end('Missing required query param: id');
   }
 
-  /* ── 1) dist/index.html 読み込み（インメモリキャッシュ適用） ── */
-  if (!cachedHtml) {
-    try {
-      const htmlPath = path.join(process.cwd(), 'dist', 'index.html');
-      cachedHtml = fs.readFileSync(htmlPath, 'utf-8');
-    } catch {
-      return res.status(500).end('Failed to read index.html');
-    }
+  /* ── 1) 物理ファイルパスへの依存を捨て、自ホストから直接Fetchする ── */
+  let html: string;
+  try {
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    // 自身のホスト名を取得（ローカル開発環境と本番環境の両方に対応）
+    const host = req.headers['x-forwarded-host'] || req.headers.host || 'proofmark.jp';
+    const baseUrl = `${protocol}://${host}`;
+    
+    // Vercelのエッジからキャッシュ済みの index.html を取得
+    const htmlRes = await fetch(`${baseUrl}/index.html`);
+    if (!htmlRes.ok) throw new Error('Failed to fetch index.html from edge');
+    
+    html = await htmlRes.text();
+  } catch (error) {
+    return res.status(500).end('Failed to retrieve index.html via HTTP fetch.');
   }
-  const html = cachedHtml;
 
-  /* ── 2) Supabase からデータ取得（型キャストエラーの完全防衛） ── */
+  /* ── 2) Supabase からデータ取得（型キャストエラー防衛） ── */
   const supabase = getSupabase();
   let title = 'ProofMark';
   let image = 'https://www.proofmark.jp/og-image.png';
 
   if (supabase) {
-    // idがUUIDフォーマットかどうかでクエリを動的に切り替える
     const isUuid = UUID_REGEX.test(id);
-    
     let query = supabase.from('certificates').select('title, public_image_url');
     
     if (isUuid) {
       query = query.or(`id.eq.${id},public_verify_token.eq.${id}`);
     } else {
-      // UUIDでない場合は、String型であるpublic_verify_tokenのみを安全に検索
       query = query.eq('public_verify_token', id);
     }
 
@@ -71,7 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   /* ── 3) OGP / Twitter Player メタタグ注入 ── */
-  const widgetUrl = `https://www.proofmark.jp/embed/widget/${id}`;
+  const widgetUrl = `https://proofmark.jp/embed/widget/${id}`;
   const metaTags = `
     <meta name="twitter:card" content="player">
     <meta name="twitter:player" content="${widgetUrl}">
