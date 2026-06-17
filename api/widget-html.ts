@@ -82,20 +82,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const widgetUrl = `https://proofmark.jp/embed/widget/${id}`;
   const vaultImageUrl = `https://www.proofmark.jp/api/og-vault?id=${id}${cacheBuster}`;
   const escapedTitle = escapeHtml(title);
+  
+  const desc = `ProofMark Verified | 制作プロセスと存在証明が暗号学的に記録されています。証明書ID: ${id.split('-')[0]}`;
 
   const metaTags = `
-    <meta name="twitter:card" content="player">
+    <meta name="description" content="${desc}">
+    <meta property="og:description" content="${desc}">
+    <meta name="twitter:description" content="${desc}">
+    <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:player" content="${widgetUrl}">
-    <meta name="twitter:player:width" content="420">
-    <meta name="twitter:player:height" content="180">
     <meta name="twitter:image" content="${vaultImageUrl}">
     <meta property="og:title" content="ProofMark: ${escapedTitle}">
     <meta property="og:image" content="${vaultImageUrl}">`;
 
-  // 既存の OGP および Twitter メタタグの衝突を防ぐため削除
-  const cleanHtml = html
-    .replace(/<meta[^>]*property=["']og:[^"']*["'][^>]*>/gi, '')
-    .replace(/<meta[^>]*name=["']twitter:[^"']*["'][^>]*>/gi, '');
+  // 既存の OGP、Twitter、および description メタタグの衝突を防ぐため完全に削除
+  const cleanHtml = html.replace(/<meta[^>]*(name|property)=["'](og:|twitter:|description)[^"']*["'][^>]*>/gi, '');
 
   // </head> の直前に新しいメタタグを挿入
   const injectedHtml = cleanHtml.replace(/<\/head>/i, `${metaTags}</head>`);
