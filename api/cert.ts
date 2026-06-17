@@ -23,9 +23,7 @@ function escapeHtml(str: string): string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const protocol = req.headers['x-forwarded-proto'] || 'http';
-  const host = req.headers['x-forwarded-host'] || req.headers.host;
-  const baseUrl = `${protocol}://${host}`;
+  const baseUrl = 'https://www.proofmark.jp';
   const url = new URL(req.url!, baseUrl);
   const id = req.query.id as string || url.searchParams.get('id');
 

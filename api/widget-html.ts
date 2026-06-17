@@ -31,10 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   /* ── 1) 物理ファイルパスへの依存を捨て、自ホストから直接Fetchする ── */
   let html: string;
   try {
-    const protocol = req.headers['x-forwarded-proto'] || 'https';
-    // 自身のホスト名を取得（ローカル開発環境と本番環境の両方に対応）
-    const host = req.headers['x-forwarded-host'] || req.headers.host || 'proofmark.jp';
-    const baseUrl = `${protocol}://${host}`;
+    const baseUrl = 'https://www.proofmark.jp';
     
     // Vercelのエッジからキャッシュ済みの index.html を取得
     const htmlRes = await fetch(`${baseUrl}/index.html`);
