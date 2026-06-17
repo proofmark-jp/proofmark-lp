@@ -273,7 +273,7 @@ export default function EmbedWidgetPage() {
   /* ─── 4) 証明書ページへのダイレクトリンク URL を構築 ─── */
   const certHref =
     state.status === 'ready'
-      ? `https://proofmark.jp/verify/${state.cert.public_verify_token ?? state.cert.id}`
+      ? `https://proofmark.jp/cert/${state.cert.public_verify_token ?? state.cert.id}`
       : 'https://proofmark.jp';
 
   /* ─── 5) Render ─── */

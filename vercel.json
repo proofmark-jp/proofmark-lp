@@ -18,6 +18,9 @@
     },
     "api/storefront-html.ts": {
       "includeFiles": "dist/index.html"
+    },
+    "api/widget-html.ts": {
+      "includeFiles": "dist/index.html"
     }
   },
   "rewrites": [
@@ -28,6 +31,10 @@
     {
       "source": "/u/:username",
       "destination": "/api/storefront-html?username=:username"
+    },
+    {
+      "source": "/embed/widget/:id",
+      "destination": "/api/widget-html?id=:id"
     },
     {
       "source": "/((?!api/|cert/|u/|@|src/|node_modules/)[^.]*)",
