@@ -77,8 +77,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   /* ── 3) OGP / Twitter Player メタタグ注入 ── */
+  const v = typeof req.query.v === 'string' ? req.query.v.trim() : null;
+  const cacheBuster = v ? `&v=${encodeURIComponent(v)}` : '';
   const widgetUrl = `https://proofmark.jp/embed/widget/${id}`;
-  const vaultImageUrl = `https://www.proofmark.jp/api/og-vault?id=${id}`;
+  const vaultImageUrl = `https://www.proofmark.jp/api/og-vault?id=${id}${cacheBuster}`;
   const escapedTitle = escapeHtml(title);
 
   const metaTags = `
@@ -90,8 +92,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     <meta property="og:title" content="ProofMark: ${escapedTitle}">
     <meta property="og:image" content="${vaultImageUrl}">`;
 
-  // 堅牢な正規表現置換（大文字小文字や属性付きのheadタグに対応）
-  const injectedHtml = html.replace(/<head\b[^>]*>/i, (match) => `${match}${metaTags}`);
+  // 既存の OGP および Twitter メタタグの衝突を防ぐため削除
+  const cleanHtml = html
+    .replace(/<meta[^>]*property=["']og:[^"']*["'][^>]*>/gi, '')
+    .replace(/<meta[^>]*name=["']twitter:[^"']*["'][^>]*>/gi, '');
+
+  // </head> の直前に新しいメタタグを挿入
+  const injectedHtml = cleanHtml.replace(/<\/head>/i, `${metaTags}</head>`);
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
