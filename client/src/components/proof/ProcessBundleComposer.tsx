@@ -1108,9 +1108,7 @@ export function ProcessBundleComposer({
     if (!certificate) return;
     setSubmitting(true); setMessage(null); setResult(null);
     try {
-      let latest: WorkspaceStep[] = [];
-      setSteps((cur) => { latest = cur; return cur; });
-      const toUpload = latest.filter((s) => !s.isRoot && s.file && s.uploadState !== 'uploaded');
+      const toUpload = steps.filter((s) => !s.isRoot && s.file && s.uploadState !== 'uploaded');
 
       if (toUpload.length > 0) {
         // もし signedUrl が無ければ取得
@@ -1142,14 +1140,11 @@ export function ProcessBundleComposer({
           }
           await new Promise((r) => setTimeout(r, 250));
         }
-
-        // アップロード完了後の最新ステートを取得
-        setSteps((cur) => { latest = cur; return cur; });
       }
 
       const payload = {
         bundleId: crypto.randomUUID(),
-        items: latest.filter(s => !s.isRoot).map((s, idx) => ({
+        items: steps.filter(s => !s.isRoot).map((s, idx) => ({
           quarantinePath: s.quarantinePath,
           thumbnailPath: s.thumbQuarantinePath,
           sha256: s.sha256,
@@ -1175,15 +1170,15 @@ export function ProcessBundleComposer({
       if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
       const data = await res.json();
       setResult({
-        chainDepth: latest.length,
-        chainHeadSha256: latest[latest.length - 1].sha256 ?? null,
+        chainDepth: steps.length,
+        chainHeadSha256: steps[steps.length - 1].sha256 ?? null,
         certificateId: data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown',
       });
       setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへリダイレクトします...');
 
       // ⭐ Upgrade ②: submit 成功時にも sealedMetaSnapshot を確定
       setSealedMetaSignatureSnapshot(currentMetaSignature);
-      setSealedStepsSnapshot(latest.map((step) => ({ ...step })));
+      setSealedStepsSnapshot(steps.map((step) => ({ ...step })));
       setSealedTitleSnapshot(title);
       setSealedDescriptionSnapshot(description);
     } catch (error) {
