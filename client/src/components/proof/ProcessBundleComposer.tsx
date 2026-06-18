@@ -253,6 +253,11 @@ export function ProcessBundleComposer({
   );
   const [isPublic, setIsPublic] = useState(true);
   const [steps, setSteps] = useState<WorkspaceStep[]>([]);
+  /** ⚡ Mutable Ref Pattern — 非同期関数から常に最新 steps を O(1) で参照 */
+  const stepsRef = useRef<WorkspaceStep[]>(steps);
+  useEffect(() => {
+    stepsRef.current = steps;
+  }, [steps]);
   const [submitting, setSubmitting] = useState(false);
   /** ⭐ Upgrade ③: メタデータ保存専用のフラグ (TSA 非消費の超軽量 PATCH) */
   const [savingMeta, setSavingMeta] = useState(false);
@@ -1021,9 +1026,8 @@ export function ProcessBundleComposer({
       const TIMEOUT_MS = 120_000;
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        let current: WorkspaceStep[] = [];
-        setSteps((cur) => { current = cur; return cur; });
-        const targets = current.filter((s) => !s.isRoot && s.file);
+        // stepsRef.current は常に最新 — setSteps ハック不要、ポーリング Promise も不要
+        const targets = stepsRef.current.filter((s) => !s.isRoot && s.file);
         const done = targets.every((s) => s.uploadState === 'uploaded');
         const failed = targets.some((s) => s.uploadState === 'error');
         if (done) break;
@@ -1041,10 +1045,8 @@ export function ProcessBundleComposer({
         caption: '証拠チェーンを台帳へ書き込み中...',
       });
 
-      let finalSteps: WorkspaceStep[] = [];
-      setSteps((cur) => { finalSteps = cur; return cur; });
-
-      const itemsList = finalSteps
+      // stepsRef.current で最新ステートを直接参照 (setSteps ハック撤廃)
+      const itemsList = stepsRef.current
         .filter((s) => !s.isRoot && s.file)
         .map((s, idx) => ({
           quarantinePath: s.quarantinePath,
@@ -1087,7 +1089,7 @@ export function ProcessBundleComposer({
 
       setResult({
         chainDepth: payload.items.length,
-        chainHeadSha256: finalSteps[finalSteps.length - 1]?.sha256 ?? null,
+        chainHeadSha256: stepsRef.current[stepsRef.current.length - 1]?.sha256 ?? null,
         certificateId,
       });
       setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへリダイレクトします...');
@@ -1095,7 +1097,7 @@ export function ProcessBundleComposer({
 
       // ⭐ Upgrade ②: submitMagic 成功時にも sealedMetaSnapshot を確定
       setSealedMetaSignatureSnapshot(currentMetaSignature);
-      setSealedStepsSnapshot(finalSteps.map((step) => ({ ...step })));
+      setSealedStepsSnapshot(stepsRef.current.map((step) => ({ ...step })));
       setSealedTitleSnapshot(title);
       setSealedDescriptionSnapshot(description);
 
@@ -1134,9 +1136,8 @@ export function ProcessBundleComposer({
         const startedAt = Date.now();
         const TIMEOUT_MS = 120_000;
         while (true) {
-          let current: WorkspaceStep[] = [];
-          setSteps((cur) => { current = cur; return cur; });
-          const targets = current.filter((s) => !s.isRoot && s.file);
+          // stepsRef.current は常に最新 — setSteps ハック不要、ポーリング Promise も不要
+          const targets = stepsRef.current.filter((s) => !s.isRoot && s.file);
           const done = targets.every((s) => s.uploadState === 'uploaded');
           const failed = targets.some((s) => s.uploadState === 'error');
           if (done) break;
@@ -1148,9 +1149,10 @@ export function ProcessBundleComposer({
         }
       }
 
+      // stepsRef.current で最新ステートを直接参照 (setSteps ハック撤廃)
       const payload = {
         bundleId: crypto.randomUUID(),
-        items: steps.filter(s => !s.isRoot).map((s, idx) => ({
+        items: stepsRef.current.filter(s => !s.isRoot).map((s, idx) => ({
           quarantinePath: s.quarantinePath,
           thumbnailPath: s.thumbQuarantinePath,
           sha256: s.sha256,
@@ -1176,15 +1178,15 @@ export function ProcessBundleComposer({
       if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
       const data = await res.json();
       setResult({
-        chainDepth: steps.length,
-        chainHeadSha256: steps[steps.length - 1].sha256 ?? null,
+        chainDepth: stepsRef.current.length,
+        chainHeadSha256: stepsRef.current[stepsRef.current.length - 1]?.sha256 ?? null,
         certificateId: data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown',
       });
       setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへリダイレクトします...');
 
       // ⭐ Upgrade ②: submit 成功時にも sealedMetaSnapshot を確定
       setSealedMetaSignatureSnapshot(currentMetaSignature);
-      setSealedStepsSnapshot(steps.map((step) => ({ ...step })));
+      setSealedStepsSnapshot(stepsRef.current.map((step) => ({ ...step })));
       setSealedTitleSnapshot(title);
       setSealedDescriptionSnapshot(description);
     } catch (error) {
