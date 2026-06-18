@@ -1154,17 +1154,23 @@ export function ProcessBundleComposer({
 
       // stepsRef.current で最新ステートを直接参照 (setSteps ハック撤廃)
       const payload = {
-        bundleId: crypto.randomUUID(),
-        items: stepsRef.current.filter(s => !s.isRoot).map((s, idx) => ({
-          quarantinePath: s.quarantinePath,
-          thumbnailPath: s.thumbQuarantinePath,
-          sha256: s.sha256,
-          title: s.title,
-          proofMode: isPublic ? 'shareable' : 'private',
-          file_name: s.file!.name,
-          file_size: s.file!.size,
-          stepIndex: idx,
-        })),
+        certificateId: certificate.id,
+        bundleId: certificate.process_bundle_id || crypto.randomUUID(),
+        title: title,
+        description: description,
+        items: stepsRef.current
+          .map((s, idx) => ({ s, idx }))
+          .filter(({ s }) => !s.isRoot && s.file)
+          .map(({ s, idx }) => ({
+            quarantinePath: s.quarantinePath,
+            thumbnailPath: s.thumbQuarantinePath,
+            sha256: s.sha256,
+            title: s.title,
+            proofMode: isPublic ? 'shareable' : 'private',
+            file_name: s.file!.name,
+            file_size: s.file!.size,
+            stepIndex: idx,
+          })),
       };
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
