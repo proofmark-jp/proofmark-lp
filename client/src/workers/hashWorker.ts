@@ -90,6 +90,7 @@ const PROGRESS_THROTTLE_MS = 60;
 const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = async (event: MessageEvent<HashRequest>): Promise<void> => {
+  const startedAt = performance.now();
   const { id, file, chunkSize = DEFAULT_CHUNK_SIZE } = event.data;
 
   try {
@@ -104,7 +105,7 @@ ctx.onmessage = async (event: MessageEvent<HashRequest>): Promise<void> => {
       size: file.size,
       name: file.name,
       type: file.type,
-      durationMs: 0, // streamingSha256 内で上書きせず ETA は progress で運用
+      durationMs: performance.now() - startedAt,
     };
     ctx.postMessage(success);
   } catch (err) {
@@ -192,9 +193,6 @@ async function streamingSha256(
       lastEmittedPercent = percent;
     }
 
-    // microtask に制御を返して GC とイベントキューに息継ぎさせる
-    // （これがないと巨大ファイル時に Worker が「ハングっぽく」見える）
-    await Promise.resolve();
   }
 
   // 末尾で必ず 100% を送る

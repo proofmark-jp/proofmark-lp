@@ -11,6 +11,9 @@ if (!supabaseKey) {
   console.error("🚨 致命的エラー: SUPABASE_SERVICE_ROLE_KEY が見つかりません。");
 }
 
+console.log("[INIT DIAGNOSTIC] Supabase URL:", supabaseUrl);
+console.log("[INIT DIAGNOSTIC] Has Service Key?:", !!supabaseKey);
+
 export const supabaseAdmin = createClient(
   supabaseUrl!,
   supabaseKey!,
@@ -60,17 +63,24 @@ export function getClientIpFromEdgeRequest(request: Request): string {
 
 export async function getAuthenticatedUserId(request: Request) {
   const authorization = request.headers.get('authorization');
+  console.log("[AUTH DIAGNOSTIC] Auth Header Check:", authorization ? `EXISTS (Length: ${authorization.length})` : "NULL");
+
   if (!authorization?.startsWith('Bearer ')) {
+    console.error("[AUTH DIAGNOSTIC] Invalid header format:", authorization);
     throw new Error('missing or invalid authorization header');
   }
 
   const token = authorization.slice('Bearer '.length);
+  console.log("[AUTH DIAGNOSTIC] Extracted Token Prefix:", token.substring(0, 15) + "...");
+
   const { data, error } = await supabaseAdmin.auth.getUser(token);
   
   if (error || !data?.user?.id) {
+    console.error("[AUTH DIAGNOSTIC] Supabase Error Detail:", JSON.stringify(error, null, 2));
     throw new Error(error?.message || 'invalid token');
   }
   
+  console.log("[AUTH DIAGNOSTIC] Auth Success! User ID:", data.user.id);
   return data.user.id;
 }
 
