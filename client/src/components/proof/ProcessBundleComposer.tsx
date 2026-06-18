@@ -643,21 +643,19 @@ export function ProcessBundleComposer({
         } catch (e) { console.error('Public API fetch failed:', e); }
       }
 
-      if (!fetchedSteps && typeof window !== 'undefined') {
+      if (!fetchedSteps) {
         try {
-          const url = (import.meta as any).env?.VITE_SUPABASE_URL;
-          const key = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-          if (url && key) {
-            const res = await fetch(
-              `${url}/rest/v1/process_bundle_steps?bundle_id=eq.${certificate.process_bundle_id}&select=*`,
-              { headers: { apikey: key, Authorization: `Bearer ${key}` } },
-            );
-            if (res.ok) {
-              const data = await res.json();
-              if (Array.isArray(data) && data.length > 0) fetchedSteps = data;
-            }
+          const { data, error } = await supabase
+            .from('process_bundle_steps')
+            .select('*')
+            .eq('bundle_id', certificate.process_bundle_id);
+            
+          if (!error && Array.isArray(data) && data.length > 0) {
+            fetchedSteps = data;
           }
-        } catch (e) { console.error('Direct Supabase fetch failed:', e); }
+        } catch (e) {
+          console.error('Supabase client fetch failed:', e);
+        }
       }
 
       if (fetchedSteps && Array.isArray(fetchedSteps) && fetchedSteps.length > 0 && isMounted) {
