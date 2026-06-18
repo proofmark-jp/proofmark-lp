@@ -729,12 +729,20 @@ export function ProcessBundleComposer({
   /* ── fetchUploadUrls ── */
   const fetchUploadUrls = useCallback(async (newSteps: WorkspaceStep[]) => {
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('認証トークンが見つかりません。再ログインしてください。');
+
       const payloadItems = newSteps.flatMap(s => [
         { fileName: s.file!.name, mimeType: s.file!.type, fileSize: s.file!.size },
         { fileName: `thumb_${s.id}.webp`, mimeType: 'image/webp', fileSize: s.thumbBlob?.size ?? 0 }
       ]);
       const res = await fetch('/api/upload-url', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({ items: payloadItems, proofMode: isPublic ? 'shareable' : 'private' })
       });
       if (!res.ok) throw new Error('Failed to get upload URLs.');
@@ -1054,8 +1062,16 @@ export function ProcessBundleComposer({
         items: itemsWithHead,
       };
 
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('認証トークンが見つかりません。再ログインしてください。');
+
       const res = await fetch('/api/certificates/create', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
@@ -1144,8 +1160,16 @@ export function ProcessBundleComposer({
           stepIndex: idx,
         })),
       };
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('認証トークンが見つかりません。再ログインしてください。');
+
       const res = await fetch('/api/certificates/create', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
