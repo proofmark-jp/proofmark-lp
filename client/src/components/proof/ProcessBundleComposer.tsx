@@ -1073,6 +1073,8 @@ export function ProcessBundleComposer({
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) throw new Error('認証トークンが見つかりません。再ログインしてください。');
+      const userId = sessionData.session?.user?.id;
+      if (!userId) throw new Error('ユーザーIDが取得できません。再ログインしてください。');
 
       const res = await fetch('/api/certificates/create', {
         method: 'POST',
@@ -1087,13 +1089,14 @@ export function ProcessBundleComposer({
       const data = await res.json();
       const certificateId = data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown';
 
-      // 🚨 ブラックボックAPIをバイパスし、Supabaseへ直接工程を書き込む
+      // 🚨 ブラックボックスAPIをバイパスし、Supabaseへ直接工程を書き込む
       const dbSteps = stepsRef.current
         .map((s, idx) => ({ s, idx }))
         .filter(({ s }) => !s.isRoot && s.file)
         .map(({ s, idx }) => ({
           id: s.id,
           bundle_id: payload.bundleId,
+          user_id: userId, // RLSを通過するために必須
           step_index: idx,
           step_type: s.stepType || 'other',
           title: s.title,
@@ -1101,8 +1104,7 @@ export function ProcessBundleComposer({
           sha256: s.sha256,
           quarantine_path: s.quarantinePath,
           thumb_quarantine_path: s.thumbQuarantinePath,
-          file_name: s.file!.name,
-          file_size: s.file!.size,
+          // file_name と file_size はDBにカラムが存在しないため除外
         }));
 
       if (dbSteps.length > 0) {
@@ -1112,7 +1114,7 @@ export function ProcessBundleComposer({
           
         if (insertErr) {
           console.error('Direct DB Insert Error:', insertErr);
-          throw new Error(`DB直接保存エラー: ${insertErr.message} (SupabaseのRLS設定でInsertが許可されているか確認してください)`);
+          throw new Error(`DB直接保存エラー: ${insertErr.message}`);
         }
       }
 
@@ -1204,6 +1206,8 @@ export function ProcessBundleComposer({
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) throw new Error('認証トークンが見つかりません。再ログインしてください。');
+      const userId = sessionData.session?.user?.id;
+      if (!userId) throw new Error('ユーザーIDが取得できません。再ログインしてください。');
 
       const res = await fetch('/api/certificates/create', {
         method: 'POST',
@@ -1216,13 +1220,14 @@ export function ProcessBundleComposer({
       if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
       const data = await res.json();
 
-      // 🚨 ブラックボックAPIをバイパスし、Supabaseへ直接工程を書き込む
+      // 🚨 ブラックボックスAPIをバイパスし、Supabaseへ直接工程を書き込む
       const dbSteps = stepsRef.current
         .map((s, idx) => ({ s, idx }))
         .filter(({ s }) => !s.isRoot && s.file)
         .map(({ s, idx }) => ({
           id: s.id,
           bundle_id: payload.bundleId,
+          user_id: userId, // RLSを通過するために必須
           step_index: idx,
           step_type: s.stepType || 'other',
           title: s.title,
@@ -1230,8 +1235,7 @@ export function ProcessBundleComposer({
           sha256: s.sha256,
           quarantine_path: s.quarantinePath,
           thumb_quarantine_path: s.thumbQuarantinePath,
-          file_name: s.file!.name,
-          file_size: s.file!.size,
+          // file_name と file_size はDBにカラムが存在しないため除外
         }));
 
       if (dbSteps.length > 0) {
@@ -1241,7 +1245,7 @@ export function ProcessBundleComposer({
           
         if (insertErr) {
           console.error('Direct DB Insert Error:', insertErr);
-          throw new Error(`DB直接保存エラー: ${insertErr.message} (SupabaseのRLS設定でInsertが許可されているか確認してください)`);
+          throw new Error(`DB直接保存エラー: ${insertErr.message}`);
         }
       }
 
