@@ -1104,7 +1104,8 @@ export function ProcessBundleComposer({
           sha256: s.sha256,
           quarantine_path: s.quarantinePath,
           thumb_quarantine_path: s.thumbQuarantinePath,
-          // file_name と file_size はDBにカラムが存在しないため除外
+          original_filename: s.file!.name, // 🚨 追加: データベースの必須カラム
+          file_size: s.file!.size,         // 🚨 追加: データベースの必須カラム
         }));
 
       if (dbSteps.length > 0) {
@@ -1235,7 +1236,8 @@ export function ProcessBundleComposer({
           sha256: s.sha256,
           quarantine_path: s.quarantinePath,
           thumb_quarantine_path: s.thumbQuarantinePath,
-          // file_name と file_size はDBにカラムが存在しないため除外
+          original_filename: s.file!.name, // 🚨 追加: データベースの必須カラム
+          file_size: s.file!.size,         // 🚨 追加: データベースの必須カラム
         }));
 
       if (dbSteps.length > 0) {
