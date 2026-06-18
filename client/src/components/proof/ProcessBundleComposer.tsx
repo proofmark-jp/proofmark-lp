@@ -735,16 +735,25 @@ export function ProcessBundleComposer({
         { fileName: s.file!.name, mimeType: s.file!.type, fileSize: s.file!.size },
         { fileName: `thumb_${s.id}.webp`, mimeType: 'image/webp', fileSize: s.thumbBlob?.size ?? 0 }
       ]);
-      const res = await fetch('/api/upload-url', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ items: payloadItems, proofMode: isPublic ? 'shareable' : 'private' })
-      });
-      if (!res.ok) throw new Error('Failed to get upload URLs.');
-      const { urls } = await res.json();
+
+      // チャンク化: バックエンドの一括制限を回避するため最大10件ずつに分割して順次POST
+      const CHUNK_SIZE = 10;
+      const allUrls: Array<{ signedUrl: string; quarantinePath: string }> = [];
+      for (let i = 0; i < payloadItems.length; i += CHUNK_SIZE) {
+        const chunk = payloadItems.slice(i, i + CHUNK_SIZE);
+        const res = await fetch('/api/upload-url', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({ items: chunk, proofMode: isPublic ? 'shareable' : 'private' })
+        });
+        if (!res.ok) throw new Error(`Failed to get upload URLs (chunk ${i / CHUNK_SIZE + 1}).`);
+        const { urls } = await res.json();
+        allUrls.push(...urls);
+      }
+
       setSteps(cur => cur.map(s => {
         const target = newSteps.find(ns => ns.id === s.id);
         if (!target) return s;
@@ -752,10 +761,10 @@ export function ProcessBundleComposer({
         const tIdx = payloadItems.findIndex(p => p.fileName === `thumb_${target.id}.webp`);
         return {
           ...s,
-          signedUrl: urls[oIdx]?.signedUrl,
-          quarantinePath: urls[oIdx]?.quarantinePath,
-          thumbSignedUrl: urls[tIdx]?.signedUrl,
-          thumbQuarantinePath: urls[tIdx]?.quarantinePath,
+          signedUrl: allUrls[oIdx]?.signedUrl,
+          quarantinePath: allUrls[oIdx]?.quarantinePath,
+          thumbSignedUrl: allUrls[tIdx]?.signedUrl,
+          thumbQuarantinePath: allUrls[tIdx]?.quarantinePath,
           uploadState: 'idle' as const,
           deferred: false,
         };
@@ -1004,9 +1013,8 @@ export function ProcessBundleComposer({
         caption: 'クラウドへ安全に転送中...',
       });
 
-      let latest: WorkspaceStep[] = [];
-      setSteps((cur) => { latest = cur; return cur; });
-      const toUpload = latest.filter((s) => !s.isRoot && s.file && s.uploadState !== 'uploaded');
+      // steps を直接参照してクロージャートラップを回避
+      const toUpload = steps.filter((s) => !s.isRoot && s.file && s.uploadState !== 'uploaded');
       await fetchUploadUrls(toUpload);
 
       const startedAt = Date.now();
