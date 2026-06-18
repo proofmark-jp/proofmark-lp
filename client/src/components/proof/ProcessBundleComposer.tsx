@@ -1087,6 +1087,9 @@ export function ProcessBundleComposer({
       const data = await res.json();
       const certificateId = data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown';
 
+      // アップロードと保存が完全に終わった最新のRef状態を、UIに書き戻す
+      setSteps([...stepsRef.current]);
+
       setResult({
         chainDepth: payload.items.length,
         chainHeadSha256: stepsRef.current[stepsRef.current.length - 1]?.sha256 ?? null,
@@ -1177,6 +1180,9 @@ export function ProcessBundleComposer({
       });
       if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
       const data = await res.json();
+      // アップロードと保存が完全に終わった最新のRef状態を、UIに書き戻す
+      setSteps([...stepsRef.current]);
+
       setResult({
         chainDepth: stepsRef.current.length,
         chainHeadSha256: stepsRef.current[stepsRef.current.length - 1]?.sha256 ?? null,
