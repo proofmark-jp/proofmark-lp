@@ -2,13 +2,18 @@ import DOMPurify from 'dompurify';
 import type { CertificateRecord, PortfolioEmbedSettings, ProcessBundleDraftStep } from './proofmark-types';
 import { supabase } from './supabase';
 
-export async function checkDuplicateCertificate(sha256: string) {
+/* ── 認証ヘッダーの自動注入ヘルパー ── */
+async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (session?.access_token) {
     headers['Authorization'] = `Bearer ${session.access_token}`;
   }
+  return headers;
+}
 
+export async function checkDuplicateCertificate(sha256: string) {
+  const headers = await getAuthHeaders();
   const response = await fetch('/api/certificates/check', {
     method: 'POST',
     headers,
@@ -19,32 +24,31 @@ export async function checkDuplicateCertificate(sha256: string) {
   return (await response.json()) as { exists: boolean; certificate?: Pick<CertificateRecord, 'id' | 'public_verify_token' | 'proven_at'> };
 }
 
+/* * 🚨 [修正済] FormDataではなく純粋なJSONとして送信する。
+ * ※ 注意: この関数を呼ぶ前に、フロントエンド側で `/api/upload-url` を叩いて
+ * Supabase Storageへのダイレクトアップロードを完了させ、
+ * quarantinePath などを metadata に含めて渡す設計にしてください。
+ */
 export async function createCertificate(input: {
   title: string;
-  file: File;
   sha256: string;
   proofMode: 'private' | 'shareable';
   visibility: 'private' | 'unlisted' | 'public';
+  quarantinePath: string; // 🟢 追加: アップロード済みファイルのパス
   metadata?: Record<string, unknown>;
 }) {
-  const form = new FormData();
-  form.append('title', input.title);
-  form.append('file', input.file);
-  form.append('sha256', input.sha256);
-  form.append('proofMode', input.proofMode);
-  form.append('visibility', input.visibility);
-  form.append('metadataJson', JSON.stringify(input.metadata ?? {}));
-
-  const { data: { session } } = await supabase.auth.getSession();
-  const headers: Record<string, string> = {};
-  if (session?.access_token) {
-    headers['Authorization'] = `Bearer ${session.access_token}`;
-  }
-
+  const headers = await getAuthHeaders();
   const response = await fetch('/api/certificates/create', {
     method: 'POST',
     headers,
-    body: form,
+    body: JSON.stringify({
+      title: input.title,
+      sha256: input.sha256,
+      proofMode: input.proofMode,
+      visibility: input.visibility,
+      quarantinePath: input.quarantinePath,
+      metadataJson: input.metadata ?? {},
+    }),
   });
 
   if (!response.ok) {
@@ -55,6 +59,9 @@ export async function createCertificate(input: {
   return (await response.json()) as { certificate: CertificateRecord; duplicate?: boolean };
 }
 
+/* * 🚨 [修正済] 生ファイル（step.file）をVercelに送らない。
+ * JSONメタデータのみを送信し、ペイロード爆発（413エラー）を防ぐ。
+ */
 export async function createProcessBundle(input: {
   certificateId: string;
   title: string;
@@ -62,37 +69,35 @@ export async function createProcessBundle(input: {
   isPublic: boolean;
   steps: ProcessBundleDraftStep[];
 }) {
-  const payload = new FormData();
-  payload.append('certificateId', input.certificateId);
-  payload.append('title', input.title);
-  payload.append('description', input.description ?? '');
-  payload.append('isPublic', String(input.isPublic));
-
-  input.steps.forEach((step, index) => {
-    payload.append(`step_${index}_type`, step.stepType);
-    payload.append(`step_${index}_title`, step.title);
-    payload.append(`step_${index}_note`, step.note ?? '');
-    if (step.isRoot) payload.append(`step_${index}_isRoot`, 'true');
-    if (step.sha256) payload.append(`step_${index}_sha256`, step.sha256);
-    if (step.file) payload.append(`step_${index}_file`, step.file);
-  });
-
-  const { data: { session } } = await supabase.auth.getSession();
-  const headers: Record<string, string> = {};
-  if (session?.access_token) {
-    headers['Authorization'] = `Bearer ${session.access_token}`;
-  }
+  const headers = await getAuthHeaders();
+  
+  // Fileオブジェクトなどの不要・巨大なデータを削ぎ落とし、純粋なJSONペイロードを構築
+  const safeSteps = input.steps.map((step) => ({
+    stepType: step.stepType,
+    title: step.title,
+    note: step.note ?? '',
+    isRoot: !!step.isRoot,
+    sha256: step.sha256,
+    // quarantinePath: step.quarantinePath // ※必要に応じて追加
+  }));
 
   const response = await fetch('/api/process-bundles/create', {
     method: 'POST',
     headers,
-    body: payload
+    body: JSON.stringify({
+      certificateId: input.certificateId,
+      title: input.title,
+      description: input.description ?? '',
+      isPublic: input.isPublic,
+      steps: safeSteps,
+    })
   });
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error || 'process bundle creation failed');
   }
+  
   return response.json() as Promise<{
     bundleId: string;
     evidenceMode: 'hash_chain_v1';
@@ -111,7 +116,7 @@ export async function getProcessBundleByVerifyToken(token: string) {
     throw new Error('Failed to fetch public process bundle');
   }
   const data = await response.json();
-  return data.bundle as ProcessBundlePublic | null;
+  return data.bundle;
 }
 
 export function sanitizeSvg(svg: string) {

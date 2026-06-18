@@ -1092,9 +1092,48 @@ export function ProcessBundleComposer({
     if (!certificate) return;
     setSubmitting(true); setMessage(null); setResult(null);
     try {
+      let latest: WorkspaceStep[] = [];
+      setSteps((cur) => { latest = cur; return cur; });
+      const toUpload = latest.filter((s) => !s.isRoot && s.file && s.uploadState !== 'uploaded');
+
+      if (toUpload.length > 0) {
+        // もし signedUrl が無ければ取得
+        const needsUrls = toUpload.filter(s => !s.signedUrl);
+        if (needsUrls.length > 0) {
+          await fetchUploadUrls(needsUrls);
+        }
+
+        // uploadState が idle や error のものを再試行させるために idle に設定
+        setSteps(cur => cur.map(s => {
+          if (!s.isRoot && s.file && s.uploadState !== 'uploaded' && s.uploadState !== 'uploading') {
+            return { ...s, uploadState: 'idle' as const };
+          }
+          return s;
+        }));
+
+        const startedAt = Date.now();
+        const TIMEOUT_MS = 120_000;
+        while (true) {
+          let current: WorkspaceStep[] = [];
+          setSteps((cur) => { current = cur; return cur; });
+          const targets = current.filter((s) => !s.isRoot && s.file);
+          const done = targets.every((s) => s.uploadState === 'uploaded');
+          const failed = targets.some((s) => s.uploadState === 'error');
+          if (done) break;
+          if (failed) throw new Error('一部のアップロードに失敗しました。再試行してください。');
+          if (Date.now() - startedAt > TIMEOUT_MS) {
+            throw new Error('アップロードがタイムアウトしました。ネットワークを確認してください。');
+          }
+          await new Promise((r) => setTimeout(r, 250));
+        }
+
+        // アップロード完了後の最新ステートを取得
+        setSteps((cur) => { latest = cur; return cur; });
+      }
+
       const payload = {
         bundleId: crypto.randomUUID(),
-        items: steps.filter(s => !s.isRoot).map((s, idx) => ({
+        items: latest.filter(s => !s.isRoot).map((s, idx) => ({
           quarantinePath: s.quarantinePath,
           thumbnailPath: s.thumbQuarantinePath,
           sha256: s.sha256,
@@ -1112,15 +1151,15 @@ export function ProcessBundleComposer({
       if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
       const data = await res.json();
       setResult({
-        chainDepth: steps.length,
-        chainHeadSha256: steps[steps.length - 1].sha256 ?? null,
+        chainDepth: latest.length,
+        chainHeadSha256: latest[latest.length - 1].sha256 ?? null,
         certificateId: data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown',
       });
       setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへリダイレクトします...');
 
       // ⭐ Upgrade ②: submit 成功時にも sealedMetaSnapshot を確定
       setSealedMetaSignatureSnapshot(currentMetaSignature);
-      setSealedStepsSnapshot(steps.map((step) => ({ ...step })));
+      setSealedStepsSnapshot(latest.map((step) => ({ ...step })));
       setSealedTitleSnapshot(title);
       setSealedDescriptionSnapshot(description);
     } catch (error) {
