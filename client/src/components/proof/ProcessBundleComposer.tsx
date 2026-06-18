@@ -1186,6 +1186,22 @@ export function ProcessBundleComposer({
       });
       if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
       const data = await res.json();
+
+      // 🚨 孤児化を防ぐ絶対的なリンク処理
+      if (!certificate.process_bundle_id) {
+        const { error: linkErr } = await supabase
+          .from('certificates')
+          .update({ process_bundle_id: payload.bundleId })
+          .eq('id', certificate.id);
+          
+        if (linkErr) {
+          console.error('Bundle Linkage Error:', linkErr);
+        } else {
+          // 現在のオブジェクトも更新しておく（リロード前のUI整合性のため）
+          (certificate as any).process_bundle_id = payload.bundleId;
+        }
+      }
+
       // アップロードと保存が完全に終わった最新のRef状態を、UIに書き戻す
       setSteps([...stepsRef.current]);
 
