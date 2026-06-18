@@ -1087,6 +1087,35 @@ export function ProcessBundleComposer({
       const data = await res.json();
       const certificateId = data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown';
 
+      // 🚨 ブラックボックAPIをバイパスし、Supabaseへ直接工程を書き込む
+      const dbSteps = stepsRef.current
+        .map((s, idx) => ({ s, idx }))
+        .filter(({ s }) => !s.isRoot && s.file)
+        .map(({ s, idx }) => ({
+          id: s.id,
+          bundle_id: payload.bundleId,
+          step_index: idx,
+          step_type: s.stepType || 'other',
+          title: s.title,
+          description: s.note || '',
+          sha256: s.sha256,
+          quarantine_path: s.quarantinePath,
+          thumb_quarantine_path: s.thumbQuarantinePath,
+          file_name: s.file!.name,
+          file_size: s.file!.size,
+        }));
+
+      if (dbSteps.length > 0) {
+        const { error: insertErr } = await supabase
+          .from('process_bundle_steps')
+          .upsert(dbSteps, { onConflict: 'id' });
+          
+        if (insertErr) {
+          console.error('Direct DB Insert Error:', insertErr);
+          throw new Error(`DB直接保存エラー: ${insertErr.message} (SupabaseのRLS設定でInsertが許可されているか確認してください)`);
+        }
+      }
+
       // アップロードと保存が完全に終わった最新のRef状態を、UIに書き戻す
       setSteps([...stepsRef.current]);
 
@@ -1186,6 +1215,35 @@ export function ProcessBundleComposer({
       });
       if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
       const data = await res.json();
+
+      // 🚨 ブラックボックAPIをバイパスし、Supabaseへ直接工程を書き込む
+      const dbSteps = stepsRef.current
+        .map((s, idx) => ({ s, idx }))
+        .filter(({ s }) => !s.isRoot && s.file)
+        .map(({ s, idx }) => ({
+          id: s.id,
+          bundle_id: payload.bundleId,
+          step_index: idx,
+          step_type: s.stepType || 'other',
+          title: s.title,
+          description: s.note || '',
+          sha256: s.sha256,
+          quarantine_path: s.quarantinePath,
+          thumb_quarantine_path: s.thumbQuarantinePath,
+          file_name: s.file!.name,
+          file_size: s.file!.size,
+        }));
+
+      if (dbSteps.length > 0) {
+        const { error: insertErr } = await supabase
+          .from('process_bundle_steps')
+          .upsert(dbSteps, { onConflict: 'id' });
+          
+        if (insertErr) {
+          console.error('Direct DB Insert Error:', insertErr);
+          throw new Error(`DB直接保存エラー: ${insertErr.message} (SupabaseのRLS設定でInsertが許可されているか確認してください)`);
+        }
+      }
 
       // 🚨 孤児化を防ぐ絶対的なリンク処理
       if (!certificate.process_bundle_id) {
