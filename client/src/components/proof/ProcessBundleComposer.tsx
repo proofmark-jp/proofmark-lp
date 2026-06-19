@@ -448,7 +448,11 @@ export function ProcessBundleComposer({
   useEffect(() => {
     const fetchQuota = async () => {
       try {
-        const res = await fetch('/api/user/quota');
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        const res = await fetch('/api/user/quota', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
         if (res.ok) setQuota(await res.json());
         else if (res.status === 401) setQuota({ plan: 'guest', limit: 3, used: 0, remaining: 3 });
       } catch (e) { console.error(e); }
@@ -1088,7 +1092,7 @@ export function ProcessBundleComposer({
       if (dbSteps.length > 0) {
         const { error: insertErr } = await supabase
           .from('process_bundle_steps')
-          .upsert(dbSteps, { onConflict: 'id' });
+          .upsert(dbSteps, { onConflict: 'bundle_id,step_index' }); // 🚨 激突を回避するためコンフリクト基準を変更
           
         if (insertErr) {
           console.error('Direct DB Insert Error:', insertErr);
@@ -1221,7 +1225,7 @@ export function ProcessBundleComposer({
       if (dbSteps.length > 0) {
         const { error: insertErr } = await supabase
           .from('process_bundle_steps')
-          .upsert(dbSteps, { onConflict: 'id' });
+          .upsert(dbSteps, { onConflict: 'bundle_id,step_index' }); // 🚨 激突を回避するためコンフリクト基準を変更
           
         if (insertErr) {
           console.error('Direct DB Insert Error:', insertErr);
