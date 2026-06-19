@@ -1086,33 +1086,33 @@ export function ProcessBundleComposer({
 
       // 🚨 ブラックボックスAPIをバイパスし、Supabaseへ直接工程を書き込む
       const dbSteps = stepsRef.current
-        .map((s, idx) => ({ s, idx }))
-        .filter(({ s }) => !s.isRoot && s.file)
-        .map(({ s, idx }) => ({
-          id: s.id,
-          bundle_id: payload.bundleId,
-          user_id: userId, // RLSを通過するために必須
-          step_index: idx,
-          step_type: s.stepType || 'other',
-          title: s.title,
-          description: s.note || '',
-          sha256: s.sha256,
-          quarantine_path: s.quarantinePath,
-          thumb_quarantine_path: s.thumbQuarantinePath,
-          original_filename: s.file!.name,
-          file_size: s.file!.size,
-          mime_type: s.file!.type, // 🚨 追加: データベースの必須カラム
-        }));
+        .map((s, idx) => {
+          // 🚨 UI用のプレフィックスを外し、純粋なUUIDに戻す
+          const realId = s.id.startsWith('root-') ? s.id.replace('root-', '') : s.id;
+          return {
+            id: realId,
+            bundle_id: payload.bundleId,
+            user_id: userId,
+            step_index: idx,
+            step_type: s.stepType || 'other',
+            title: s.title,
+            description: s.note || '',
+            sha256: s.sha256,
+            quarantine_path: s.quarantinePath || null,
+            thumb_quarantine_path: s.thumbQuarantinePath || null,
+            original_filename: s.file?.name || (certificate as any)?.file_name || 'original',
+            file_size: s.file?.size || (certificate as any)?.file_size || 0,
+            mime_type: s.file?.type || (certificate as any)?.mime_type || 'application/octet-stream',
+          };
+        });
 
-      if (dbSteps.length > 0) {
-        const { error: insertErr } = await supabase
-          .from('process_bundle_steps')
-          .upsert(dbSteps, { onConflict: 'bundle_id,step_index' }); // 🚨 激突を回避するためコンフリクト基準を変更
-          
-        if (insertErr) {
-          console.error('Direct DB Insert Error:', insertErr);
-          throw new Error(`DB直接保存エラー: ${insertErr.message}`);
-        }
+      const { error: insertErr } = await supabase
+        .from('process_bundle_steps')
+        .upsert(dbSteps, { onConflict: 'id' }); // 🚨 全ステップをIDベースで上書き/挿入
+        
+      if (insertErr) {
+        console.error('Direct DB Insert Error:', insertErr);
+        throw new Error(`DB直接保存エラー: ${insertErr.message}`);
       }
 
       // アップロードと保存が完全に終わった最新のRef状態を、UIに書き戻す
@@ -1234,33 +1234,33 @@ export function ProcessBundleComposer({
 
       // 🚨 ブラックボックスAPIをバイパスし、Supabaseへ直接工程を書き込む
       const dbSteps = stepsRef.current
-        .map((s, idx) => ({ s, idx }))
-        .filter(({ s }) => !s.isRoot && s.file)
-        .map(({ s, idx }) => ({
-          id: s.id,
-          bundle_id: payload.bundleId,
-          user_id: userId, // RLSを通過するために必須
-          step_index: idx,
-          step_type: s.stepType || 'other',
-          title: s.title,
-          description: s.note || '',
-          sha256: s.sha256,
-          quarantine_path: s.quarantinePath,
-          thumb_quarantine_path: s.thumbQuarantinePath,
-          original_filename: s.file!.name,
-          file_size: s.file!.size,
-          mime_type: s.file!.type, // 🚨 追加: データベースの必須カラム
-        }));
+        .map((s, idx) => {
+          // 🚨 UI用のプレフィックスを外し、純粋なUUIDに戻す
+          const realId = s.id.startsWith('root-') ? s.id.replace('root-', '') : s.id;
+          return {
+            id: realId,
+            bundle_id: payload.bundleId,
+            user_id: userId,
+            step_index: idx,
+            step_type: s.stepType || 'other',
+            title: s.title,
+            description: s.note || '',
+            sha256: s.sha256,
+            quarantine_path: s.quarantinePath || null,
+            thumb_quarantine_path: s.thumbQuarantinePath || null,
+            original_filename: s.file?.name || (certificate as any)?.file_name || 'original',
+            file_size: s.file?.size || (certificate as any)?.file_size || 0,
+            mime_type: s.file?.type || (certificate as any)?.mime_type || 'application/octet-stream',
+          };
+        });
 
-      if (dbSteps.length > 0) {
-        const { error: insertErr } = await supabase
-          .from('process_bundle_steps')
-          .upsert(dbSteps, { onConflict: 'bundle_id,step_index' }); // 🚨 激突を回避するためコンフリクト基準を変更
-          
-        if (insertErr) {
-          console.error('Direct DB Insert Error:', insertErr);
-          throw new Error(`DB直接保存エラー: ${insertErr.message}`);
-        }
+      const { error: insertErr } = await supabase
+        .from('process_bundle_steps')
+        .upsert(dbSteps, { onConflict: 'id' }); // 🚨 全ステップをIDベースで上書き/挿入
+        
+      if (insertErr) {
+        console.error('Direct DB Insert Error:', insertErr);
+        throw new Error(`DB直接保存エラー: ${insertErr.message}`);
       }
 
       // 🚨 孤児化を防ぐ絶対的なリンク処理
