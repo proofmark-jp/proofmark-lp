@@ -177,6 +177,7 @@ type WorkspaceStep = ProcessBundleDraftStep & {
   thumbBlob?: Blob;
   quarantinePath?: string;
   thumbQuarantinePath?: string;
+  storagePath?: string;
   signedUrl?: string;
   thumbSignedUrl?: string;
   deferred?: boolean;
@@ -617,6 +618,7 @@ export function ProcessBundleComposer({
           title: certificate.title || '原本 (Base Layer)',
           note: '証明書として登録済みの原本データ',
           previewUrl: certificate.public_image_url || undefined,
+          storagePath: certificate.storage_path || undefined,
           sha256: certificate.sha256,
           hashState: 'verified',
           isRoot: true,
@@ -651,6 +653,9 @@ export function ProcessBundleComposer({
           title: s.title || '過去の工程',
           note: s.description || s.note || '',
           previewUrl: s.preview_url || s.previewUrl || s.image_url || certificate.public_image_url,
+          storagePath: s.storage_path || undefined,
+          quarantinePath: s.quarantine_path || undefined,
+          thumbQuarantinePath: s.thumb_quarantine_path || undefined,
           sha256: s.sha256,
           hashState: 'verified',
           isRoot: true,
@@ -668,6 +673,7 @@ export function ProcessBundleComposer({
           title: certificate.title || '原本 (Base Layer)',
           note: '証明書として登録済みの原本データ',
           previewUrl: certificate.public_image_url || undefined,
+          storagePath: certificate.storage_path || undefined,
           sha256: certificate.sha256,
           hashState: 'verified',
           isRoot: true,
@@ -1101,12 +1107,11 @@ export function ProcessBundleComposer({
             title: s.title,
             description: s.note || '',
             sha256: s.sha256,
+            // 🚨 過去の工程の記憶（パス）が null で上書きされないように s.xxx のフォールバックを追加
+            storage_path: createdCert?.storage_path || s.storagePath || null,
+            preview_url: createdCert?.public_image_url || s.previewUrl || null,
             quarantine_path: s.quarantinePath || null,
             thumb_quarantine_path: s.thumbQuarantinePath || null,
-            
-            // 🚨 バックエンドが生成した本番パスと証明書リンクを正しく上書き保存する
-            storage_path: createdCert?.storage_path || null,
-            preview_url: createdCert?.public_image_url || null,
             
             original_filename: s.file?.name || (certificate as any)?.file_name || 'original',
             file_size: s.file?.size || (certificate as any)?.file_size || 0,
@@ -1291,12 +1296,11 @@ export function ProcessBundleComposer({
             title: s.title,
             description: s.note || '',
             sha256: s.sha256,
+            // 🚨 過去の工程の記憶（パス）が null で上書きされないように s.xxx のフォールバックを追加
+            storage_path: createdCert?.storage_path || s.storagePath || null,
+            preview_url: createdCert?.public_image_url || s.previewUrl || null,
             quarantine_path: s.quarantinePath || null,
             thumb_quarantine_path: s.thumbQuarantinePath || null,
-            
-            // 🚨 バックエンドが生成した本番パスと証明書リンクを正しく上書き保存する
-            storage_path: createdCert?.storage_path || null,
-            preview_url: createdCert?.public_image_url || null,
             
             original_filename: s.file?.name || (certificate as any)?.file_name || 'original',
             file_size: s.file?.size || (certificate as any)?.file_size || 0,
