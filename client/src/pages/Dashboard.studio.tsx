@@ -422,6 +422,7 @@ interface CertRow {
   team_id?: string | null;
   original_filename?: string | null;
   metadata?: Record<string, unknown> | null;
+  process_bundle_id?: string | null; // 🚨 追加
 }
 
 interface TrustDescriptor {
@@ -3360,7 +3361,7 @@ function toCertificateRecord(cert: CertRow): CertificateRecord {
     width_px: null,
     height_px: null,
     badge_tier: 'basic',
-    process_bundle_id: null,
+    process_bundle_id: cert.process_bundle_id ?? null, // 🚨 ハードコードされた null を修正
     metadata_json: (cert as any).metadata_json ?? cert.metadata ?? null,
     proven_at: cert.certified_at ?? cert.created_at,
     created_at: cert.created_at,
