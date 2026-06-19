@@ -1087,8 +1087,11 @@ export function ProcessBundleComposer({
       // 🚨 ブラックボックスAPIをバイパスし、Supabaseへ直接工程を書き込む
       const dbSteps = stepsRef.current
         .map((s, idx) => {
-          // 🚨 UI用のプレフィックスを外し、純粋なUUIDに戻す
           const realId = s.id.startsWith('root-') ? s.id.replace('root-', '') : s.id;
+          
+          // 🚨 バックエンドが作成した証明書データをハッシュで検索し、本番パスとIDを取得する
+          const createdCert = data.certificates?.find((c: any) => c.sha256 === s.sha256);
+
           return {
             id: realId,
             bundle_id: payload.bundleId,
@@ -1098,8 +1101,14 @@ export function ProcessBundleComposer({
             title: s.title,
             description: s.note || '',
             sha256: s.sha256,
-            quarantine_path: s.quarantinePath || null,
-            thumb_quarantine_path: s.thumbQuarantinePath || null,
+            quarantine_path: null, // 🚨 移動済みのためnullにする
+            thumb_quarantine_path: null,
+            
+            // 🚨 バックエンドが生成した本番パスと証明書リンクを正しく上書き保存する
+            storage_path: createdCert?.storage_path || null,
+            preview_url: createdCert?.public_image_url || null,
+            certificate_id: createdCert?.id || null,
+            
             original_filename: s.file?.name || (certificate as any)?.file_name || 'original',
             file_size: s.file?.size || (certificate as any)?.file_size || 0,
             mime_type: s.file?.type || (certificate as any)?.mime_type || 'application/octet-stream',
@@ -1113,6 +1122,21 @@ export function ProcessBundleComposer({
       if (insertErr) {
         console.error('Direct DB Insert Error:', insertErr);
         throw new Error(`DB直接保存エラー: ${insertErr.message}`);
+      }
+
+      // 🚨 Chain内のすべての新規証明書に対してTSA付与をバックグラウンドでトリガーする
+      if (data.certificates && Array.isArray(data.certificates)) {
+        data.certificates.forEach((cert: any) => {
+          fetch('/api/timestamp', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ certId: cert.id, hash: cert.sha256 }),
+            keepalive: true,
+          }).catch(err => console.error('[Background TSA] Failed to trigger for chain step:', err));
+        });
       }
 
       // アップロードと保存が完全に終わった最新のRef状態を、UIに書き戻す
@@ -1235,8 +1259,11 @@ export function ProcessBundleComposer({
       // 🚨 ブラックボックスAPIをバイパスし、Supabaseへ直接工程を書き込む
       const dbSteps = stepsRef.current
         .map((s, idx) => {
-          // 🚨 UI用のプレフィックスを外し、純粋なUUIDに戻す
           const realId = s.id.startsWith('root-') ? s.id.replace('root-', '') : s.id;
+          
+          // 🚨 バックエンドが作成した証明書データをハッシュで検索し、本番パスとIDを取得する
+          const createdCert = data.certificates?.find((c: any) => c.sha256 === s.sha256);
+
           return {
             id: realId,
             bundle_id: payload.bundleId,
@@ -1246,8 +1273,14 @@ export function ProcessBundleComposer({
             title: s.title,
             description: s.note || '',
             sha256: s.sha256,
-            quarantine_path: s.quarantinePath || null,
-            thumb_quarantine_path: s.thumbQuarantinePath || null,
+            quarantine_path: null, // 🚨 移動済みのためnullにする
+            thumb_quarantine_path: null,
+            
+            // 🚨 バックエンドが生成した本番パスと証明書リンクを正しく上書き保存する
+            storage_path: createdCert?.storage_path || null,
+            preview_url: createdCert?.public_image_url || null,
+            certificate_id: createdCert?.id || null,
+            
             original_filename: s.file?.name || (certificate as any)?.file_name || 'original',
             file_size: s.file?.size || (certificate as any)?.file_size || 0,
             mime_type: s.file?.type || (certificate as any)?.mime_type || 'application/octet-stream',
@@ -1261,6 +1294,21 @@ export function ProcessBundleComposer({
       if (insertErr) {
         console.error('Direct DB Insert Error:', insertErr);
         throw new Error(`DB直接保存エラー: ${insertErr.message}`);
+      }
+
+      // 🚨 Chain内のすべての新規証明書に対してTSA付与をバックグラウンドでトリガーする
+      if (data.certificates && Array.isArray(data.certificates)) {
+        data.certificates.forEach((cert: any) => {
+          fetch('/api/timestamp', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ certId: cert.id, hash: cert.sha256 }),
+            keepalive: true,
+          }).catch(err => console.error('[Background TSA] Failed to trigger for chain step:', err));
+        });
       }
 
       // 🚨 孤児化を防ぐ絶対的なリンク処理
