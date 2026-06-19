@@ -1072,7 +1072,12 @@ export function ProcessBundleComposer({
       // 🚨 親となる process_bundles レコードを先に作成・保証する
       const { error: bundleErr } = await supabase
         .from('process_bundles')
-        .upsert({ id: payload.bundleId, user_id: userId }, { onConflict: 'id' });
+        .upsert({ 
+          id: payload.bundleId, 
+          user_id: userId,
+          title: title,             // 🚨 NOT NULL 制約を突破するため追加
+          description: description  // 🚨 合わせて状態を保存
+        }, { onConflict: 'id' });
 
       if (bundleErr) {
         console.error('Bundle Insert Error:', bundleErr);
@@ -1215,7 +1220,12 @@ export function ProcessBundleComposer({
       // 🚨 親となる process_bundles レコードを先に作成・保証する
       const { error: bundleErr } = await supabase
         .from('process_bundles')
-        .upsert({ id: payload.bundleId, user_id: userId }, { onConflict: 'id' });
+        .upsert({ 
+          id: payload.bundleId, 
+          user_id: userId,
+          title: title,             // 🚨 NOT NULL 制約を突破するため追加
+          description: description  // 🚨 合わせて状態を保存
+        }, { onConflict: 'id' });
 
       if (bundleErr) {
         console.error('Bundle Insert Error:', bundleErr);
