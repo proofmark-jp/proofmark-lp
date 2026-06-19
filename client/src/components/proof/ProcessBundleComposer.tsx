@@ -1107,7 +1107,6 @@ export function ProcessBundleComposer({
             // 🚨 バックエンドが生成した本番パスと証明書リンクを正しく上書き保存する
             storage_path: createdCert?.storage_path || null,
             preview_url: createdCert?.public_image_url || null,
-            certificate_id: createdCert?.id || null,
             
             original_filename: s.file?.name || (certificate as any)?.file_name || 'original',
             file_size: s.file?.size || (certificate as any)?.file_size || 0,
@@ -1298,7 +1297,6 @@ export function ProcessBundleComposer({
             // 🚨 バックエンドが生成した本番パスと証明書リンクを正しく上書き保存する
             storage_path: createdCert?.storage_path || null,
             preview_url: createdCert?.public_image_url || null,
-            certificate_id: createdCert?.id || null,
             
             original_filename: s.file?.name || (certificate as any)?.file_name || 'original',
             file_size: s.file?.size || (certificate as any)?.file_size || 0,
