@@ -1069,6 +1069,16 @@ export function ProcessBundleComposer({
       const data = await res.json();
       const certificateId = data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown';
 
+      // 🚨 親となる process_bundles レコードを先に作成・保証する
+      const { error: bundleErr } = await supabase
+        .from('process_bundles')
+        .upsert({ id: payload.bundleId, user_id: userId }, { onConflict: 'id' });
+
+      if (bundleErr) {
+        console.error('Bundle Insert Error:', bundleErr);
+        throw new Error(`バンドル親レコード作成エラー: ${bundleErr.message}`);
+      }
+
       // 🚨 ブラックボックスAPIをバイパスし、Supabaseへ直接工程を書き込む
       const dbSteps = stepsRef.current
         .map((s, idx) => ({ s, idx }))
@@ -1201,6 +1211,16 @@ export function ProcessBundleComposer({
       });
       if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
       const data = await res.json();
+
+      // 🚨 親となる process_bundles レコードを先に作成・保証する
+      const { error: bundleErr } = await supabase
+        .from('process_bundles')
+        .upsert({ id: payload.bundleId, user_id: userId }, { onConflict: 'id' });
+
+      if (bundleErr) {
+        console.error('Bundle Insert Error:', bundleErr);
+        throw new Error(`バンドル親レコード作成エラー: ${bundleErr.message}`);
+      }
 
       // 🚨 ブラックボックスAPIをバイパスし、Supabaseへ直接工程を書き込む
       const dbSteps = stepsRef.current
