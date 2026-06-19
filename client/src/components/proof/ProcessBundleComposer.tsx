@@ -1069,23 +1069,18 @@ export function ProcessBundleComposer({
       const data = await res.json();
       const certificateId = data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown';
 
-      // 🚨 親となる process_bundles レコードを先に作成・保証する
-      const headStep = stepsRef.current[stepsRef.current.length - 1];
-      const headStepId = headStep?.id.startsWith('root-') ? headStep.id.replace('root-', '') : headStep?.id;
-
+      // 🚨 1. デッドロック回避：まずHEADなしで親の箱だけを作る
       const { error: bundleErr } = await supabase
         .from('process_bundles')
-        .upsert({ 
-          id: payload.bundleId, 
+        .upsert({
+          id: payload.bundleId,
           user_id: userId,
           title: title,
           description: description,
-          chain_head_step_id: headStepId || null,      // 🚨 NOT NULL制約突破のためHEADのIDを追加
-          chain_head_sha256: headStep?.sha256 || null  // 🚨 NOT NULL制約突破のためHEADのハッシュを追加
         }, { onConflict: 'id' });
 
       if (bundleErr) {
-        console.error('Bundle Insert Error:', bundleErr);
+        console.error('Bundle Insert Error (Step 1):', bundleErr);
         throw new Error(`バンドル親レコード作成エラー: ${bundleErr.message}`);
       }
 
@@ -1120,13 +1115,30 @@ export function ProcessBundleComposer({
           };
         });
 
+      // 🚨 2. 子ステップを保存する
       const { error: insertErr } = await supabase
         .from('process_bundle_steps')
-        .upsert(dbSteps, { onConflict: 'id' }); // 🚨 全ステップをIDベースで上書き/挿入
-        
+        .upsert(dbSteps, { onConflict: 'id' });
+
       if (insertErr) {
-        console.error('Direct DB Insert Error:', insertErr);
+        console.error('Direct DB Insert Error (Step 2):', insertErr);
         throw new Error(`DB直接保存エラー: ${insertErr.message}`);
+      }
+
+      // 🚨 3. 子が確定した後にHEADポインターで親を更新する
+      const headStep = stepsRef.current[stepsRef.current.length - 1];
+      const headStepId = headStep?.id.startsWith('root-') ? headStep.id.replace('root-', '') : headStep?.id;
+      const { error: headErr } = await supabase
+        .from('process_bundles')
+        .update({
+          chain_head_step_id: headStepId ?? null,
+          chain_head_sha256: headStep?.sha256 ?? null,
+        })
+        .eq('id', payload.bundleId);
+
+      if (headErr) {
+        console.error('Bundle HEAD Update Error (Step 3):', headErr);
+        // HEAD更新失敗は致命的ではないのでログのみ
       }
 
       // 🚨 Chain内のすべての新規証明書に対してTSA付与をバックグラウンドでトリガーする
@@ -1155,7 +1167,9 @@ export function ProcessBundleComposer({
       setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへリダイレクトします...');
       setCompression({ phase: 'done', current: 1, total: 1, caption: '完了' });
 
-      // ⭐ Upgrade ②: submitMagic 成功時にも sealedMetaSnapshot を確定
+      // ⭐ 保存成功時にシール状態を確定する
+      const finalSig = stepsSignature(stepsRef.current);
+      setSealedSignatureSnapshot(finalSig);
       setSealedMetaSignatureSnapshot(currentMetaSignature);
       setSealedStepsSnapshot(stepsRef.current.map((step) => ({ ...step })));
       setSealedTitleSnapshot(title);
@@ -1246,23 +1260,18 @@ export function ProcessBundleComposer({
       if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
       const data = await res.json();
 
-      // 🚨 親となる process_bundles レコードを先に作成・保証する
-      const headStep = stepsRef.current[stepsRef.current.length - 1];
-      const headStepId = headStep?.id.startsWith('root-') ? headStep.id.replace('root-', '') : headStep?.id;
-
+      // 🚨 1. デッドロック回避：まずHEADなしで親の箱だけを作る
       const { error: bundleErr } = await supabase
         .from('process_bundles')
-        .upsert({ 
-          id: payload.bundleId, 
+        .upsert({
+          id: payload.bundleId,
           user_id: userId,
           title: title,
           description: description,
-          chain_head_step_id: headStepId || null,      // 🚨 NOT NULL制約突破のためHEADのIDを追加
-          chain_head_sha256: headStep?.sha256 || null  // 🚨 NOT NULL制約突破のためHEADのハッシュを追加
         }, { onConflict: 'id' });
 
       if (bundleErr) {
-        console.error('Bundle Insert Error:', bundleErr);
+        console.error('Bundle Insert Error (Step 1):', bundleErr);
         throw new Error(`バンドル親レコード作成エラー: ${bundleErr.message}`);
       }
 
@@ -1297,13 +1306,30 @@ export function ProcessBundleComposer({
           };
         });
 
+      // 🚨 2. 子ステップを保存する
       const { error: insertErr } = await supabase
         .from('process_bundle_steps')
-        .upsert(dbSteps, { onConflict: 'id' }); // 🚨 全ステップをIDベースで上書き/挿入
-        
+        .upsert(dbSteps, { onConflict: 'id' });
+
       if (insertErr) {
-        console.error('Direct DB Insert Error:', insertErr);
+        console.error('Direct DB Insert Error (Step 2):', insertErr);
         throw new Error(`DB直接保存エラー: ${insertErr.message}`);
+      }
+
+      // 🚨 3. 子が確定した後にHEADポインターで親を更新する
+      const headStep = stepsRef.current[stepsRef.current.length - 1];
+      const headStepRealId = headStep?.id.startsWith('root-') ? headStep.id.replace('root-', '') : headStep?.id;
+      const { error: headErr } = await supabase
+        .from('process_bundles')
+        .update({
+          chain_head_step_id: headStepRealId ?? null,
+          chain_head_sha256: headStep?.sha256 ?? null,
+        })
+        .eq('id', payload.bundleId);
+
+      if (headErr) {
+        console.error('Bundle HEAD Update Error (Step 3):', headErr);
+        // HEAD更新失敗は致命的ではないのでログのみ
       }
 
       // 🚨 Chain内のすべての新規証明書に対してTSA付与をバックグラウンドでトリガーする
@@ -1346,7 +1372,9 @@ export function ProcessBundleComposer({
       });
       setMessage('Chain of Evidence を保存しました。');
 
-      // ⭐ Upgrade ②: submit 成功時にも sealedMetaSnapshot を確定
+      // ⭐ 保存成功時にシール状態を確定する
+      const finalSig2 = stepsSignature(stepsRef.current);
+      setSealedSignatureSnapshot(finalSig2);
       setSealedMetaSignatureSnapshot(currentMetaSignature);
       setSealedStepsSnapshot(stepsRef.current.map((step) => ({ ...step })));
       setSealedTitleSnapshot(title);
