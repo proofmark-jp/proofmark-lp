@@ -626,41 +626,17 @@ export function ProcessBundleComposer({
       }
 
       let fetchedSteps: any[] | null = null;
-      if (certificate.public_verify_token) {
-        try {
-          const res = await fetch(
-            `/api/certificates/public/${certificate.public_verify_token}?t=${Date.now()}`,
-            { headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }, cache: 'no-store' },
-          );
-          if (res.ok) {
-            const data = await res.json();
-            const traverse = (obj: any) => {
-              if (fetchedSteps) return;
-              if (Array.isArray(obj) && obj.length > 0 && typeof obj[0] === 'object') {
-                if ('step_type' in obj[0] || 'sha256' in obj[0] || 'stepType' in obj[0]) {
-                  fetchedSteps = obj; return;
-                }
-              }
-              if (obj && typeof obj === 'object') for (const key in obj) traverse(obj[key]);
-            };
-            traverse(data);
-          }
-        } catch (e) { console.error('Public API fetch failed:', e); }
-      }
-
-      if (!fetchedSteps) {
-        try {
-          const { data, error } = await supabase
-            .from('process_bundle_steps')
-            .select('*')
-            .eq('bundle_id', certificate.process_bundle_id);
-            
-          if (!error && Array.isArray(data) && data.length > 0) {
-            fetchedSteps = data;
-          }
-        } catch (e) {
-          console.error('Supabase client fetch failed:', e);
+      try {
+        const { data, error } = await supabase
+          .from('process_bundle_steps')
+          .select('*')
+          .eq('bundle_id', certificate.process_bundle_id);
+          
+        if (!error && Array.isArray(data) && data.length > 0) {
+          fetchedSteps = data;
         }
+      } catch (e) {
+        console.error('Supabase client fetch failed:', e);
       }
 
       if (fetchedSteps && Array.isArray(fetchedSteps) && fetchedSteps.length > 0 && isMounted) {
@@ -1104,8 +1080,9 @@ export function ProcessBundleComposer({
           sha256: s.sha256,
           quarantine_path: s.quarantinePath,
           thumb_quarantine_path: s.thumbQuarantinePath,
-          original_filename: s.file!.name, // 🚨 追加: データベースの必須カラム
-          file_size: s.file!.size,         // 🚨 追加: データベースの必須カラム
+          original_filename: s.file!.name,
+          file_size: s.file!.size,
+          mime_type: s.file!.type, // 🚨 追加: データベースの必須カラム
         }));
 
       if (dbSteps.length > 0) {
@@ -1236,8 +1213,9 @@ export function ProcessBundleComposer({
           sha256: s.sha256,
           quarantine_path: s.quarantinePath,
           thumb_quarantine_path: s.thumbQuarantinePath,
-          original_filename: s.file!.name, // 🚨 追加: データベースの必須カラム
-          file_size: s.file!.size,         // 🚨 追加: データベースの必須カラム
+          original_filename: s.file!.name,
+          file_size: s.file!.size,
+          mime_type: s.file!.type, // 🚨 追加: データベースの必須カラム
         }));
 
       if (dbSteps.length > 0) {

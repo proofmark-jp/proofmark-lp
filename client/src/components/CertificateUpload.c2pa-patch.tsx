@@ -118,6 +118,7 @@ export default function CertificateUpload() {
   const [deliveryModalFile, setDeliveryModalFile] = useState<File | null>(null);
   const [deliveryFileHash, setDeliveryFileHash] = useState<string | null>(null);
   const { promote, isPromoting } = usePromoteCertificate();
+  const [pendingRedirectUrl, setPendingRedirectUrl] = useState<string | null>(null);
 
   // Obsidian Desk UI States
   const [windowDragActive, setWindowDragActive] = useState(false);
@@ -679,6 +680,10 @@ export default function CertificateUpload() {
           if (isPromoting) return;
           setDeliveryModalFile(null);
           setDeliveryFileHash(null);
+          // 🚨 モーダルが閉じられた時に、もし待機中のリダイレクトURLがあれば遷移する
+          if (pendingRedirectUrl) {
+            window.location.href = pendingRedirectUrl;
+          }
         }}
         onComplete={async (payload) => {
           try {
@@ -689,17 +694,15 @@ export default function CertificateUpload() {
               c2paManifest: isPaidPlan && c2paManifest ? JSON.stringify(c2paManifest) : null
             }, deliveryModalFile);
 
-            setShellError('Private Proofの封印が完了しました');
-            setTimeout(() => setShellError(null), 4200);
-
-            setDeliveryModalFile(null);
-            setDeliveryFileHash(null);
+            setProcessStatus('完了。パスワードをコピーしてください。');
 
             const certId = (res as any).certificates?.[0]?.id || res.certificate?.id || (res as any).id;
             if (!certId || typeof certId !== 'string') {
               throw new Error("証明書は作成されましたが、IDの取得に失敗しました。ダッシュボードをリロードしてください。");
             }
-            window.location.href = `/cert/${certId}`;
+            
+            // 🚨 即時リダイレクトやモーダル消去は行わず、遷移先URLだけを記憶させる
+            setPendingRedirectUrl(`/cert/${certId}`);
           } catch (e) {
             const errMsg = e instanceof Error ? e.message : '昇格に失敗しました';
             setShellError(errMsg);

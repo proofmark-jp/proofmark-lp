@@ -287,7 +287,7 @@ export default function EvidencePackDownloadButton({
                 disabled={phase === 'fetching' || phase === 'magic-handoff'}
                 className={['group flex w-full items-center justify-between gap-3 rounded-2xl px-5 py-3.5 font-bold transition-all active:scale-[0.99]', baseBtn].join(' ')}
                 onMouseEnter={prefetchPayload}
-                onTouchStart={prefetchPayload}
+                // 🚨 onTouchStart={prefetchPayload} はスクロール中の暴発（API雪崩）を防ぐため削除
             >
                 <span className="flex items-center gap-3">
                     <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/14 text-white">
