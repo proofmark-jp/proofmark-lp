@@ -1101,8 +1101,8 @@ export function ProcessBundleComposer({
             title: s.title,
             description: s.note || '',
             sha256: s.sha256,
-            quarantine_path: null, // 🚨 移動済みのためnullにする
-            thumb_quarantine_path: null,
+            quarantine_path: s.quarantinePath || null,
+            thumb_quarantine_path: s.thumbQuarantinePath || null,
             
             // 🚨 バックエンドが生成した本番パスと証明書リンクを正しく上書き保存する
             storage_path: createdCert?.storage_path || null,
@@ -1291,8 +1291,8 @@ export function ProcessBundleComposer({
             title: s.title,
             description: s.note || '',
             sha256: s.sha256,
-            quarantine_path: null, // 🚨 移動済みのためnullにする
-            thumb_quarantine_path: null,
+            quarantine_path: s.quarantinePath || null,
+            thumb_quarantine_path: s.thumbQuarantinePath || null,
             
             // 🚨 バックエンドが生成した本番パスと証明書リンクを正しく上書き保存する
             storage_path: createdCert?.storage_path || null,
