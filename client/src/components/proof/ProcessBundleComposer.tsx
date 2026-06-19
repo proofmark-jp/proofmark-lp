@@ -1334,13 +1334,18 @@ export function ProcessBundleComposer({
         chainHeadSha256: stepsRef.current[stepsRef.current.length - 1]?.sha256 ?? null,
         certificateId: data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown',
       });
-      setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへリダイレクトします...');
+      setMessage('Chain of Evidence を保存しました。');
 
       // ⭐ Upgrade ②: submit 成功時にも sealedMetaSnapshot を確定
       setSealedMetaSignatureSnapshot(currentMetaSignature);
       setSealedStepsSnapshot(stepsRef.current.map((step) => ({ ...step })));
       setSealedTitleSnapshot(title);
       setSealedDescriptionSnapshot(description);
+
+      // 🚨 強制遷移を削除し、親に完了を通知してドロワーを閉じさせる
+      setTimeout(() => {
+        if (onComplete) onComplete();
+      }, 800);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '保存に失敗しました');
       setSealedSignatureSnapshot(null);
@@ -1352,11 +1357,11 @@ export function ProcessBundleComposer({
 
   /* ── auto-redirect on success ── */
   useEffect(() => {
-    if (result?.certificateId) {
+    if (result?.certificateId && magicMode) {
       const timer = setTimeout(() => setLocation(`/cert/${result.certificateId}`), 3000);
       return () => clearTimeout(timer);
     }
-  }, [result?.certificateId, setLocation]);
+  }, [result?.certificateId, setLocation, magicMode]);
 
   /* ── cleanup on unmount ── */
   useEffect(() => {
