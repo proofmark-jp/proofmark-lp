@@ -1070,13 +1070,18 @@ export function ProcessBundleComposer({
       const certificateId = data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown';
 
       // 🚨 親となる process_bundles レコードを先に作成・保証する
+      const headStep = stepsRef.current[stepsRef.current.length - 1];
+      const headStepId = headStep?.id.startsWith('root-') ? headStep.id.replace('root-', '') : headStep?.id;
+
       const { error: bundleErr } = await supabase
         .from('process_bundles')
         .upsert({ 
           id: payload.bundleId, 
           user_id: userId,
-          title: title,             // 🚨 NOT NULL 制約を突破するため追加
-          description: description  // 🚨 合わせて状態を保存
+          title: title,
+          description: description,
+          chain_head_step_id: headStepId || null,      // 🚨 NOT NULL制約突破のためHEADのIDを追加
+          chain_head_sha256: headStep?.sha256 || null  // 🚨 NOT NULL制約突破のためHEADのハッシュを追加
         }, { onConflict: 'id' });
 
       if (bundleErr) {
@@ -1242,13 +1247,18 @@ export function ProcessBundleComposer({
       const data = await res.json();
 
       // 🚨 親となる process_bundles レコードを先に作成・保証する
+      const headStep = stepsRef.current[stepsRef.current.length - 1];
+      const headStepId = headStep?.id.startsWith('root-') ? headStep.id.replace('root-', '') : headStep?.id;
+
       const { error: bundleErr } = await supabase
         .from('process_bundles')
         .upsert({ 
           id: payload.bundleId, 
           user_id: userId,
-          title: title,             // 🚨 NOT NULL 制約を突破するため追加
-          description: description  // 🚨 合わせて状態を保存
+          title: title,
+          description: description,
+          chain_head_step_id: headStepId || null,      // 🚨 NOT NULL制約突破のためHEADのIDを追加
+          chain_head_sha256: headStep?.sha256 || null  // 🚨 NOT NULL制約突破のためHEADのハッシュを追加
         }, { onConflict: 'id' });
 
       if (bundleErr) {
