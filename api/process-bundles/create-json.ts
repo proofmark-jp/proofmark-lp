@@ -13,7 +13,7 @@ import {
 } from '../_shared.js';
 import { resolveC2paForPersistence } from '../_lib/c2pa-validate.js';
 import { checkIpRateLimit } from '../_lib/rate-limit.js';
-// 🚨 注意: import crypto from 'node:crypto'; は Edgeでエラーになるため記述しません
+// 🚨 node:crypto は使用しません
 
 /* ─────────────────────────────────────────────
  * Constants & Helpers
@@ -43,26 +43,23 @@ export interface CreateJsonBody {
     note: string;
     mimeType: string;
     fileSize: number;
-    originalFilename: string;
-    thumbnailPath?: string; // 🚨 軽量サムネイルのパスのみを受け取る
-    previewUrl?: string;    // 🚨 サムネイルの公開URL
-    // storagePath は哲学に基づき完全廃止
+    // 🚨 修正1: フロントエンドからの送信プロトコル（変数名）に完全一致させる
+    fileName?: string;
+    originalFilename?: string;
+    stepType?: string; 
+    thumbnailPath?: string;
+    previewUrl?: string;
   }>;
 }
 
-/* ─────────────────────────────────────────────
- * The Decoupled Proof Handler
- * ───────────────────────────────────────────── */
 export async function POST(request: Request): Promise<Response> {
   if (request.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
   try {
-    /* ── 1. IP Rate Limit ── */
     const ip = getClientIpFromEdgeRequest(request);
     const allowed = await checkIpRateLimit(ip, 'create');
     if (!allowed) throw new HttpError(429, 'Too many requests. Please wait a few seconds.');
 
-    /* ── 2. Auth & Body Parse ── */
     const userId = await getAuthenticatedUserId(request);
     const body = (await request.json()) as CreateJsonBody;
     
@@ -74,7 +71,6 @@ export async function POST(request: Request): Promise<Response> {
       throw new HttpError(400, `Items array must be between 1 and ${MAX_CHAIN_LENGTH}`);
     }
 
-    /* ── 3. 事前重複チェック (The Orphan Defense) ── */
     const newHashes = items.filter(i => !i.isRoot && SHA256_HEX.test(i.sha256)).map(i => i.sha256.toLowerCase());
     if (newHashes.length > 0) {
       const { data: duplicates } = await supabaseAdmin
@@ -88,12 +84,10 @@ export async function POST(request: Request): Promise<Response> {
       }
     }
 
-    /* ── 4. C2PA Gate ── */
     const { data: profile } = await supabaseAdmin.from('profiles').select('plan_tier').eq('id', userId).single();
     const planTier = (profile?.plan_tier ?? 'free') as string;
-    const { value: c2paParsed, gate } = resolveC2paForPersistence(null, planTier);
+    const { value: c2paParsed } = resolveC2paForPersistence(null, planTier);
 
-    /* ── 5. Bundle Draft 作成 ── */
     const { error: bundleErr } = await supabaseAdmin.from('process_bundles').upsert({
       id: bundleId,
       user_id: userId,
@@ -104,7 +98,7 @@ export async function POST(request: Request): Promise<Response> {
       status: 'draft',
       evidence_mode: 'hash_chain_v1',
     }, { onConflict: 'id' });
-    if (bundleErr) throw new HttpError(500, `Bundle creation failed`);
+    if (bundleErr) throw new HttpError(500, `Bundle creation failed: ${bundleErr.message}`);
 
     const certificateRecords: any[] = [];
     const stepRecords: any[] = [];
@@ -113,9 +107,8 @@ export async function POST(request: Request): Promise<Response> {
     let prevChainSha256: string | null = null;
     let rootStepId: string | null = null;
 
-    /* ── 6. インメモリ暗号連鎖計算 (Zero-Knowledge) ── */
     for (const [index, item] of items.entries()) {
-      // Edge 環境のグローバル API として crypto.randomUUID() を使用
+      // 🚨 Edge 環境のグローバル API として crypto.randomUUID() を使用
       const stepId = crypto.randomUUID();
       if (index === 0) rootStepId = stepId;
       
@@ -126,7 +119,9 @@ export async function POST(request: Request): Promise<Response> {
       const hashData = String(item.sha256).trim().toLowerCase();
       if (!SHA256_HEX.test(hashData)) throw new HttpError(400, `Invalid SHA256 at step ${index}`);
 
-      const declaredFileName = clampFileName(item.originalFilename);
+      // 🚨 修正2: フロントエンドの `fileName` と `stepType` を正しく受け取る
+      const declaredFileName = clampFileName(item.fileName || item.originalFilename);
+      const declaredStepType = item.stepType || (item.isRoot ? 'other' : 'draft');
 
       if (!item.isRoot) {
         if (item.thumbnailPath && (item.thumbnailPath.includes('..') || item.thumbnailPath.split('/')[0] !== userId)) {
@@ -144,7 +139,7 @@ export async function POST(request: Request): Promise<Response> {
           visibility: isPublic ? 'public' : 'private',
           public_verify_token: crypto.randomUUID(),
           public_image_url: item.previewUrl || null,
-          storage_path: null, // 🚨 原本はクラウドに存在しない
+          storage_path: null, 
           file_name: declaredFileName,
           mime_type: item.mimeType || 'application/octet-stream',
           file_size: item.fileSize || 0,
@@ -160,7 +155,7 @@ export async function POST(request: Request): Promise<Response> {
       }
 
       const { payload: chainPayload, chainSha256 } = await buildEvidenceStep({
-        bundleId, stepIndex: index, stepType: item.isRoot ? 'other' : 'draft', 
+        bundleId, stepIndex: index, stepType: declaredStepType, 
         title: String(item.title).trim(), description: item.note || '',
         sha256: hashData, originalFilename: declaredFileName,
         mimeType: item.mimeType || 'application/octet-stream', fileSize: item.fileSize || 0,
@@ -169,10 +164,10 @@ export async function POST(request: Request): Promise<Response> {
 
       stepRecords.push({
         id: stepId, bundle_id: bundleId, user_id: userId, step_index: index,
-        step_type: item.isRoot ? 'other' : 'draft', title: String(item.title).trim(),
+        step_type: declaredStepType, title: String(item.title).trim(),
         description: item.note || '', sha256: hashData, original_filename: declaredFileName,
         mime_type: item.mimeType || 'application/octet-stream', file_size: item.fileSize || 0,
-        storage_path: null, // 🚨 原本なし
+        storage_path: null,
         preview_url: item.isRoot ? undefined : item.previewUrl,
         prev_step_id: prevStepId, root_step_id: rootStepId,
         prev_chain_sha256: prevChainSha256, chain_sha256: chainSha256,
@@ -185,10 +180,12 @@ export async function POST(request: Request): Promise<Response> {
     /* ── 7. Bulk DB Insert ── */
     if (certificateRecords.length > 0) {
       const { error: certErr } = await supabaseAdmin.from('certificates').insert(certificateRecords);
-      if (certErr) throw new HttpError(500, `Certificates insert failed`);
+      // 🚨 修正3: エラーの真因をログとUIに露出させる
+      if (certErr) throw new HttpError(500, `Certificates insert failed: ${certErr.message}`);
     }
     const { error: stepErr } = await supabaseAdmin.from('process_bundle_steps').insert(stepRecords);
-    if (stepErr) throw new HttpError(500, `Steps insert failed`);
+    // 🚨 修正3: エラーの真因をログとUIに露出させる
+    if (stepErr) throw new HttpError(500, `Steps insert failed: ${stepErr.message}`);
 
     /* ── 8. Bundle HEAD の確定 ── */
     const headRecord = stepRecords[stepRecords.length - 1];
@@ -202,7 +199,7 @@ export async function POST(request: Request): Promise<Response> {
         chain_verification_status: 'verified',
         chain_verified_at:  new Date().toISOString(),
       }).eq('id', bundleId);
-    if (headErr) throw new HttpError(500, `Bundle HEAD update failed`);
+    if (headErr) throw new HttpError(500, `Bundle HEAD update failed: ${headErr.message}`);
 
     if (body.certificateId) {
       await supabaseAdmin.from('certificates').update({ process_bundle_id: bundleId }).eq('id', body.certificateId.replace('root-', ''));
@@ -219,7 +216,12 @@ export async function POST(request: Request): Promise<Response> {
       }),
       keepalive: true,
     })
-    .then(res => res.json())
+    .then(async (res) => {
+        if (!res.ok) {
+            const err = await res.json().catch(()=>({}));
+            console.error('[create-json] TSA Sync returned error:', err);
+        }
+    })
     .catch(err => console.error('[create-json] TSA Sync failed:', err));
 
     waitUntil(tsaPromise);
