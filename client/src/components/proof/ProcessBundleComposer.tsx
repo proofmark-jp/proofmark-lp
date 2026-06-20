@@ -252,7 +252,7 @@ export function ProcessBundleComposer({
   const [description, setDescription] = useState(
     '制作工程を時系列に連結し、人間の試行錯誤の痕跡そのものを証拠化します。',
   );
-  const [isPublic, setIsPublic] = useState(true);
+  const [isPublic, setIsPublic] = useState(certificate ? certificate.visibility === 'public' : true);
   const [steps, setSteps] = useState<WorkspaceStep[]>([]);
   /** ⚡ Mutable Ref Pattern — 非同期関数から常に最新 steps を O(1) で参照 */
   const stepsRef = useRef<WorkspaceStep[]>(steps);
@@ -717,11 +717,11 @@ export function ProcessBundleComposer({
 
   /* ── fetchUploadUrls ── */
   const fetchUploadUrls = useCallback(async (newSteps: WorkspaceStep[]) => {
-    try {
-      // 🚨 isRoot (原本・過去の工程) はアップロード不要なので完全に除外
-      const stepsToUpload = newSteps.filter(s => !s.isRoot && s.file);
-      if (stepsToUpload.length === 0) return;
+    // 🚨 isRoot (原本・過去の工程) はアップロード不要なので完全に除外
+    const stepsToUpload = newSteps.filter(s => !s.isRoot && s.file);
+    if (stepsToUpload.length === 0) return;
 
+    try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) throw new Error('認証トークンが見つかりません。再ログインしてください。');
@@ -995,6 +995,14 @@ export function ProcessBundleComposer({
 
   async function submitMagic() {
     if (!magicMode) return;
+
+    // 🚨 Race Condition 防衛: 未完了のハッシュ計算がある場合は完了を待つ
+    const hasUnfinishedHashes = steps.some(s => !s.isRoot && s.file && s.hashState !== 'verified');
+    if (hasUnfinishedHashes) {
+      setMessage('※ ハッシュ計算中の工程があります。完了まで数秒お待ちください。');
+      return;
+    }
+
     setSubmitting(true);
     setMessage(null);
     setResult(null);
@@ -1016,7 +1024,6 @@ export function ProcessBundleComposer({
       const TIMEOUT_MS = 120_000;
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        // stepsRef.current は常に最新 — setSteps ハック不要、ポーリング Promise も不要
         const targets = stepsRef.current.filter((s) => !s.isRoot && s.file);
         const done = targets.every((s) => s.uploadState === 'uploaded');
         const failed = targets.some((s) => s.uploadState === 'error');
@@ -1035,142 +1042,69 @@ export function ProcessBundleComposer({
         caption: '証拠チェーンを台帳へ書き込み中...',
       });
 
-      // stepsRef.current で最新ステートを直接参照 (setSteps ハック撤廃)
-      const itemsList = stepsRef.current
-        .filter((s) => !s.isRoot && s.file)
-        .map((s, idx) => ({
-          quarantinePath: s.quarantinePath,
-          thumbnailPath: s.thumbQuarantinePath,
-          sha256: s.sha256,
-          title: s.title,
-          proofMode: isPublic ? 'shareable' : 'private',
-          file_name: s.file!.name,
-          file_size: s.file!.size,
-          stepIndex: idx,
-        }));
-      const itemsWithHead = itemsList.map((it, i, arr) => ({
-        ...it,
-        isHead: i === arr.length - 1,
-      }));
-
-      const payload = {
-        bundleId: crypto.randomUUID(),
-        title,
-        description,
-        items: itemsWithHead,
-      };
-
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) throw new Error('認証トークンが見つかりません。再ログインしてください。');
-      const userId = sessionData.session?.user?.id;
-      if (!userId) throw new Error('ユーザーIDが取得できません。再ログインしてください。');
 
-      const res = await fetch('/api/certificates/create', {
+      const bundleId = crypto.randomUUID();
+
+      // 🚨 API に送信するステップ一覧を構築する
+      // isRoot の場合は root- プレフィックスを除去して純粋な UUID を復元する
+      const jsonSteps = stepsRef.current.map((s, idx) => {
+        const realId = s.id.startsWith('root-') ? s.id.replace('root-', '') : s.id;
+        return {
+          id: realId,
+          stepType: s.stepType || 'other',
+          title: s.title,
+          note: s.note || '',
+          sha256: s.sha256 ?? '',
+          isRoot: s.isRoot ?? false,
+          // 新規工程: quarantine パスを送信（API が promote する）
+          quarantinePath: (!s.isRoot && s.quarantinePath) ? s.quarantinePath : undefined,
+          thumbQuarantinePath: (!s.isRoot && s.thumbQuarantinePath) ? s.thumbQuarantinePath : undefined,
+          // 既存工程: 復元済みのパスを送信（API がそのまま保持する）
+          storagePath: s.isRoot ? (s.storagePath ?? undefined) : undefined,
+          previewUrl: s.isRoot ? (s.previewUrl ?? undefined) : undefined,
+          fileName: s.file?.name,
+          fileSize: s.file?.size,
+          mimeType: s.file?.type,
+          proofMode: (isPublic ? 'shareable' : 'private') as 'shareable' | 'private',
+          stepIndex: idx,
+        };
+      });
+
+      const payload = {
+        bundleId,
+        title,
+        description,
+        isPublic,
+        items: jsonSteps,
+      };
+
+      // 🚨 UI 専用化: DB 直接アクセス・TSA 発火を API に完全委譲する
+      const res = await fetch('/api/process-bundles/create-json', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `API エラー (${res.status})`)
+      }
 
       const data = await res.json();
-      const certificateId = data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown';
-
-      // 🚨 1. デッドロック回避：まずHEADなしで親の箱だけを作る
-      const { error: bundleErr } = await supabase
-        .from('process_bundles')
-        .upsert({
-          id: payload.bundleId,
-          user_id: userId,
-          title: title,
-          description: description,
-        }, { onConflict: 'id' });
-
-      if (bundleErr) {
-        console.error('Bundle Insert Error (Step 1):', bundleErr);
-        throw new Error(`バンドル親レコード作成エラー: ${bundleErr.message}`);
-      }
-
-      // 🚨 ブラックボックスAPIをバイパスし、Supabaseへ直接工程を書き込む
-      const dbSteps = stepsRef.current
-        .map((s, idx) => {
-          const realId = s.id.startsWith('root-') ? s.id.replace('root-', '') : s.id;
-          
-          // 🚨 バックエンドが作成した証明書データをハッシュで検索し、本番パスとIDを取得する
-          const createdCert = data.certificates?.find((c: any) => c.sha256 === s.sha256);
-
-          return {
-            id: realId,
-            bundle_id: payload.bundleId,
-            user_id: userId,
-            step_index: idx,
-            step_type: s.stepType || 'other',
-            title: s.title,
-            description: s.note || '',
-            sha256: s.sha256,
-            // 🚨 過去の工程の記憶（パス）が null で上書きされないように s.xxx のフォールバックを追加
-            storage_path: createdCert?.storage_path || s.storagePath || null,
-            preview_url: createdCert?.public_image_url || s.previewUrl || null,
-            quarantine_path: s.quarantinePath || null,
-            thumb_quarantine_path: s.thumbQuarantinePath || null,
-            
-            original_filename: s.file?.name || (certificate as any)?.file_name || 'original',
-            file_size: s.file?.size || (certificate as any)?.file_size || 0,
-            mime_type: s.file?.type || (certificate as any)?.mime_type || 'application/octet-stream',
-          };
-        });
-
-      // 🚨 2. 子ステップを保存する
-      const { error: insertErr } = await supabase
-        .from('process_bundle_steps')
-        .upsert(dbSteps, { onConflict: 'id' });
-
-      if (insertErr) {
-        console.error('Direct DB Insert Error (Step 2):', insertErr);
-        throw new Error(`DB直接保存エラー: ${insertErr.message}`);
-      }
-
-      // 🚨 3. 子が確定した後にHEADポインターで親を更新する
-      const headStep = stepsRef.current[stepsRef.current.length - 1];
-      const headStepId = headStep?.id.startsWith('root-') ? headStep.id.replace('root-', '') : headStep?.id;
-      const { error: headErr } = await supabase
-        .from('process_bundles')
-        .update({
-          chain_head_step_id: headStepId ?? null,
-          chain_head_sha256: headStep?.sha256 ?? null,
-        })
-        .eq('id', payload.bundleId);
-
-      if (headErr) {
-        console.error('Bundle HEAD Update Error (Step 3):', headErr);
-        // HEAD更新失敗は致命的ではないのでログのみ
-      }
-
-      // 🚨 Merkle Rollup: コスト防衛のため、TSAはチェーンの「一番最後の工程（HEAD）」にのみ発行する
-      if (data.certificates && Array.isArray(data.certificates) && data.certificates.length > 0) {
-        // バックエンドが返した証明書リストの最後の1件を取得
-        const headCert = data.certificates[data.certificates.length - 1];
-        fetch('/api/timestamp', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ certId: headCert.id, hash: headCert.sha256 }),
-          keepalive: true,
-        }).catch(err => console.error('[Background TSA] Failed to trigger HEAD timestamp:', err));
-      }
 
       // アップロードと保存が完全に終わった最新のRef状態を、UIに書き戻す
       setSteps([...stepsRef.current]);
 
       setResult({
-        chainDepth: payload.items.length,
-        chainHeadSha256: stepsRef.current[stepsRef.current.length - 1]?.sha256 ?? null,
-        certificateId,
+        chainDepth: data.chainDepth ?? stepsRef.current.length,
+        chainHeadSha256: data.chainHeadSha256 ?? stepsRef.current[stepsRef.current.length - 1]?.sha256 ?? null,
+        certificateId: data.chainHeadStepId ?? 'unknown',
       });
       setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへリダイレクトします...');
       setCompression({ phase: 'done', current: 1, total: 1, caption: '完了' });
@@ -1196,6 +1130,14 @@ export function ProcessBundleComposer({
 
   async function submit() {
     if (!certificate) return;
+
+    // 🚨 Race Condition 防衛: 未完了のハッシュ計算がある場合は完了を待つ
+    const hasUnfinishedHashes = steps.some(s => !s.isRoot && s.file && s.hashState !== 'verified');
+    if (hasUnfinishedHashes) {
+      setMessage('※ ハッシュ計算中の工程があります。完了まで数秒お待ちください。');
+      return;
+    }
+
     setSubmitting(true); setMessage(null); setResult(null);
     try {
       const toUpload = steps.filter((s) => !s.isRoot && s.file && s.uploadState !== 'uploaded');
@@ -1218,7 +1160,6 @@ export function ProcessBundleComposer({
         const startedAt = Date.now();
         const TIMEOUT_MS = 120_000;
         while (true) {
-          // stepsRef.current は常に最新 — setSteps ハック不要、ポーリング Promise も不要
           const targets = stepsRef.current.filter((s) => !s.isRoot && s.file);
           const done = targets.every((s) => s.uploadState === 'uploaded');
           const failed = targets.some((s) => s.uploadState === 'error');
@@ -1231,150 +1172,70 @@ export function ProcessBundleComposer({
         }
       }
 
-      // stepsRef.current で最新ステートを直接参照 (setSteps ハック撤廃)
-      const payload = {
-        certificateId: certificate.id,
-        bundleId: certificate.process_bundle_id || crypto.randomUUID(),
-        title: title,
-        description: description,
-        items: stepsRef.current
-          .map((s, idx) => ({ s, idx }))
-          .filter(({ s }) => !s.isRoot && s.file)
-          .map(({ s, idx }) => ({
-            quarantinePath: s.quarantinePath,
-            thumbnailPath: s.thumbQuarantinePath,
-            sha256: s.sha256,
-            title: s.title,
-            proofMode: isPublic ? 'shareable' : 'private',
-            file_name: s.file!.name,
-            file_size: s.file!.size,
-            stepIndex: idx,
-          })),
-      };
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) throw new Error('認証トークンが見つかりません。再ログインしてください。');
-      const userId = sessionData.session?.user?.id;
-      if (!userId) throw new Error('ユーザーIDが取得できません。再ログインしてください。');
 
-      const res = await fetch('/api/certificates/create', {
+      const bundleId = certificate.process_bundle_id || crypto.randomUUID();
+
+      // 🚨 API に送信するステップ一覧を構築する
+      // isRoot の場合は root- プレフィックスを除去して純粋な UUID を復元する
+      const jsonSteps = stepsRef.current.map((s, idx) => {
+        const realId = s.id.startsWith('root-') ? s.id.replace('root-', '') : s.id;
+        return {
+          id: realId,
+          stepType: s.stepType || 'other',
+          title: s.title,
+          note: s.note || '',
+          sha256: s.sha256 ?? '',
+          isRoot: s.isRoot ?? false,
+          // 新規工程: quarantine パスを送信（API が promote する）
+          quarantinePath: (!s.isRoot && s.quarantinePath) ? s.quarantinePath : undefined,
+          thumbQuarantinePath: (!s.isRoot && s.thumbQuarantinePath) ? s.thumbQuarantinePath : undefined,
+          // 既存工程: 復元済みのパスを送信（API がそのまま保持する）
+          storagePath: s.isRoot ? (s.storagePath ?? undefined) : undefined,
+          previewUrl: s.isRoot ? (s.previewUrl ?? undefined) : undefined,
+          fileName: s.file?.name ?? (certificate as any)?.file_name,
+          fileSize: s.file?.size ?? (certificate as any)?.file_size,
+          mimeType: s.file?.type ?? (certificate as any)?.mime_type,
+          proofMode: (isPublic ? 'shareable' : 'private') as 'shareable' | 'private',
+          stepIndex: idx,
+        };
+      });
+
+      const payload = {
+        certificateId: certificate.id,
+        bundleId,
+        title,
+        description,
+        isPublic,
+        items: jsonSteps,
+      };
+
+      // 🚨 UI 専用化: DB 直接アクセス・TSA 発火・孤児化リンクをすべて API に委譲する
+      const res = await fetch('/api/process-bundles/create-json', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('証明書の台帳記録に失敗しました。');
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `API エラー (${res.status})`);
+      }
+
       const data = await res.json();
-
-      // 🚨 1. デッドロック回避：まずHEADなしで親の箱だけを作る
-      const { error: bundleErr } = await supabase
-        .from('process_bundles')
-        .upsert({
-          id: payload.bundleId,
-          user_id: userId,
-          title: title,
-          description: description,
-        }, { onConflict: 'id' });
-
-      if (bundleErr) {
-        console.error('Bundle Insert Error (Step 1):', bundleErr);
-        throw new Error(`バンドル親レコード作成エラー: ${bundleErr.message}`);
-      }
-
-      // 🚨 ブラックボックスAPIをバイパスし、Supabaseへ直接工程を書き込む
-      const dbSteps = stepsRef.current
-        .map((s, idx) => {
-          const realId = s.id.startsWith('root-') ? s.id.replace('root-', '') : s.id;
-          
-          // 🚨 バックエンドが作成した証明書データをハッシュで検索し、本番パスとIDを取得する
-          const createdCert = data.certificates?.find((c: any) => c.sha256 === s.sha256);
-
-          return {
-            id: realId,
-            bundle_id: payload.bundleId,
-            user_id: userId,
-            step_index: idx,
-            step_type: s.stepType || 'other',
-            title: s.title,
-            description: s.note || '',
-            sha256: s.sha256,
-            // 🚨 過去の工程の記憶（パス）が null で上書きされないように s.xxx のフォールバックを追加
-            storage_path: createdCert?.storage_path || s.storagePath || null,
-            preview_url: createdCert?.public_image_url || s.previewUrl || null,
-            quarantine_path: s.quarantinePath || null,
-            thumb_quarantine_path: s.thumbQuarantinePath || null,
-            
-            original_filename: s.file?.name || (certificate as any)?.file_name || 'original',
-            file_size: s.file?.size || (certificate as any)?.file_size || 0,
-            mime_type: s.file?.type || (certificate as any)?.mime_type || 'application/octet-stream',
-          };
-        });
-
-      // 🚨 2. 子ステップを保存する
-      const { error: insertErr } = await supabase
-        .from('process_bundle_steps')
-        .upsert(dbSteps, { onConflict: 'id' });
-
-      if (insertErr) {
-        console.error('Direct DB Insert Error (Step 2):', insertErr);
-        throw new Error(`DB直接保存エラー: ${insertErr.message}`);
-      }
-
-      // 🚨 3. 子が確定した後にHEADポインターで親を更新する
-      const headStep = stepsRef.current[stepsRef.current.length - 1];
-      const headStepRealId = headStep?.id.startsWith('root-') ? headStep.id.replace('root-', '') : headStep?.id;
-      const { error: headErr } = await supabase
-        .from('process_bundles')
-        .update({
-          chain_head_step_id: headStepRealId ?? null,
-          chain_head_sha256: headStep?.sha256 ?? null,
-        })
-        .eq('id', payload.bundleId);
-
-      if (headErr) {
-        console.error('Bundle HEAD Update Error (Step 3):', headErr);
-        // HEAD更新失敗は致命的ではないのでログのみ
-      }
-
-      // 🚨 Merkle Rollup: コスト防衛のため、TSAはチェーンの「一番最後の工程（HEAD）」にのみ発行する
-      if (data.certificates && Array.isArray(data.certificates) && data.certificates.length > 0) {
-        // バックエンドが返した証明書リストの最後の1件を取得
-        const headCert = data.certificates[data.certificates.length - 1];
-        fetch('/api/timestamp', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ certId: headCert.id, hash: headCert.sha256 }),
-          keepalive: true,
-        }).catch(err => console.error('[Background TSA] Failed to trigger HEAD timestamp:', err));
-      }
-
-      // 🚨 孤児化を防ぐ絶対的なリンク処理
-      if (!certificate.process_bundle_id) {
-        const { error: linkErr } = await supabase
-          .from('certificates')
-          .update({ process_bundle_id: payload.bundleId })
-          .eq('id', certificate.id);
-          
-        if (linkErr) {
-          console.error('Bundle Linkage Error:', linkErr);
-        } else {
-          // 現在のオブジェクトも更新しておく（リロード前のUI整合性のため）
-          (certificate as any).process_bundle_id = payload.bundleId;
-        }
-      }
 
       // アップロードと保存が完全に終わった最新のRef状態を、UIに書き戻す
       setSteps([...stepsRef.current]);
 
       setResult({
-        chainDepth: stepsRef.current.length,
-        chainHeadSha256: stepsRef.current[stepsRef.current.length - 1]?.sha256 ?? null,
-        certificateId: data.certificates?.[0]?.id || data.certificate?.id || data.certificateId || 'unknown',
+        chainDepth: data.chainDepth ?? stepsRef.current.length,
+        chainHeadSha256: data.chainHeadSha256 ?? stepsRef.current[stepsRef.current.length - 1]?.sha256 ?? null,
+        certificateId: data.chainHeadStepId ?? certificate.id,
       });
       setMessage('Chain of Evidence を保存しました。');
 
@@ -1386,7 +1247,6 @@ export function ProcessBundleComposer({
       setSealedTitleSnapshot(title);
       setSealedDescriptionSnapshot(description);
 
-      // 🚨 強制遷移を削除し、親に完了を通知してドロワーを閉じさせる
       setTimeout(() => {
         if (onComplete) onComplete();
       }, 800);
