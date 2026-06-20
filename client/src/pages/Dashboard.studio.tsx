@@ -75,9 +75,6 @@ import { SlimUploadDock } from '../components/dashboard/SlimUploadDock';
 import VisibilityToggle from '../components/VisibilityToggle';
 import { executeEvidencePackDownload } from '../components/EvidencePackDownloadButton';
 import FounderBadge from '../components/FounderBadge';
-import { DeliveryKitModal } from '@/components/DeliveryKitModal';
-import { usePromoteCertificate } from '@/hooks/usePromoteCertificate';
-import { useHashFile } from '@/hooks/useHashFile';
 
 // Chain of Evidence builder (Inspector 内に常設マウント)
 const ProcessBundleComposer = lazy(() =>
@@ -575,32 +572,13 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const [inspectorCertId, setInspectorCertId] = useState<string | null>(null);
   const [inspectorTab, setInspectorTab] = useState<'overview' | 'chain'>('overview');
 
-  // ── One-Click Delivery Kit States & Hook ──
-  const [deliveryModalFile, setDeliveryModalFile] = useState<File | null>(null);
-  const [deliveryFileHash, setDeliveryFileHash] = useState<string | null>(null);
-  const { promote, isPromoting } = usePromoteCertificate();
-  const { hashFile } = useHashFile();
+  // ── Refresh & Navigation States ──
   const [refreshKey, setRefreshKey] = useState(0);
   const [, setLocation] = useLocation();
 
   const mutateCertificates = useCallback(() => {
     setRefreshKey((prev) => prev + 1);
   }, []);
-
-  const handleUpload = useCallback(async (file: File, uploadSettings: { proofMode: string }) => {
-    if (uploadSettings.proofMode === 'private') {
-      try {
-        // 1. WASM Workerで安全にハッシュを事前計算
-        const hashResult = await hashFile(file);
-        setDeliveryFileHash(hashResult.sha256);
-        // 2. モーダルを開く
-        setDeliveryModalFile(file);
-      } catch (e) {
-        toast.error('ハッシュ計算に失敗しました');
-      }
-      return; // 後続のPublicアップロード処理を遮断
-    }
-  }, [hashFile]);
 
   // ── URL → state (初回マウント & popstate)
   useEffect(() => {
@@ -1495,37 +1473,6 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
           />
         </>
       )}
-
-      <DeliveryKitModal
-        isOpen={!!deliveryModalFile}
-        file={deliveryModalFile as File}
-        fileHash={deliveryFileHash}
-        onClose={() => {
-          if (isPromoting) return;
-          setDeliveryModalFile(null);
-          setDeliveryFileHash(null);
-        }}
-        onComplete={async (payload) => {
-          try {
-            if (!deliveryModalFile) return;
-            const res = await promote({
-               ...payload,
-               c2paManifest: null // 既存のC2PA抽出フックがある場合はその値を渡すが、一旦nullで安全に繋ぐ
-            }, deliveryModalFile);
-
-            toast.success('Private Proofの封印が完了しました');
-            setDeliveryModalFile(null);
-            setDeliveryFileHash(null);
-
-            mutateCertificates(); // 一覧のリロード
-            if (res.certificate?.id) {
-              setLocation(`?asset=${res.certificate.id}`); // Inspectorの自動展開
-            }
-          } catch (e) {
-            toast.error(e instanceof Error ? e.message : '昇格に失敗しました');
-          }
-        }}
-      />
 
       {/* ─────────── THE INSPECTOR (right slide-in drawer) ─────────── */}
       <Inspector

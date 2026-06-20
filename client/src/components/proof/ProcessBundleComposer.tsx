@@ -521,7 +521,7 @@ export function ProcessBundleComposer({
 
   /* ── Magic Mode 判定 ── */
   const magicMode = useMemo(
-    () => !certificate && Array.isArray(initialFiles) && initialFiles.length >= 2,
+    () => !certificate && Array.isArray(initialFiles) && initialFiles.length >= 1,
     [certificate, initialFiles],
   );
 
@@ -571,7 +571,7 @@ export function ProcessBundleComposer({
     !sealed &&
     allVerified &&
     (magicMode
-      ? steps.length >= 2
+      ? steps.length >= 1
       : !!certificate && allUploaded);
 
   /* ── hashWorker call (progress aware) ── */
