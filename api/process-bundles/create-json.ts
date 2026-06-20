@@ -2,16 +2,18 @@ export const config = {
   runtime: 'edge', // Vercel Edge Runtime による爆速起動
 };
 
+import { waitUntil } from '@vercel/functions';
 import {
   getAuthenticatedUserId,
   getClientIpFromEdgeRequest,
   getOrigin,
   json,
-  supabaseAdmin, // 🚨 神の権限（Service Role Key）を使用
+  supabaseAdmin,
   buildEvidenceStep,
 } from '../_shared.js';
 import { resolveC2paForPersistence } from '../_lib/c2pa-validate.js';
 import { checkIpRateLimit } from '../_lib/rate-limit.js';
+// 🚨 注意: import crypto from 'node:crypto'; は Edgeでエラーになるため記述しません
 
 /* ─────────────────────────────────────────────
  * Constants & Helpers
@@ -42,14 +44,14 @@ export interface CreateJsonBody {
     mimeType: string;
     fileSize: number;
     originalFilename: string;
-    storagePath?: string;   // 🚨 Quarantineではなく、直接 Originals の本番パスを受け取る
-    thumbnailPath?: string; // 🚨 直接 Public のサムネイルパスを受け取る
+    thumbnailPath?: string; // 🚨 軽量サムネイルのパスのみを受け取る
     previewUrl?: string;    // 🚨 サムネイルの公開URL
+    // storagePath は哲学に基づき完全廃止
   }>;
 }
 
 /* ─────────────────────────────────────────────
- * The Zero-Move Handler
+ * The Decoupled Proof Handler
  * ───────────────────────────────────────────── */
 export async function POST(request: Request): Promise<Response> {
   if (request.method !== 'POST') return json(405, { error: 'Method not allowed' });
@@ -66,7 +68,7 @@ export async function POST(request: Request): Promise<Response> {
     
     const { bundleId, title, description, isPublic, items } = body;
     if (!bundleId || !title || !items || !Array.isArray(items)) {
-      throw new HttpError(400, 'Missing required fields (bundleId, title, items)');
+      throw new HttpError(400, 'Missing required fields');
     }
     if (items.length === 0 || items.length > MAX_CHAIN_LENGTH) {
       throw new HttpError(400, `Items array must be between 1 and ${MAX_CHAIN_LENGTH}`);
@@ -82,7 +84,7 @@ export async function POST(request: Request): Promise<Response> {
         .limit(1);
       
       if (duplicates && duplicates.length > 0) {
-        throw new HttpError(409, 'Duplicate hash detected. One or more images are already registered.');
+        throw new HttpError(409, 'Duplicate hash detected. One or more files are already registered.');
       }
     }
 
@@ -102,7 +104,7 @@ export async function POST(request: Request): Promise<Response> {
       status: 'draft',
       evidence_mode: 'hash_chain_v1',
     }, { onConflict: 'id' });
-    if (bundleErr) throw new HttpError(500, `Bundle creation failed: ${bundleErr.message}`);
+    if (bundleErr) throw new HttpError(500, `Bundle creation failed`);
 
     const certificateRecords: any[] = [];
     const stepRecords: any[] = [];
@@ -111,8 +113,9 @@ export async function POST(request: Request): Promise<Response> {
     let prevChainSha256: string | null = null;
     let rootStepId: string | null = null;
 
-    /* ── 6. インメモリ暗号連鎖計算 (Zero-Move) ── */
+    /* ── 6. インメモリ暗号連鎖計算 (Zero-Knowledge) ── */
     for (const [index, item] of items.entries()) {
+      // Edge 環境のグローバル API として crypto.randomUUID() を使用
       const stepId = crypto.randomUUID();
       if (index === 0) rootStepId = stepId;
       
@@ -125,12 +128,7 @@ export async function POST(request: Request): Promise<Response> {
 
       const declaredFileName = clampFileName(item.originalFilename);
 
-      // 新規追加分の証明書レコードを構築
       if (!item.isRoot) {
-        // 🚨 The Ironclad Fortress (絶対防衛線): ディレクトリの所有権とトラバーサルを検証
-        if (!item.storagePath || item.storagePath.includes('..') || item.storagePath.split('/')[0] !== userId) {
-          throw new HttpError(403, `Invalid storage path ownership at step ${index}`);
-        }
         if (item.thumbnailPath && (item.thumbnailPath.includes('..') || item.thumbnailPath.split('/')[0] !== userId)) {
           throw new HttpError(403, `Invalid thumbnail path ownership at step ${index}`);
         }
@@ -138,21 +136,21 @@ export async function POST(request: Request): Promise<Response> {
         certificateRecords.push({
           id: certId,
           user_id: userId,
-          process_bundle_id: bundleId, // 🚨 ダッシュボード表示用の紐付け
-          step_index: index,           // 🚨 工程順序の明記
+          process_bundle_id: bundleId,
+          step_index: index,
           title: String(item.title).trim() || 'untitled',
           sha256: hashData,
           proof_mode: isPublic ? 'shareable' : 'private',
           visibility: isPublic ? 'public' : 'private',
           public_verify_token: crypto.randomUUID(),
-          public_image_url: item.previewUrl || null, // フロントが取得したURLをそのまま使用
-          storage_path: item.storagePath,            // Originals のパス
+          public_image_url: item.previewUrl || null,
+          storage_path: null, // 🚨 原本はクラウドに存在しない
           file_name: declaredFileName,
           mime_type: item.mimeType || 'application/octet-stream',
           file_size: item.fileSize || 0,
           c2pa_manifest: c2paParsed,
           metadata_json: {
-            upload_pipeline: 'direct-to-vault.v1', // 🚨 ゼロ・ムーブの証
+            upload_pipeline: 'decoupled-proof.v1',
             bundle_id: bundleId,
             step_index: index,
             integrity_model: 'proofmark.chain-ready.v1'
@@ -161,7 +159,6 @@ export async function POST(request: Request): Promise<Response> {
         });
       }
 
-      // Merkle Rollup 計算 (瞬時に完了)
       const { payload: chainPayload, chainSha256 } = await buildEvidenceStep({
         bundleId, stepIndex: index, stepType: item.isRoot ? 'other' : 'draft', 
         title: String(item.title).trim(), description: item.note || '',
@@ -170,13 +167,12 @@ export async function POST(request: Request): Promise<Response> {
         prevStepId, prevChainSha256,
       });
 
-      // 工程レコードの構築
       stepRecords.push({
         id: stepId, bundle_id: bundleId, user_id: userId, step_index: index,
         step_type: item.isRoot ? 'other' : 'draft', title: String(item.title).trim(),
         description: item.note || '', sha256: hashData, original_filename: declaredFileName,
         mime_type: item.mimeType || 'application/octet-stream', file_size: item.fileSize || 0,
-        storage_path: item.isRoot ? undefined : item.storagePath,
+        storage_path: null, // 🚨 原本なし
         preview_url: item.isRoot ? undefined : item.previewUrl,
         prev_step_id: prevStepId, root_step_id: rootStepId,
         prev_chain_sha256: prevChainSha256, chain_sha256: chainSha256,
@@ -186,19 +182,19 @@ export async function POST(request: Request): Promise<Response> {
       prevStepId = stepId; prevChainSha256 = chainSha256;
     }
 
-    /* ── 7. Bulk DB Insert (最速の確定) ── */
+    /* ── 7. Bulk DB Insert ── */
     if (certificateRecords.length > 0) {
       const { error: certErr } = await supabaseAdmin.from('certificates').insert(certificateRecords);
-      if (certErr) throw new HttpError(500, `Certificates insert failed: ${certErr.message}`);
+      if (certErr) throw new HttpError(500, `Certificates insert failed`);
     }
     const { error: stepErr } = await supabaseAdmin.from('process_bundle_steps').insert(stepRecords);
-    if (stepErr) throw new HttpError(500, `Steps insert failed: ${stepErr.message}`);
+    if (stepErr) throw new HttpError(500, `Steps insert failed`);
 
     /* ── 8. Bundle HEAD の確定 ── */
     const headRecord = stepRecords[stepRecords.length - 1];
     const { error: headErr } = await supabaseAdmin.from('process_bundles').update({
         status: 'issued',
-        certificate_id: body.certificateId ? body.certificateId.replace('root-', '') : certificateRecords[certificateRecords.length - 1]?.id, // 🚨 幽霊バンドルの回避
+        certificate_id: body.certificateId ? body.certificateId.replace('root-', '') : certificateRecords[certificateRecords.length - 1]?.id,
         root_step_id: rootStepId,
         chain_head_step_id: headRecord.id,
         chain_head_sha256:  headRecord.chain_sha256,
@@ -212,9 +208,9 @@ export async function POST(request: Request): Promise<Response> {
       await supabaseAdmin.from('certificates').update({ process_bundle_id: bundleId }).eq('id', body.certificateId.replace('root-', ''));
     }
 
-    /* ── 9. TSA Sync (ギロチン回避) ── */
+    /* ── 9. TSA Sync (The Zero-Latency Ignition) ── */
     const appOrigin = getOrigin(request);
-    await fetch(`${appOrigin}/api/timestamp`, { // 🚨 await による確実な発火
+    const tsaPromise = fetch(`${appOrigin}/api/timestamp`, { 
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${request.headers.get('authorization')?.replace('Bearer ', '')}` },
       body: JSON.stringify({ 
@@ -222,7 +218,11 @@ export async function POST(request: Request): Promise<Response> {
         hash: headRecord.chain_sha256 
       }),
       keepalive: true,
-    }).catch(err => console.error('[create-json] TSA Sync failed:', err));
+    })
+    .then(res => res.json())
+    .catch(err => console.error('[create-json] TSA Sync failed:', err));
+
+    waitUntil(tsaPromise);
 
     /* ── 10. Ignition ── */
     return json(200, {
