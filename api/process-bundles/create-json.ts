@@ -9,14 +9,6 @@
  * 5. Safety   — 事前ハッシュ重複チェックによるストレージ孤児化（Orphaned Files）の完全防衛
  */
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-  },
-};
-
 import {
   getAuthenticatedUserId,
   getClientIpFromEdgeRequest,
@@ -75,7 +67,7 @@ export interface CreateJsonBody {
 /* ─────────────────────────────────────────────
  * Handler
  * ───────────────────────────────────────────── */
-export default async function handler(request: Request): Promise<Response> {
+export async function POST(request: Request): Promise<Response> {
   if (request.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
   try {
