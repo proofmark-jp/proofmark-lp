@@ -718,11 +718,15 @@ export function ProcessBundleComposer({
   /* ── fetchUploadUrls ── */
   const fetchUploadUrls = useCallback(async (newSteps: WorkspaceStep[]) => {
     try {
+      // 🚨 isRoot (原本・過去の工程) はアップロード不要なので完全に除外
+      const stepsToUpload = newSteps.filter(s => !s.isRoot && s.file);
+      if (stepsToUpload.length === 0) return;
+
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) throw new Error('認証トークンが見つかりません。再ログインしてください。');
 
-      const payloadItems = newSteps.flatMap(s => [
+      const payloadItems = stepsToUpload.flatMap(s => [
         { fileName: s.file!.name, mimeType: s.file!.type, fileSize: s.file!.size },
         { fileName: `thumb_${s.id}.webp`, mimeType: 'image/webp', fileSize: s.thumbBlob?.size ?? 0 }
       ]);
@@ -746,7 +750,7 @@ export function ProcessBundleComposer({
       }
 
       setSteps(cur => cur.map(s => {
-        const target = newSteps.find(ns => ns.id === s.id);
+        const target = stepsToUpload.find(ns => ns.id === s.id);
         if (!target) return s;
         const oIdx = payloadItems.findIndex(p => p.fileName === target.file!.name);
         const tIdx = payloadItems.findIndex(p => p.fileName === `thumb_${target.id}.webp`);
@@ -761,7 +765,7 @@ export function ProcessBundleComposer({
         };
       }));
     } catch {
-      setSteps(cur => cur.map(s => newSteps.some(ns => ns.id === s.id) ? { ...s, uploadState: 'error' as const } : s));
+      setSteps(cur => cur.map(s => stepsToUpload.some(ns => ns.id === s.id) ? { ...s, uploadState: 'error' as const } : s));
     }
   }, [isPublic]);
 
@@ -1145,19 +1149,19 @@ export function ProcessBundleComposer({
         // HEAD更新失敗は致命的ではないのでログのみ
       }
 
-      // 🚨 Chain内のすべての新規証明書に対してTSA付与をバックグラウンドでトリガーする
-      if (data.certificates && Array.isArray(data.certificates)) {
-        data.certificates.forEach((cert: any) => {
-          fetch('/api/timestamp', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ certId: cert.id, hash: cert.sha256 }),
-            keepalive: true,
-          }).catch(err => console.error('[Background TSA] Failed to trigger for chain step:', err));
-        });
+      // 🚨 Merkle Rollup: コスト防衛のため、TSAはチェーンの「一番最後の工程（HEAD）」にのみ発行する
+      if (data.certificates && Array.isArray(data.certificates) && data.certificates.length > 0) {
+        // バックエンドが返した証明書リストの最後の1件を取得
+        const headCert = data.certificates[data.certificates.length - 1];
+        fetch('/api/timestamp', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ certId: headCert.id, hash: headCert.sha256 }),
+          keepalive: true,
+        }).catch(err => console.error('[Background TSA] Failed to trigger HEAD timestamp:', err));
       }
 
       // アップロードと保存が完全に終わった最新のRef状態を、UIに書き戻す
@@ -1334,19 +1338,19 @@ export function ProcessBundleComposer({
         // HEAD更新失敗は致命的ではないのでログのみ
       }
 
-      // 🚨 Chain内のすべての新規証明書に対してTSA付与をバックグラウンドでトリガーする
-      if (data.certificates && Array.isArray(data.certificates)) {
-        data.certificates.forEach((cert: any) => {
-          fetch('/api/timestamp', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ certId: cert.id, hash: cert.sha256 }),
-            keepalive: true,
-          }).catch(err => console.error('[Background TSA] Failed to trigger for chain step:', err));
-        });
+      // 🚨 Merkle Rollup: コスト防衛のため、TSAはチェーンの「一番最後の工程（HEAD）」にのみ発行する
+      if (data.certificates && Array.isArray(data.certificates) && data.certificates.length > 0) {
+        // バックエンドが返した証明書リストの最後の1件を取得
+        const headCert = data.certificates[data.certificates.length - 1];
+        fetch('/api/timestamp', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ certId: headCert.id, hash: headCert.sha256 }),
+          keepalive: true,
+        }).catch(err => console.error('[Background TSA] Failed to trigger HEAD timestamp:', err));
       }
 
       // 🚨 孤児化を防ぐ絶対的なリンク処理
