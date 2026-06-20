@@ -1114,7 +1114,7 @@ export function ProcessBundleComposer({
       setResult({
         chainDepth: data.chainDepth ?? stepsRef.current.length,
         chainHeadSha256: data.chainHeadSha256 ?? stepsRef.current[stepsRef.current.length - 1]?.sha256 ?? null,
-        certificateId: data.chainHeadStepId ?? 'unknown',
+        certificateId: data.certificateId ?? 'unknown',
       });
       setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへ遷移します...');
       setCompression({ phase: 'done', current: 1, total: 1, caption: '完了' });
@@ -1255,7 +1255,7 @@ export function ProcessBundleComposer({
       setResult({
         chainDepth: data.chainDepth ?? stepsRef.current.length,
         chainHeadSha256: data.chainHeadSha256 ?? stepsRef.current[stepsRef.current.length - 1]?.sha256 ?? null,
-        certificateId: data.chainHeadStepId ?? certificate.id,
+        certificateId: data.certificateId ?? certificate.id,
       });
       setMessage('Chain of Evidence を保存しました。');
 
