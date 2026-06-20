@@ -157,11 +157,15 @@ export async function POST(request: Request): Promise<Response> {
         finalStoragePath = existingCert?.storage_path || null;
         finalPreviewUrl = existingCert?.public_image_url || null;
       } else {
-        // セキュリティ: Quarantine Path Hijacking 防衛
-        if (!item.quarantinePath || !item.quarantinePath.startsWith(`${QUARANTINE_PREFIX}/${userId}/`)) {
+        // 🚨 セキュリティ: Quarantine Path Hijacking 防衛 (The Ironclad Fortress)
+        if (!item.quarantinePath || item.quarantinePath.includes('..') || item.quarantinePath.includes('./') || item.quarantinePath.includes('//')) {
+          throw new HttpError(400, 'Path traversal detected');
+        }
+        const qParts = item.quarantinePath.split('/');
+        // パスの先頭（ルートディレクトリ）が確実に自分の userId であることのみを許可
+        if (qParts.length < 2 || qParts[0] !== userId) {
           throw new HttpError(403, `Invalid quarantine path ownership at step ${index}`);
         }
-        if (item.quarantinePath.includes('..')) throw new HttpError(400, 'Path traversal detected');
 
         const ext = safeExt(declaredFileName);
         
@@ -171,7 +175,16 @@ export async function POST(request: Request): Promise<Response> {
           supabaseAdmin.storage.from(ORIGINALS_BUCKET).move(item.quarantinePath, finalStoragePath)
         );
 
-        if (item.thumbnailPath && item.thumbnailPath.startsWith(`${QUARANTINE_PREFIX}/${userId}/`)) {
+        // 🚨 サムネイルも同様にディレクトリの完全一致を検証 (The Ironclad Fortress)
+        if (item.thumbnailPath) {
+          if (item.thumbnailPath.includes('..') || item.thumbnailPath.includes('./') || item.thumbnailPath.includes('//')) {
+            throw new HttpError(400, 'Path traversal detected in thumbnail');
+          }
+          const tParts = item.thumbnailPath.split('/');
+          if (tParts.length < 2 || tParts[0] !== userId) {
+            throw new HttpError(403, `Invalid thumbnail path ownership at step ${index}`);
+          }
+          
           const publicThumbPath = `bundles/${bundleId}/thumb_${index}_${certId}.webp`;
           movePromises.push(
             supabaseAdmin.storage.from(PUBLIC_BUCKET).move(item.thumbnailPath, publicThumbPath)
