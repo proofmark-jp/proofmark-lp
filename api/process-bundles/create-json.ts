@@ -36,7 +36,7 @@ export interface CreateJsonBody {
   description: string;
   isPublic: boolean;
   items: Array<{
-    id: string; // 🚨 修正1: フロントエンドからの既存IDを受け取る
+    id: string;
     isRoot: boolean;
     sha256: string;
     title: string;
@@ -58,12 +58,10 @@ export async function POST(request: Request): Promise<Response> {
   if (request.method !== 'POST') return json(405, { error: 'Method not allowed' });
 
   try {
-    /* ── 1. IP Rate Limit ── */
     const ip = getClientIpFromEdgeRequest(request);
     const allowed = await checkIpRateLimit(ip, 'create');
     if (!allowed) throw new HttpError(429, 'Too many requests. Please wait a few seconds.');
 
-    /* ── 2. Auth & Body Parse ── */
     const userId = await getAuthenticatedUserId(request);
     const body = (await request.json()) as CreateJsonBody;
     
@@ -75,7 +73,6 @@ export async function POST(request: Request): Promise<Response> {
       throw new HttpError(400, `Items array must be between 1 and ${MAX_CHAIN_LENGTH}`);
     }
 
-    /* ── 3. 事前重複チェック ── */
     const newHashes = items.filter(i => !i.isRoot && SHA256_HEX.test(i.sha256)).map(i => i.sha256.toLowerCase());
     if (newHashes.length > 0) {
       const { data: duplicates } = await supabaseAdmin
@@ -89,13 +86,10 @@ export async function POST(request: Request): Promise<Response> {
       }
     }
 
-    /* ── 4. C2PA Gate ── */
     const { data: profile } = await supabaseAdmin.from('profiles').select('plan_tier').eq('id', userId).single();
     const planTier = (profile?.plan_tier ?? 'free') as string;
     const { value: c2paParsed } = resolveC2paForPersistence(null, planTier);
 
-    /* ── 5. Bundle Draft 作成 (Wipe & Replace 準備) ── */
-    // 🚨 修正2: 既存ステップの削除を許可するため、FK（Head / Root）を一旦解除して Draft を更新
     const { error: bundleErr } = await supabaseAdmin.from('process_bundles').upsert({
       id: bundleId,
       user_id: userId,
@@ -105,12 +99,11 @@ export async function POST(request: Request): Promise<Response> {
       is_public: isPublic,
       status: 'draft',
       evidence_mode: 'hash_chain_v1',
-      root_step_id: null,       // 🚨 FKを一旦解除
-      chain_head_step_id: null, // 🚨 FKを一旦解除
+      root_step_id: null,
+      chain_head_step_id: null,
     }, { onConflict: 'id' });
     if (bundleErr) throw new HttpError(500, `Bundle creation failed: ${bundleErr.message}`);
 
-    // 🚨 修正3: 一意制約エラー（duplicate key）を防ぐため、既存のステップを全削除（Wipe & Replace）
     const { error: deleteErr } = await supabaseAdmin.from('process_bundle_steps').delete().eq('bundle_id', bundleId);
     if (deleteErr) throw new HttpError(500, `Failed to clean up old steps: ${deleteErr.message}`);
 
@@ -121,9 +114,7 @@ export async function POST(request: Request): Promise<Response> {
     let prevChainSha256: string | null = null;
     let rootStepId: string | null = null;
 
-    /* ── 6. インメモリ暗号連鎖計算 ── */
     for (const [index, item] of items.entries()) {
-      // 🚨 修正4: フロントエンドのIDを維持する（なければ生成）
       const stepId = item.id || crypto.randomUUID();
       if (index === 0) rootStepId = stepId;
       
@@ -191,16 +182,13 @@ export async function POST(request: Request): Promise<Response> {
       prevStepId = stepId; prevChainSha256 = chainSha256;
     }
 
-    /* ── 7. Bulk DB Insert (Replace) ── */
     if (certificateRecords.length > 0) {
       const { error: certErr } = await supabaseAdmin.from('certificates').insert(certificateRecords);
       if (certErr) throw new HttpError(500, `Certificates insert failed: ${certErr.message}`);
     }
-    // 🚨 既存は全消去されているため、ここで insert しても重複エラーは絶対に出ない
     const { error: stepErr } = await supabaseAdmin.from('process_bundle_steps').insert(stepRecords);
     if (stepErr) throw new HttpError(500, `Steps insert failed: ${stepErr.message}`);
 
-    /* ── 8. Bundle HEAD の確定 ── */
     const headRecord = stepRecords[stepRecords.length - 1];
     const { error: headErr } = await supabaseAdmin.from('process_bundles').update({
         status: 'issued',
@@ -218,26 +206,36 @@ export async function POST(request: Request): Promise<Response> {
       await supabaseAdmin.from('certificates').update({ process_bundle_id: bundleId }).eq('id', body.certificateId.replace('root-', ''));
     }
 
-    /* ── 9. TSA Sync ── */
-    const appOrigin = getOrigin(request);
-    const tsaPromise = fetch(`${appOrigin}/api/timestamp`, { 
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${request.headers.get('authorization')?.replace('Bearer ', '')}` },
-      body: JSON.stringify({ 
-        certId: certificateRecords[certificateRecords.length - 1]?.id || body.certificateId?.replace('root-', ''), 
-        hash: headRecord.chain_sha256 
-      }),
-      keepalive: true,
-    })
-    .then(async (res) => {
-        if (!res.ok) {
-            const err = await res.json().catch(()=>({}));
-            console.error('[create-json] TSA Sync returned error:', err);
-        }
-    })
-    .catch(err => console.error('[create-json] TSA Sync failed:', err));
+    /* ── 9. TSA Sync (The Exact Match Protocol) ── */
+    let tsaTargetCertId: string | null = null;
+    let tsaTargetHash: string | null = null;
 
-    waitUntil(tsaPromise);
+    // 🚨 修正1: 新規画像が追加された場合のみ、その画像のIDとハッシュをTSAに送る
+    if (certificateRecords.length > 0) {
+      const lastCert = certificateRecords[certificateRecords.length - 1];
+      tsaTargetCertId = lastCert.id;
+      tsaTargetHash = lastCert.sha256; // 🚨 Merkle Rootではなく、個別の画像ハッシュを送る
+    }
+
+    if (tsaTargetCertId && tsaTargetHash) {
+      const appOrigin = getOrigin(request);
+      const tsaPromise = fetch(`${appOrigin}/api/timestamp`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${request.headers.get('authorization')?.replace('Bearer ', '')}` },
+        body: JSON.stringify({ certId: tsaTargetCertId, hash: tsaTargetHash }),
+        keepalive: true,
+      })
+      .then(async (res) => {
+          if (!res.ok) {
+              const errText = await res.text().catch(()=>'Unknown Error');
+              // 🚨 修正2: エラーの真因を握りつぶさずテキストでログに出す
+              console.error(`[create-json] TSA Sync returned error (${res.status}):`, errText);
+          }
+      })
+      .catch(err => console.error('[create-json] TSA Sync fetch failed:', err));
+
+      waitUntil(tsaPromise);
+    }
 
     /* ── 10. Ignition ── */
     return json(200, {
