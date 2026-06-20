@@ -169,13 +169,18 @@ export async function POST(request: Request): Promise<Response> {
 
         const ext = safeExt(declaredFileName);
         
-        // パス生成 & 移動タスクの予約 (まだ実行しない)
+        // 🚨 クロスバケット転送: 原本 (Quarantine -> Originals)
         finalStoragePath = `${userId}/bundles/${bundleId}/step_${index}_${certId}.${ext}`;
-        movePromises.push(
-          supabaseAdmin.storage.from(ORIGINALS_BUCKET).move(item.quarantinePath, finalStoragePath)
-        );
+        movePromises.push((async () => {
+          const { data, error: dlErr } = await supabaseAdmin.storage.from(QUARANTINE_BUCKET).download(item.quarantinePath);
+          if (dlErr || !data) throw new HttpError(500, `Original download failed: ${dlErr?.message}`);
+          const { error: ulErr } = await supabaseAdmin.storage.from(ORIGINALS_BUCKET).upload(finalStoragePath, data, { contentType: item.mimeType });
+          if (ulErr) throw new HttpError(500, `Original upload failed: ${ulErr.message}`);
+          // 成功後にQuarantineから削除
+          await supabaseAdmin.storage.from(QUARANTINE_BUCKET).remove([item.quarantinePath]);
+        })());
 
-        // 🚨 サムネイルも同様にディレクトリの完全一致を検証 (The Ironclad Fortress)
+        // 🚨 クロスバケット転送: サムネイル (Quarantine -> Public)
         if (item.thumbQuarantinePath) {
           if (item.thumbQuarantinePath.includes('..') || item.thumbQuarantinePath.includes('./') || item.thumbQuarantinePath.includes('//')) {
             throw new HttpError(400, 'Path traversal detected in thumbnail');
@@ -186,9 +191,14 @@ export async function POST(request: Request): Promise<Response> {
           }
           
           const publicThumbPath = `bundles/${bundleId}/thumb_${index}_${certId}.webp`;
-          movePromises.push(
-            supabaseAdmin.storage.from(PUBLIC_BUCKET).move(item.thumbQuarantinePath, publicThumbPath)
-          );
+          movePromises.push((async () => {
+            const { data, error: dlErr } = await supabaseAdmin.storage.from(QUARANTINE_BUCKET).download(item.thumbQuarantinePath!);
+            if (dlErr || !data) throw new HttpError(500, `Thumb download failed: ${dlErr?.message}`);
+            const { error: ulErr } = await supabaseAdmin.storage.from(PUBLIC_BUCKET).upload(publicThumbPath, data, { contentType: 'image/webp' });
+            if (ulErr) throw new HttpError(500, `Thumb upload failed: ${ulErr.message}`);
+            // 成功後にQuarantineから削除
+            await supabaseAdmin.storage.from(QUARANTINE_BUCKET).remove([item.thumbQuarantinePath!]);
+          })());
           finalPreviewUrl = `${supabaseBaseUrl}/storage/v1/object/public/${PUBLIC_BUCKET}/${publicThumbPath}`;
         }
 
