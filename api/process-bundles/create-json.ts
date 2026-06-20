@@ -73,8 +73,8 @@ export async function POST(request: Request): Promise<Response> {
   try {
     /* ── 1. IP Rate Limit ── */
     const ip = getClientIpFromEdgeRequest(request);
-    const { success: rateLimitOk } = await checkIpRateLimit(ip, 10, '10 s');
-    if (!rateLimitOk) {
+    const allowed = await checkIpRateLimit(ip, 'create');
+    if (!allowed) {
       return json(429, { error: 'Too many requests. Please wait a few seconds.' });
     }
 
