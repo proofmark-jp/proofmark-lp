@@ -287,7 +287,10 @@ export async function POST(request: Request): Promise<Response> {
       .from('process_bundles')
       .update({
         status: 'issued',
-        certificate_id: body.certificateId ? body.certificateId.replace('root-', '') : null,
+        // 🚨 修正: 新規発行時は「最後（HEAD）の工程の証明書」をカバー（表紙）として紐付ける
+        certificate_id: body.certificateId 
+          ? body.certificateId.replace('root-', '') 
+          : certificateRecords[certificateRecords.length - 1]?.id,
         root_step_id: rootStepId,
         chain_head_step_id: headRecord.id,
         chain_head_sha256:  headRecord.chain_sha256,
@@ -306,7 +309,7 @@ export async function POST(request: Request): Promise<Response> {
 
     /* ── 10. Cost Defense: TSA は HEAD にのみ 1 回だけ発火 ── */
     const appOrigin = getOrigin(request);
-    fetch(`${appOrigin}/api/timestamp`, {
+    fetch(`${appOrigin}/api/timestamp`, { 
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${request.headers.get('authorization')?.replace('Bearer ', '')}` },
       body: JSON.stringify({ 
