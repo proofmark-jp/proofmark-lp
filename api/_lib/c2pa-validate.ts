@@ -19,7 +19,7 @@ import {
   C2PA_PAYLOAD_MAX_BYTES,
   measureBytes,
   type C2paManifest,
-} from '../../client/src/lib/c2pa-schema';
+} from '../../client/src/lib/c2pa-schema.js';
 
 const PAID_TIERS = new Set(['creator', 'studio', 'business', 'light', 'admin']);
 
