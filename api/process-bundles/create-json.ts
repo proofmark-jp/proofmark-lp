@@ -60,7 +60,7 @@ export interface CreateJsonBody {
     fileSize: number;
     originalFilename: string;
     quarantinePath: string;
-    thumbnailPath?: string; 
+    thumbQuarantinePath?: string;
   }>;
 }
 
@@ -176,18 +176,18 @@ export async function POST(request: Request): Promise<Response> {
         );
 
         // 🚨 サムネイルも同様にディレクトリの完全一致を検証 (The Ironclad Fortress)
-        if (item.thumbnailPath) {
-          if (item.thumbnailPath.includes('..') || item.thumbnailPath.includes('./') || item.thumbnailPath.includes('//')) {
+        if (item.thumbQuarantinePath) {
+          if (item.thumbQuarantinePath.includes('..') || item.thumbQuarantinePath.includes('./') || item.thumbQuarantinePath.includes('//')) {
             throw new HttpError(400, 'Path traversal detected in thumbnail');
           }
-          const tParts = item.thumbnailPath.split('/');
+          const tParts = item.thumbQuarantinePath.split('/');
           if (tParts.length < 2 || tParts[0] !== userId) {
             throw new HttpError(403, `Invalid thumbnail path ownership at step ${index}`);
           }
           
           const publicThumbPath = `bundles/${bundleId}/thumb_${index}_${certId}.webp`;
           movePromises.push(
-            supabaseAdmin.storage.from(PUBLIC_BUCKET).move(item.thumbnailPath, publicThumbPath)
+            supabaseAdmin.storage.from(PUBLIC_BUCKET).move(item.thumbQuarantinePath, publicThumbPath)
           );
           finalPreviewUrl = `${supabaseBaseUrl}/storage/v1/object/public/${PUBLIC_BUCKET}/${publicThumbPath}`;
         }
@@ -196,6 +196,8 @@ export async function POST(request: Request): Promise<Response> {
         certificateRecords.push({
           id: certId,
           user_id: userId,
+          process_bundle_id: bundleId,
+          step_index: index,
           title: String(item.title).trim() || 'untitled',
           sha256: hashData,
           proof_mode: isPublic ? 'shareable' : 'private',
@@ -212,7 +214,8 @@ export async function POST(request: Request): Promise<Response> {
             bundle_id: bundleId,
             step_index: index,
             integrity_model: 'proofmark.chain-ready.v1'
-          }
+          },
+          is_asset_purged: false // 🚨 追加: ダッシュボードのカウントロジック等で必要な場合があるため明記
         });
       }
 
