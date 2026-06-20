@@ -275,6 +275,14 @@ export function ProcessBundleComposer({
   const [isHydrating, setIsHydrating] = useState(true);
   const [scrubIndex, setScrubIndex] = useState(0);
 
+  // 🚨 メモリリーク防衛: コンポーネントの生存監視
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   /* ─────────────────────────────────────────────────────────────
    * 🚀 Dual-State Engine — 画像とテキストの差分を完全分離
    * ─────────────────────────────────────────────────────────────
@@ -996,15 +1004,17 @@ export function ProcessBundleComposer({
   async function submitMagic() {
     if (!magicMode) return;
 
-    // 🚨 Race Condition 防衛: 未完了のハッシュ計算がある場合は完了を待つ
-    const hasUnfinishedHashes = steps.some(s => !s.isRoot && s.file && s.hashState !== 'verified');
-    if (hasUnfinishedHashes) {
-      setMessage('※ ハッシュ計算中の工程があります。完了まで数秒お待ちください。');
-      return;
+    // 🚨 洗練: ユーザーにやり直しさせず、システムがハッシュ完了を自動待機する
+    if (stepsRef.current.some(s => !s.isRoot && s.file && s.hashState !== 'verified')) {
+      setMessage('ハッシュ計算を待機しています...');
+      setSubmitting(true);
+      while (stepsRef.current.some(s => !s.isRoot && s.file && s.hashState !== 'verified')) {
+        await new Promise(r => setTimeout(r, 200));
+      }
+      setMessage(null);
+    } else {
+      setSubmitting(true);
     }
-
-    setSubmitting(true);
-    setMessage(null);
     setResult(null);
 
     try {
@@ -1106,7 +1116,7 @@ export function ProcessBundleComposer({
         chainHeadSha256: data.chainHeadSha256 ?? stepsRef.current[stepsRef.current.length - 1]?.sha256 ?? null,
         certificateId: data.chainHeadStepId ?? 'unknown',
       });
-      setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへリダイレクトします...');
+      setMessage('Chain of Evidence を保存しました。3秒後に証明書ページへ遷移します...');
       setCompression({ phase: 'done', current: 1, total: 1, caption: '完了' });
 
       // ⭐ 保存成功時にシール状態を確定する
@@ -1117,28 +1127,38 @@ export function ProcessBundleComposer({
       setSealedTitleSnapshot(title);
       setSealedDescriptionSnapshot(description);
 
-      onComplete?.();
+      // 🚨 アンマウント時は実行しない
+      if (isMounted.current) onComplete?.();
     } catch (error) {
+      if (!isMounted.current) return;
       setMessage(error instanceof Error ? error.message : '保存に失敗しました');
       setCompression({ phase: 'idle', current: 0, total: 0, caption: '' });
-      setSealedSignatureSnapshot(null);
-      setSealedStepsSnapshot(null);
+      // 🚨 リスク排除: 新規作成時のみ null に戻し、既存の記憶は破壊しない
+      if (!certificate) {
+        setSealedSignatureSnapshot(null);
+        setSealedStepsSnapshot(null);
+      }
     } finally {
-      setSubmitting(false);
+      if (isMounted.current) setSubmitting(false);
     }
   }
 
   async function submit() {
     if (!certificate) return;
 
-    // 🚨 Race Condition 防衛: 未完了のハッシュ計算がある場合は完了を待つ
-    const hasUnfinishedHashes = steps.some(s => !s.isRoot && s.file && s.hashState !== 'verified');
-    if (hasUnfinishedHashes) {
-      setMessage('※ ハッシュ計算中の工程があります。完了まで数秒お待ちください。');
-      return;
+    // 🚨 洗練: ユーザーにやり直しさせず、システムがハッシュ完了を自動待機する
+    if (stepsRef.current.some(s => !s.isRoot && s.file && s.hashState !== 'verified')) {
+      setMessage('ハッシュ計算を待機しています...');
+      setSubmitting(true);
+      while (stepsRef.current.some(s => !s.isRoot && s.file && s.hashState !== 'verified')) {
+        await new Promise(r => setTimeout(r, 200));
+      }
+      setMessage(null);
+    } else {
+      setSubmitting(true);
     }
+    setResult(null);
 
-    setSubmitting(true); setMessage(null); setResult(null);
     try {
       const toUpload = steps.filter((s) => !s.isRoot && s.file && s.uploadState !== 'uploaded');
 
@@ -1247,15 +1267,17 @@ export function ProcessBundleComposer({
       setSealedTitleSnapshot(title);
       setSealedDescriptionSnapshot(description);
 
+      // 🚨 UXの洗練とメモリ防衛: 2000msの余韻を持たせ、SealedのUIを確認させる
       setTimeout(() => {
-        if (onComplete) onComplete();
-      }, 800);
+        if (isMounted.current && onComplete) onComplete();
+      }, 2000);
     } catch (error) {
+      if (!isMounted.current) return;
       setMessage(error instanceof Error ? error.message : '保存に失敗しました');
-      setSealedSignatureSnapshot(null);
-      setSealedStepsSnapshot(null);
+      // 🚨 リスク排除: 既存証明書への追加で失敗した場合、元の封印状態の記憶を絶対に破壊しない
+      // (ここでは何もしないのが正解)
     } finally {
-      setSubmitting(false);
+      if (isMounted.current) setSubmitting(false);
     }
   }
 
