@@ -1,20 +1,13 @@
-/**
- * api/process-bundles/create-json.ts — Merkle Rollup JSON Multiplexer (God-Tier v4)
- *
- * アーキテクチャの柱:
- * 1. Speed    — Promise.all 並列 promote + Bulk INSERT (N+1 DB 呼び出しの根絶)
- * 2. Security — Path Traversal / Hijacking 防衛 + 厳密なファイル名サニタイズ
- * 3. Business — IP Rate Limit (10req/10s) + C2PA Gate (plan_tier ベース)
- * 4. Cost     — TSA はチェーン HEAD にのみ 1 回だけ fire-and-forget
- * 5. Safety   — 事前ハッシュ重複チェックによるストレージ孤児化（Orphaned Files）の完全防衛
- */
+export const config = {
+  runtime: 'edge', // Vercel Edge Runtime による爆速起動
+};
 
 import {
   getAuthenticatedUserId,
   getClientIpFromEdgeRequest,
   getOrigin,
   json,
-  supabaseAdmin,
+  supabaseAdmin, // 🚨 神の権限（Service Role Key）を使用
   buildEvidenceStep,
 } from '../_shared.js';
 import { resolveC2paForPersistence } from '../_lib/c2pa-validate.js';
@@ -22,13 +15,9 @@ import { checkIpRateLimit } from '../_lib/rate-limit.js';
 import crypto from 'crypto';
 
 /* ─────────────────────────────────────────────
- * Constants & Helpers (定数は必ず最上部に配置)
+ * Constants & Helpers
  * ───────────────────────────────────────────── */
 const MAX_CHAIN_LENGTH = 150;
-const QUARANTINE_PREFIX = 'quarantine';
-const QUARANTINE_BUCKET = 'proofmark-quarantine';
-const ORIGINALS_BUCKET = 'proofmark-originals';
-const PUBLIC_BUCKET = 'proofmark-public';
 const SHA256_HEX = /^[a-f0-9]{64}$/i;
 
 function clampFileName(name: string): string {
@@ -36,13 +25,8 @@ function clampFileName(name: string): string {
   return stripped.length > 240 ? stripped.slice(0, 240) : stripped || 'untitled';
 }
 
-function safeExt(name: string): string {
-  const ext = (name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
-  return ext || 'bin';
-}
-
 class HttpError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(public status: number, public message: string) { super(message); }
 }
 
 export interface CreateJsonBody {
@@ -59,13 +43,14 @@ export interface CreateJsonBody {
     mimeType: string;
     fileSize: number;
     originalFilename: string;
-    quarantinePath: string;
-    thumbQuarantinePath?: string;
+    storagePath?: string;   // 🚨 Quarantineではなく、直接 Originals の本番パスを受け取る
+    thumbnailPath?: string; // 🚨 直接 Public のサムネイルパスを受け取る
+    previewUrl?: string;    // 🚨 サムネイルの公開URL
   }>;
 }
 
 /* ─────────────────────────────────────────────
- * Handler
+ * The Zero-Move Handler
  * ───────────────────────────────────────────── */
 export async function POST(request: Request): Promise<Response> {
   if (request.method !== 'POST') return json(405, { error: 'Method not allowed' });
@@ -74,9 +59,7 @@ export async function POST(request: Request): Promise<Response> {
     /* ── 1. IP Rate Limit ── */
     const ip = getClientIpFromEdgeRequest(request);
     const allowed = await checkIpRateLimit(ip, 'create');
-    if (!allowed) {
-      return json(429, { error: 'Too many requests. Please wait a few seconds.' });
-    }
+    if (!allowed) throw new HttpError(429, 'Too many requests. Please wait a few seconds.');
 
     /* ── 2. Auth & Body Parse ── */
     const userId = await getAuthenticatedUserId(request);
@@ -90,8 +73,7 @@ export async function POST(request: Request): Promise<Response> {
       throw new HttpError(400, `Items array must be between 1 and ${MAX_CHAIN_LENGTH}`);
     }
 
-    /* ── 3. 事前重複チェック (Pre-flight Duplicate Hash Check) ── */
-    // 送信された新規ハッシュだけを抽出
+    /* ── 3. 事前重複チェック (The Orphan Defense) ── */
     const newHashes = items.filter(i => !i.isRoot && SHA256_HEX.test(i.sha256)).map(i => i.sha256.toLowerCase());
     if (newHashes.length > 0) {
       const { data: duplicates } = await supabaseAdmin
@@ -101,19 +83,16 @@ export async function POST(request: Request): Promise<Response> {
         .limit(1);
       
       if (duplicates && duplicates.length > 0) {
-        throw new HttpError(409, 'Duplicate hash detected. One or more images are already registered as certificates.');
+        throw new HttpError(409, 'Duplicate hash detected. One or more images are already registered.');
       }
     }
 
-    /* ── 4. プロファイル & C2PA Gate ── */
+    /* ── 4. C2PA Gate ── */
     const { data: profile } = await supabaseAdmin.from('profiles').select('plan_tier').eq('id', userId).single();
     const planTier = (profile?.plan_tier ?? 'free') as string;
     const { value: c2paParsed, gate } = resolveC2paForPersistence(null, planTier);
-    if (gate.kind === 'reject') {
-      console.warn({ event: 'c2pa.rejected', reason: gate.reason });
-    }
 
-    /* ── 5. Bundle Draft 作成 (デッドロック回避) ── */
+    /* ── 5. Bundle Draft 作成 ── */
     const { error: bundleErr } = await supabaseAdmin.from('process_bundles').upsert({
       id: bundleId,
       user_id: userId,
@@ -126,8 +105,6 @@ export async function POST(request: Request): Promise<Response> {
     }, { onConflict: 'id' });
     if (bundleErr) throw new HttpError(500, `Bundle creation failed: ${bundleErr.message}`);
 
-    const supabaseBaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim().replace(/\/$/, "");
-    const movePromises: Promise<any>[] = [];
     const certificateRecords: any[] = [];
     const stepRecords: any[] = [];
 
@@ -135,7 +112,7 @@ export async function POST(request: Request): Promise<Response> {
     let prevChainSha256: string | null = null;
     let rootStepId: string | null = null;
 
-    /* ── 6. メモリ上でのループ処理 (DB通信最小化) ── */
+    /* ── 6. インメモリ暗号連鎖計算 (Zero-Move) ── */
     for (const [index, item] of items.entries()) {
       const stepId = crypto.randomUUID();
       if (index === 0) rootStepId = stepId;
@@ -147,179 +124,98 @@ export async function POST(request: Request): Promise<Response> {
       const hashData = String(item.sha256).trim().toLowerCase();
       if (!SHA256_HEX.test(hashData)) throw new HttpError(400, `Invalid SHA256 at step ${index}`);
 
-      let finalStoragePath: string | null = null;
-      let finalPreviewUrl: string | null = null;
       const declaredFileName = clampFileName(item.originalFilename);
 
-      if (item.isRoot) {
-        // 既存証明書からのURL引き継ぎ
-        const { data: existingCert } = await supabaseAdmin.from('certificates').select('*').eq('id', certId).single();
-        finalStoragePath = existingCert?.storage_path || null;
-        finalPreviewUrl = existingCert?.public_image_url || null;
-      } else {
-        // 🚨 セキュリティ: Quarantine Path Hijacking 防衛 (The Ironclad Fortress)
-        if (!item.quarantinePath || item.quarantinePath.includes('..') || item.quarantinePath.includes('./') || item.quarantinePath.includes('//')) {
-          throw new HttpError(400, 'Path traversal detected');
+      // 新規追加分の証明書レコードを構築
+      if (!item.isRoot) {
+        // 🚨 The Ironclad Fortress (絶対防衛線): ディレクトリの所有権とトラバーサルを検証
+        if (!item.storagePath || item.storagePath.includes('..') || item.storagePath.split('/')[0] !== userId) {
+          throw new HttpError(403, `Invalid storage path ownership at step ${index}`);
         }
-        const qParts = item.quarantinePath.split('/');
-        // パスの先頭（ルートディレクトリ）が確実に自分の userId であることのみを許可
-        if (qParts.length < 2 || qParts[0] !== userId) {
-          throw new HttpError(403, `Invalid quarantine path ownership at step ${index}`);
+        if (item.thumbnailPath && (item.thumbnailPath.includes('..') || item.thumbnailPath.split('/')[0] !== userId)) {
+          throw new HttpError(403, `Invalid thumbnail path ownership at step ${index}`);
         }
 
-        const ext = safeExt(declaredFileName);
-        
-        // 🚨 クロスバケット転送: 原本 (Quarantine -> Originals)
-        finalStoragePath = `${userId}/bundles/${bundleId}/step_${index}_${certId}.${ext}`;
-        movePromises.push((async () => {
-          const { data, error: dlErr } = await supabaseAdmin.storage.from(QUARANTINE_BUCKET).download(item.quarantinePath);
-          if (dlErr || !data) throw new HttpError(500, `Original download failed: ${dlErr?.message}`);
-          const { error: ulErr } = await supabaseAdmin.storage.from(ORIGINALS_BUCKET).upload(finalStoragePath, data, { contentType: item.mimeType });
-          if (ulErr) throw new HttpError(500, `Original upload failed: ${ulErr.message}`);
-          // 成功後にQuarantineから削除
-          await supabaseAdmin.storage.from(QUARANTINE_BUCKET).remove([item.quarantinePath]);
-        })());
-
-        // 🚨 クロスバケット転送: サムネイル (Quarantine -> Public)
-        if (item.thumbQuarantinePath) {
-          if (item.thumbQuarantinePath.includes('..') || item.thumbQuarantinePath.includes('./') || item.thumbQuarantinePath.includes('//')) {
-            throw new HttpError(400, 'Path traversal detected in thumbnail');
-          }
-          const tParts = item.thumbQuarantinePath.split('/');
-          if (tParts.length < 2 || tParts[0] !== userId) {
-            throw new HttpError(403, `Invalid thumbnail path ownership at step ${index}`);
-          }
-          
-          const publicThumbPath = `bundles/${bundleId}/thumb_${index}_${certId}.webp`;
-          movePromises.push((async () => {
-            const { data, error: dlErr } = await supabaseAdmin.storage.from(QUARANTINE_BUCKET).download(item.thumbQuarantinePath!);
-            if (dlErr || !data) throw new HttpError(500, `Thumb download failed: ${dlErr?.message}`);
-            const { error: ulErr } = await supabaseAdmin.storage.from(PUBLIC_BUCKET).upload(publicThumbPath, data, { contentType: 'image/webp' });
-            if (ulErr) throw new HttpError(500, `Thumb upload failed: ${ulErr.message}`);
-            // 成功後にQuarantineから削除
-            await supabaseAdmin.storage.from(QUARANTINE_BUCKET).remove([item.thumbQuarantinePath!]);
-          })());
-          finalPreviewUrl = `${supabaseBaseUrl}/storage/v1/object/public/${PUBLIC_BUCKET}/${publicThumbPath}`;
-        }
-
-        // 証明書レコードの予約
         certificateRecords.push({
           id: certId,
           user_id: userId,
-          process_bundle_id: bundleId,
-          step_index: index,
+          process_bundle_id: bundleId, // 🚨 ダッシュボード表示用の紐付け
+          step_index: index,           // 🚨 工程順序の明記
           title: String(item.title).trim() || 'untitled',
           sha256: hashData,
           proof_mode: isPublic ? 'shareable' : 'private',
           visibility: isPublic ? 'public' : 'private',
           public_verify_token: crypto.randomUUID(),
-          public_image_url: finalPreviewUrl,
-          storage_path: finalStoragePath,
+          public_image_url: item.previewUrl || null, // フロントが取得したURLをそのまま使用
+          storage_path: item.storagePath,            // Originals のパス
           file_name: declaredFileName,
           mime_type: item.mimeType || 'application/octet-stream',
           file_size: item.fileSize || 0,
           c2pa_manifest: c2paParsed,
           metadata_json: {
-            upload_pipeline: 'quarantine-bulk.v4',
+            upload_pipeline: 'direct-to-vault.v1', // 🚨 ゼロ・ムーブの証
             bundle_id: bundleId,
             step_index: index,
             integrity_model: 'proofmark.chain-ready.v1'
           },
-          is_asset_purged: false // 🚨 追加: ダッシュボードのカウントロジック等で必要な場合があるため明記
+          is_asset_purged: false
         });
       }
 
-      // Merkle Rollup 連鎖計算
+      // Merkle Rollup 計算 (瞬時に完了)
       const { payload: chainPayload, chainSha256 } = await buildEvidenceStep({
-        bundleId,
-        stepIndex: index,
-        stepType: item.isRoot ? 'other' : 'draft', 
-        title: String(item.title).trim(),
-        description: item.note || '',
-        sha256: hashData,
-        originalFilename: declaredFileName,
-        mimeType: item.mimeType || 'application/octet-stream',
-        fileSize: item.fileSize || 0,
-        prevStepId,
-        prevChainSha256,
+        bundleId, stepIndex: index, stepType: item.isRoot ? 'other' : 'draft', 
+        title: String(item.title).trim(), description: item.note || '',
+        sha256: hashData, originalFilename: declaredFileName,
+        mimeType: item.mimeType || 'application/octet-stream', fileSize: item.fileSize || 0,
+        prevStepId, prevChainSha256,
       });
 
-      // 工程レコードの予約
+      // 工程レコードの構築
       stepRecords.push({
-        id: stepId,
-        bundle_id: bundleId,
-        user_id: userId,
-        step_index: index,
-        step_type: item.isRoot ? 'other' : 'draft',
-        title: String(item.title).trim(),
-        description: item.note || '',
-        sha256: hashData,
-        original_filename: declaredFileName,
-        mime_type: item.mimeType || 'application/octet-stream',
-        file_size: item.fileSize || 0,
-        storage_path: finalStoragePath,
-        preview_url: finalPreviewUrl,
-        prev_step_id: prevStepId,
-        root_step_id: rootStepId,
-        prev_chain_sha256: prevChainSha256,
-        chain_sha256: chainSha256,
-        chain_payload_json: chainPayload,
-        issued_at: new Date().toISOString(),
+        id: stepId, bundle_id: bundleId, user_id: userId, step_index: index,
+        step_type: item.isRoot ? 'other' : 'draft', title: String(item.title).trim(),
+        description: item.note || '', sha256: hashData, original_filename: declaredFileName,
+        mime_type: item.mimeType || 'application/octet-stream', file_size: item.fileSize || 0,
+        storage_path: item.isRoot ? undefined : item.storagePath,
+        preview_url: item.isRoot ? undefined : item.previewUrl,
+        prev_step_id: prevStepId, root_step_id: rootStepId,
+        prev_chain_sha256: prevChainSha256, chain_sha256: chainSha256,
+        chain_payload_json: chainPayload, issued_at: new Date().toISOString(),
       });
 
-      prevStepId = stepId;
-      prevChainSha256 = chainSha256;
+      prevStepId = stepId; prevChainSha256 = chainSha256;
     }
 
-    /* ── 7. DB一括インサート (DBを先に確定させる) ── */
+    /* ── 7. Bulk DB Insert (最速の確定) ── */
     if (certificateRecords.length > 0) {
       const { error: certErr } = await supabaseAdmin.from('certificates').insert(certificateRecords);
       if (certErr) throw new HttpError(500, `Certificates insert failed: ${certErr.message}`);
     }
-
     const { error: stepErr } = await supabaseAdmin.from('process_bundle_steps').insert(stepRecords);
     if (stepErr) throw new HttpError(500, `Steps insert failed: ${stepErr.message}`);
 
-    /* ── 8. Storageの移動実行 (DB成功後に行うことで孤児化を防ぐ) ── */
-    if (movePromises.length > 0) {
-      await Promise.all(movePromises).catch(err => {
-        console.error('[create-json] Storage move failed after DB insert:', err);
-        // 本来ならここでDBのロールバックが必要だが、Supabase JSの制限上ログ留め。
-        // ただし事前ハッシュチェックにより、ここで失敗する確率は極めて低い。
-      });
-    }
-
-    /* ── 9. バンドルと親証明書のステータス確定 ── */
+    /* ── 8. Bundle HEAD の確定 ── */
     const headRecord = stepRecords[stepRecords.length - 1];
-    const now = new Date().toISOString();
-
-    const { error: headErr } = await supabaseAdmin
-      .from('process_bundles')
-      .update({
+    const { error: headErr } = await supabaseAdmin.from('process_bundles').update({
         status: 'issued',
-        // 🚨 修正: 新規発行時は「最後（HEAD）の工程の証明書」をカバー（表紙）として紐付ける
-        certificate_id: body.certificateId 
-          ? body.certificateId.replace('root-', '') 
-          : certificateRecords[certificateRecords.length - 1]?.id,
+        certificate_id: body.certificateId ? body.certificateId.replace('root-', '') : certificateRecords[certificateRecords.length - 1]?.id, // 🚨 幽霊バンドルの回避
         root_step_id: rootStepId,
         chain_head_step_id: headRecord.id,
         chain_head_sha256:  headRecord.chain_sha256,
         chain_depth:        stepRecords.length,
         chain_verification_status: 'verified',
-        chain_verified_at:  now,
-      })
-      .eq('id', bundleId);
-    if (headErr) console.error('[create-json] Bundle HEAD update failed:', headErr);
+        chain_verified_at:  new Date().toISOString(),
+      }).eq('id', bundleId);
+    if (headErr) throw new HttpError(500, `Bundle HEAD update failed`);
 
     if (body.certificateId) {
-      await supabaseAdmin.from('certificates')
-        .update({ process_bundle_id: bundleId })
-        .eq('id', body.certificateId.replace('root-', ''));
+      await supabaseAdmin.from('certificates').update({ process_bundle_id: bundleId }).eq('id', body.certificateId.replace('root-', ''));
     }
 
-    /* ── 10. Cost Defense: TSA は HEAD にのみ 1 回だけ発火 ── */
+    /* ── 9. TSA Sync (ギロチン回避) ── */
     const appOrigin = getOrigin(request);
-    fetch(`${appOrigin}/api/timestamp`, { 
+    await fetch(`${appOrigin}/api/timestamp`, { // 🚨 await による確実な発火
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${request.headers.get('authorization')?.replace('Bearer ', '')}` },
       body: JSON.stringify({ 
@@ -327,20 +223,16 @@ export async function POST(request: Request): Promise<Response> {
         hash: headRecord.chain_sha256 
       }),
       keepalive: true,
-    }).catch(err => console.error('[create-json] Background TSA HEAD trigger failed:', err));
+    }).catch(err => console.error('[create-json] TSA Sync failed:', err));
 
-    /* ── 11. 完了レスポンス ── */
+    /* ── 10. Ignition ── */
     return json(200, {
-      success: true,
-      bundleId,
-      chainDepth: stepRecords.length,
-      chainHeadSha256: headRecord.chain_sha256,
+      success: true, bundleId, chainDepth: stepRecords.length, chainHeadSha256: headRecord.chain_sha256,
       certificateId: body.certificateId ? body.certificateId.replace('root-', '') : certificateRecords[certificateRecords.length - 1]?.id,
     });
 
   } catch (err: any) {
     console.error('[create-json] Error:', err);
-    const status = err instanceof HttpError ? err.status : 500;
-    return json(status, { error: err.message || 'Internal Server Error' });
+    return json(err.status || 500, { error: err.message || 'Internal Server Error' });
   }
 }

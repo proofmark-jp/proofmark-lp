@@ -89,10 +89,18 @@ import VerifiedBadge from '../ui/VerifiedBadge';
    CONSTANTS
    ═══════════════════════════════════════════════════════════════ */
 
+/** UI表示用の超軽量サムネイルの長辺上限 (px) */
 const THUMB_MAX_PX = 200;
 const FLICK_VELOCITY_THRESHOLD = 400;
-const MAX_CONCURRENT_UPLOADS = 5;
+/** ⭐ Decoupled Architecture: 同時アップロード数は4並列に制限（ブラウザクラッシュ防衛） */
+const MAX_CONCURRENT_UPLOADS = 4;
 const COMPRESSION_YIELD_MS = 10;
+/** 途中工程サムネイルの長辺上限 (px) — 2MB以下を目標 */
+const STEP_THUMB_MAX_PX = 1000;
+/** 完成品（HEAD）サムネイルの画質 — 元の解像度を維持しつつ20MB以下を目標 */
+const HEAD_THUMB_QUALITY = 0.85;
+/** 途中工程サムネイルの画質 */
+const STEP_THUMB_QUALITY = 0.7;
 
 /* ═══════════════════════════════════════════════════════════════
    HELPERS
@@ -111,7 +119,12 @@ function guessStepType(name: string): BundleStepType {
   return 'other';
 }
 
+/**
+ * UI表示用の超軽量サムネイル生成（長辺 200px / WebP）。
+ * Canvas は同期的に呼ばれるため、呼び出し前に Yield を挿入してメインスレッドを保護する。
+ */
 async function generateThumb(file: File): Promise<{ url: string, blob: Blob }> {
+  if (!file.type.startsWith('image/')) throw new Error('not an image');
   // 🚨 メインスレッドのブロッキングを防ぎ、UIフリーズを回避するための Yield
   await new Promise((resolve) => setTimeout(resolve, 10));
 
@@ -120,8 +133,8 @@ async function generateThumb(file: File): Promise<{ url: string, blob: Blob }> {
     const srcUrl = URL.createObjectURL(file);
     img.onload = () => {
       const scale = Math.min(1, THUMB_MAX_PX / Math.max(img.width, img.height));
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
@@ -129,6 +142,7 @@ async function generateThumb(file: File): Promise<{ url: string, blob: Blob }> {
       ctx.drawImage(img, 0, 0, w, h);
       canvas.toBlob((blob) => {
         URL.revokeObjectURL(srcUrl);
+        canvas.width = 0; canvas.height = 0; // VRAM解放
         if (blob) resolve({ url: URL.createObjectURL(blob), blob });
         else reject(new Error('blob null'));
       }, 'image/webp', 0.7);
@@ -136,6 +150,70 @@ async function generateThumb(file: File): Promise<{ url: string, blob: Blob }> {
     img.onerror = () => { URL.revokeObjectURL(srcUrl); reject(new Error('load fail')); };
     img.src = srcUrl;
   });
+}
+
+/**
+ * ⭐ Decoupled Architecture: アップロード用の軽量WebPサムネイルをブラウザ内で生成する。
+ * 原本ファイルは絶対にサーバーに送らない（Zero-Knowledge原則）。
+ *
+ * - isHead=true（完成品）: 元の解像度を維持、画質0.85（目標20MB以下）
+ * - isHead=false（途中工程）: 長辺1000px以下、画質0.7（目標2MB以下）
+ *
+ * 🚨 UIフリーズ防衛: createImageBitmap は非同期で内部スレッド側で動作するため
+ * Framer Motion の RAF を阻害しない。さらに toBlob 後にも Yield を挿入。
+ */
+async function generateUploadThumbnail(
+  file: File,
+  isHead: boolean,
+): Promise<Blob> {
+  if (!file.type.startsWith('image/')) throw new Error('not an image');
+
+  // Yield でメインスレッドを解放してからヘビー処理へ
+  await new Promise<void>((r) => setTimeout(r, 0));
+
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+
+  const srcW = bitmap.width;
+  const srcH = bitmap.height;
+
+  let dstW: number;
+  let dstH: number;
+
+  if (isHead) {
+    // 完成品: 元の解像度を維持（拡大はしない）
+    dstW = srcW;
+    dstH = srcH;
+  } else {
+    // 途中工程: 長辺 STEP_THUMB_MAX_PX 以下
+    const longEdge = Math.max(srcW, srcH);
+    const scale = longEdge > STEP_THUMB_MAX_PX ? STEP_THUMB_MAX_PX / longEdge : 1;
+    dstW = Math.max(1, Math.round(srcW * scale));
+    dstH = Math.max(1, Math.round(srcH * scale));
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = dstW;
+  canvas.height = dstH;
+  const ctx = canvas.getContext('2d', { alpha: true });
+  if (!ctx) { bitmap.close(); throw new Error('2D context unavailable'); }
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bitmap, 0, 0, dstW, dstH);
+  bitmap.close();
+
+  const quality = isHead ? HEAD_THUMB_QUALITY : STEP_THUMB_QUALITY;
+  const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/webp', quality));
+
+  // VRAM解放
+  canvas.width = 0;
+  canvas.height = 0;
+
+  // 後続処理のためにメインスレッドへ制御を返す
+  await new Promise<void>((r) => setTimeout(r, 0));
+
+  if (!blob) throw new Error('toBlob returned null');
+  return blob;
 }
 
 /**
@@ -174,12 +252,14 @@ type WorkspaceStep = ProcessBundleDraftStep & {
   thumbUrl?: string;
   sameTimestamp?: boolean;
   uploadState?: 'idle' | 'fetching_url' | 'uploading' | 'uploaded' | 'error';
+  /** アップロード用サムネイルBlob（軽量WebP）。原本ファイルは送らない。 */
   thumbBlob?: Blob;
-  quarantinePath?: string;
-  thumbQuarantinePath?: string;
-  storagePath?: string;
+  /** ⭐ Decoupled: Publicバケットへのアップロード完了後に得られる storagePath */
+  thumbnailPath?: string;
+  /** ⭐ Decoupled: Publicバケットの公開 URL（create-json の previewUrl に使用） */
+  uploadedPreviewUrl?: string;
+  /** アップロード用署名済みURL */
   signedUrl?: string;
-  thumbSignedUrl?: string;
   deferred?: boolean;
 };
 
@@ -626,7 +706,6 @@ export function ProcessBundleComposer({
           title: certificate.title || '原本 (Base Layer)',
           note: '証明書として登録済みの原本データ',
           previewUrl: certificate.public_image_url || undefined,
-          storagePath: certificate.storage_path || undefined,
           sha256: certificate.sha256,
           hashState: 'verified',
           isRoot: true,
@@ -661,9 +740,6 @@ export function ProcessBundleComposer({
           title: s.title || '過去の工程',
           note: s.description || s.note || '',
           previewUrl: s.preview_url || s.previewUrl || s.image_url || certificate.public_image_url,
-          storagePath: s.storage_path || undefined,
-          quarantinePath: s.quarantine_path || undefined,
-          thumbQuarantinePath: s.thumb_quarantine_path || undefined,
           sha256: s.sha256,
           hashState: 'verified',
           isRoot: true,
@@ -681,7 +757,6 @@ export function ProcessBundleComposer({
           title: certificate.title || '原本 (Base Layer)',
           note: '証明書として登録済みの原本データ',
           previewUrl: certificate.public_image_url || undefined,
-          storagePath: certificate.storage_path || undefined,
           sha256: certificate.sha256,
           hashState: 'verified',
           isRoot: true,
@@ -724,9 +799,19 @@ export function ProcessBundleComposer({
   }
 
   /* ── fetchUploadUrls ── */
-  const fetchUploadUrls = useCallback(async (newSteps: WorkspaceStep[]) => {
+  /**
+   * ⭐ Decoupled Architecture: 軽量サムネイルのみの署名付きURL を一括取得。
+   * 原本ファイルのURLは取得しない（Zero-Knowledge原則）。
+   * API: POST /api/upload-url
+   *   body: { bundleId, proofMode, files: [{ fileName, mimeType, fileSize, isHead }] }
+   *   resp: { urls: [{ signedUrl, storagePath, publicUrl, isHead }] }
+   */
+  const fetchUploadUrls = useCallback(async (
+    newSteps: WorkspaceStep[],
+    bundleId: string,
+  ) => {
     // 🚨 isRoot (原本・過去の工程) はアップロード不要なので完全に除外
-    const stepsToUpload = newSteps.filter(s => !s.isRoot && s.file);
+    const stepsToUpload = newSteps.filter(s => !s.isRoot && s.file && s.file.type.startsWith('image/'));
     if (stepsToUpload.length === 0) return;
 
     try {
@@ -734,45 +819,77 @@ export function ProcessBundleComposer({
       const token = sessionData.session?.access_token;
       if (!token) throw new Error('認証トークンが見つかりません。再ログインしてください。');
 
-      const payloadItems = stepsToUpload.flatMap(s => [
-        { fileName: s.file!.name, mimeType: s.file!.type, fileSize: s.file!.size },
-        { fileName: `thumb_${s.id}.webp`, mimeType: 'image/webp', fileSize: s.thumbBlob?.size ?? 0 }
-      ]);
+      const lastIdx = stepsToUpload.length - 1;
 
-      // チャンク化: バックエンドの一括制限を回避するため最大10件ずつに分割して順次POST
-      const CHUNK_SIZE = 10;
-      const allUrls: Array<{ signedUrl: string; quarantinePath: string }> = [];
-      for (let i = 0; i < payloadItems.length; i += CHUNK_SIZE) {
-        const chunk = payloadItems.slice(i, i + CHUNK_SIZE);
+      // ⭐ サムネイルBlobを生成（まだ持っていないステップのみ）
+      const stepsWithBlob: (WorkspaceStep & { _uploadBlob: Blob; _isHead: boolean })[] = [];
+      for (let i = 0; i < stepsToUpload.length; i++) {
+        const s = stepsToUpload[i];
+        const isHead = i === lastIdx;
+        let blob: Blob;
+        if (s.thumbBlob && !isHead) {
+          // すでに UI表示用サムネイルがあれば再利用（途中工程のみ）
+          blob = s.thumbBlob;
+        } else {
+          try {
+            blob = await generateUploadThumbnail(s.file!, isHead);
+          } catch {
+            // 画像でない or 失敗: スキップ（このステップはアップロードしない）
+            continue;
+          }
+        }
+        stepsWithBlob.push({ ...s, _uploadBlob: blob, _isHead: isHead });
+      }
+
+      if (stepsWithBlob.length === 0) return;
+
+      // ⭐ 署名付きURLを一括取得（チャンク化: max 20件ずつ）
+      const fileDescriptors = stepsWithBlob.map(s => ({
+        fileName: `thumb_${s.id}.webp`,
+        mimeType: 'image/webp',
+        fileSize: s._uploadBlob.size,
+        isHead: s._isHead,
+      }));
+
+      const CHUNK_SIZE = 20;
+      const allUrls: Array<{ signedUrl: string; storagePath: string; publicUrl: string; isHead: boolean }> = [];
+      for (let i = 0; i < fileDescriptors.length; i += CHUNK_SIZE) {
+        const chunk = fileDescriptors.slice(i, i + CHUNK_SIZE);
         const res = await fetch('/api/upload-url', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
           },
-          body: JSON.stringify({ items: chunk, proofMode: isPublic ? 'shareable' : 'private' })
+          body: JSON.stringify({
+            bundleId,
+            proofMode: isPublic ? 'shareable' : 'private',
+            files: chunk,
+          }),
         });
-        if (!res.ok) throw new Error(`Failed to get upload URLs (chunk ${i / CHUNK_SIZE + 1}).`);
+        if (!res.ok) throw new Error(`署名付きURLの取得に失敗しました (chunk ${Math.floor(i / CHUNK_SIZE) + 1}).`);
         const { urls } = await res.json();
         allUrls.push(...urls);
       }
 
+      // ⭐ 各ステップに署名付きURLとBlob参照を紐付ける
       setSteps(cur => cur.map(s => {
-        const target = stepsToUpload.find(ns => ns.id === s.id);
-        if (!target) return s;
-        const oIdx = payloadItems.findIndex(p => p.fileName === target.file!.name);
-        const tIdx = payloadItems.findIndex(p => p.fileName === `thumb_${target.id}.webp`);
+        const idx = stepsWithBlob.findIndex(sw => sw.id === s.id);
+        if (idx === -1) return s;
+        const urlInfo = allUrls[idx];
+        if (!urlInfo) return { ...s, uploadState: 'error' as const };
         return {
           ...s,
-          signedUrl: allUrls[oIdx]?.signedUrl,
-          quarantinePath: allUrls[oIdx]?.quarantinePath,
-          thumbSignedUrl: allUrls[tIdx]?.signedUrl,
-          thumbQuarantinePath: allUrls[tIdx]?.quarantinePath,
+          signedUrl: urlInfo.signedUrl,
+          thumbnailPath: urlInfo.storagePath,
+          uploadedPreviewUrl: urlInfo.publicUrl,
+          thumbBlob: stepsWithBlob[idx]._uploadBlob, // アップロード用Blobをセット
           uploadState: 'idle' as const,
           deferred: false,
         };
       }));
-    } catch {
+    } catch (err) {
+      console.error('[fetchUploadUrls] failed:', err);
       setSteps(cur => cur.map(s => stepsToUpload.some(ns => ns.id === s.id) ? { ...s, uploadState: 'error' as const } : s));
     }
   }, [isPublic]);
@@ -835,8 +952,9 @@ export function ProcessBundleComposer({
     setSteps((cur) => { const copy = [...cur]; copy.splice(insertAt, 0, ...newSteps); return copy; });
 
     newSteps.forEach((s) => computeHash(s.id, s.file!));
-    if (!magicMode) fetchUploadUrls(newSteps);
-  }, [steps, getPreviewUrl, computeHash, quota, magicMode, fetchUploadUrls]);
+    // ⭐ Decoupled: fetchUploadUrls は submit 時に bundleId が確定してから一括呼び出す。
+    // Ghost Upload Watcher は signedUrl が確定次第、自動的にアップロードを開始する。
+  }, [steps, getPreviewUrl, computeHash, quota, magicMode]);
 
   const addFilesAsSteps = useCallback(
     (files: FileList | File[]) => addFilesAtIndex(files, steps.length),
@@ -844,6 +962,11 @@ export function ProcessBundleComposer({
   );
 
   /* ── Ghost Upload Watcher ── */
+  /**
+   * ⭐ Decoupled Architecture: signedUrl が確定した非Rootステップを、
+   * 最大4並列でPublicバケットへ直接アップロードする。
+   * アップロードするのは thumbBlob（軽量WebP）のみ。原本は送らない。
+   */
   useEffect(() => {
     const processUploadQueue = async () => {
       const readyItems = steps.filter(s =>
@@ -867,10 +990,14 @@ export function ProcessBundleComposer({
 
         while (retryCount < 3 && !success && !isAborted) {
           try {
-            await Promise.all([
-              fetch(item.signedUrl!, { method: 'PUT', body: item.file, signal: controller.signal }),
-              item.thumbSignedUrl ? fetch(item.thumbSignedUrl, { method: 'PUT', body: item.thumbBlob, signal: controller.signal }) : Promise.resolve()
-            ]);
+            // ⭐ Zero-Knowledge: thumbBlob（軽量WebP）のみアップロード。原本は絶対に送らない。
+            if (!item.thumbBlob) throw new Error('thumbBlob is missing; cannot upload');
+            await fetch(item.signedUrl!, {
+              method: 'PUT',
+              body: item.thumbBlob,
+              headers: { 'Content-Type': 'image/webp' },
+              signal: controller.signal,
+            });
             success = true;
             setSteps(cur => cur.map(s => s.id === item.id ? { ...s, uploadState: 'uploaded' as const } : s));
           } catch (e: any) {
@@ -1021,23 +1148,27 @@ export function ProcessBundleComposer({
       const postCompress = await runHybridCompression();
       await reHashAfterCompression(postCompress);
 
+      const bundleId = crypto.randomUUID();
+
       setCompression({
         phase: 'uploading', current: 0, total: postCompress.length,
-        caption: 'クラウドへ安全に転送中...',
+        caption: 'サムネイルを生成・転送中...',
       });
 
-      // steps を直接参照してクロージャートラップを回避
-      const toUpload = steps.filter((s) => !s.isRoot && s.file && s.uploadState !== 'uploaded');
-      await fetchUploadUrls(toUpload);
+      // ⭐ Decoupled Architecture: 署名付きURLを bundleId 確定後に一括取得
+      const toUpload = stepsRef.current.filter((s) => !s.isRoot && s.file && s.file.type.startsWith('image/') && s.uploadState !== 'uploaded');
+      if (toUpload.length > 0) {
+        await fetchUploadUrls(toUpload, bundleId);
+      }
 
       const startedAt = Date.now();
       const TIMEOUT_MS = 120_000;
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        const targets = stepsRef.current.filter((s) => !s.isRoot && s.file);
+        const targets = stepsRef.current.filter((s) => !s.isRoot && s.file && s.file.type.startsWith('image/'));
         const done = targets.every((s) => s.uploadState === 'uploaded');
         const failed = targets.some((s) => s.uploadState === 'error');
-        if (done) break;
+        if (done || targets.length === 0) break;
         if (failed) throw new Error('一部のアップロードに失敗しました。再試行してください。');
         if (Date.now() - startedAt > TIMEOUT_MS) {
           throw new Error('アップロードがタイムアウトしました。ネットワークを確認してください。');
@@ -1056,10 +1187,7 @@ export function ProcessBundleComposer({
       const token = sessionData.session?.access_token;
       if (!token) throw new Error('認証トークンが見つかりません。再ログインしてください。');
 
-      const bundleId = crypto.randomUUID();
-
-      // 🚨 API に送信するステップ一覧を構築する
-      // isRoot の場合は root- プレフィックスを除去して純粋な UUID を復元する
+      // ⭐ Decoupled: API に送信する items（quarantinePath は廃止）
       const jsonSteps = stepsRef.current.map((s, idx) => {
         const realId = s.id.startsWith('root-') ? s.id.replace('root-', '') : s.id;
         return {
@@ -1069,12 +1197,9 @@ export function ProcessBundleComposer({
           note: s.note || '',
           sha256: s.sha256 ?? '',
           isRoot: s.isRoot ?? false,
-          // 新規工程: quarantine パスを送信（API が promote する）
-          quarantinePath: (!s.isRoot && s.quarantinePath) ? s.quarantinePath : undefined,
-          thumbQuarantinePath: (!s.isRoot && s.thumbQuarantinePath) ? s.thumbQuarantinePath : undefined,
-          // 既存工程: 復元済みのパスを送信（API がそのまま保持する）
-          storagePath: s.isRoot ? (s.storagePath ?? undefined) : undefined,
-          previewUrl: s.isRoot ? (s.previewUrl ?? undefined) : undefined,
+          // ⭐ Decoupled: アップロード済みのサムネイルパスと公開URLを送信
+          thumbnailPath: (!s.isRoot && s.thumbnailPath) ? s.thumbnailPath : undefined,
+          previewUrl: (!s.isRoot && s.uploadedPreviewUrl) ? s.uploadedPreviewUrl : (s.isRoot ? (s.previewUrl ?? undefined) : undefined),
           fileName: s.file?.name,
           fileSize: s.file?.size,
           mimeType: s.file?.type,
@@ -1160,13 +1285,16 @@ export function ProcessBundleComposer({
     setResult(null);
 
     try {
-      const toUpload = steps.filter((s) => !s.isRoot && s.file && s.uploadState !== 'uploaded');
+      const bundleId = certificate.process_bundle_id || crypto.randomUUID();
+
+      // ⭐ Decoupled Architecture: 未アップロードの画像ステップにURL取得＆アップロードを実行
+      const toUpload = stepsRef.current.filter((s) => !s.isRoot && s.file && s.file.type.startsWith('image/') && s.uploadState !== 'uploaded');
 
       if (toUpload.length > 0) {
-        // もし signedUrl が無ければ取得
+        // signedUrl が無いものに一括でURLを取得（bundleId 確定後）
         const needsUrls = toUpload.filter(s => !s.signedUrl);
         if (needsUrls.length > 0) {
-          await fetchUploadUrls(needsUrls);
+          await fetchUploadUrls(needsUrls, bundleId);
         }
 
         // uploadState が idle や error のものを再試行させるために idle に設定
@@ -1180,10 +1308,10 @@ export function ProcessBundleComposer({
         const startedAt = Date.now();
         const TIMEOUT_MS = 120_000;
         while (true) {
-          const targets = stepsRef.current.filter((s) => !s.isRoot && s.file);
+          const targets = stepsRef.current.filter((s) => !s.isRoot && s.file && s.file.type.startsWith('image/'));
           const done = targets.every((s) => s.uploadState === 'uploaded');
           const failed = targets.some((s) => s.uploadState === 'error');
-          if (done) break;
+          if (done || targets.length === 0) break;
           if (failed) throw new Error('一部のアップロードに失敗しました。再試行してください。');
           if (Date.now() - startedAt > TIMEOUT_MS) {
             throw new Error('アップロードがタイムアウトしました。ネットワークを確認してください。');
@@ -1196,10 +1324,7 @@ export function ProcessBundleComposer({
       const token = sessionData.session?.access_token;
       if (!token) throw new Error('認証トークンが見つかりません。再ログインしてください。');
 
-      const bundleId = certificate.process_bundle_id || crypto.randomUUID();
-
-      // 🚨 API に送信するステップ一覧を構築する
-      // isRoot の場合は root- プレフィックスを除去して純粋な UUID を復元する
+      // ⭐ Decoupled: API に送信する items（quarantinePath は廃止）
       const jsonSteps = stepsRef.current.map((s, idx) => {
         const realId = s.id.startsWith('root-') ? s.id.replace('root-', '') : s.id;
         return {
@@ -1209,12 +1334,9 @@ export function ProcessBundleComposer({
           note: s.note || '',
           sha256: s.sha256 ?? '',
           isRoot: s.isRoot ?? false,
-          // 新規工程: quarantine パスを送信（API が promote する）
-          quarantinePath: (!s.isRoot && s.quarantinePath) ? s.quarantinePath : undefined,
-          thumbQuarantinePath: (!s.isRoot && s.thumbQuarantinePath) ? s.thumbQuarantinePath : undefined,
-          // 既存工程: 復元済みのパスを送信（API がそのまま保持する）
-          storagePath: s.isRoot ? (s.storagePath ?? undefined) : undefined,
-          previewUrl: s.isRoot ? (s.previewUrl ?? undefined) : undefined,
+          // ⭐ Decoupled: アップロード済みのサムネイルパスと公開URLを送信
+          thumbnailPath: (!s.isRoot && s.thumbnailPath) ? s.thumbnailPath : undefined,
+          previewUrl: (!s.isRoot && s.uploadedPreviewUrl) ? s.uploadedPreviewUrl : (s.isRoot ? (s.previewUrl ?? undefined) : undefined),
           fileName: s.file?.name ?? (certificate as any)?.file_name,
           fileSize: s.file?.size ?? (certificate as any)?.file_size,
           mimeType: s.file?.type ?? (certificate as any)?.mime_type,
