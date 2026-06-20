@@ -12,7 +12,6 @@ import {
 } from '../_shared.js';
 import { resolveC2paForPersistence } from '../_lib/c2pa-validate.js';
 import { checkIpRateLimit } from '../_lib/rate-limit.js';
-import crypto from 'node:crypto';
 
 /* ─────────────────────────────────────────────
  * Constants & Helpers

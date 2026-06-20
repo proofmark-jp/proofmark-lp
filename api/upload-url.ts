@@ -4,7 +4,6 @@ import { getAuthenticatedUserId, getClientIpFromEdgeRequest, json, supabaseAdmin
 import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
 import { checkIpRateLimit } from './_lib/rate-limit.js';
-import crypto from 'node:crypto';
 
 const PUBLIC_BUCKET = 'proofmark-public';
 
