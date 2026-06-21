@@ -508,6 +508,7 @@ export function ProcessBundleComposer({
       setMessage('✓ テキストの変更を保存しました (TSA 非消費)。');
       // ④ Ghost Message 防衛: 3秒後に自動消去
       setTimeout(() => setMessage(null), 3000);
+      if (onComplete) onComplete();
     } catch (err) {
       console.error('[handleSaveMetadata] failed:', err);
       setMessage(err instanceof Error ? err.message : 'メタデータの保存に失敗しました');
@@ -517,7 +518,7 @@ export function ProcessBundleComposer({
   }, [certificate, result, savingMeta, steps, title, description]);
 
   /* ── Verified Badge 表示中のリヴィジョン番号 ── */
-  const [revisionCount, setRevisionCount] = useState<number>(1);
+  const [revisionCount, setRevisionCount] = useState<number>(() => (certificate as any)?.metadata_json?.revision ?? 1);
   const revisionLabel = `v${revisionCount}`;
 
   /* ── Magic Mode 判定 ── */
@@ -1352,6 +1353,7 @@ export function ProcessBundleComposer({
         title,
         description,
         isPublic,
+        revision: revisionCount + 1,
         items: jsonSteps,
       };
 
@@ -1409,11 +1411,11 @@ export function ProcessBundleComposer({
 
   /* ── auto-redirect on success ── */
   useEffect(() => {
-    if (result?.certificateId && magicMode) {
+    if (result?.certificateId) {
       const timer = setTimeout(() => setLocation(`/cert/${result.certificateId}`), 3000);
       return () => clearTimeout(timer);
     }
-  }, [result?.certificateId, setLocation, magicMode]);
+  }, [result?.certificateId, setLocation]);
 
   /* ── cleanup on unmount ── */
   useEffect(() => {

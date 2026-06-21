@@ -35,6 +35,7 @@ export interface CreateJsonBody {
   title: string;
   description: string;
   isPublic: boolean;
+  revision?: number;
   items: Array<{
     id: string;
     isRoot: boolean;
@@ -209,9 +210,15 @@ export async function POST(request: Request): Promise<Response> {
       }).eq('id', bundleId);
     if (headErr) throw new HttpError(500, `Bundle HEAD update failed: ${headErr.message}`);
 
-    if (!isNewBundle) {
-      // 既存証明書への追加の場合、BundleIDの紐付けを更新
-      await supabaseAdmin.from('certificates').update({ process_bundle_id: bundleId }).eq('id', finalCertId);
+    if (body.certificateId) {
+      const certIdToUpdate = body.certificateId.replace('root-', '');
+      const { data: existingCert } = await supabaseAdmin.from('certificates').select('metadata_json').eq('id', certIdToUpdate).single();
+      const currentMeta = typeof existingCert?.metadata_json === 'object' && existingCert?.metadata_json !== null ? existingCert.metadata_json : {};
+      
+      await supabaseAdmin.from('certificates').update({ 
+        process_bundle_id: bundleId,
+        metadata_json: { ...currentMeta, revision: body.revision || 1 }
+      }).eq('id', certIdToUpdate);
     }
 
     /* ── 9. TSA Sync (Vercel Firewall 突破) ── */
