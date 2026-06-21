@@ -541,6 +541,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const [loadingCerts, setLoadingCerts] = useState(true);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [totalCertCount, setTotalCertCount] = useState<number>(0);
 
   const profileData: any = null;
   const isFounder = profileData?.is_founder || user?.user_metadata?.is_founder || user?.user_metadata?.username === 'sinn' || user?.email?.includes('ogurishinya');
@@ -577,6 +578,8 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const [, setLocation] = useLocation();
 
   const mutateCertificates = useCallback(() => {
+    setPage(0);
+    setCerts([]);
     setRefreshKey((prev) => prev + 1);
   }, []);
 
@@ -653,7 +656,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
       setLoadingCerts(true);
       let q = supabase
         .from('certificates')
-        .select('*');
+        .select('*', { count: 'exact' });
 
       if (!isStudio) q = q.eq('user_id', user.id);
       if (!showArchived) q = q.eq('is_archived', false);
@@ -709,7 +712,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
       const to = from + 23;
       q = q.range(from, to);
 
-      const { data, error } = await q;
+      const { data, count, error } = await q;
       if (cancelled) return;
       if (error) {
         toast.error('証明書の取得に失敗しました', { description: error.message });
@@ -717,6 +720,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
         const fetchedCerts = (data ?? []) as CertRow[];
         setCerts((prev) => page === 0 ? fetchedCerts : [...prev, ...fetchedCerts]);
         setHasMore(fetchedCerts.length === 24);
+        if (count !== null) setTotalCertCount(count);
       }
       setLoadingCerts(false);
     })();
@@ -818,7 +822,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     const ready = visibleCerts.filter((c) => c.delivery_status === 'ready').length;
     const lastIso = visibleCerts[0]?.certified_at ?? visibleCerts[0]?.created_at ?? null;
     return {
-      total: visibleCerts.length,
+      total: totalCertCount,
       trusted: tierCount.trusted + tierCount.cross,
       beta: tierCount.beta,
       pending: tierCount.pending,
