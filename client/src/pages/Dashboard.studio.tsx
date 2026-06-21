@@ -1490,6 +1490,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
         canExportEvidencePack={canExportEvidencePack}
         onResync={handleResync}
         reduce={reduce}
+        onComplete={mutateCertificates}
       />
 
       <style>{`
@@ -2453,6 +2454,7 @@ interface InspectorProps {
   canExportEvidencePack: boolean;
   onResync?: (certId: string) => Promise<void>;
   reduce: boolean;
+  onComplete?: () => void;
 }
 
 function Inspector({
@@ -2469,6 +2471,7 @@ function Inspector({
   canExportEvidencePack,
   onResync,
   reduce,
+  onComplete,
 }: InspectorProps) {
   // ESC で閉じる
   useEffect(() => {
@@ -2602,6 +2605,7 @@ function Inspector({
                   canExportEvidencePack={canExportEvidencePack}
                   onResync={onResync}
                   reduce={reduce}
+                  onComplete={onComplete}
                 />
               )}
 
@@ -2610,6 +2614,7 @@ function Inspector({
                   cert={cert}
                   canExportEvidencePack={canExportEvidencePack}
                   reduce={reduce}
+                  onComplete={onComplete}
                 />
               )}
             </div>
@@ -2680,6 +2685,7 @@ function InspectorOverview({
   canExportEvidencePack,
   onResync,
   reduce,
+  onComplete,
 }: {
   cert: CertRow;
   copiedId: string | null;
@@ -2689,6 +2695,7 @@ function InspectorOverview({
   canExportEvidencePack: boolean;
   onResync?: (certId: string) => Promise<void>;
   reduce: boolean;
+  onComplete?: () => void;
 }) {
   const [imgError, setImgError] = useState(false);
   const hasRealImage =
@@ -2943,10 +2950,12 @@ function InspectorChain({
   cert,
   canExportEvidencePack,
   reduce,
+  onComplete,
 }: {
   cert: CertRow;
   canExportEvidencePack: boolean;
   reduce: boolean;
+  onComplete?: () => void;
 }) {
   const record = useMemo(() => toCertificateRecord(cert), [cert]);
 
@@ -2971,7 +2980,7 @@ function InspectorChain({
       {/* The composer & Shield */}
       <div className="relative flex-1 min-h-[500px]">
         <Suspense fallback={<MinimalSpinner />}>
-          <ProcessBundleComposer certificate={record} />
+          <ProcessBundleComposer certificate={record} onComplete={onComplete} />
         </Suspense>
 
         {/* 🚨 THE ABSOLUTE SHIELD: 漆黒のグラデーションで本来のボタンを物理的に封殺する */}
