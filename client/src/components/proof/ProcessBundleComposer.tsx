@@ -517,7 +517,8 @@ export function ProcessBundleComposer({
   }, [certificate, result, savingMeta, steps, title, description]);
 
   /* ── Verified Badge 表示中のリヴィジョン番号 ── */
-  const [revisionLabel] = useState<string>('v1');
+  const [revisionCount, setRevisionCount] = useState<number>(1);
+  const revisionLabel = `v${revisionCount}`;
 
   /* ── Magic Mode 判定 ── */
   const magicMode = useMemo(
@@ -1381,6 +1382,9 @@ export function ProcessBundleComposer({
       });
       setMessage('Chain of Evidence を保存しました。');
 
+      // 🚨 追加: 保存に成功したらリヴィジョン番号を +1 する
+      setRevisionCount(prev => prev + 1);
+      
       // ⭐ 保存成功時にシール状態を確定する
       const finalSig2 = stepsSignature(stepsRef.current);
       setSealedSignatureSnapshot(finalSig2);
