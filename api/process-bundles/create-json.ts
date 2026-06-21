@@ -74,15 +74,21 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const newHashes = items.filter(i => !i.isRoot && SHA256_HEX.test(i.sha256)).map(i => i.sha256.toLowerCase());
+    let existingCerts: any[] = [];
+
     if (newHashes.length > 0) {
       const { data: duplicates } = await supabaseAdmin
         .from('certificates')
-        .select('sha256')
-        .in('sha256', newHashes)
-        .limit(1);
+        .select('id, sha256, process_bundle_id')
+        .in('sha256', newHashes);
       
       if (duplicates && duplicates.length > 0) {
-        throw new HttpError(409, 'Duplicate hash detected. One or more files are already registered.');
+        existingCerts = duplicates;
+        // 🚨 修正1: 同じバンドル（プロジェクト）内の画像は「過去の工程」として許可する。他のバンドルのハッシュだけ弾く。
+        const trueDuplicates = duplicates.filter(d => d.process_bundle_id !== bundleId);
+        if (trueDuplicates.length > 0) {
+          throw new HttpError(409, 'Duplicate hash detected. This image is already used in another bundle.');
+        }
       }
     }
 
@@ -90,6 +96,7 @@ export async function POST(request: Request): Promise<Response> {
     const planTier = (profile?.plan_tier ?? 'free') as string;
     const { value: c2paParsed } = resolveC2paForPersistence(null, planTier);
 
+    // Bundleの更新（Wipe & Replace 準備）
     const { error: bundleErr } = await supabaseAdmin.from('process_bundles').upsert({
       id: bundleId,
       user_id: userId,
@@ -118,10 +125,6 @@ export async function POST(request: Request): Promise<Response> {
       const stepId = item.id || crypto.randomUUID();
       if (index === 0) rootStepId = stepId;
       
-      const certId = item.isRoot && body.certificateId 
-        ? body.certificateId.replace('root-', '') 
-        : crypto.randomUUID();
-        
       const hashData = String(item.sha256).trim().toLowerCase();
       if (!SHA256_HEX.test(hashData)) throw new HttpError(400, `Invalid SHA256 at step ${index}`);
 
@@ -133,30 +136,34 @@ export async function POST(request: Request): Promise<Response> {
           throw new HttpError(403, `Invalid thumbnail path ownership at step ${index}`);
         }
 
-        certificateRecords.push({
-          id: certId,
-          user_id: userId,
-          process_bundle_id: bundleId,
-          step_index: index,
-          title: String(item.title).trim() || 'untitled',
-          sha256: hashData,
-          proof_mode: isPublic ? 'shareable' : 'private',
-          visibility: isPublic ? 'public' : 'private',
-          public_verify_token: crypto.randomUUID(),
-          public_image_url: item.previewUrl || null,
-          storage_path: null, 
-          file_name: declaredFileName,
-          mime_type: item.mimeType || 'application/octet-stream',
-          file_size: item.fileSize || 0,
-          c2pa_manifest: c2paParsed,
-          metadata_json: {
-            upload_pipeline: 'decoupled-proof.v1',
-            bundle_id: bundleId,
+        // 🚨 修正2: すでにDBに保存済みの画像なら、新規作成リストに入れない（重複クラッシュの完全回避）
+        const existsInDb = existingCerts.some(c => c.sha256 === hashData);
+        if (!existsInDb) {
+          certificateRecords.push({
+            id: crypto.randomUUID(),
+            user_id: userId,
+            process_bundle_id: bundleId,
             step_index: index,
-            integrity_model: 'proofmark.chain-ready.v1'
-          },
-          is_asset_purged: false
-        });
+            title: String(item.title).trim() || 'untitled',
+            sha256: hashData,
+            proof_mode: isPublic ? 'shareable' : 'private',
+            visibility: isPublic ? 'public' : 'private',
+            public_verify_token: crypto.randomUUID(),
+            public_image_url: item.previewUrl || null,
+            storage_path: null, 
+            file_name: declaredFileName,
+            mime_type: item.mimeType || 'application/octet-stream',
+            file_size: item.fileSize || 0,
+            c2pa_manifest: c2paParsed,
+            metadata_json: {
+              upload_pipeline: 'decoupled-proof.v1',
+              bundle_id: bundleId,
+              step_index: index,
+              integrity_model: 'proofmark.chain-ready.v1'
+            },
+            is_asset_purged: false
+          });
+        }
       }
 
       const { payload: chainPayload, chainSha256 } = await buildEvidenceStep({
@@ -182,17 +189,24 @@ export async function POST(request: Request): Promise<Response> {
       prevStepId = stepId; prevChainSha256 = chainSha256;
     }
 
+    // 新規画像のみをインサート
     if (certificateRecords.length > 0) {
       const { error: certErr } = await supabaseAdmin.from('certificates').insert(certificateRecords);
       if (certErr) throw new HttpError(500, `Certificates insert failed: ${certErr.message}`);
     }
+    
+    // ステップ順序はWipe&Replaceで完全再現
     const { error: stepErr } = await supabaseAdmin.from('process_bundle_steps').insert(stepRecords);
     if (stepErr) throw new HttpError(500, `Steps insert failed: ${stepErr.message}`);
 
     const headRecord = stepRecords[stepRecords.length - 1];
+    const finalCertId = body.certificateId 
+        ? body.certificateId.replace('root-', '') 
+        : (certificateRecords.length > 0 ? certificateRecords[certificateRecords.length - 1].id : existingCerts.find(c => c.sha256 === headRecord.sha256)?.id);
+
     const { error: headErr } = await supabaseAdmin.from('process_bundles').update({
         status: 'issued',
-        certificate_id: body.certificateId ? body.certificateId.replace('root-', '') : certificateRecords[certificateRecords.length - 1]?.id,
+        certificate_id: finalCertId,
         root_step_id: rootStepId,
         chain_head_step_id: headRecord.id,
         chain_head_sha256:  headRecord.chain_sha256,
@@ -206,29 +220,19 @@ export async function POST(request: Request): Promise<Response> {
       await supabaseAdmin.from('certificates').update({ process_bundle_id: bundleId }).eq('id', body.certificateId.replace('root-', ''));
     }
 
-    /* ── 9. TSA Sync (The Exact Match Protocol) ── */
-    let tsaTargetCertId: string | null = null;
-    let tsaTargetHash: string | null = null;
-
-    // 🚨 修正1: 新規画像が追加された場合のみ、その画像のIDとハッシュをTSAに送る
+    /* ── 9. TSA Sync (新しく追加された画像のみスタンプを要請) ── */
     if (certificateRecords.length > 0) {
       const lastCert = certificateRecords[certificateRecords.length - 1];
-      tsaTargetCertId = lastCert.id;
-      tsaTargetHash = lastCert.sha256; // 🚨 Merkle Rootではなく、個別の画像ハッシュを送る
-    }
-
-    if (tsaTargetCertId && tsaTargetHash) {
       const appOrigin = getOrigin(request);
       const tsaPromise = fetch(`${appOrigin}/api/timestamp`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${request.headers.get('authorization')?.replace('Bearer ', '')}` },
-        body: JSON.stringify({ certId: tsaTargetCertId, hash: tsaTargetHash }),
+        body: JSON.stringify({ certId: lastCert.id, hash: lastCert.sha256 }),
         keepalive: true,
       })
       .then(async (res) => {
           if (!res.ok) {
               const errText = await res.text().catch(()=>'Unknown Error');
-              // 🚨 修正2: エラーの真因を握りつぶさずテキストでログに出す
               console.error(`[create-json] TSA Sync returned error (${res.status}):`, errText);
           }
       })
@@ -240,7 +244,7 @@ export async function POST(request: Request): Promise<Response> {
     /* ── 10. Ignition ── */
     return json(200, {
       success: true, bundleId, chainDepth: stepRecords.length, chainHeadSha256: headRecord.chain_sha256,
-      certificateId: body.certificateId ? body.certificateId.replace('root-', '') : certificateRecords[certificateRecords.length - 1]?.id,
+      certificateId: finalCertId,
     });
 
   } catch (err: any) {
