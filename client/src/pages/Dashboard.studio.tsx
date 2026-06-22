@@ -542,6 +542,11 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [totalCertCount, setTotalCertCount] = useState<number>(0);
+  const [pageSize, setPageSize] = useState(24);
+
+  useEffect(() => {
+    setPageSize(window.innerWidth < 768 ? 8 : 24);
+  }, []);
 
   const profileData: any = null;
   const isFounder = profileData?.is_founder || user?.user_metadata?.is_founder || user?.user_metadata?.username === 'sinn' || user?.email?.includes('ogurishinya');
@@ -708,8 +713,8 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
       }
 
       // Paginate
-      const from = page * 24;
-      const to = from + 23;
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
       q = q.range(from, to);
 
       const { data, count, error } = await q;
@@ -719,7 +724,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
       } else {
         const fetchedCerts = (data ?? []) as CertRow[];
         setCerts((prev) => page === 0 ? fetchedCerts : [...prev, ...fetchedCerts]);
-        setHasMore(fetchedCerts.length === 24);
+        setHasMore(fetchedCerts.length === pageSize);
         if (count !== null) setTotalCertCount(count);
       }
       setLoadingCerts(false);
@@ -727,7 +732,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     return () => {
       cancelled = true;
     };
-  }, [user, isStudio, showArchived, searchQuery, activeProjectId, trustFilter, sortBy, page, refreshKey]);
+  }, [user, isStudio, showArchived, searchQuery, activeProjectId, trustFilter, sortBy, page, refreshKey, pageSize]);
 
   const visibleCerts = useMemo(
     () => (showArchived ? certs : certs.filter((c) => !c.is_archived)),
@@ -2090,21 +2095,30 @@ function IconBtn({
   title,
 }: {
   children: ReactNode;
-  onClick: () => void;
+  onClick: () => void | Promise<void>;
   title: string;
 }) {
+  const [loading, setLoading] = useState(false);
+  const handleClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (loading) return;
+    setLoading(true);
+    try {
+      await onClick();
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <button
       type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
+      onClick={handleClick}
       title={title}
       aria-label={title}
-      className="p-1.5 rounded-lg text-white/55 hover:text-white hover:bg-white/[0.05] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4AA]"
+      disabled={loading}
+      className="p-1.5 rounded-lg text-white/55 hover:text-white hover:bg-white/[0.05] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4AA] disabled:opacity-50"
     >
-      {children}
+      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : children}
     </button>
   );
 }
@@ -2195,8 +2209,8 @@ function BentoCard({
   copiedId: string | null;
   isSelected: boolean;
   onToggleSelect: () => void;
-  onCopyLink: (cert: CertRow) => void;
-  onEvidence: (cert: CertRow) => void;
+  onCopyLink: (cert: CertRow) => void | Promise<void>;
+  onEvidence: (cert: CertRow) => void | Promise<void>;
   onArchive: (cert: CertRow, next: boolean) => void;
   onToggleStar: (id: string, current: boolean) => void;
   onAssignClientProject: (cert: CertRow) => void;
@@ -2206,6 +2220,8 @@ function BentoCard({
   reduce: boolean;
 }) {
   const [imgError, setImgError] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const trust = useMemo(() => deriveTrustTier(cert), [cert]);
   const isPending = trust.tier === 'pending' || cert.delivery_status === 'in_progress';
   const hasRealImage =
@@ -2375,10 +2391,21 @@ function BentoCard({
         <div className="grid grid-cols-2 gap-1.5 pt-1.5" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
-            onClick={() => onCopyLink(cert)}
-            className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-white/80 border border-white/10 hover:bg-white/[0.04] transition-colors"
+            disabled={copying || downloading}
+            onClick={async () => {
+              if (copying) return;
+              setCopying(true);
+              try {
+                await onCopyLink(cert);
+              } finally {
+                setCopying(false);
+              }
+            }}
+            className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-white/80 border border-white/10 hover:bg-white/[0.04] transition-colors disabled:opacity-50"
           >
-            {copiedId === cert.id ? (
+            {copying ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : copiedId === cert.id ? (
               <>
                 <Check className="w-3 h-3" /> コピー済
               </>
@@ -2390,11 +2417,26 @@ function BentoCard({
           </button>
           <button
             type="button"
-            onClick={() => onEvidence(cert)}
-            className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-[#07061A] bg-gradient-to-r from-[#6C3EF4] to-[#00D4AA] hover:opacity-95 transition-opacity"
+            disabled={copying || downloading}
+            onClick={async () => {
+              if (downloading) return;
+              setDownloading(true);
+              try {
+                await onEvidence(cert);
+              } finally {
+                setDownloading(false);
+              }
+            }}
+            className="inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-[#07061A] bg-gradient-to-r from-[#6C3EF4] to-[#00D4AA] hover:opacity-95 transition-opacity disabled:opacity-50"
           >
-            <FileDown className="w-3 h-3" />
-            Evidence
+            {downloading ? (
+              <Loader2 className="w-3 h-3 animate-spin text-[#07061A]" />
+            ) : (
+              <>
+                <FileDown className="w-3 h-3" />
+                Evidence
+              </>
+            )}
           </button>
         </div>
         <div className="flex items-center justify-between pt-1" onClick={(e) => e.stopPropagation()}>

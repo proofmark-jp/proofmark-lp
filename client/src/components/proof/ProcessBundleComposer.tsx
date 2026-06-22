@@ -328,10 +328,9 @@ export function ProcessBundleComposer({
   onDiscard,
 }: ProcessBundleComposerProps) {
   /* ── core state ── */
-  const [title, setTitle] = useState('Chain of Evidence');
-  const [description, setDescription] = useState(
-    '制作工程を時系列に連結し、人間の試行錯誤の痕跡そのものを証拠化します。',
-  );
+  const metaJson = (certificate as any)?.metadata_json || {};
+  const [title, setTitle] = useState(metaJson.title ?? certificate?.title ?? 'Chain of Evidence');
+  const [description, setDescription] = useState(metaJson.description ?? (certificate as any)?.description ?? '制作工程を時系列に連結し、人間の試行錯誤の痕跡そのものを証拠化します。');
   const [isPublic, setIsPublic] = useState(certificate ? certificate.visibility === 'public' : true);
   const [steps, setSteps] = useState<WorkspaceStep[]>([]);
   /** ⚡ Mutable Ref Pattern — 非同期関数から常に最新 steps を O(1) で参照 */
