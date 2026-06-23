@@ -542,11 +542,10 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [totalCertCount, setTotalCertCount] = useState<number>(0);
-  const [pageSize, setPageSize] = useState(24);
-
-  useEffect(() => {
-    setPageSize(window.innerWidth < 768 ? 8 : 24);
-  }, []);
+  const [pageSize, setPageSize] = useState(() => {
+    if (typeof window === 'undefined') return 24; // SSR時の安全なフォールバック
+    return window.innerWidth < 768 ? 8 : 24;
+  });
 
   const profileData: any = null;
   const isFounder = profileData?.is_founder || user?.user_metadata?.is_founder || user?.user_metadata?.username === 'sinn' || user?.email?.includes('ogurishinya');
