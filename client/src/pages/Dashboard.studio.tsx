@@ -42,6 +42,7 @@ import {
   Link as LinkIcon,
   Loader2,
   Lock,
+  MoreHorizontal,
   Plus,
   Rows3,
   Search,
@@ -813,7 +814,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
 
   const kpi = useMemo(() => {
     if (loadingCerts) {
-      return { total: '-', trusted: '-', beta: '-', pending: '-', review: '-', ready: '-', last: null };
+      return { total: '-', trusted: '-', beta: '-', pending: '-', review: '-', ready: '-', last: null, rollupSteps: '-' };
     }
     const tierCount = visibleCerts.reduce(
       (acc, c) => {
@@ -825,6 +826,12 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     const review = visibleCerts.filter((c) => c.delivery_status === 'review').length;
     const ready = visibleCerts.filter((c) => c.delivery_status === 'ready').length;
     const lastIso = visibleCerts[0]?.certified_at ?? visibleCerts[0]?.created_at ?? null;
+    // Total chain steps across all visible certs (The Merkle Rollup)
+    const rollupSteps = visibleCerts.reduce((acc, c) => {
+      const meta = ((c as any).metadata_json || c.metadata) as any;
+      const chainLen = (meta?.chain_history?.length as number) || 1;
+      return acc + chainLen;
+    }, 0);
     return {
       total: totalCertCount,
       trusted: tierCount.trusted + tierCount.cross,
@@ -833,8 +840,9 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
       review,
       ready,
       last: lastIso,
+      rollupSteps,
     };
-  }, [visibleCerts, loadingCerts]);
+  }, [visibleCerts, loadingCerts, totalCertCount]);
 
   const attentionItems = useMemo(() => {
     if (!isStudio) return [];
@@ -1199,10 +1207,10 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
           <SlimUploadDock isPaidPlan={isStudio} />
         </section>
 
-        {/* ───────── KPI ───────── */}
+        {/* ───────── KPI (Console 2.0 Zone A) ───────── */}
         <section
           className="mt-6 grid gap-3"
-          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}
+          style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}
         >
           <KPI
             label="管理中の証明"
@@ -1210,41 +1218,17 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
             icon={<FolderKanban className="w-4 h-4" />}
           />
           <KPI
-            label="Trusted TSA"
-            value={String(kpi.trusted)}
+            label="防衛した総工程数"
+            value={String(kpi.rollupSteps)}
+            accent="#6C3EF4"
+            icon={<History className="w-4 h-4" />}
+          />
+          <KPI
+            label="納品準備完了"
+            value={String(kpi.ready)}
             accent="#00D4AA"
             icon={<ShieldCheck className="w-4 h-4" />}
           />
-          {isStudio ? (
-            <>
-              <KPI
-                label="要対応"
-                value={String(kpi.review)}
-                accent="#F0BB38"
-                icon={<History className="w-4 h-4" />}
-              />
-              <KPI
-                label="納品準備完了"
-                value={String(kpi.ready)}
-                accent="#00D4AA"
-                icon={<ShieldCheck className="w-4 h-4" />}
-              />
-            </>
-          ) : (
-            <>
-              <KPI
-                label="Beta TSA"
-                value={String(kpi.beta)}
-                accent="#9BA3D4"
-                icon={<ShieldAlert className="w-4 h-4" />}
-              />
-              <KPI
-                label="最終発行"
-                value={kpi.last ? formatDate(kpi.last) : '—'}
-                icon={<Clock3 className="w-4 h-4" />}
-              />
-            </>
-          )}
         </section>
 
         {/* ───────── Project Rail ───────── */}
@@ -2221,6 +2205,7 @@ function BentoCard({
   const [imgError, setImgError] = useState(false);
   const [copying, setCopying] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const trust = useMemo(() => deriveTrustTier(cert), [cert]);
   const isPending = trust.tier === 'pending' || cert.delivery_status === 'in_progress';
   const hasRealImage =
@@ -2233,6 +2218,13 @@ function BentoCard({
     () => (hasRealImage ? getOptimizedImageUrl(cert.public_image_url, { width: 400, quality: 80, format: 'webp' }) : ''),
     [hasRealImage, cert.public_image_url],
   );
+
+  // Ghost Scrub: derive chain depth from metadata_json chain_history
+  const chainDepth = useMemo(() => {
+    const meta = ((cert as any).metadata_json || cert.metadata) as any;
+    const len = (meta?.chain_history?.length as number) || 0;
+    return len;
+  }, [cert]);
 
   const variants: Variants = reduce
     ? { hidden: { opacity: 1 }, visible: { opacity: 1 }, exit: { opacity: 0 } }
@@ -2330,11 +2322,19 @@ function BentoCard({
         </button>
 
         {cert.is_archived && (
-          <div className="absolute bottom-2 right-2 z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 text-[9px] font-bold uppercase text-white/70">
+          <div className="absolute bottom-2 left-2 z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/55 text-[9px] font-bold uppercase text-white/70">
             <Archive className="w-2.5 h-2.5" />
             Archived
           </div>
         )}
+
+        {/* Humanity: PRO — Ghost Oracle Paywall Badge */}
+        <div
+          className="absolute bottom-2 right-2 z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-full backdrop-blur-md bg-black/50 border border-white/10 text-[9px] font-mono text-[#BC78FF] font-bold shadow-lg"
+          title="ProプランでAIによるプロセス人間性審査 (Humanity Oracle) をアンロック"
+        >
+          <Lock className="w-2 h-2" /> Humanity: PRO
+        </div>
 
         {/* Visual-first hover veil with title */}
         {hasRealImage && (
@@ -2350,6 +2350,30 @@ function BentoCard({
       </div>
 
       <div className="p-3.5 space-y-2.5">
+        {/* Ghost Scrub — chain depth dot indicator */}
+        {chainDepth > 0 && (
+          <div className="flex items-center gap-1" title={`Chain Depth: ${chainDepth} Steps`}>
+            {Array.from({ length: Math.min(chainDepth, 8) }).map((_, i) => (
+              <span
+                key={i}
+                className="inline-block rounded-full"
+                style={{
+                  width: 5,
+                  height: 5,
+                  background: i === chainDepth - 1
+                    ? 'linear-gradient(135deg, #6C3EF4, #00D4AA)'
+                    : 'rgba(255,255,255,0.18)',
+                  boxShadow: i === chainDepth - 1 ? '0 0 5px rgba(108,62,244,0.7)' : 'none',
+                  transition: 'background 0.3s',
+                }}
+              />
+            ))}
+            {chainDepth > 8 && (
+              <span className="text-[9px] font-mono text-white/35 ml-0.5">+{chainDepth - 8}</span>
+            )}
+          </div>
+        )}
+
         <div className="flex items-baseline justify-between gap-2 min-w-0">
           <p 
             className="text-[13px] font-semibold text-white whitespace-nowrap overflow-hidden max-w-[200px] sm:max-w-full"
@@ -2387,6 +2411,7 @@ function BentoCard({
           </span>
         </div>
 
+        {/* PLG出口戦略 — 2大アクション (URL / Evidence) */}
         <div className="grid grid-cols-2 gap-1.5 pt-1.5" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
@@ -2438,42 +2463,54 @@ function BentoCard({
             )}
           </button>
         </div>
+
+        {/* Secondary actions row — VisibilityToggle + MoreHorizontal dropdown */}
         <div className="flex items-center justify-between pt-1" onClick={(e) => e.stopPropagation()}>
           <div className="scale-90 origin-left">
             <VisibilityToggle assetId={cert.id} initialVisibility={(cert.visibility as 'public' | 'private') || 'public'} />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="relative">
             <button
               type="button"
-              onClick={() => onOpenChain(cert)}
-              className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
-              title="Chain of Evidence"
+              onClick={(e) => { e.stopPropagation(); setMoreOpen((v) => !v); }}
+              className="w-6 h-6 rounded-md flex items-center justify-center text-white/40 hover:text-white/80 hover:bg-white/[0.06] transition-colors"
+              title="その他の操作"
             >
-              <LinkIcon className="w-2.5 h-2.5" />
-              Chain
+              <MoreHorizontal className="w-3.5 h-3.5" />
             </button>
-            <button
-              type="button"
-              onClick={() => onArchive(cert, !cert.is_archived)}
-              className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
-              title={cert.is_archived ? '戻す' : 'アーカイブ'}
-            >
-              {cert.is_archived ? (
-                <>
-                  <ArchiveRestore className="w-2.5 h-2.5" /> 戻す
-                </>
-              ) : (
-                <>
-                  <Archive className="w-2.5 h-2.5" /> アーカイブ
-                </>
-              )}
-            </button>
-            <a
-              href={`/cert/${cert.id}`}
-              className="text-[10.5px] text-white/45 hover:text-white/80 transition-colors inline-flex items-center gap-1"
-            >
-              <ExternalLink className="w-2.5 h-2.5" /> 開く
-            </a>
+            {moreOpen && (
+              <div
+                className="absolute bottom-full right-0 mb-1.5 z-30 min-w-[130px] rounded-xl border border-white/10 shadow-2xl overflow-hidden"
+                style={{ background: 'rgba(15,12,32,0.97)', backdropFilter: 'blur(20px)' }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => { setMoreOpen(false); onOpenChain(cert); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-[11px] text-white/65 hover:text-white hover:bg-white/[0.05] transition-colors"
+                >
+                  <LinkIcon className="w-3 h-3" /> Chain of Evidence
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMoreOpen(false); onArchive(cert, !cert.is_archived); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-[11px] text-white/65 hover:text-white hover:bg-white/[0.05] transition-colors"
+                >
+                  {cert.is_archived ? (
+                    <><ArchiveRestore className="w-3 h-3" /> アーカイブから戻す</>
+                  ) : (
+                    <><Archive className="w-3 h-3" /> アーカイブ</>
+                  )}
+                </button>
+                <a
+                  href={`/cert/${cert.id}`}
+                  onClick={() => setMoreOpen(false)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-[11px] text-white/65 hover:text-white hover:bg-white/[0.05] transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" /> 公開ページを開く
+                </a>
+              </div>
+            )}
           </div>
         </div>
       </div>
