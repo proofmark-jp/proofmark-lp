@@ -76,6 +76,7 @@ import { SlimUploadDock } from '../components/dashboard/SlimUploadDock';
 import VisibilityToggle from '../components/VisibilityToggle';
 import { executeEvidencePackDownload } from '../components/EvidencePackDownloadButton';
 import FounderBadge from '../components/FounderBadge';
+import { GlobalDropzoneOverlay } from '../components/GlobalDropzoneOverlay';
 
 // Chain of Evidence builder (Inspector 内に常設マウント)
 const ProcessBundleComposer = lazy(() =>
@@ -574,6 +575,11 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const [auditCertId, setAuditCertId] = useState<string | null>(null);
   const [auditCertTitle, setAuditCertTitle] = useState<string | null>(null);
 
+  // ── Console 2.0: PLG & SRE Gate ──
+  const [globalDragError, setGlobalDragError] = useState<string | null>(null);
+  const [isProcessingDrop, setIsProcessingDrop] = useState(false);
+  const [globalDropFiles, setGlobalDropFiles] = useState<File[] | null>(null);
+
   /* ━━━━━━━━━━━━━━━━ The Inspector (deep-link enabled) ━━━━━━━━━━━━━━━━ */
   const [inspectorCertId, setInspectorCertId] = useState<string | null>(null);
   const [inspectorTab, setInspectorTab] = useState<'overview' | 'chain'>('overview');
@@ -600,6 +606,13 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     sync();
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
+  }, []);
+
+  // ── Ghost Error浄化: 新しいドラッグ開始時にエラーをリセット ──
+  useEffect(() => {
+    const clearError = () => setGlobalDragError(null);
+    window.addEventListener('dragenter', clearError);
+    return () => window.removeEventListener('dragenter', clearError);
   }, []);
 
   // ── state → URL (history push/replace)
@@ -1147,6 +1160,67 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     return ['creator', 'studio', 'admin'].includes(tier);
   }, [ops]);
 
+  // ── Console 2.0: SRE絶対防衛線 + Dopamine Strike ──
+  const handleGlobalDrop = useCallback(async (files: FileList, _dropPoint: { x: number; y: number }) => {
+    if (isProcessingDrop) return;
+    setGlobalDragError(null);
+
+    // 1. SRE防衛: 件数上限
+    if (files.length > 150) {
+      setGlobalDragError('1つの暗号チェーンに格納できる歴史は150工程までです。至高のプロセスを厳選してください。');
+      return;
+    }
+
+    // 2. SRE防衛: MIME & 容量
+    let totalSize = 0;
+    const allowedPrefixes = ['image/', 'video/', 'application/pdf'];
+    const allowedExtensions = ['.psd', '.ai', '.zip'];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      totalSize += f.size;
+      const mimeOk = allowedPrefixes.some((p) => f.type.startsWith(p));
+      const extOk = allowedExtensions.some((ext) => f.name.toLowerCase().endsWith(ext));
+      if (!mimeOk && !extOk) {
+        setGlobalDragError(`非対応のファイル形式が含まれています: ${f.name}`);
+        return;
+      }
+      // OOM防衛: 単体500MB超過
+      if (f.size > 500 * 1024 * 1024) {
+        setGlobalDragError(`ファイル「${f.name}」が単体制限（500MB）を超過しています。`);
+        return;
+      }
+    }
+    // OOM防衛: 総容量2GB超過
+    if (totalSize > 2 * 1024 * 1024 * 1024) {
+      setGlobalDragError('一度に処理できる総容量（2GB）を超過しています。');
+      return;
+    }
+
+    setIsProcessingDrop(true);
+    try {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([20, 50, 20]);
+
+      // Dopamine Strike: プラン別トースト
+      const isPro = ['creator', 'studio', 'admin'].includes((ops.planTier ?? '').toLowerCase());
+      if (isPro) {
+        toast.success(`${files.length} 件のアセットを受理しました。暗号連鎖を構築します。`);
+      } else {
+        toast('歴史を受理しました', {
+          description: 'AIによる人間性審査(Oracle)と法的エクスポートのロックを解除するにはアップグレードが必要です。',
+          action: { label: 'Proをアンロック', onClick: () => { window.location.href = '/pricing'; } },
+          icon: '🔒',
+        });
+      }
+
+      // クリーンな結線: ProcessBundleComposer に initialFiles として渡す
+      setGlobalDropFiles(Array.from(files));
+    } catch (e: any) {
+      toast.error('処理エラー', { description: e?.message ?? '不明なエラーが発生しました。' });
+    } finally {
+      setIsProcessingDrop(false);
+    }
+  }, [isProcessingDrop, ops]);
+
   /* ━━━━━━━━━━━━━━━━ Render ━━━━━━━━━━━━━━━━ */
 
   return (
@@ -1498,6 +1572,71 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
           }
         }
       `}</style>
+
+      {/* ─────────── Console 2.0: Global Doorway ─────────── */}
+      <GlobalDropzoneOverlay
+        dragError={globalDragError}
+        onDrop={handleGlobalDrop}
+      />
+
+      {/* ─────────── Console 2.0: Global Drop Modal (ProcessBundleComposer) ─────────── */}
+      <AnimatePresence>
+        {globalDropFiles && (
+          <motion.div
+            key="global-drop-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="fixed inset-0 z-[9998] flex flex-col"
+            style={{
+              background: 'rgba(7,6,26,0.82)',
+              backdropFilter: 'blur(14px)',
+            }}
+          >
+            {/* Header bar */}
+            <div
+              className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] shrink-0"
+              style={{
+                background: 'linear-gradient(165deg, rgba(15,12,32,0.98) 0%, rgba(7,6,26,0.96) 100%)',
+              }}
+            >
+              <div>
+                <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-[#A8A0D8]">
+                  Chain of Evidence Studio
+                </p>
+                <h2 className="text-[18px] font-bold text-white mt-0.5">
+                  {globalDropFiles.length} 工程を暗号連鎖に組み込む
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGlobalDropFiles(null)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white hover:bg-white/[0.07] transition-colors"
+                aria-label="閉じる"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Composer body */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-4xl mx-auto px-4 py-6">
+                <Suspense fallback={<MinimalSpinner />}>
+                  <ProcessBundleComposer
+                    certificate={null}
+                    initialFiles={globalDropFiles}
+                    onComplete={() => {
+                      setGlobalDropFiles(null);
+                      mutateCertificates();
+                    }}
+                  />
+                </Suspense>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
