@@ -83,8 +83,9 @@ const SPRING = {
 // Component
 // ──────────────────────────────────────────────────────────────
 
-export const GlobalDropzoneOverlay: React.FC<GlobalDropzoneOverlayProps> = ({
-  isDragging,
+export const GlobalDropzoneOverlay: React.FC<
+  Omit<GlobalDropzoneOverlayProps, "isDragging">
+> = ({
   dragError = null,
   onDrop,
   title = "ここにファイルをドロップ",
@@ -94,59 +95,80 @@ export const GlobalDropzoneOverlay: React.FC<GlobalDropzoneOverlayProps> = ({
   const prefersReducedMotion = useReducedMotion();
   const grainId = useId();
 
+  // 💎 1. 自律的な状態管理を追加
+  const [isDragging, setIsDragging] = React.useState(false);
+  const dragCounter = useRef(0); // Flicker防止用のカウンター
+
   // ── Cursor-tracked spatial light ──────────────────────────
   const rawX = useMotionValue(-9999);
   const rawY = useMotionValue(-9999);
   const x = useSpring(rawX, SPRING.spotlight);
   const y = useSpring(rawY, SPRING.spotlight);
 
-  // Spotlight is rendered via a CSS radial-gradient anchored to (x, y).
   const spotlightBg = useTransform(
     [x, y] as const,
     ([lx, ly]) =>
       `radial-gradient(420px circle at ${lx}px ${ly}px, rgba(255,255,255,0.10), rgba(255,255,255,0.04) 35%, transparent 65%)`
   );
 
-  // ── Drop coordinates (for The Merkle Collapse exit) ───────
   const dropPointRef = useRef<{ x: number; y: number }>({
     x: typeof window !== "undefined" ? window.innerWidth / 2 : 0,
     y: typeof window !== "undefined" ? window.innerHeight / 2 : 0,
   });
 
-  // ── Window-level drag tracking ────────────────────────────
+  // 💎 2. Window-level drag tracking (Flicker対策版)
   useEffect(() => {
-    if (!isDragging) return;
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter.current += 1;
+      if (dragCounter.current === 1) {
+        setIsDragging(true);
+      }
+    };
 
-    const handleMove = (e: DragEvent) => {
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter.current -= 1;
+      if (dragCounter.current === 0) {
+        setIsDragging(false);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // マウス座標の更新
       rawX.set(e.clientX);
       rawY.set(e.clientY);
       dropPointRef.current = { x: e.clientX, y: e.clientY };
     };
-    const handleOver = (e: DragEvent) => {
-      e.preventDefault(); // required to enable drop
-    };
 
-    window.addEventListener("dragover", handleOver);
-    window.addEventListener("dragover", handleMove);
-    return () => {
-      window.removeEventListener("dragover", handleOver);
-      window.removeEventListener("dragover", handleMove);
-    };
-  }, [isDragging, rawX, rawY]);
-
-  // ── Drop handler ──────────────────────────────────────────
-  const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
+    const handleDropEvent = (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      const point = { x: e.clientX, y: e.clientY };
-      dropPointRef.current = point;
+      dragCounter.current = 0;
+      setIsDragging(false);
+      
       if (e.dataTransfer?.files?.length) {
+        const point = { x: e.clientX, y: e.clientY };
         onDrop(e.dataTransfer.files, point);
       }
-    },
-    [onDrop]
-  );
+    };
+
+    window.addEventListener("dragenter", handleDragEnter);
+    window.addEventListener("dragleave", handleDragLeave);
+    window.addEventListener("dragover", handleDragOver);
+    window.addEventListener("drop", handleDropEvent);
+
+    return () => {
+      window.removeEventListener("dragenter", handleDragEnter);
+      window.removeEventListener("dragleave", handleDragLeave);
+      window.removeEventListener("dragover", handleDragOver);
+      window.removeEventListener("drop", handleDropEvent);
+    };
+  }, [onDrop, rawX, rawY]);
 
   // ── Derived state ─────────────────────────────────────────
   const inError = Boolean(dragError);
