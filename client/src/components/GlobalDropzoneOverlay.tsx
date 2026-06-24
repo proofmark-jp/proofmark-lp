@@ -1,35 +1,37 @@
 /**
  * GlobalDropzoneOverlay.tsx
  * ──────────────────────────────────────────────────────────────
- * ProofMark — Global Drag & Drop Overlay
+ * ProofMark — Global Drag & Drop Overlay  [Kinetic Tuning Edition]
  *
- * Design Philosophy:
- *   "Restraint as the highest form of luxury."
+ * Design Philosophy (this iteration):
+ *   "Sensual physics. Cybernetic acceptance."
  *
- *   We do not impress users with effects.
- *   We make them feel that their action has been *received*
- *   by something quietly intelligent — a vault that is awake.
+ *   The vault no longer whispers — it breathes neon.
+ *   Every pixel must feel like it has mass, current, and intent.
  *
  * Layers (back → front):
- *   L0  Scrim         : near-black wash, the "silence"
- *   L1  Fluid Mesh    : Teal × Purple, breathing at 0.04 opacity
- *   L2  Film Grain    : SVG turbulence, 3% opacity, eternal
- *   L3  Spatial Light : cursor-tracked spotlight (Spring physics)
- *   L4  Vignette      : edge fade, focuses the eye to center
- *   L5  Message       : the only thing that speaks
+ *   L0  Scrim         : variable-depth blur, "the silence deepens"
+ *   L1  Fluid Mesh    : Teal/Cyan × Purple, awakened orbs
+ *   L2  Scan Lines    : faint cyberpunk horizontals (CRT memory)
+ *   L3  Film Grain    : SVG turbulence, 4% — kept honest
+ *   L4  Spatial Light : cursor-tracked spotlight (Spring physics)
+ *   L5  Vignette      : edge fade
+ *   L6  Drop Capsule  : the neon vault door
  *
  * Physics:
- *   - Idle entrance     : critically damped spring (smooth arrival)
- *   - Kinetic rejection : heavy mass + low damping (iron-door bounce)
- *   - Merkle Collapse   : exit converges toward drop coordinates
+ *   - Entrance         : heavy spring  { mass:2.6, damping:18, stiffness:100 }
+ *                        → "vault door swinging open"
+ *   - Pulse / breath   : 2.6s sine, scale 1↔1.015, neon shadow swells
+ *   - Glitch rejection : two-pass shake (x/y/rotate) + RGB split flash
+ *   - Merkle Collapse  : exit converges to drop coordinates
  *
  * Accessibility:
- *   useReducedMotion → all kinetic motion neutralized,
- *                      only opacity transitions remain.
+ *   useReducedMotion → kinetic motion neutralized; only opacity,
+ *                      static neon, no shake/breath/spotlight motion.
  * ──────────────────────────────────────────────────────────────
  */
 
-import React, { useCallback, useEffect, useId, useRef } from "react";
+import React, { useId, useRef } from "react";
 import {
   AnimatePresence,
   motion,
@@ -44,60 +46,72 @@ import {
 // ──────────────────────────────────────────────────────────────
 
 export interface GlobalDropzoneOverlayProps {
-  /** Whether a drag operation is in progress over the window. */
-  isDragging: boolean;
-  /** If non-null, overlay enters the "kinetic rejection" state. */
+  isDragActive: boolean;
   dragError?: string | null;
-  /** Called with the dropped FileList. Coordinates are captured internally. */
-  onDrop: (files: FileList, dropPoint: { x: number; y: number }) => void;
-  /** Optional: override the default idle headline. */
+  onDrop: (files: FileList | File[], dropPoint?: { x: number; y: number }) => void;
   title?: string;
-  /** Optional: override the default idle subtitle. */
   subtitle?: string;
-  /** Optional: override the default accepted-types hint. */
   hint?: string;
 }
 
 // ──────────────────────────────────────────────────────────────
-// Design tokens — single source of truth
+// Design tokens
 // ──────────────────────────────────────────────────────────────
 
 const PALETTE = {
-  teal: "#00D4AA",
-  purple: "#6C3EF4",
-  amber: "#F59E0B",
-  ink: "#07061A",
+  neon: "#00FFCC",        // primary cyber accent
+  teal: "#00D4AA",        // secondary cool
+  purple: "#6C3EF4",      // depth
+  magenta: "#FF2E97",     // accent glitch
+  amber: "#F59E0B",       // rejection
+  red: "#FF3344",         // rejection edge
+  ink: "#04030F",         // void
   fog: "rgba(255,255,255,0.06)",
 } as const;
 
 const SPRING = {
-  /** Cursor spotlight — high stiffness for an "alive" follow. */
-  spotlight: { stiffness: 420, damping: 38, mass: 0.6 },
-  /** Standard entrance — calm and confident. */
-  arrival: { stiffness: 220, damping: 28, mass: 1 },
-  /** Kinetic rejection — heavy iron-door rebound. */
-  rejection: { stiffness: 380, damping: 12, mass: 2.6 },
+  /** Cursor spotlight — alive, snappy. */
+  spotlight: { stiffness: 480, damping: 36, mass: 0.55 },
+  /** The vault opens — heavy, audible-feeling. */
+  vaultDoor: { type: "spring" as const, mass: 2.6, damping: 18, stiffness: 100 },
+  /** Glitch rejection — fast, brittle. */
+  rejection: { type: "spring" as const, mass: 2.6, damping: 12, stiffness: 380 },
 } as const;
+
+// Reusable neon shadow recipe — kept here so pulse animations stay coherent.
+const neonShadow = (level: 0 | 1 | 2, color: string = PALETTE.neon) => {
+  const a = level === 0 ? 0.18 : level === 1 ? 0.32 : 0.55;
+  const b = level === 0 ? 0.06 : level === 1 ? 0.12 : 0.22;
+  return [
+    `0 0 0 1px ${color}${level === 2 ? "55" : "33"}`,
+    `0 0 24px -2px ${hexA(color, a)}`,
+    `0 0 60px -10px ${hexA(color, b)}`,
+    `inset 0 1px 0 rgba(255,255,255,0.06)`,
+  ].join(", ");
+};
+
+function hexA(hex: string, alpha: number) {
+  // #RRGGBB → rgba(r,g,b,a)
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 
 // ──────────────────────────────────────────────────────────────
 // Component
 // ──────────────────────────────────────────────────────────────
 
-export const GlobalDropzoneOverlay: React.FC<
-  Omit<GlobalDropzoneOverlayProps, "isDragging">
-> = ({
+export const GlobalDropzoneOverlay: React.FC<GlobalDropzoneOverlayProps> = ({
+  isDragActive,
   dragError = null,
   onDrop,
-  title = "ここにファイルをドロップ",
-  subtitle = "ブラウザ内でSHA-256ハッシュを計算し、RFC-3161タイムスタンプを発行します",
-  hint = "PNG · JPG · PDF · MP4 · 任意のバイナリ — 最大 50 MB",
+  title = "Drop to Seal your History",
+  subtitle = "ブラウザ内でSHA-256を演算し、RFC-3161で時刻を封印します",
+  hint = "PNG · JPG · PDF · MP4 · BIN — up to 50 MB",
 }) => {
   const prefersReducedMotion = useReducedMotion();
   const grainId = useId();
-
-  // 💎 1. 自律的な状態管理を追加
-  const [isDragging, setIsDragging] = React.useState(false);
-  const dragCounter = useRef(0); // Flicker防止用のカウンター
 
   // ── Cursor-tracked spatial light ──────────────────────────
   const rawX = useMotionValue(-9999);
@@ -108,359 +122,282 @@ export const GlobalDropzoneOverlay: React.FC<
   const spotlightBg = useTransform(
     [x, y] as const,
     ([lx, ly]) =>
-      `radial-gradient(420px circle at ${lx}px ${ly}px, rgba(255,255,255,0.10), rgba(255,255,255,0.04) 35%, transparent 65%)`
+      `radial-gradient(520px circle at ${lx}px ${ly}px, ${hexA(
+        PALETTE.neon,
+        0.14
+      )}, ${hexA(PALETTE.purple, 0.06)} 38%, transparent 68%)`
   );
 
-  const dropPointRef = useRef<{ x: number; y: number }>({
+  // Parallax tilt for the capsule (subtle — never seasick)
+  const tiltX = useTransform(y, (v) => {
+    if (typeof window === "undefined") return 0;
+    return ((v - window.innerHeight / 2) / window.innerHeight) * -6;
+  });
+  const tiltY = useTransform(x, (v) => {
+    if (typeof window === "undefined") return 0;
+    return ((v - window.innerWidth / 2) / window.innerWidth) * 6;
+  });
+
+  // ── Drop point memory (for The Merkle Collapse) ───────────
+  const dropPointRef = useRef({
     x: typeof window !== "undefined" ? window.innerWidth / 2 : 0,
     y: typeof window !== "undefined" ? window.innerHeight / 2 : 0,
   });
 
-  // 💎 2. Window-level drag tracking (Flicker対策版)
-  useEffect(() => {
-    const handleDragEnter = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dragCounter.current += 1;
-      if (dragCounter.current === 1) {
-        setIsDragging(true);
-      }
-    };
-
-    const handleDragLeave = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dragCounter.current -= 1;
-      if (dragCounter.current === 0) {
-        setIsDragging(false);
-      }
-    };
-
-    const handleDragOver = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      // マウス座標の更新
-      rawX.set(e.clientX);
-      rawY.set(e.clientY);
-      dropPointRef.current = { x: e.clientX, y: e.clientY };
-    };
-
-    const handleDropEvent = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dragCounter.current = 0;
-      setIsDragging(false);
-      
-      if (e.dataTransfer?.files?.length) {
-        const point = { x: e.clientX, y: e.clientY };
-        onDrop(e.dataTransfer.files, point);
-      }
-    };
-
-    window.addEventListener("dragenter", handleDragEnter);
-    window.addEventListener("dragleave", handleDragLeave);
-    window.addEventListener("dragover", handleDragOver);
-    window.addEventListener("drop", handleDropEvent);
-
-    return () => {
-      window.removeEventListener("dragenter", handleDragEnter);
-      window.removeEventListener("dragleave", handleDragLeave);
-      window.removeEventListener("dragover", handleDragOver);
-      window.removeEventListener("drop", handleDropEvent);
-    };
-  }, [onDrop, rawX, rawY]);
-
-  // ── Derived state ─────────────────────────────────────────
   const inError = Boolean(dragError);
 
-  // ── Animation variants ────────────────────────────────────
-  // The exit transform origin is set inline so the Merkle Collapse
-  // converges precisely on the cursor's last known position.
+  // ── Exit (Merkle Collapse) ────────────────────────────────
   const overlayExit = prefersReducedMotion
     ? { opacity: 0, transition: { duration: 0.18 } }
     : {
         opacity: 0,
         scale: 0.0,
-        filter: "blur(14px)",
-        transition: { duration: 0.55, ease: [0.7, 0, 0.84, 0] as const },
+        filter: "blur(18px)",
+        transition: { duration: 0.6, ease: [0.7, 0, 0.84, 0] as const },
       };
 
-  const messageVariants = {
-    initial: { opacity: 0, y: 12, scale: 0.98 },
+  // ── Capsule variants ──────────────────────────────────────
+  const capsuleVariants = {
+    initial: { opacity: 0, y: 28, scale: 0.92, rotateX: -8 },
     animate: {
       opacity: 1,
       y: 0,
       scale: 1,
-      transition: prefersReducedMotion
-        ? { duration: 0.18 }
-        : { type: "spring" as const, ...SPRING.arrival },
+      rotateX: 0,
+      transition: prefersReducedMotion ? { duration: 0.2 } : SPRING.vaultDoor,
     },
     error: {
       opacity: 1,
-      x: prefersReducedMotion ? 0 : [0, -14, 11, -7, 4, 0],
       y: 0,
       scale: 1,
-      transition: prefersReducedMotion
-        ? { duration: 0.18 }
-        : { type: "spring" as const, ...SPRING.rejection },
+      rotateX: 0,
+      x: prefersReducedMotion ? 0 : [0, -22, 18, -12, 9, -5, 0],
+      rotateZ: prefersReducedMotion ? 0 : [0, -1.4, 1.1, -0.7, 0.4, 0],
+      transition: prefersReducedMotion ? { duration: 0.2 } : SPRING.rejection,
     },
   };
 
   return (
     <AnimatePresence>
-      {isDragging && (
+      {isDragActive && (
         <motion.div
           key="proofmark-dropzone"
-          // ── Accessibility ─────────────────────────────────
-          role="region"
-          aria-label={inError ? "ファイル受入エラー" : "ファイルドロップ領域"}
-          aria-live="polite"
-          // ── Drag wiring ───────────────────────────────────
-          onDrop={handleDrop}
-          onDragOver={(e) => e.preventDefault()}
-          // ── Motion ────────────────────────────────────────
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={overlayExit}
-          transition={{ duration: prefersReducedMotion ? 0.18 : 0.32, ease: [0.16, 1, 0.3, 1] }}
           style={{
             transformOrigin: `${dropPointRef.current.x}px ${dropPointRef.current.y}px`,
           }}
-          className="fixed inset-0 z-[9999] pointer-events-auto select-none"
+          className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden pointer-events-auto select-none"
+          onDragOver={(e) => {
+            e.preventDefault();
+            rawX.set(e.clientX);
+            rawY.set(e.clientY);
+            dropPointRef.current = { x: e.clientX, y: e.clientY };
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (e.dataTransfer?.files?.length) {
+              const point = { x: e.clientX, y: e.clientY };
+              dropPointRef.current = point;
+              onDrop(e.dataTransfer.files, point);
+            }
+          }}
         >
-          {/* ─────────────────────────────────────────────────
-             L0 — Scrim (the silence)
-             ───────────────────────────────────────────────── */}
+          {/* ───────── L0  Scrim — variable-depth blur ───────── */}
           <div
-            className="absolute inset-0"
+            className="absolute inset-0 pointer-events-none"
             style={{
               backgroundColor: PALETTE.ink,
-              opacity: 0.78,
-              backdropFilter: "blur(18px) saturate(140%)",
-              WebkitBackdropFilter: "blur(18px) saturate(140%)",
+              opacity: 0.85,
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
             }}
           />
 
-          {/* ─────────────────────────────────────────────────
-             L1 — Fluid Mesh Gradient (Teal × Purple)
-             Two slow-breathing orbs. Opacity stays near 0.04
-             so the color is felt, not seen.
-             ───────────────────────────────────────────────── */}
+          {/* ───────── L1  Fluid Mesh (neon + purple) ───────── */}
           {!prefersReducedMotion && (
             <>
               <motion.div
-                aria-hidden
-                className="absolute -inset-[20%] pointer-events-none"
-                style={{
-                  background: `radial-gradient(40% 40% at 30% 35%, ${PALETTE.teal} 0%, transparent 60%)`,
-                  filter: "blur(80px)",
-                  mixBlendMode: "screen",
+                className="absolute w-[80vw] h-[80vh] rounded-full pointer-events-none mix-blend-screen blur-[100px]"
+                style={{ background: PALETTE.teal, left: "-10%", top: "-10%", opacity: 0.4 }}
+                animate={{
+                  x: ["0%", "15%", "0%"],
+                  y: ["0%", "20%", "0%"],
+                  scale: [1, 1.1, 1],
                 }}
-                animate={
-                  inError
-                    ? { opacity: 0 }
-                    : {
-                        opacity: [0.04, 0.07, 0.04],
-                        x: ["-2%", "3%", "-2%"],
-                        y: ["1%", "-2%", "1%"],
-                      }
-                }
-                transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+                transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
               />
               <motion.div
-                aria-hidden
-                className="absolute -inset-[20%] pointer-events-none"
-                style={{
-                  background: `radial-gradient(45% 45% at 70% 65%, ${PALETTE.purple} 0%, transparent 60%)`,
-                  filter: "blur(90px)",
-                  mixBlendMode: "screen",
+                className="absolute w-[90vw] h-[90vh] rounded-full pointer-events-none mix-blend-screen blur-[100px]"
+                style={{ background: PALETTE.purple, right: "-10%", bottom: "-10%", opacity: 0.3 }}
+                animate={{
+                  x: ["0%", "-10%", "0%"],
+                  y: ["0%", "-15%", "0%"],
+                  scale: [1, 1.1, 1],
                 }}
-                animate={
-                  inError
-                    ? { opacity: 0 }
-                    : {
-                        opacity: [0.05, 0.08, 0.05],
-                        x: ["2%", "-3%", "2%"],
-                        y: ["-1%", "2%", "-1%"],
-                      }
-                }
-                transition={{ duration: 17, repeat: Infinity, ease: "easeInOut" }}
+                transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
               />
-              {/* Error wash — single amber sheet, calm but unmistakable */}
+              {/* Magenta accent — only awakens on error */}
               <motion.div
-                aria-hidden
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  background: `radial-gradient(60% 60% at 50% 50%, ${PALETTE.amber} 0%, transparent 70%)`,
-                  mixBlendMode: "screen",
-                }}
-                animate={{ opacity: inError ? 0.12 : 0 }}
-                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                className="absolute inset-0 pointer-events-none mix-blend-color-dodge blur-[100px]"
+                style={{ background: `radial-gradient(circle at 50% 50%, ${PALETTE.magenta} 0%, transparent 60%)` }}
+                animate={{ opacity: inError ? 1 : 0 }}
+                transition={{ duration: 0.3 }}
               />
             </>
           )}
 
-          {/* ─────────────────────────────────────────────────
-             L2 — Film Grain (SVG turbulence, 3% opacity)
-             A whisper, not a texture.
-             ───────────────────────────────────────────────── */}
-          <svg
-            aria-hidden
-            className="absolute inset-0 w-full h-full pointer-events-none"
-            style={{ opacity: 0.035, mixBlendMode: "overlay" }}
-          >
+          {/* ───────── L2  Scan lines (CRT memory) ───────── */}
+          <div
+            className="absolute inset-0 pointer-events-none mix-blend-overlay"
+            style={{
+              opacity: 0.05,
+              backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.05) 2px, rgba(255,255,255,0.05) 4px)",
+            }}
+          />
+
+          {/* ───────── L3  Film grain ───────── */}
+          <svg className="absolute inset-0 h-full w-full pointer-events-none mix-blend-overlay" style={{ opacity: 0.04 }}>
             <filter id={grainId}>
-              <feTurbulence
-                type="fractalNoise"
-                baseFrequency="0.9"
-                numOctaves="2"
-                stitchTiles="stitch"
-              />
+              <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch" />
               <feColorMatrix type="saturate" values="0" />
             </filter>
             <rect width="100%" height="100%" filter={`url(#${grainId})`} />
           </svg>
 
-          {/* ─────────────────────────────────────────────────
-             L3 — Spatial Spotlight (cursor-tracked)
-             Renders ONLY in the absence of reduced-motion.
-             ───────────────────────────────────────────────── */}
+          {/* ───────── L4  Spatial spotlight ───────── */}
           {!prefersReducedMotion && (
             <motion.div
-              aria-hidden
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background: spotlightBg,
-                mixBlendMode: "soft-light",
-              }}
+              className="absolute inset-0 pointer-events-none mix-blend-soft-light"
+              style={{ background: spotlightBg }}
             />
           )}
 
-          {/* ─────────────────────────────────────────────────
-             L4 — Vignette (edge fade)
-             ───────────────────────────────────────────────── */}
+          {/* ───────── L5  Vignette ───────── */}
           <div
-            aria-hidden
             className="absolute inset-0 pointer-events-none"
-            style={{
-              background:
-                "radial-gradient(120% 80% at 50% 50%, transparent 55%, rgba(0,0,0,0.55) 100%)",
-            }}
+            style={{ boxShadow: "inset 0 0 150px rgba(0,0,0,0.9)" }}
           />
 
-          {/* ─────────────────────────────────────────────────
-             L5 — Message
-             The only element that speaks.
-             ───────────────────────────────────────────────── */}
-          <div className="absolute inset-0 flex items-center justify-center px-6">
+          {/* ───────── L6  Drop Capsule — the neon vault door ───────── */}
+          <div className="relative z-10 px-6 [perspective:800px] pointer-events-none">
             <motion.div
-              variants={messageVariants}
+              variants={capsuleVariants}
               initial="initial"
               animate={inError ? "error" : "animate"}
-              className="relative w-full max-w-[520px]"
+              style={{
+                rotateX: tiltX,
+                rotateY: tiltY,
+                transformStyle: "preserve-3d" as const,
+              }}
+              className="relative w-full max-w-[540px] mx-auto"
             >
-              {/* Frame — restrained, single hairline, monumental corners */}
-              <div
-                className="relative rounded-[28px] px-10 py-12 text-center overflow-hidden"
-                style={{
-                  background: "rgba(10, 9, 30, 0.55)",
-                  border: `1px solid ${inError ? "rgba(245,158,11,0.45)" : PALETTE.fog}`,
-                  boxShadow: inError
-                    ? "0 30px 90px -30px rgba(245,158,11,0.35), inset 0 1px 0 rgba(255,255,255,0.04)"
-                    : "0 30px 90px -30px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.05)",
-                  backdropFilter: "blur(22px) saturate(160%)",
-                  WebkitBackdropFilter: "blur(22px) saturate(160%)",
-                }}
-              >
-                {/* Icon — pure SVG, no library dependency */}
+              {/* Neon halo — pulses on idle, snaps to red on error */}
+              {!prefersReducedMotion && (
                 <motion.div
-                  aria-hidden
-                  className="mx-auto mb-7 flex h-14 w-14 items-center justify-center rounded-2xl"
+                  className="absolute inset-0 rounded-[32px] pointer-events-none"
                   style={{
-                    background: inError
-                      ? "rgba(245,158,11,0.10)"
-                      : "rgba(0,212,170,0.08)",
-                    border: `1px solid ${
-                      inError ? "rgba(245,158,11,0.35)" : "rgba(0,212,170,0.22)"
-                    }`,
+                    border: `1px solid ${inError ? PALETTE.red : PALETTE.neon}`,
+                    boxShadow: neonShadow(inError ? 2 : 1, inError ? PALETTE.red : PALETTE.neon),
                   }}
                   animate={
-                    prefersReducedMotion || inError
-                      ? {}
-                      : { y: [0, -3, 0] }
+                    inError
+                      ? { scale: [1, 1.02, 1] }
+                      : { boxShadow: [neonShadow(0), neonShadow(2), neonShadow(0)] }
                   }
-                  transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
-                >
-                  {inError ? (
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M12 8v5M12 16.5v.5"
-                        stroke={PALETTE.amber}
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="M10.6 3.6 2.3 18a1.6 1.6 0 0 0 1.4 2.4h16.6a1.6 1.6 0 0 0 1.4-2.4L13.4 3.6a1.6 1.6 0 0 0-2.8 0Z"
-                        stroke={PALETTE.amber}
-                        strokeWidth="1.6"
-                      />
-                    </svg>
-                  ) : (
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M12 4v12M12 16l-4-4M12 16l4-4"
-                        stroke={PALETTE.teal}
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M4 18v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1"
-                        stroke={PALETTE.teal}
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  )}
-                </motion.div>
+                  transition={
+                    inError
+                      ? { duration: 0.2, repeat: 2 }
+                      : { duration: 2.6, repeat: Infinity, ease: "easeInOut" }
+                  }
+                />
+              )}
 
-                {/* Headline */}
-                <h2
-                  className="text-[22px] leading-tight font-semibold tracking-[-0.01em]"
+              {/* Capsule shell */}
+              <div
+                style={{
+                  background: "rgba(8, 7, 20, 0.75)",
+                  border: `1px solid ${inError ? "rgba(255, 51, 68, 0.3)" : "rgba(0, 255, 204, 0.15)"}`,
+                  backdropFilter: "blur(24px) saturate(140%)",
+                  WebkitBackdropFilter: "blur(24px) saturate(140%)",
+                  boxShadow: inError
+                    ? "0 30px 90px -30px rgba(255, 51, 68, 0.3)"
+                    : "0 30px 90px -30px rgba(0, 255, 204, 0.2)",
+                }}
+                className="relative rounded-[32px] px-8 py-10 text-center overflow-hidden"
+              >
+                {/* Top hairline — neon underglow strip */}
+                <div
+                  className="absolute top-0 left-8 right-8 h-[1px]"
+                  style={{ background: `linear-gradient(90deg, transparent, ${inError ? PALETTE.red : PALETTE.neon}, transparent)` }}
+                />
+                {/* Bottom hairline */}
+                <div
+                  className="absolute bottom-0 left-8 right-8 h-[1px]"
+                  style={{ background: `linear-gradient(90deg, transparent, ${inError ? PALETTE.red : PALETTE.purple}, transparent)` }}
+                />
+
+                {/* Corner brackets — cyber HUD ornament */}
+                <CornerBracket pos="tl" color={inError ? PALETTE.red : PALETTE.neon} />
+                <CornerBracket pos="tr" color={inError ? PALETTE.red : PALETTE.neon} />
+                <CornerBracket pos="bl" color={inError ? PALETTE.red : PALETTE.neon} />
+                <CornerBracket pos="br" color={inError ? PALETTE.red : PALETTE.neon} />
+
+                {/* Icon ring */}
+                <div
+                  className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full relative"
                   style={{
-                    color: inError ? PALETTE.amber : "rgba(255,255,255,0.96)",
+                    background: inError ? "rgba(255,51,68,0.08)" : "rgba(0,255,204,0.05)",
+                    border: `1px solid ${inError ? "rgba(255,51,68,0.25)" : "rgba(0,255,204,0.2)"}`,
                   }}
                 >
-                  {inError ? "受け入れできません" : title}
+                  {inError ? <IconWarn /> : <IconDrop />}
+                  {/* Rotating ring for active state — disabled on error */}
+                  {!prefersReducedMotion && !inError && (
+                    <motion.div
+                      className="absolute inset-0 rounded-full border border-dashed"
+                      style={{ borderColor: `${PALETTE.neon}55`, margin: -4 }}
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
+                    />
+                  )}
+                </div>
+
+                {/* Headline — with RGB-split shadow for cyber edge */}
+                <h2
+                  style={{
+                    color: inError ? PALETTE.red : "#FFFFFF",
+                    textShadow: inError
+                      ? `0 0 16px ${PALETTE.red}66`
+                      : `1px 0px 0px ${PALETTE.magenta}bb, -1px 0px 0px ${PALETTE.neon}bb`,
+                  }}
+                  className="text-[22px] font-bold tracking-tight mb-3"
+                >
+                  {inError ? "ZKP対象外 / Rejected" : title}
                 </h2>
 
-                {/* Subtitle / error message */}
+                {/* Sub */}
                 <p
-                  className="mx-auto mt-3 max-w-[380px] text-[13.5px] leading-relaxed"
-                  style={{
-                    color: inError
-                      ? "rgba(245,158,11,0.85)"
-                      : "rgba(255,255,255,0.62)",
-                  }}
+                  style={{ color: inError ? "rgba(255,51,68,0.85)" : "rgba(255,255,255,0.65)" }}
+                  className="max-w-[360px] mx-auto text-[14px] leading-relaxed"
                 >
                   {inError ? dragError : subtitle}
                 </p>
 
-                {/* Hint row */}
+                {/* Hint chip */}
                 {!inError && (
                   <div
-                    className="mx-auto mt-7 inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] tracking-[0.06em] uppercase"
+                    className="mt-8 inline-flex items-center gap-2.5 rounded-full px-4 py-1.5 text-[11px] font-mono tracking-widest uppercase"
                     style={{
                       background: "rgba(255,255,255,0.03)",
-                      border: `1px solid ${PALETTE.fog}`,
+                      border: "1px solid rgba(255,255,255,0.1)",
                       color: "rgba(255,255,255,0.5)",
-                      fontFeatureSettings: '"tnum"',
                     }}
                   >
                     <span
-                      aria-hidden
-                      className="inline-block h-1.5 w-1.5 rounded-full"
-                      style={{ background: PALETTE.teal }}
+                      className="h-1.5 w-1.5 rounded-full animate-pulse"
+                      style={{ backgroundColor: PALETTE.neon, boxShadow: `0 0 8px ${PALETTE.neon}` }}
                     />
                     {hint}
                   </div>
@@ -475,3 +412,49 @@ export const GlobalDropzoneOverlay: React.FC<
 };
 
 export default GlobalDropzoneOverlay;
+
+// ──────────────────────────────────────────────────────────────
+// Internal atoms
+// ──────────────────────────────────────────────────────────────
+
+const IconDrop: React.FC = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+    <path
+      d="M12 4V20M12 20L6 14M12 20L18 14"
+      stroke={PALETTE.neon}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const IconWarn: React.FC = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+    <path
+      d="M12 8V13M12 17.01L12.01 17M12 21C16.9706 21 21 16.9706 21 12C21 7.02944 16.9706 3 12 3C7.02944 3 3 7.02944 3 12C3 16.9706 7.02944 21 12 21Z"
+      stroke={PALETTE.red}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const CornerBracket: React.FC<{ pos: "tl" | "tr" | "bl" | "br"; color: string }> = ({ pos, color }) => {
+  const base = "absolute h-5 w-5 pointer-events-none";
+  const posCls =
+    pos === "tl"
+      ? "top-4 left-4 border-t-2 border-l-2"
+      : pos === "tr"
+      ? "top-4 right-4 border-t-2 border-r-2"
+      : pos === "bl"
+      ? "bottom-4 left-4 border-b-2 border-l-2"
+      : "bottom-4 right-4 border-b-2 border-r-2";
+  return (
+    <span
+      className={`${base} ${posCls}`}
+      style={{ borderColor: `${color}44` }}
+    />
+  );
+};

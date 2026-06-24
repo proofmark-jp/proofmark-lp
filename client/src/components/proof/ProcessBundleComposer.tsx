@@ -315,6 +315,7 @@ type CompressionProgress = {
 export interface ProcessBundleComposerProps {
   certificate: CertificateRecord | null;
   initialFiles?: File[];
+  manifest?: any; // 🚨 これを追加（今は any で構いません。後日厳格化します）
   onComplete?: () => void;
   onArchive?: () => void;
   onDiscard?: () => void;

@@ -530,6 +530,52 @@ export default function DashboardStudioWrapper() {
  *  Studio Canvas
  * ══════════════════════════════════════════════════════════════ */
 
+export type ProcessManifest = {
+  fileName: string;
+  lastModified: number;
+  fileSize: number;
+  sequence: number;
+};
+
+const validateSRE = (files: File[]): string | null => {
+  if (files.length > 150) {
+    return '1つの暗号チェーンに格納できる歴史は150工程までです。';
+  }
+  let totalSize = 0;
+  const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  
+  for (const f of files) {
+    if (!allowedMimeTypes.includes(f.type)) {
+      return `非対応のファイル形式が含まれています: ${f.name}`;
+    }
+    totalSize += f.size;
+  }
+  
+  if (totalSize > 2 * 1024 * 1024 * 1024) { // 2GB
+    return '一度に処理できる総容量（2GB）を超過しています。';
+  }
+  return null;
+};
+
+const generateProcessManifest = (files: File[]): { manifest: ProcessManifest[]; sortedFiles: File[] } => {
+  // 時間が同じ場合はファイル名でソート（暗号の決定論的保証）
+  const sortedFiles = [...files].sort((a, b) => {
+    if (a.lastModified === b.lastModified) {
+      return a.name.localeCompare(b.name);
+    }
+    return a.lastModified - b.lastModified;
+  });
+
+  const manifest: ProcessManifest[] = sortedFiles.map((file, index) => ({
+    fileName: file.name,
+    lastModified: file.lastModified,
+    fileSize: file.size,
+    sequence: index,
+  }));
+  
+  return { manifest, sortedFiles };
+};
+
 interface StudioCanvasProps {
   user: ReturnType<typeof useAuth>['user'];
   signOut: ReturnType<typeof useAuth>['signOut'];
@@ -576,9 +622,11 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
   const [auditCertTitle, setAuditCertTitle] = useState<string | null>(null);
 
   // ── Console 2.0: PLG & SRE Gate ──
+  const [isDragActive, setIsDragActive] = useState(false);
   const [globalDragError, setGlobalDragError] = useState<string | null>(null);
   const [isProcessingDrop, setIsProcessingDrop] = useState(false);
   const [globalDropFiles, setGlobalDropFiles] = useState<File[] | null>(null);
+  const [processManifest, setProcessManifest] = useState<ProcessManifest[] | null>(null);
 
   /* ━━━━━━━━━━━━━━━━ The Inspector (deep-link enabled) ━━━━━━━━━━━━━━━━ */
   const [inspectorCertId, setInspectorCertId] = useState<string | null>(null);
@@ -608,12 +656,53 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     return () => window.removeEventListener('popstate', sync);
   }, []);
 
-  // ── Ghost Error浄化: 新しいドラッグ開始時にエラーをリセット ──
+  // ── Console 2.0: 全画面ドロップゾーンのための鉄壁のSRE防衛線およびドラッグ監視 ──
   useEffect(() => {
-    const clearError = () => setGlobalDragError(null);
-    window.addEventListener('dragenter', clearError);
-    return () => window.removeEventListener('dragenter', clearError);
-  }, []);
+    // UI着火用：ブラウザ全体へのドラッグ監視
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragActive(true);
+      setGlobalDragError(null);
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // ブラウザ外に出た時のみOverlayを閉じる（子要素でのチラつき防止）
+      if (!e.relatedTarget) {
+        setIsDragActive(false);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const handleDrop = async (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragActive(false); 
+      
+      const droppedFiles = Array.from(e.dataTransfer?.files || []);
+      if (droppedFiles.length === 0) return;
+
+      await handleGlobalDrop(droppedFiles);
+    };
+
+    window.addEventListener('dragenter', handleDragEnter);
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
+
+    return () => {
+      window.removeEventListener('dragenter', handleDragEnter);
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, [handleGlobalDrop]);
 
   // ── state → URL (history push/replace)
   const syncInspectorToUrl = useCallback((id: string | null, tab: 'overview' | 'chain' = 'overview', replace = false) => {
@@ -1160,66 +1249,40 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     return ['creator', 'studio', 'admin'].includes(tier);
   }, [ops]);
 
-  // ── Console 2.0: SRE絶対防衛線 + Dopamine Strike ──
-  const handleGlobalDrop = useCallback(async (files: FileList, _dropPoint: { x: number; y: number }) => {
+  // ── Console 2.0: SRE絶対防衛線 ──
+  const handleGlobalDrop = useCallback(async (files: FileList | File[], _dropPoint?: { x: number; y: number }) => {
     if (isProcessingDrop) return;
+    
+    const fileArray = Array.isArray(files) ? files : Array.from(files);
+    if (fileArray.length === 0) return;
+
+    // 1. SRE 防衛線
+    const errorMsg = validateSRE(fileArray);
+    if (errorMsg) {
+      setGlobalDragError(errorMsg);
+      toast.error(errorMsg);
+      return;
+    }
+
     setGlobalDragError(null);
-
-    // 1. SRE防衛: 件数上限
-    if (files.length > 150) {
-      setGlobalDragError('1つの暗号チェーンに格納できる歴史は150工程までです。至高のプロセスを厳選してください。');
-      return;
-    }
-
-    // 2. SRE防衛: MIME & 容量
-    let totalSize = 0;
-    const allowedPrefixes = ['image/', 'video/', 'application/pdf'];
-    const allowedExtensions = ['.psd', '.ai', '.zip'];
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i];
-      totalSize += f.size;
-      const mimeOk = allowedPrefixes.some((p) => f.type.startsWith(p));
-      const extOk = allowedExtensions.some((ext) => f.name.toLowerCase().endsWith(ext));
-      if (!mimeOk && !extOk) {
-        setGlobalDragError(`非対応のファイル形式が含まれています: ${f.name}`);
-        return;
-      }
-      // OOM防衛: 単体500MB超過
-      if (f.size > 500 * 1024 * 1024) {
-        setGlobalDragError(`ファイル「${f.name}」が単体制限（500MB）を超過しています。`);
-        return;
-      }
-    }
-    // OOM防衛: 総容量2GB超過
-    if (totalSize > 2 * 1024 * 1024 * 1024) {
-      setGlobalDragError('一度に処理できる総容量（2GB）を超過しています。');
-      return;
-    }
-
     setIsProcessingDrop(true);
+    
     try {
-      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([20, 50, 20]);
+      // 2. The Manifest Preparation
+      const { manifest, sortedFiles } = generateProcessManifest(fileArray);
+      setProcessManifest(manifest); 
+      
+      toast.success(`${sortedFiles.length}件の歴史を受理しました。暗号連鎖を構築します。`);
 
-      // Dopamine Strike: プラン別トースト
-      const isPro = ['creator', 'studio', 'admin'].includes((ops.planTier ?? '').toLowerCase());
-      if (isPro) {
-        toast.success(`${files.length} 件のアセットを受理しました。暗号連鎖を構築します。`);
-      } else {
-        toast('歴史を受理しました', {
-          description: 'AIによる人間性審査(Oracle)と法的エクスポートのロックを解除するにはアップグレードが必要です。',
-          action: { label: 'Proをアンロック', onClick: () => { window.location.href = '/pricing'; } },
-          icon: '🔒',
-        });
-      }
+      // 3. 既存システムへの「物理的」結線
+      setGlobalDropFiles(sortedFiles);
 
-      // クリーンな結線: ProcessBundleComposer に initialFiles として渡す
-      setGlobalDropFiles(Array.from(files));
-    } catch (e: any) {
-      toast.error('処理エラー', { description: e?.message ?? '不明なエラーが発生しました。' });
+    } catch (err: any) {
+      toast.error('処理エラー', { description: err?.message ?? '不明なエラーが発生しました。' });
     } finally {
       setIsProcessingDrop(false);
     }
-  }, [isProcessingDrop, ops]);
+  }, [isProcessingDrop]);
 
   /* ━━━━━━━━━━━━━━━━ Render ━━━━━━━━━━━━━━━━ */
 
@@ -1575,6 +1638,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
 
       {/* ─────────── Console 2.0: Global Doorway ─────────── */}
       <GlobalDropzoneOverlay
+        isDragActive={isDragActive}
         dragError={globalDragError}
         onDrop={handleGlobalDrop}
       />
@@ -1611,7 +1675,10 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
               </div>
               <button
                 type="button"
-                onClick={() => setGlobalDropFiles(null)}
+                onClick={() => {
+                  setGlobalDropFiles(null);
+                  setProcessManifest(null); // 🚨 この1行を絶対に追加してメモリを解放する
+                }}
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white hover:bg-white/[0.07] transition-colors"
                 aria-label="閉じる"
               >
@@ -1626,8 +1693,10 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
                   <ProcessBundleComposer
                     certificate={null}
                     initialFiles={globalDropFiles}
+                    manifest={processManifest}
                     onComplete={() => {
                       setGlobalDropFiles(null);
+                      setProcessManifest(null);
                       mutateCertificates();
                     }}
                   />
