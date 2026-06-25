@@ -84,6 +84,7 @@ import { compressProcessStepImage } from '../../lib/image-compression';
 import { supabase } from '../../lib/supabase';
 // ⭐ Upgrade ④: 新しく独立した VerifiedBadge コンポーネント
 import VerifiedBadge from '../ui/VerifiedBadge';
+import KineticEvolutionScrub from './KineticEvolutionScrub';
 
 /* ═══════════════════════════════════════════════════════════════
    CONSTANTS
@@ -119,109 +120,112 @@ function guessStepType(name: string): BundleStepType {
   return 'other';
 }
 
-/**
- * UI表示用の超軽量サムネイル生成（長辺 200px / WebP）。
- * Canvas は同期的に呼ばれるため、呼び出し前に Yield を挿入してメインスレッドを保護する。
- */
+/* ── 🚨 Ultimate Patch 1: Mutex-Locked Canvas Pool ── */
+let _sharedCanvas: HTMLCanvasElement | null = null;
+let _isCanvasBusy = false; // 🔒 Mutex Lock Flag
+
+// ロック取得（使用中なら待機する）
+async function acquireCanvasLock(): Promise<void> {
+  while (_isCanvasBusy) {
+    await new Promise(r => setTimeout(r, 5)); // 5ms Yield
+  }
+  _isCanvasBusy = true;
+}
+function releaseCanvasLock() { _isCanvasBusy = false; }
+
+function getSharedCanvas(w: number, h: number) {
+  if (typeof document === 'undefined') return null;
+  if (!_sharedCanvas) _sharedCanvas = document.createElement('canvas');
+  _sharedCanvas.width = w; _sharedCanvas.height = h;
+  return { canvas: _sharedCanvas, ctx: _sharedCanvas.getContext('2d', { alpha: true }) };
+}
+
 async function generateThumb(file: File): Promise<{ url: string, blob: Blob }> {
   if (!file.type.startsWith('image/')) throw new Error('not an image');
-  // 🚨 メインスレッドのブロッキングを防ぎ、UIフリーズを回避するための Yield
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  await acquireCanvasLock(); // 🔒 ロック取得
 
   return new Promise((resolve, reject) => {
     const img = new Image();
     const srcUrl = URL.createObjectURL(file);
-    img.onload = () => {
-      const scale = Math.min(1, THUMB_MAX_PX / Math.max(img.width, img.height));
-      const w = Math.max(1, Math.round(img.width * scale));
-      const h = Math.max(1, Math.round(img.height * scale));
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { URL.revokeObjectURL(srcUrl); reject(new Error('no ctx')); return; }
-      ctx.drawImage(img, 0, 0, w, h);
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(srcUrl);
-        canvas.width = 0; canvas.height = 0; // VRAM解放
-        if (blob) resolve({ url: URL.createObjectURL(blob), blob });
-        else reject(new Error('blob null'));
-      }, 'image/webp', 0.7);
+    
+    const finalize = (err?: Error, res?: { url: string, blob: Blob }) => {
+      URL.revokeObjectURL(srcUrl);
+      releaseCanvasLock(); // 🔓 ロック解放
+      if (err) reject(err); else resolve(res!);
     };
-    img.onerror = () => { URL.revokeObjectURL(srcUrl); reject(new Error('load fail')); };
+
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, THUMB_MAX_PX / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        
+        const shared = getSharedCanvas(w, h);
+        if (!shared || !shared.ctx) return finalize(new Error('no ctx'));
+        
+        shared.ctx.drawImage(img, 0, 0, w, h);
+        shared.canvas.toBlob((blob) => {
+          shared.canvas.width = 0; shared.canvas.height = 0; 
+          if (blob) finalize(undefined, { url: URL.createObjectURL(blob), blob });
+          else finalize(new Error('blob null'));
+        }, 'image/webp', 0.7);
+      } catch (e) { finalize(e as Error); }
+    };
+    img.onerror = () => finalize(new Error('load fail'));
     img.src = srcUrl;
   });
 }
 
-/**
- * ⭐ Decoupled Architecture: アップロード用の軽量WebPサムネイルをブラウザ内で生成する。
- * 原本ファイルは絶対にサーバーに送らない（Zero-Knowledge原則）。
- *
- * - isHead=true（完成品）: 元の解像度を維持、画質0.85（目標20MB以下）
- * - isHead=false（途中工程）: 長辺1000px以下、画質0.7（目標2MB以下）
- *
- * 🚨 UIフリーズ防衛: createImageBitmap は非同期で内部スレッド側で動作するため
- * Framer Motion の RAF を阻害しない。さらに toBlob 後にも Yield を挿入。
- */
-async function generateUploadThumbnail(
-  file: File,
-  isHead: boolean,
-): Promise<Blob> {
+async function generateUploadThumbnail(file: File, isHead: boolean): Promise<Blob> {
   if (!file.type.startsWith('image/')) throw new Error('not an image');
+  await acquireCanvasLock(); // 🔒 ロック取得
 
-  // Yield でメインスレッドを解放してからヘビー処理へ
-  await new Promise<void>((r) => setTimeout(r, 0));
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const srcW = bitmap.width;
+    const srcH = bitmap.height;
+    let dstW = srcW; let dstH = srcH;
 
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    if (!isHead) {
+      const longEdge = Math.max(srcW, srcH);
+      const scale = longEdge > STEP_THUMB_MAX_PX ? STEP_THUMB_MAX_PX / longEdge : 1;
+      dstW = Math.max(1, Math.round(srcW * scale));
+      dstH = Math.max(1, Math.round(srcH * scale));
+    }
 
-  const srcW = bitmap.width;
-  const srcH = bitmap.height;
+    const shared = getSharedCanvas(dstW, dstH);
+    if (!shared || !shared.ctx) { bitmap.close(); throw new Error('2D context unavailable'); }
 
-  let dstW: number;
-  let dstH: number;
+    shared.ctx.imageSmoothingEnabled = true;
+    shared.ctx.imageSmoothingQuality = 'high';
+    shared.ctx.drawImage(bitmap, 0, 0, dstW, dstH);
+    bitmap.close();
 
-  if (isHead) {
-    // 完成品: 元の解像度を維持（拡大はしない）
-    dstW = srcW;
-    dstH = srcH;
-  } else {
-    // 途中工程: 長辺 STEP_THUMB_MAX_PX 以下
-    const longEdge = Math.max(srcW, srcH);
-    const scale = longEdge > STEP_THUMB_MAX_PX ? STEP_THUMB_MAX_PX / longEdge : 1;
-    dstW = Math.max(1, Math.round(srcW * scale));
-    dstH = Math.max(1, Math.round(srcH * scale));
+    const quality = isHead ? HEAD_THUMB_QUALITY : STEP_THUMB_QUALITY;
+    const blob = await new Promise<Blob | null>((r) => shared.canvas.toBlob(r, 'image/webp', quality));
+
+    shared.canvas.width = 0; shared.canvas.height = 0;
+    await new Promise<void>((r) => setTimeout(r, 0));
+
+    if (!blob) throw new Error('toBlob returned null');
+    return blob;
+  } finally {
+    releaseCanvasLock(); // 🔓 ロック解放
   }
-
-  const canvas = document.createElement('canvas');
-  canvas.width = dstW;
-  canvas.height = dstH;
-  const ctx = canvas.getContext('2d', { alpha: true });
-  if (!ctx) { bitmap.close(); throw new Error('2D context unavailable'); }
-
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(bitmap, 0, 0, dstW, dstH);
-  bitmap.close();
-
-  const quality = isHead ? HEAD_THUMB_QUALITY : STEP_THUMB_QUALITY;
-  const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/webp', quality));
-
-  // VRAM解放
-  canvas.width = 0;
-  canvas.height = 0;
-
-  // 後続処理のためにメインスレッドへ制御を返す
-  await new Promise<void>((r) => setTimeout(r, 0));
-
-  if (!blob) throw new Error('toBlob returned null');
-  return blob;
 }
 
-/**
- * Fork-on-Write 判定用: steps の「形」(画像 + ハッシュ) を 1 文字列に圧縮するシグネチャ。
- * 画像ハッシュ監視のみを扱う既存ロジック — 絶対に変更しない。
- */
+/* ── 🚨 Patch 2: Micro-Jank Elimination (Bitwise Checksum) ── */
 function stepsSignature(steps: WorkspaceStep[]): string {
-  return steps.map((s, i) => `${i}:${s.id}:${s.sha256 ?? ''}`).join('|');
+  let hash = 2166136261;
+  for (let i = 0; i < steps.length; i++) {
+    const s = steps[i];
+    const chunk = `${i}:${s.id}:${s.sha256 ?? ''}`;
+    for (let j = 0; j < chunk.length; j++) {
+      hash ^= chunk.charCodeAt(j);
+      hash = Math.imul(hash, 16777619);
+    }
+  }
+  return hash.toString(16);
 }
 
 /**
@@ -912,6 +916,7 @@ export function ProcessBundleComposer({
     }
   }, []);  // fetchUploadUrls 依存を除去
 
+/* ── 🚨 Patch 3: Zero-Latency UI Hydration (Phantom Drop Fix) ── */
   const addFilesAtIndex = useCallback(async (files: FileList | File[], insertAt: number) => {
     const fileArray = Array.from(files).filter((f) => f.type.startsWith('image/')).sort((a, b) => a.lastModified - b.lastModified);
     if (fileArray.length === 0) return;
@@ -936,27 +941,38 @@ export function ProcessBundleComposer({
     const modifiedTimes = uniqueFiles.map((f) => f.lastModified);
     const hasDuplicateTimestamps = new Set(modifiedTimes).size !== modifiedTimes.length || steps.some((s) => s.file && modifiedTimes.includes(s.file.lastModified));
 
-    let newSteps: WorkspaceStep[] = uniqueFiles.map((file) => ({
+    // ① まず即座に「プレビュー無しの空枠」をUIに展開（体感遅延ゼロ）
+    const baseSteps: WorkspaceStep[] = uniqueFiles.map((file) => ({
       id: crypto.randomUUID(), stepType: guessStepType(file.name), title: fileBaseName(file.name) || '途中工程', note: '',
-      file, previewUrl: getPreviewUrl(crypto.randomUUID(), file), hashState: 'idle' as const,
+      file, previewUrl: undefined, hashState: 'idle' as const,
       uploadState: magicMode ? 'idle' as const : 'fetching_url' as const,
-      sameTimestamp: hasDuplicateTimestamps,
-      deferred: magicMode,
+      sameTimestamp: hasDuplicateTimestamps, deferred: magicMode,
     }));
 
-    newSteps = await processInChunks(newSteps, 3, async (s) => {
-      try {
-        const thumb = await generateThumb(s.file!);
-        return { ...s, thumbUrl: thumb.url, thumbBlob: thumb.blob };
-      } catch { return s; }
-    });
+    setSteps((cur) => { const copy = [...cur]; copy.splice(insertAt, 0, ...baseSteps); return copy; });
 
-    setSteps((cur) => { const copy = [...cur]; copy.splice(insertAt, 0, ...newSteps); return copy; });
+    // ② 裏側でメインスレッドを殺さずに 1 枚ずつサムネイルを生成して受肉
+    for (const s of baseSteps) {
+      const purl = URL.createObjectURL(s.file!);
+      urlCacheRef.current.set(s.id, purl);
+      let thumb: { url: string; blob: Blob } | null = null;
+      try { 
+        thumb = await generateThumb(s.file!); 
+      } catch { /* fallback to original file if compression fails */ }
+      
+      setSteps((cur) => cur.map((item) => 
+        item.id === s.id ? { ...item, previewUrl: purl, thumbUrl: thumb?.url, thumbBlob: thumb?.blob } : item
+      ));
+      await new Promise(r => setTimeout(r, COMPRESSION_YIELD_MS));
+    }
 
-    newSteps.forEach((s) => computeHash(s.id, s.file!));
-    // ⭐ Decoupled: fetchUploadUrls は submit 時に bundleId が確定してから一括呼び出す。
-    // Ghost Upload Watcher は signedUrl が確定次第、自動的にアップロードを開始する。
-  }, [steps, getPreviewUrl, computeHash, quota, magicMode]);
+    // ③ メインスレッドのフリーズ（Structured Clone Spike）を防ぐマイクロバッチ処理
+    for (let i = 0; i < baseSteps.length; i++) {
+      computeHash(baseSteps[i].id, baseSteps[i].file!);
+      // 5件Workerに投げるごとにメインスレッドに10msの呼吸（Yield）をさせる
+      if (i % 5 === 4) await new Promise(r => setTimeout(r, 10)); 
+    }
+  }, [steps, computeHash, quota, magicMode]);
 
   const addFilesAsSteps = useCallback(
     (files: FileList | File[]) => addFilesAtIndex(files, steps.length),
@@ -1022,6 +1038,9 @@ export function ProcessBundleComposer({
   }
 
   function removeStep(id: string) {
+    // 🚨 ゾンビWorkerキルシグナル
+    getWorker().postMessage({ kind: 'abort', id }); 
+    
     if (abortControllersRef.current.has(id)) {
       abortControllersRef.current.get(id)?.abort();
       abortControllersRef.current.delete(id);
@@ -1437,6 +1456,9 @@ export function ProcessBundleComposer({
      Danger Zone ハンドラ
      ═════════════════════════════════════════════════════════════ */
   const handleDiscard = useCallback(() => {
+    // 🚨 ゾンビWorkerキルシグナル (Workspace全体破棄時)
+    steps.forEach(s => getWorker().postMessage({ kind: 'abort', id: s.id }));
+
     if (onDiscard) {
       onDiscard();
     } else {
@@ -1734,10 +1756,9 @@ export function ProcessBundleComposer({
           </div>
 
           {steps.some((s) => s.thumbUrl || s.previewUrl) && (
-            <EvolutionScrub
+            <KineticEvolutionScrub
               steps={steps}
-              scrubIndex={scrubIndex}
-              onScrub={setScrubIndex}
+              onScrubEnd={setScrubIndex}
             />
           )}
         </div>
@@ -2615,57 +2636,7 @@ function TimelineCard({
   );
 }
 
-function EvolutionScrub({
-  steps, scrubIndex, onScrub,
-}: {
-  steps: WorkspaceStep[];
-  scrubIndex: number;
-  onScrub: (i: number) => void;
-}) {
-  const displayStep = steps[scrubIndex] ?? steps[0];
-  const thumbSrc = displayStep?.thumbUrl ?? displayStep?.previewUrl;
-  if (!thumbSrc) return null;
 
-  return (
-    <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-4">
-      <div className="text-[10px] uppercase tracking-[0.22em] text-[#A8A0D8]/50 mb-3 font-bold">
-        Evolution Scrub — 工程 {scrubIndex + 1} / {steps.length}
-      </div>
-      <div className="flex items-center gap-4">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={scrubIndex}
-            initial={{ opacity: 0, scale: 0.93 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.04 }}
-            transition={{ duration: 0.12 }}
-            className="w-20 h-20 rounded-xl overflow-hidden shrink-0 border border-white/10 bg-[#0D0B24]"
-          >
-            <img src={thumbSrc} alt="scrub preview" className="w-full h-full object-cover" draggable={false} />
-          </motion.div>
-        </AnimatePresence>
-
-        <div className="flex-1 flex flex-col gap-2">
-          <input
-            type="range"
-            min={0}
-            max={steps.length - 1}
-            step={1}
-            value={scrubIndex}
-            onChange={(e) => onScrub(Number(e.target.value))}
-            className="w-full h-1.5 rounded-full appearance-none bg-white/10 accent-[#00D4AA] cursor-pointer"
-            style={{ accentColor: '#00D4AA' }}
-          />
-          <div className="flex justify-between">
-            <span className="text-[9px] text-[#A8A0D8]/40">{steps[0]?.title ?? '起点'}</span>
-            <span className="text-[9px] text-[#A8A0D8]/70 font-bold">{displayStep?.title}</span>
-            <span className="text-[9px] text-[#A8A0D8]/40">{steps[steps.length - 1]?.title ?? '完成'}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function SlideToSeal({
   empty,
