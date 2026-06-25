@@ -85,6 +85,7 @@ import { supabase } from '../../lib/supabase';
 // ⭐ Upgrade ④: 新しく独立した VerifiedBadge コンポーネント
 import VerifiedBadge from '../ui/VerifiedBadge';
 import KineticEvolutionScrub from './KineticEvolutionScrub';
+import KineticSlideToSeal from './KineticSlideToSeal';
 
 /* ═══════════════════════════════════════════════════════════════
    CONSTANTS
@@ -1874,19 +1875,21 @@ export function ProcessBundleComposer({
               exit={{ opacity: 0, y: -8, scale: 0.98 }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             >
-              <SlideToSeal
+              <KineticSlideToSeal
                 empty={steps.length === 0}
                 disabled={!canSubmit}
                 onSealed={() => {
                   if (steps.length === 0) return;
-                  const sig = stepsSignature(steps);
-                  setSealedSignatureSnapshot(sig);
-                  const metaSig = generateMetaSignature(steps, title, description);
-                  setSealedMetaSignatureSnapshot(metaSig);
-                  setSealedStepsSnapshot(steps.map(step => ({ ...step })));
+                  
+                  // 🚨 データの完全フリーズとシグネチャの二重ロック
+                  const frozenSteps = [...steps];
+                  setSealedSignatureSnapshot(stepsSignature(frozenSteps));
+                  setSealedMetaSignatureSnapshot(generateMetaSignature(frozenSteps, title, description));
+                  setSealedStepsSnapshot(frozenSteps.map(step => ({ ...step })));
                   setSealedTitleSnapshot(title);
                   setSealedDescriptionSnapshot(description);
-                  navigator.vibrate?.(40);
+                  
+                  // 🚨 二重バイブレーションを完全に排除（フィードバックはKineticSlideToSeal内部に一元化）
                   if (magicMode) submitMagic();
                   else submit();
                 }}
@@ -2638,94 +2641,6 @@ function TimelineCard({
 
 
 
-function SlideToSeal({
-  empty,
-  disabled,
-  onSealed,
-}: {
-  empty: boolean;
-  disabled: boolean;
-  onSealed: () => void;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [trackWidth, setTrackWidth] = useState(280);
-  const x = useMotionValue(0);
-  const sealedRef = useRef(false);
 
-  useEffect(() => {
-    const updateWidth = () => {
-      if (containerRef.current) setTrackWidth(containerRef.current.offsetWidth);
-    };
-    updateWidth();
-    window.addEventListener('resize', updateWidth);
-    return () => window.removeEventListener('resize', updateWidth);
-  }, []);
-
-  const KNOB_W = 52;
-  const MAX_X = Math.max(0, trackWidth - KNOB_W - 8);
-
-  const trackBg = useTransform(x, [0, MAX_X], ['rgba(255,255,255,0.05)', 'rgba(0,212,170,0.18)']);
-  const knobBg = useTransform(x, [0, MAX_X], ['#6C3EF4', '#00D4AA']);
-  const labelOpacity = useTransform(x, [0, MAX_X * 0.5], [1, 0]);
-
-  const handleDragEnd = () => {
-    if (empty || sealedRef.current) return;
-    if (x.get() >= MAX_X * 0.8) {
-      sealedRef.current = true;
-      animate(x, MAX_X, { type: 'spring', stiffness: 400, damping: 28 });
-      onSealed();
-    } else {
-      animate(x, 0, { type: 'spring', stiffness: 400, damping: 30 });
-    }
-  };
-
-  const hardLocked = empty;
-  const wrapperClass = [
-    'w-full max-w-md mx-auto transition-all duration-300',
-    hardLocked
-      ? 'opacity-30 grayscale pointer-events-none'
-      : disabled
-        ? 'opacity-50'
-        : 'opacity-100',
-  ].join(' ');
-
-  return (
-    <div className={wrapperClass} aria-disabled={hardLocked || disabled}>
-      <motion.div
-        ref={containerRef}
-        style={{ background: trackBg }}
-        className="relative h-[56px] w-full rounded-2xl border border-white/10 backdrop-blur-md overflow-hidden flex items-center px-1"
-      >
-        <motion.div
-          style={{ opacity: labelOpacity }}
-          className="absolute inset-0 flex items-center justify-center gap-2 pointer-events-none select-none px-4"
-        >
-          <Layers3 className="w-4 h-4 text-[#A8A0D8]/60 shrink-0" />
-          <span className="text-xs md:text-sm font-bold text-[#A8A0D8]/60 tracking-wide truncate">
-            {hardLocked ? '画像を追加してください' : 'スライドして封印 (Seal)'}
-          </span>
-        </motion.div>
-
-        <motion.div
-          drag={hardLocked ? false : 'x'}
-          dragConstraints={{ left: 0, right: MAX_X }}
-          dragElastic={0.05}
-          dragMomentum={false}
-          style={{ x, background: knobBg }}
-          onDragEnd={handleDragEnd}
-          whileDrag={{ scale: 1.08 }}
-          className="relative z-10 w-[52px] h-[48px] rounded-xl flex items-center justify-center cursor-grab active:cursor-grabbing shadow-[0_4px_16px_rgba(0,0,0,0.4)] shrink-0"
-        >
-          <Lock className="w-4 h-4 text-white" />
-        </motion.div>
-      </motion.div>
-      <p className="mt-2 text-[10px] text-[#A8A0D8]/40 text-center font-medium tracking-wider">
-        {hardLocked
-          ? 'Empty Canvas — 何も封印できません'
-          : '右端まで引いて封印 — 確定後も編集すれば自動で派生'}
-      </p>
-    </div>
-  );
-}
 
 export default ProcessBundleComposer;
