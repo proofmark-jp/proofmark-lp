@@ -358,7 +358,6 @@ export function ProcessBundleComposer({
 
   const [globalDragOver, setGlobalDragOver] = useState(false);
   const [isHydrating, setIsHydrating] = useState(true);
-  const [scrubIndex, setScrubIndex] = useState(0);
 
   // 🚨 メモリリーク防衛: コンポーネントの生存監視
   const isMounted = useRef(true);
@@ -954,6 +953,8 @@ export function ProcessBundleComposer({
 
     // ② 裏側でメインスレッドを殺さずに 1 枚ずつサムネイルを生成して受肉
     for (const s of baseSteps) {
+      if (!isMounted.current) break;
+      
       const purl = URL.createObjectURL(s.file!);
       urlCacheRef.current.set(s.id, purl);
       let thumb: { url: string; blob: Blob } | null = null;
@@ -1447,12 +1448,6 @@ export function ProcessBundleComposer({
     };
   }, []);
 
-  useEffect(() => {
-    if (scrubIndex >= steps.length && steps.length > 0) {
-      setScrubIndex(steps.length - 1);
-    }
-  }, [steps.length, scrubIndex]);
-
   /* ═════════════════════════════════════════════════════════════
      Danger Zone ハンドラ
      ═════════════════════════════════════════════════════════════ */
@@ -1759,7 +1754,7 @@ export function ProcessBundleComposer({
           {steps.some((s) => s.thumbUrl || s.previewUrl) && (
             <KineticEvolutionScrub
               steps={steps}
-              onScrubEnd={setScrubIndex}
+              onScrubEnd={() => {}}
             />
           )}
         </div>
