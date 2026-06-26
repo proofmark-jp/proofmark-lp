@@ -29,18 +29,10 @@ import { html } from 'satori-html';
 import { Resvg } from '@resvg/resvg-js';
 
 import {
-    deriveTrustTier,
-    type TrustDescriptor,
-} from './_lib/proofmark-trust.js';
-import {
     loadProofmarkFonts,
     PM_BADGE_VERIFIED_SVG,
     svgToDataUri,
 } from './_lib/proofmark-assets.js';
-import {
-    fetchCertificateForOG,
-    type VaultCertificate,
-} from './_lib/proofmark-supabase.js';
 
 export const config = { runtime: 'nodejs', maxDuration: 60 };
 
@@ -50,7 +42,7 @@ const HEIGHT = 630;
 /* ─────────────────────────────────────────────
  * 🛡️ HMAC Anti-DDoS Shield (極限の厳格検証)
  * ───────────────────────────────────────────── */
-function verifyHmacSignature(id: string, rev: string, sig: string): boolean {
+function verifyHmacSignature(payloadStr: string, sig: string): boolean {
     const secret = process.env.OGP_HMAC_SECRET;
     if (!secret) {
         console.error('[CRITICAL] OGP_HMAC_SECRET is missing. Rejecting all requests to prevent DDoS.');
@@ -59,7 +51,7 @@ function verifyHmacSignature(id: string, rev: string, sig: string): boolean {
     if (!sig || typeof sig !== 'string') return false;
     if (!/^[0-9a-f]+$/i.test(sig)) return false;
     try {
-        const payload = `${id}:${rev}`;
+        const payload = payloadStr;
         const expectedSig = crypto.createHmac('sha256', secret).update(payload).digest('hex');
 
         const sigBuffer = Buffer.from(sig, 'hex');
@@ -167,11 +159,7 @@ function getTheme(depth: number): VaultTheme {
 interface SlabInput {
     title: string;
     sha256: string;
-    trust: TrustDescriptor;
-    certifiedAt: string;
     authorLabel: string;
-    isFounder: boolean;
-    proofMode: string | null;
     depth: number;
     timeSpan: string;
     originUrl: string;
@@ -989,33 +977,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).end('Method Not Allowed');
     }
 
-    const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
-    const rev = typeof req.query.rev === 'string' ? req.query.rev.trim() : '1';
-    const sig = typeof req.query.sig === 'string' ? req.query.sig.trim() : '';
+    // 👑 URLパラメータからのデータ抽出（DBアクセス完全排除）
+    const p = {
+        id: (req.query.id as string) || '',
+        title: (req.query.t as string) || '',
+        hash: (req.query.h as string) || '',
+        author: (req.query.a as string) || '',
+        depth: parseInt((req.query.d as string) || '1', 10),
+        timeSpan: (req.query.tm as string) || '',
+        origin: (req.query.o as string) || '',
+        mid: (req.query.m as string) || '',
+        head: (req.query.hd as string) || '',
+    };
+    const sig = (req.query.sig as string) || '';
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!id || !uuidRegex.test(id)) {
+    if (!p.id || !uuidRegex.test(p.id)) {
         return res.status(400).end('Bad Request');
     }
 
+    // 🛡️ プロキシ側と全く同じ文字列を再現してHMAC検証
+    const payloadStr = `${p.id}||${p.title}||${p.hash}||${p.author}||${p.depth}||${p.timeSpan}||${p.origin}||${p.mid}||${p.head}`;
+    
     // 🚨 HMAC Anti-DDoS Shield
     if (process.env.NODE_ENV === 'production') {
-        if (!verifyHmacSignature(id, rev, sig)) {
+        if (!verifyHmacSignature(payloadStr, sig)) {
             return res.status(403).end('Forbidden: Invalid Signature');
         }
     }
 
     try {
-        const [fonts, cert] = await Promise.all([
-            loadProofmarkFonts(),
-            fetchCertificateForOG(id),
-        ]);
+        const fonts = await loadProofmarkFonts();
 
-        if (!cert) {
-            return res.status(404).end('Not Found');
-        }
+        const input: SlabInput = {
+            title: p.title || '無題の証拠',
+            sha256: p.hash,
+            authorLabel: p.author,
+            depth: p.depth,
+            timeSpan: p.timeSpan,
+            originUrl: p.origin,
+            midUrl: p.mid,
+            headUrl: p.head
+        };
 
-        const tree = buildVaultSlab(toSlabInput(cert));
+        const tree = buildVaultSlab(input);
         const png = await renderPng(tree, fonts);
 
         res.setHeader('Content-Type', 'image/png');
@@ -1032,48 +1037,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.status(500).end('Internal Server Error');
         }
     }
-}
-
-/* ─────────────────────────────────────────────
- * Utilities & DTO
- * ───────────────────────────────────────────── */
-function toSlabInput(cert: VaultCertificate): SlabInput {
-    const trust = deriveTrustTier(cert);
-    const author = safeText(cert.display_name, '') || safeText(cert.username, 'Anonymous');
-
-    // 🚨 警告: fetchCertificateForOG が `metadata_json` を取得していない場合、
-    // history は空配列となり、1枚の画像（HEAD）のみの表示にフォールバックします。
-    // _lib/proofmark-supabase.js 側で必ず metadata_json を SELECT してください。
-    const meta = (cert as any).metadata_json || {};
-    const history = Array.isArray(meta.chain_history) ? meta.chain_history : [];
-    const depth = history.length > 0 ? history.length + 1 : 1;
-
-    const headUrl = cert.public_image_url || '';
-    let originUrl = headUrl;
-    let midUrl = headUrl;
-
-    if (history.length > 0) {
-        originUrl = history[0].preview_url || history[0].previewUrl || headUrl;
-        const midIndex = Math.floor(history.length / 2);
-        midUrl = history[midIndex].preview_url || history[midIndex].previewUrl || headUrl;
-    }
-    const safeUrl = (url: string) => escapeHtml(url.trim());
-    const mockHours = Math.floor((depth * 25) / 60);
-    const mockMins = (depth * 25) % 60;
-    const timeSpan = meta.duration_str || (depth > 1 ? `${mockHours}h ${mockMins}m` : '0h 0m');
-
-    return {
-        title: safeText(cert.title, '無題の証拠'),
-        sha256: cert.sha256 || '',
-        trust,
-        certifiedAt: cert.certified_at || cert.proven_at || '',
-        authorLabel: `@${author}`,
-        isFounder: Boolean(cert.is_founder),
-        proofMode: cert.proof_mode || null,
-        depth,
-        timeSpan,
-        originUrl: safeUrl(originUrl),
-        midUrl: safeUrl(midUrl),
-        headUrl: safeUrl(headUrl),
-    };
 }
