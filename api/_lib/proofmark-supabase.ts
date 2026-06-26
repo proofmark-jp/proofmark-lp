@@ -38,6 +38,7 @@ export interface VaultCertificate {
     is_founder: boolean | null;
     public_image_url?: string | null;
     metadata_json?: any;
+    created_at?: string | null; // 🛡️ 安全網として追加
 }
 
 /**
@@ -54,10 +55,11 @@ export async function fetchCertificateForOG(
   const timer = setTimeout(() => controller.abort(), 1200);
 
   try {
+    // 🛡️ 修正箇所1: select文に public_image_url, metadata_json, created_at を追加
     const query = supabase
       .from('certificates')
       .select(`
-        id, title, sha256, proof_mode, visibility, badge_tier, proven_at, certified_at, tsa_provider, timestamp_token, cross_anchors,
+        id, title, sha256, proof_mode, visibility, badge_tier, proven_at, certified_at, created_at, tsa_provider, timestamp_token, cross_anchors, public_image_url, metadata_json,
         profiles (
           username, display_name, is_founder
         )
@@ -73,6 +75,7 @@ export async function fetchCertificateForOG(
 
     const profile = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles;
 
+    // 🛡️ 修正箇所2: 戻り値のマッピングに取得したカラムを追加
     return {
       id: data.id,
       title: data.title,
@@ -88,6 +91,9 @@ export async function fetchCertificateForOG(
       username: profile?.username ?? null,
       display_name: profile?.display_name ?? null,
       is_founder: profile?.is_founder ?? false,
+      public_image_url: data.public_image_url ?? null,
+      metadata_json: data.metadata_json ?? null,
+      created_at: data.created_at ?? null,
     };
   } catch {
     return null;
