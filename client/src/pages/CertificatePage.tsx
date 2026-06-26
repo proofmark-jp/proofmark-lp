@@ -303,13 +303,6 @@ export default function CertificatePage() {
     };
 
     const ogTitle = getDisplayTitle();
-    const ogThumb = cert.public_image_url || '';
-    const ogHash = cert.sha256 ? cert.sha256.substring(0, 12) : '000000000000';
-    const ogTimestamp = cert?.certified_at || cert?.created_at || '';
-    const formattedTimestamp = new Date(ogTimestamp).toLocaleString('ja-JP');
-    const ogCreator = authorProfile?.username || 'Anonymous';
-
-    const ogpUrl = `https://proofmark.jp/api/og?id=${cert.id}&title=${encodeURIComponent(ogTitle)}&thumb=${encodeURIComponent(ogThumb)}&hash=${ogHash}&timestamp=${encodeURIComponent(formattedTimestamp)}&creator=${encodeURIComponent(ogCreator)}`;
 
     const hasVisualAsset = !cert.is_asset_purged &&
         cert.proof_mode === 'shareable' &&
@@ -334,7 +327,7 @@ export default function CertificatePage() {
             <SEO
                 title={`証明書: ${ogTitle}`}
                 description={`この作品の存在と制作日時はProofMarkによって暗号学的に証明されています。`}
-                image={ogpUrl}
+                image={`https://proofmark.jp/cert/${cert.id}`}
                 url={verifyUrl}
             />
             <style>{`

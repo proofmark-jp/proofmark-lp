@@ -1,4 +1,6 @@
 // api/ogp-proxy.ts
+import { generateSignedOgpUrlEdge } from './_lib/og-signer-edge.js';
+
 export const config = { runtime: 'edge' };
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -62,10 +64,7 @@ export default async function handler(req: Request) {
         const title = c.title ?? c.original_filename ?? 'Verified Digital Artwork';
         const description = `この作品の存在と制作日時は ProofMark によって暗号学的に証明されています。あなたも大切な作品を保護しませんか？ (SHA-256: ${c.sha256 ? c.sha256.slice(0,12) : ''}...)`;
         
-        const encodedTitle = encodeURIComponent(title);
-        const encodedCreator = encodeURIComponent(creatorName);
-        const encodedThumb = encodeURIComponent(c.public_image_url || '');
-        const ogImage = `https://proofmark.jp/api/og?id=${c.id}&title=${encodedTitle}&creator=${encodedCreator}&thumb=${encodedThumb}`;
+        const ogImage = await generateSignedOgpUrlEdge(c.id);
         const originalUrl = new URL(targetPath, url.origin).href;
 
         return generateOgpResponse(`証明書: ${title} | by ${creatorName}`, description, originalUrl, ogImage, '#00D4AA', 86400);
