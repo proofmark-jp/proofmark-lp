@@ -132,7 +132,7 @@ export async function POST(request: Request): Promise<Response> {
       const hashData = String(item.sha256).trim().toLowerCase();
       if (!SHA256_HEX.test(hashData)) throw new HttpError(400, `Invalid SHA256 at step ${index}`);
 
-      const declaredFileName = clampFileName(item.fileName || item.originalFilename);
+      const declaredFileName = clampFileName(item.fileName || item.originalFilename || '');
       const declaredStepType = item.stepType || (item.isRoot ? 'other' : 'draft');
       const isHead = index === items.length - 1;
 

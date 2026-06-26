@@ -36,6 +36,8 @@ export interface VaultCertificate {
     username: string | null;
     display_name: string | null;
     is_founder: boolean | null;
+    public_image_url?: string | null;
+    metadata_json?: any;
 }
 
 /**

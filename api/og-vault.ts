@@ -983,7 +983,7 @@ async function renderPng(tree: ReturnType<typeof html>, fonts: { regular: ArrayB
 /* ─────────────────────────────────────────────
  * Handler
  * ───────────────────────────────────────────── */
-export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
         res.setHeader('Allow', 'GET, HEAD');
         return res.status(405).end('Method Not Allowed');
