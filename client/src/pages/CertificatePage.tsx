@@ -10,6 +10,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useAuth } from '../hooks/useAuth';
 import EvidencePackDownloadButton from '@/components/EvidencePackDownloadButton';
+import CertificateJsonLd from '@/components/CertificateJsonLd';
 import Navbar from '../components/Navbar';
 import SEO from '../components/SEO';
 import VerifiedBadge from '../components/ui/VerifiedBadge';
@@ -317,6 +318,19 @@ export default function CertificatePage() {
 
     return (
         <>
+            <CertificateJsonLd
+                data={{
+                    id: cert.id,
+                    title: cert.title || '無題の証拠',
+                    sha256: cert.sha256 || '',
+                    authorName: cert.display_name || cert.username || 'Anonymous',
+                    certifiedAt: cert.certified_at || cert.proven_at || cert.created_at || new Date().toISOString(),
+                    depth: cert.metadata_json?.chain_history?.length ? cert.metadata_json.chain_history.length + 1 : 1,
+                    timeSpan: cert.metadata_json?.duration_str || '0h 0m',
+                    publicUrl: `https://proofmark.jp/cert/${cert.id}`,
+                    imageUrl: cert.public_image_url || ''
+                }}
+            />
             <SEO
                 title={`証明書: ${ogTitle}`}
                 description={`この作品の存在と制作日時はProofMarkによって暗号学的に証明されています。`}
