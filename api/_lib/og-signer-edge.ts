@@ -35,8 +35,8 @@ export async function generateSignedOgpUrlEdge(p: OgPayload): Promise<string> {
     );
 
     const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(payloadStr));
-    const signatureArray = Array.from(new Uint8Array(signatureBuffer));
-    const sigHex = signatureArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    // 🛡️ 確実な高速Hexシリアライズ
+    const sigHex = Array.prototype.map.call(new Uint8Array(signatureBuffer), (x: number) => ('00' + x.toString(16)).slice(-2)).join('');
 
     const params = new URLSearchParams({
         id: p.id,

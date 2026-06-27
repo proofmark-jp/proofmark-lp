@@ -66,38 +66,26 @@ function verifyHmacSignature(payloadStr: string, sig: string): boolean {
 }
 
 /* ─────────────────────────────────────────────
- * 🎨 Rarity Theme Engine — VaultTheme (GOD TIER)
+ * 🎨 Rarity Theme Engine — VaultTheme (Apex 4-Tier Gamification)
  * ───────────────────────────────────────────── */
 interface VaultTheme {
-    tier: 'STANDARD' | 'ADVANCED' | 'GOD TIER';
-    /** ベース背景 (一番奥のキャンバス) */
+    tier: 'STANDARD' | 'ADVANCED' | 'MASTER' | 'GOD TIER';
     bg: string;
-    /** 暗幕レイヤー (背景ノイズや写真の上を覆う) */
     veil: string;
-    /** 主アクセント (ネオンの色) */
     accent: string;
-    /** サブアクセント */
     accentSoft: string;
-    /** Rarity バッジ用グラデーション */
     rarityGradient: string;
-    /** ネオン結線の色 */
     neon: string;
-    /** ネオングロー (box-shadow / drop-shadow 用 RGB) */
     neonGlow: string;
-    /** 枠線 */
     border: string;
-    /** タイポグラフィ主色 */
     text: string;
-    /** ミュート文字色 */
     textMuted: string;
-    /** ウォーターマーク色 (極薄) */
     watermark: string;
-    /** 縦帯のサイバーグリッド色 */
     grid: string;
 }
 
 function getTheme(depth: number): VaultTheme {
-    // God Tier — 漆黒 × ゴールド (depth >= 100)
+    // 👑 100工程以上: GOD TIER — 漆黒 × ゴールド (神の領域)
     if (depth >= 100) {
         return {
             tier: 'GOD TIER',
@@ -116,7 +104,26 @@ function getTheme(depth: number): VaultTheme {
         };
     }
 
-    // Advanced — 紺色 × サイバーブルー (depth 11..99)
+    // 🟣 51〜99工程: MASTER — 深紫 × アメジスト (新設: 虚無を防ぐ中間到達点)
+    if (depth >= 51) {
+        return {
+            tier: 'MASTER',
+            bg: '#0D0514',
+            veil: 'rgba(13,5,20,0.80)',
+            accent: '#D946EF',
+            accentSoft: '#F0ABFC',
+            rarityGradient: 'linear-gradient(135deg, #D946EF 0%, #A21CAF 100%)',
+            neon: '#D946EF',
+            neonGlow: 'rgba(217,70,239,0.55)',
+            border: 'rgba(217,70,239,0.30)',
+            text: '#FDF4FF',
+            textMuted: 'rgba(250,204,255,0.62)',
+            watermark: 'rgba(217,70,239,0.045)',
+            grid: 'rgba(217,70,239,0.06)',
+        };
+    }
+
+    // 🔵 11〜50工程: ADVANCED — 紺色 × サイバーブルー (習慣化の証)
     if (depth >= 11) {
         return {
             tier: 'ADVANCED',
@@ -135,7 +142,7 @@ function getTheme(depth: number): VaultTheme {
         };
     }
 
-    // Standard — 黒青 × ネオングリーン (depth 1..10)
+    // 🟢 1〜10工程: STANDARD — 黒青 × ネオングリーン (初期衝動)
     return {
         tier: 'STANDARD',
         bg: '#06090F',

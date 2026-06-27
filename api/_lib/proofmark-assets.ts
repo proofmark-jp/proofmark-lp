@@ -1,57 +1,40 @@
 /**
  * proofmark-assets.ts
  *
- * - Satori が必要とする日本語フォント (Noto Sans JP) を Google Fonts から
- *   一度だけ fetch し、Lambda 寿命中はメモリキャッシュ。
- * - ProofMark の Verified バッジ SVG / favicon SVG を「文字列定数」として
- *   直接保持する（FS / network I/O を経由しない＝Vercel の歴史的事故を回避）。
+ * - Satori が必要とする日本語フォント (Noto Sans JP) をローカルのファイルシステムから
+ *   同期的に読み込み、Lambda 寿命中はメモリキャッシュ。
+ * - Bufferのメモリ共有汚染を防ぐため、厳格にArrayBufferへキャストする。
+ * - ProofMark の Verified バッジ SVG / favicon SVG を「文字列定数」として直接保持する。
  */
+import { Buffer } from 'buffer';
+import fs from 'fs';
+import path from 'path';
 
 let fontCache: { regular: ArrayBuffer; bold: ArrayBuffer } | null = null;
 
-/**
- * Google Fonts CSS API → woff2 ではなく ttf を取りに行く。
- * Satori は ttf / otf を要求するため、user-agent を明示的に古いものにする。
- */
-async function fetchGoogleFontTTF(family: string, weight: number): Promise<ArrayBuffer> {
-    const cssUrl = `https://fonts.googleapis.com/css2?family=${family}:wght@${weight}&display=swap&subset=japanese`;
-
-    const cssRes = await fetch(cssUrl, {
-        headers: {
-            // Modern UA → woff2 が返ってきて Satori が読めない
-            // 古い UA (IE9) → ttf が返ってくる
-            'User-Agent':
-                'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko',
-        },
-    });
-    if (!cssRes.ok) {
-        throw new Error(`Google Fonts CSS fetch failed: ${cssRes.status}`);
-    }
-    const css = await cssRes.text();
-    // url(https://...ttf) の最初の 1 件を抜く
-    const match = css.match(/url\((https:\/\/[^)]+\.ttf)\)/);
-    if (!match) {
-        throw new Error('Google Fonts CSS: no TTF url found');
-    }
-    const ttfRes = await fetch(match[1]);
-    if (!ttfRes.ok) {
-        throw new Error(`Google Fonts TTF fetch failed: ${ttfRes.status}`);
-    }
-    return ttfRes.arrayBuffer();
-}
-
-export async function loadProofmarkFonts(): Promise<{
-    regular: ArrayBuffer;
-    bold: ArrayBuffer;
-}> {
+export async function loadProofmarkFonts(): Promise<{ regular: ArrayBuffer; bold: ArrayBuffer }> {
     if (fontCache) return fontCache;
 
-    const [regular, bold] = await Promise.all([
-        fetchGoogleFontTTF('Noto+Sans+JP', 500),
-        fetchGoogleFontTTF('Noto+Sans+JP', 800),
-    ]);
+    let regularBuffer: ArrayBuffer = new ArrayBuffer(0);
+    let boldBuffer: ArrayBuffer = new ArrayBuffer(0);
 
-    fontCache = { regular, bold };
+    try {
+        const regularPath = path.join(process.cwd(), 'fonts', 'NotoSansJP-PM-Regular.ttf');
+        const regularRaw = fs.readFileSync(regularPath);
+        regularBuffer = regularRaw.buffer.slice(regularRaw.byteOffset, regularRaw.byteOffset + regularRaw.byteLength);
+    } catch (e) {
+        console.error('[proofmark-assets] Failed to load NotoSansJP-PM-Regular.ttf. Fallback to empty buffer.', e);
+    }
+
+    try {
+        const boldPath = path.join(process.cwd(), 'fonts', 'NotoSansJP-PM-Black.ttf');
+        const boldRaw = fs.readFileSync(boldPath);
+        boldBuffer = boldRaw.buffer.slice(boldRaw.byteOffset, boldRaw.byteOffset + boldRaw.byteLength);
+    } catch (e) {
+        console.error('[proofmark-assets] Failed to load NotoSansJP-PM-Black.ttf. Fallback to empty buffer.', e);
+    }
+
+    fontCache = { regular: regularBuffer, bold: boldBuffer };
     return fontCache;
 }
 
