@@ -800,7 +800,7 @@ function nodeBlock(opts: {
         "
       >
         <img
-          src="${imageUrl}"
+          src="${escapeHtml(imageUrl)}"
           width="${size}"
           height="${size}"
           style="
@@ -977,33 +977,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).end('Method Not Allowed');
     }
 
-    // 👑 URLパラメータからのデータ抽出（DBアクセス完全排除）
-    const p = {
-        id: (req.query.id as string) || '',
-        title: (req.query.t as string) || '',
-        hash: (req.query.h as string) || '',
-        author: (req.query.a as string) || '',
-        depth: parseInt((req.query.d as string) || '1', 10),
-        timeSpan: (req.query.tm as string) || '',
-        origin: (req.query.o as string) || '',
-        mid: (req.query.m as string) || '',
-        head: (req.query.hd as string) || '',
-    };
-    const sig = (req.query.sig as string) || '';
+    // 🚨 防衛線1: Strict Query Whitelisting (キャッシュ破壊DDoSの完全封殺)
+    // 許可されたパラメータ「以外」が1つでも含まれていたら即時 403 遮断。
+    const ALLOWED_KEYS = new Set(['id', 't', 'h', 'a', 'd', 'tm', 'o', 'm', 'hd', 'sig']);
+    const queryKeys = Object.keys(req.query);
+    for (const key of queryKeys) {
+        if (!ALLOWED_KEYS.has(key)) {
+            return res.status(403).end('Forbidden: Invalid Query Parameters');
+        }
+    }
 
+    // 🛡️ パラメータ配列化の罠を防ぐヘルパー
+    const getParam = (val: string | string[] | undefined): string => {
+        if (Array.isArray(val)) return val[0] || '';
+        return val || '';
+    };
+
+    const p = {
+        id: getParam(req.query.id),
+        title: getParam(req.query.t),
+        hash: getParam(req.query.h),
+        author: getParam(req.query.a),
+        depth: parseInt(getParam(req.query.d) || '1', 10),
+        timeSpan: getParam(req.query.tm),
+        origin: getParam(req.query.o),
+        mid: getParam(req.query.m),
+        head: getParam(req.query.hd),
+    };
+    const sig = getParam(req.query.sig);
+
+    // 🚨 防衛線2: 認証(HMAC)をバリデーション(Regex)の前に移動
+    // 重い正規表現処理すらも、署名がないリクエストには与えない。
+    const payloadStr = `${p.id}||${p.title}||${p.hash}||${p.author}||${p.depth}||${p.timeSpan}||${p.origin}||${p.mid}||${p.head}`;
+    
+    if (process.env.NODE_ENV === 'production') {
+        if (!verifyHmacSignature(payloadStr, sig)) {
+            return res.status(403).end('Forbidden: Invalid Signature');
+        }
+    }
+
+    // UUIDの検証
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!p.id || !uuidRegex.test(p.id)) {
         return res.status(400).end('Bad Request');
     }
 
-    // 🛡️ プロキシ側と全く同じ文字列を再現してHMAC検証
-    const payloadStr = `${p.id}||${p.title}||${p.hash}||${p.author}||${p.depth}||${p.timeSpan}||${p.origin}||${p.mid}||${p.head}`;
-    
-    // 🚨 HMAC Anti-DDoS Shield
-    if (process.env.NODE_ENV === 'production') {
-        if (!verifyHmacSignature(payloadStr, sig)) {
-            return res.status(403).end('Forbidden: Invalid Signature');
+    // 🚨 防衛線3: SSRF / Timeout Protection
+    // Satoriがフェッチする画像URLが「自身のドメイン」または「Supabase Storage」以外なら弾く。
+    // ※以下は一般的な防衛ロジックです。環境変数に合わせてドメインを許可してください。
+    const allowedImageDomains = ['proofmark.jp', 'supabase.co'];
+    const isUrlSafe = (urlStr: string) => {
+        if (!urlStr) return true; // 空は許容(代替描画される)
+        try {
+            const parsed = new URL(urlStr);
+            return allowedImageDomains.some(domain => parsed.hostname.endsWith(domain));
+        } catch {
+            return false; // パースできないURLは危険
         }
+    };
+
+    if (!isUrlSafe(p.origin) || !isUrlSafe(p.mid) || !isUrlSafe(p.head)) {
+        return res.status(403).end('Forbidden: Disallowed Image Origin');
     }
 
     try {

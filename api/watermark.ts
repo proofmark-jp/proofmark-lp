@@ -28,11 +28,7 @@ import satori from 'satori';
 import { html } from 'satori-html';
 import { Resvg } from '@resvg/resvg-js';
 
-import {
-    loadProofmarkFonts,
-    PM_SEAL_SVG,
-    svgToDataUri,
-} from './_lib/proofmark-assets.js';
+import { loadProofmarkFonts } from './_lib/proofmark-assets.js';
 
 export const config = { runtime: 'nodejs', maxDuration: 60 };
 
