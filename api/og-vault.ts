@@ -34,7 +34,7 @@ import {
     svgToDataUri,
 } from './_lib/proofmark-assets.js';
 
-export const config = { runtime: 'nodejs', maxDuration: 60 };
+export const config = { runtime: 'nodejs', maxDuration: 10 };
 
 const WIDTH = 1200;
 const HEIGHT = 630;

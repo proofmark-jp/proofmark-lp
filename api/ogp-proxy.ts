@@ -69,13 +69,19 @@ export default async function handler(req: Request) {
           midUrl = history[midIndex].preview_url || history[midIndex].previewUrl || headUrl;
         }
 
+        // 👑 1行ディフェンスパッチ：URLからクエリパラメータを完全にパージし、Satoriのデコード失敗を封殺
+        const purgeQuery = (u: string) => u ? u.split('?')[0] : '';
+        const safeOrigin = purgeQuery(originUrl);
+        const safeMid = purgeQuery(midUrl);
+        const safeHead = purgeQuery(headUrl);
+
         const mockHours = Math.floor((depth * 25) / 60);
         const mockMins = (depth * 25) % 60;
         const timeSpan = meta.duration_str || (depth > 1 ? `${mockHours}h ${mockMins}m` : '0h 0m');
 
         const ogPayload: OgPayload = {
             id: c.id, title, hash, author: `@${author}`,
-            depth, timeSpan, origin: originUrl, mid: midUrl, head: headUrl
+            depth, timeSpan, origin: safeOrigin, mid: safeMid, head: safeHead
         };
         
         const ogImage = await generateSignedOgpUrlEdge(ogPayload);

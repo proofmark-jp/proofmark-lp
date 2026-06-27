@@ -30,7 +30,7 @@ import { Resvg } from '@resvg/resvg-js';
 
 import { loadProofmarkFonts } from './_lib/proofmark-assets.js';
 
-export const config = { runtime: 'nodejs', maxDuration: 60 };
+export const config = { runtime: 'nodejs', maxDuration: 5 };
 
 type Theme = 'dark' | 'light';
 type Size = 'small' | 'medium' | 'large';
