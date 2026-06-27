@@ -126,15 +126,27 @@ export default function ShareToUnlockPaywall({
   }, [certificateId, onUnlockSuccess]);
 
   /* ───────────────────────────────────────────────
-     The Flip — focus / popup.closed のデュアル監視
+     The Flip — focus / visibilitychange / popup.closed の統合監視
      ─────────────────────────────────────────────── */
   const checkUnlock = useCallback(() => {
-    if (!watchingRef.current) return;
-    if (unlockTriggeredRef.current) return;
-    // ポップアップが閉じていればウォッチを終了して解錠
-    if (!popupRef.current || popupRef.current.closed) {
-      watchingRef.current = false;
-      performUnlock();
+    // ウォッチ中でない、または既に解錠処理が走っていれば無視
+    if (!watchingRef.current || unlockTriggeredRef.current) return;
+
+    // 1. デスクトップ環境: ポップアップが開かれており、かつ閉じられていれば解錠
+    if (popupRef.current) {
+        if (popupRef.current.closed) {
+            watchingRef.current = false;
+            performUnlock();
+            return;
+        }
+    }
+
+    // 2. モバイル環境 (ネイティブアプリ遷移からの復帰検知)
+    //    document.visibilityState が 'visible' (画面に戻ってきた) または
+    //    document.hasFocus() が true (デスクトップのタブ切り替え復帰) であれば解錠を試みる
+    if (document.visibilityState === 'visible' || document.hasFocus()) {
+        watchingRef.current = false;
+        performUnlock();
     }
   }, [performUnlock]);
 
@@ -145,55 +157,64 @@ export default function ShareToUnlockPaywall({
     if (isUnlocking || unlocked) return;
     setError(null);
 
+    // 🛡️ 修正: ブラウザの厳格なポップアップブロックを回避するため、
+    // onClickの同期スレッドの「直下」で確実に window.open を呼ぶ。
     const popup = window.open(
       intentUrl,
       '_blank',
       'width=600,height=600,noopener=no,noreferrer=no',
     );
 
-    // ポップアップブロック時のフォールバック
-    if (!popup) {
-      alert(
-        'ポップアップがブロックされています。\nブラウザのポップアップ許可を ON にしてからもう一度お試しください。',
-      );
-      return;
-    }
-
-    popupRef.current = popup;
     watchingRef.current = true;
 
-    // popup.closed を polling
+    // ポップアップがブロックされた場合（またはiOSネイティブ遷移で null が返った場合）のフォールバック
+    if (!popup) {
+        // null が返っても、モバイル遷移の可能性があるため監視は継続する
+        // ただし、明示的なリンククリックも促す
+        console.warn('[ShareToUnlock] window.open returned null. Assuming popup blocker or mobile deep link.');
+    } else {
+        popupRef.current = popup;
+    }
+
+    // popup.closed を polling (主にデスクトップのポップアップ監視用)
     if (intervalRef.current !== null) {
       window.clearInterval(intervalRef.current);
     }
     intervalRef.current = window.setInterval(() => {
-      if (!popupRef.current || popupRef.current.closed) {
-        latestCheckUnlockRef.current(); // 🛡️ 修正: 依存配列に縛られない最新の関数を叩く
-      }
+        // checkUnlock 内で条件を判定させる
+        latestCheckUnlockRef.current(); 
     }, 500);
-  }, [checkUnlock, intentUrl, isUnlocking, unlocked]);
+
+  }, [intentUrl, isUnlocking, unlocked]);
 
   /* ───────────────────────────────────────────────
-     Mount: focus listener / Unmount: 完全クリーンアップ
+     Mount: focus & visibility listener / Unmount: 完全クリーンアップ
      ─────────────────────────────────────────────── */
   useEffect(() => {
-    const onFocus = () => latestCheckUnlockRef.current(); // 🛡️ 最新の関数を参照
-    window.addEventListener('focus', onFocus);
+    latestCheckUnlockRef.current = checkUnlock;
+  }, [checkUnlock]);
+
+  useEffect(() => {
+    const onReturn = () => latestCheckUnlockRef.current(); 
+    
+    // 👑 修正: モバイルのネイティブアプリ復帰を検知する最強のフックを追加
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
     
     return () => {
-      window.removeEventListener('focus', onFocus);
-      if (intervalRef.current !== null) {
-        window.clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      if (timeoutRef.current !== null) {
-        window.clearTimeout(timeoutRef.current);
-        timeoutRef.current = null;
-      }
-      // 残ったポップアップ参照は GC に委ねる
-      popupRef.current = null;
+        document.removeEventListener('visibilitychange', onReturn);
+        window.removeEventListener('focus', onReturn);
+        if (intervalRef.current !== null) {
+            window.clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+        if (timeoutRef.current !== null) {
+            window.clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+        }
+        popupRef.current = null;
     };
-  }, []); // 🛡️ 修正: 依存配列を空（[]）にする。これにより親の再描画で監視が死ぬバグを完全消滅させる
+  }, []);
 
   /* ═══════════════════════════════════════════════════════════════
      RENDER
