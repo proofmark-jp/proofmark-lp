@@ -18,9 +18,6 @@
     },
     "api/storefront-html.ts": {
       "includeFiles": "dist/index.html"
-    },
-    "api/widget-html.ts": {
-      "includeFiles": "dist/index.html"
     }
   },
   "rewrites": [
@@ -31,10 +28,6 @@
     {
       "source": "/u/:username",
       "destination": "/api/storefront-html?username=:username"
-    },
-    {
-      "source": "/embed/widget/:id",
-      "destination": "/api/widget-html?id=:id"
     },
     {
       "source": "/((?!api/|cert/|u/|@|src/|node_modules/)[^.]*)",
@@ -60,7 +53,7 @@
       ]
     },
     {
-      "source": "/embed/(.*)",
+      "source": "/api/embed",
       "headers": [
         {
           "key": "X-Frame-Options",
@@ -69,15 +62,11 @@
         {
           "key": "Content-Security-Policy",
           "value": "frame-ancestors *"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, s-maxage=3600, stale-while-revalidate=86400"
         }
       ]
     },
     {
-      "source": "/api/certificates/widget/:path*",
+      "source": "/embed.js",
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",
@@ -85,7 +74,7 @@
         },
         {
           "key": "Cache-Control",
-          "value": "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400"
+          "value": "public, max-age=3600, s-maxage=86400"
         }
       ]
     },
