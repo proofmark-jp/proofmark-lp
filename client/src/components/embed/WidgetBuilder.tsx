@@ -408,7 +408,7 @@ export default function WidgetBuilder({
                 animate={{ opacity: previewLoaded ? 1 : 0 }}
                 transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
                 /* セキュリティ隔離 */
-                sandbox="allow-scripts allow-same-origin allow-popups"
+                sandbox="allow-popups allow-popups-to-escape-sandbox"
                 referrerPolicy="no-referrer-when-downgrade"
                 loading="lazy"
                 style={{
