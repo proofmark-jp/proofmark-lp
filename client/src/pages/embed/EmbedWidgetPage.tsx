@@ -17,6 +17,30 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useRoute } from 'wouter';
 
+function getNetworkAwareFrames(urls: string[]): string[] {
+  const n = urls.length;
+  if (n <= 5) return urls;
+  if (typeof navigator === 'undefined' || !('connection' in navigator)) return urls;
+  const conn = (navigator as any).connection;
+
+  const isSaveData = conn.saveData === true;
+  const is3G = conn.effectiveType === '3g';
+  const is2G = conn.effectiveType === '2g' || conn.effectiveType === 'slow-2g';
+
+  if (!isSaveData && !is3G && !is2G) return urls;
+
+  const numFrames = is2G ? 3 : 12;
+  const reduced: string[] = [];
+  const step = Math.max(1, (n - 1) / (numFrames - 1));
+
+  for (let i = 0; i < numFrames - 1; i++) {
+    reduced.push(urls[Math.floor(i * step)]);
+  }
+  reduced.push(urls[n - 1]);
+  
+  return Array.from(new Set(reduced));
+}
+
 /* ════════════════════════════════════════════════════════════════
    Types
    ════════════════════════════════════════════════════════════════ */
@@ -575,11 +599,13 @@ export default function EmbedWidgetPage() {
           public_image_url: raw.public_image_url ?? null,
           public_verify_token: raw.public_verify_token ?? null,
           certified_at: raw.certified_at ?? null,
-          proof_frame_urls: Array.isArray(raw.proof_frame_urls)
-            ? raw.proof_frame_urls.filter(
-                (u): u is string => typeof u === 'string' && u.length > 0,
-              )
-            : [],
+          proof_frame_urls: getNetworkAwareFrames(
+            Array.isArray(raw.proof_frame_urls)
+              ? raw.proof_frame_urls.filter(
+                  (u): u is string => typeof u === 'string' && u.length > 0,
+                )
+              : []
+          ),
         };
 
         setState({ status: 'ready', cert });

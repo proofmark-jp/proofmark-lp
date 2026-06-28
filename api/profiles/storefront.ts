@@ -103,10 +103,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 🚨 Vercel Edge Cache (CDN) を有効化し、DBへのDDoSを物理遮断する
     // s-maxage=60: エッジサーバーで60秒間キャッシュ
-    // stale-while-revalidate=300: 古いキャッシュを返しつつ、裏で非同期に再取得
+    // stale-while-revalidate=31536000: 1年間SWR—古いキャッシュを返しつつ、裏で非同期に再取得
     res.setHeader(
       'Cache-Control',
-      'public, s-maxage=60, stale-while-revalidate=300'
+      'public, max-age=60, s-maxage=60, stale-while-revalidate=31536000'
     );
     res.setHeader('vary', 'Accept-Encoding, Accept');
 

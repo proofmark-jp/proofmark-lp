@@ -184,9 +184,9 @@ function generateOgpResponse(title: string, description: string, url: string, im
   return new Response(html, {
     headers: {
       'Content-Type': 'text/html; charset=UTF-8',
-      'Cache-Control': `public, max-age=3600, s-maxage=31536000, stale-while-revalidate=86400`,
-      'Vercel-CDN-Cache-Control': `max-age=31536000`, // Vercel専用の最強キャッシュヘッダ
-      'CDN-Cache-Control': `max-age=31536000`        // 汎用CDNキャッシュ
+      'Cache-Control': `public, max-age=60, s-maxage=60, stale-while-revalidate=31536000`,
+      'Vercel-CDN-Cache-Control': `s-maxage=60, stale-while-revalidate=31536000`, // Vercel専用SWRキャッシュ
+      'CDN-Cache-Control': `s-maxage=60, stale-while-revalidate=31536000`        // 汎用CDN SWRキャッシュ
     }
   });
 }

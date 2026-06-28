@@ -68,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     }
 
-    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=31536000');
     return res.status(200).json({
       certificate,
       bundle, // UI側はこの束ねられた情報を見てレンダリングする

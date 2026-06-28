@@ -56,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     // The Infinite Cache Shield: Success Cache
-    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=31536000, stale-while-revalidate=86400');
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=31536000');
     return res.status(200).json(payload);
     
   } catch (error) {

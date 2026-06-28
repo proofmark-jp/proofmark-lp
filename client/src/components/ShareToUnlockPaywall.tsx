@@ -75,6 +75,7 @@ export default function ShareToUnlockPaywall({
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsFallback, setNeedsFallback] = useState(false);
 
   /* ─── refs ─── */
   const popupRef = useRef<Window | null>(null);
@@ -172,6 +173,7 @@ export default function ShareToUnlockPaywall({
         // null が返っても、モバイル遷移の可能性があるため監視は継続する
         // ただし、明示的なリンククリックも促す
         console.warn('[ShareToUnlock] window.open returned null. Assuming popup blocker or mobile deep link.');
+        setNeedsFallback(true);
     } else {
         popupRef.current = popup;
     }
@@ -458,6 +460,11 @@ export default function ShareToUnlockPaywall({
             isUnlocking={isUnlocking}
             unlocked={unlocked}
             onClick={handleShare}
+            needsFallback={needsFallback}
+            intentUrl={intentUrl}
+            onFallbackClick={() => {
+              watchingRef.current = true;
+            }}
           />
 
           {/* 行動を後押しする極小フットノート */}
@@ -649,50 +656,53 @@ interface ShareButtonProps {
   isUnlocking: boolean;
   unlocked: boolean;
   onClick: () => void;
+  needsFallback?: boolean;
+  intentUrl?: string;
+  onFallbackClick?: () => void;
 }
 
-function ShareButton({ isUnlocking, unlocked, onClick }: ShareButtonProps) {
+function ShareButton({ isUnlocking, unlocked, onClick, needsFallback, intentUrl, onFallbackClick }: ShareButtonProps) {
   const baseLabel = unlocked
     ? 'UNLOCKED'
     : isUnlocking
       ? 'VERIFYING…'
-      : 'XでシェアしてUNLOCK';
+      : needsFallback
+        ? 'ポップアップがブロックされました。ここをクリックしてシェア'
+        : 'XでシェアしてUNLOCK';
 
   const isDisabled = isUnlocking || unlocked;
 
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={isDisabled}
-      className={`
-        group relative w-full
-        inline-flex items-center justify-center gap-3
-        px-5 py-3.5 rounded-xl
-        font-mono font-bold uppercase
-        text-[13px] tracking-[0.22em]
-        text-white
-        overflow-hidden
-        transition-all duration-300 ease-out
-        ${isDisabled ? 'cursor-not-allowed opacity-90' : 'hover:scale-[1.025] active:scale-[0.985]'}
-        ${isUnlocking ? 'animate-pulse' : ''}
-      `}
-      style={{
-        backgroundColor: unlocked ? 'rgba(0,255,178,0.12)' : '#0F0F14',
-        backgroundImage: unlocked
-          ? `linear-gradient(135deg, rgba(0,255,178,0.18) 0%, rgba(108,62,244,0.18) 100%)`
-          : `linear-gradient(180deg, #15131F 0%, #0B0915 100%)`,
-        border: unlocked
-          ? `1px solid ${NEON}88`
-          : '1px solid rgba(255,255,255,0.12)',
-        boxShadow: unlocked
-          ? `0 0 30px rgba(0,255,178,0.55), inset 0 0 12px rgba(0,255,178,0.25)`
-          : isUnlocking
-            ? `0 0 18px rgba(0,255,178,0.35)`
-            : `0 8px 26px -8px rgba(0,0,0,0.7)`,
-        willChange: 'transform, box-shadow',
-      }}
-    >
+  const commonClasses = `
+    group relative w-full
+    inline-flex items-center justify-center gap-3
+    px-5 py-3.5 rounded-xl
+    font-mono font-bold uppercase
+    text-[13px] tracking-[0.22em]
+    text-white
+    overflow-hidden
+    transition-all duration-300 ease-out
+    ${isDisabled ? 'cursor-not-allowed opacity-90' : 'hover:scale-[1.025] active:scale-[0.985]'}
+    ${isUnlocking ? 'animate-pulse' : ''}
+  `;
+
+  const commonStyles: React.CSSProperties = {
+    backgroundColor: unlocked ? 'rgba(0,255,178,0.12)' : '#0F0F14',
+    backgroundImage: unlocked
+      ? `linear-gradient(135deg, rgba(0,255,178,0.18) 0%, rgba(108,62,244,0.18) 100%)`
+      : `linear-gradient(180deg, #15131F 0%, #0B0915 100%)`,
+    border: unlocked
+      ? `1px solid ${NEON}88`
+      : '1px solid rgba(255,255,255,0.12)',
+    boxShadow: unlocked
+      ? `0 0 30px rgba(0,255,178,0.55), inset 0 0 12px rgba(0,255,178,0.25)`
+      : isUnlocking
+        ? `0 0 18px rgba(0,255,178,0.35)`
+        : `0 8px 26px -8px rgba(0,0,0,0.7)`,
+    willChange: 'transform, box-shadow',
+  };
+
+  const innerContent = (
+    <>
       {/* Hover glow ring (X brand neon) */}
       {!isDisabled && (
         <span
@@ -745,6 +755,33 @@ function ShareButton({ isUnlocking, unlocked, onClick }: ShareButtonProps) {
       {unlocked && (
         <Sparkles size={14} color={NEON} className="relative z-10" />
       )}
+    </>
+  );
+
+  if (needsFallback && !isDisabled && intentUrl) {
+    return (
+      <a
+        href={intentUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onFallbackClick}
+        className={commonClasses}
+        style={{ ...commonStyles, textDecoration: 'none' }}
+      >
+        {innerContent}
+      </a>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={isDisabled}
+      className={commonClasses}
+      style={commonStyles}
+    >
+      {innerContent}
     </button>
   );
 }

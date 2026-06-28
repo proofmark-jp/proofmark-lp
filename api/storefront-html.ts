@@ -75,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .replace('</head>', `${ogpTags}\n</head>`);
 
     // 6. レスポンス（エッジキャッシュの最強設定）
-    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600');
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=31536000');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200).send(modifiedHtml);
 

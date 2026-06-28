@@ -1065,7 +1065,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const png = await renderPng(tree, fonts);
 
         res.setHeader('Content-Type', 'image/png');
-        res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable, stale-while-revalidate=86400');
+        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=31536000');
         res.setHeader('X-ProofMark-OG', 'vault-slab-god-tier');
         res.status(200).send(png);
     } catch (err) {
