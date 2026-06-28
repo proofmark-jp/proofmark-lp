@@ -1,58 +1,53 @@
-export type PortfolioWidgetTheme = 'dark' | 'light';
-export type PortfolioWidgetLayout = 'grid' | 'list' | 'compact';
+// shared/proofmark-widget.ts
+/**
+ * proofmark-widget.ts — The Parasitic Payload
+ * ────────────────────────────────────────────────────────────────
+ * Twitter-style oEmbed snippet for ProofMark.
+ *
+ *   <blockquote class="proofmark-embed" data-proofmark-id="…">
+ *     <a href="https://proofmark.jp/cert/…">ProofMark Verified: …</a>
+ *   </blockquote>
+ *   <script async src="https://proofmark.jp/embed.js" charset="utf-8"></script>
+ *
+ * Why a <blockquote>?
+ *   - SEO crawlers can read the link text BEFORE embed.js hydrates → ranking juice.
+ *   - Screen readers see a real anchor → accessibility for free.
+ *   - If JS is blocked, users still get a clickable certificate link → graceful.
+ *   - embed.js can replace the blockquote with the kinetic iframe at its leisure.
+ *
+ * No iframe builders. No legacy portfolio HTML. This is the only export.
+ */
 
-export interface PortfolioWidgetOptions {
-  theme?: PortfolioWidgetTheme;
-  layout?: PortfolioWidgetLayout;
-  showBadges?: boolean;
-  showBundles?: boolean;
-  maxItems?: number;
-  bundleLimit?: number;
-  height?: number;
+const PROOFMARK_ORIGIN = 'https://proofmark.jp';
+
+/** Strict HTML-attribute escaper (titles often contain ", &, <, >, '). */
+function escapeHtmlAttr(input: string): string {
+  return input
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
-const clamp = (value: number, min: number, max: number) => {
-  const safeValue = Number.isFinite(value) ? value : min;
-  return Math.min(Math.max(safeValue, min), max);
-};
-
-export function buildPortfolioWidgetUrl(baseUrl: string, username: string, options: PortfolioWidgetOptions = {}) {
-  const url = new URL(`/embed/${encodeURIComponent(username)}`, baseUrl);
-
-  if (options.theme) url.searchParams.set('theme', options.theme);
-  if (options.layout) url.searchParams.set('layout', options.layout);
-  if (typeof options.showBadges === 'boolean') url.searchParams.set('badges', String(options.showBadges));
-  if (typeof options.showBundles === 'boolean') url.searchParams.set('bundles', String(options.showBundles));
-  if (typeof options.maxItems === 'number') url.searchParams.set('maxItems', String(clamp(options.maxItems, 1, 12)));
-  if (typeof options.bundleLimit === 'number') url.searchParams.set('bundleLimit', String(clamp(options.bundleLimit, 0, 6)));
-
-  return url.toString();
+/** Conservative ID sanitizer — UUID/slug-safe characters only. */
+function sanitizeId(id: string): string {
+  return String(id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 128);
 }
 
-export function buildPortfolioWidgetEmbedHtml(baseUrl: string, username: string, options: PortfolioWidgetOptions = {}) {
-  const src = buildPortfolioWidgetUrl(baseUrl, username, options);
-  const frameId = `proofmark-widget-${username.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'portfolio'}`;
-  const height = clamp(options.height ?? 880, 520, 1600);
+/**
+ * Build the canonical ProofMark embed snippet.
+ *
+ * @param id     Certificate id or public_verify_token.
+ * @param title  Human-readable work title (used in fallback link text).
+ * @returns      Self-contained HTML snippet ready to paste into Notion/STUDIO/etc.
+ */
+export function buildParasiticSnippet(id: string, title: string): string {
+  const safeId = sanitizeId(id);
+  const safeTitleAttr = escapeHtmlAttr(title || 'Untitled Work');
 
-  return `<iframe
-  id="${frameId}"
-  src="${src}"
-  title="ProofMark verified portfolio"
-  loading="lazy"
-  style="width:100%;height:${height}px;border:0;border-radius:28px;overflow:hidden;background:#050816;box-shadow:0 24px 120px rgba(10,14,39,.36);"
-  referrerpolicy="strict-origin-when-cross-origin"
-></iframe>
-<script>
-(function(){
-  var frame = document.getElementById('${frameId}');
-  if (!frame) return;
-  window.addEventListener('message', function(event){
-    if (!event || !event.data || event.data.type !== 'proofmark:embed:resize') return;
-    // 🛡️ 防衛線：自分自身（ProofMarkのiframe）からの通信以外は完全に無視する
-    if (event.source !== frame.contentWindow) return;
-    if (typeof event.data.height !== 'number') return;
-    frame.style.height = Math.max(520, Math.min(1600, Math.ceil(event.data.height))) + 'px';
-  });
-})();
-</script>`;
+  return `<blockquote class="proofmark-embed" data-proofmark-id="${safeId}">
+  <a href="${PROOFMARK_ORIGIN}/cert/${safeId}">ProofMark Verified: ${safeTitleAttr}</a>
+</blockquote>
+<script async src="${PROOFMARK_ORIGIN}/embed.js" charset="utf-8"></script>`;
 }
