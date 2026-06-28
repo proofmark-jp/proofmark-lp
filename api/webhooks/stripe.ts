@@ -174,6 +174,7 @@ async function issueSpotTimestamp(opts: { stagingId: string; sha256: string; req
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     const log = makeLogger('webhooks/stripe');
     res.setHeader('x-request-id', log.ctx.reqId);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
     if (!methodGuard(req, res, ['POST'])) return;
 
