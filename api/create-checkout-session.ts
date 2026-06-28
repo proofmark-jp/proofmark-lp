@@ -66,15 +66,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const log = makeLogger('create-checkout-session');
     res.setHeader('x-request-id', log.ctx.reqId);
 
-    if (req.method === 'OPTIONS') {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-        res.status(200).end();
-        return;
-    }
-
-    res.setHeader('Access-Control-Allow-Origin', '*');
-
     if (!methodGuard(req, res, ['POST'])) return;
 
     const origin = (req.headers.origin as string | undefined) ?? '';

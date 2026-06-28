@@ -239,10 +239,9 @@ export default async function handler(
         const png = resvg.render().asPng();
 
         res.setHeader('Content-Type', 'image/png');
-        res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader(
             'Cache-Control',
-            'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800',
+            'public, max-age=60, s-maxage=60, stale-while-revalidate=31536000',
         );
         res.setHeader(
             'Content-Disposition',
@@ -257,7 +256,6 @@ export default async function handler(
             'base64',
         );
         res.setHeader('Content-Type', 'image/png');
-        res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('X-ProofMark-Watermark', 'fallback-transparent');
         res.status(200).send(transparent);
