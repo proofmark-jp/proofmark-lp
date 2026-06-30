@@ -7,7 +7,6 @@
     "api/timestamp.ts": { "maxDuration": 30 },
     "api/webhooks/stripe.ts": { "maxDuration": 30 },
     "api/delivery.ts": { "maxDuration": 15 }
-    // 削除: "api/storefront-html.ts" の "includeFiles" (Viteのindex.htmlはもう存在しないため)
   },
   "rewrites": [
     {
@@ -18,7 +17,6 @@
       "source": "/u/:username",
       "destination": "/api/storefront-html?username=:username"
     }
-    // 削除: SPA用の "/index.html" へのキャッチオール・フォールバック
   ],
   "headers": [
     {
