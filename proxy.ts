@@ -19,7 +19,8 @@ const ratelimit = new Ratelimit({
   prefix: 'proofmark_edge_limiter',
 });
 
-export async function middleware(request: NextRequest) {
+// 👑 【Next.js 16 完全準拠】: エッジ関数として機能させるため名前を厳格に `proxy` としてエクスポート
+export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
   
   // 静的アセット、画像、APIルート、各種メタファイルはレートリミットの対象外とし、
@@ -75,8 +76,7 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-// ミドルウェアを実行するスコープの厳格な定義
-// 不要なアセットへの関与を減らし、エッジ関数の実行時間（Vercelのインフラコスト）をミリ秒単位で削減する
+// 👑 【Next.js 16 命名規則固定】: 旧 middleware の matcher スコープを完全に継承
 export const config = {
   matcher: [
     /*
