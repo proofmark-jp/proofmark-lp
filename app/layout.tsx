@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Geist } from 'next/font/google';
-import '@/index.css'; // 既存のグローバルCSS（Tailwind v4）をバインド
+import '../index.css'; // 既存のグローバルCSS（Tailwind v4）をバインド
 
 // Geistフォントのインポーズ（サブセット化による超高速ロード）
 const geist = Geist({
