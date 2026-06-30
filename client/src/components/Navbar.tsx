@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'wouter';
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   LogOut,
   LayoutDashboard,
@@ -9,25 +12,65 @@ import {
   X,
   FileText,
   Shield,
-  Info,
-  ExternalLink,
+  HelpCircle,
   Zap,
   Scale,
   CreditCard,
   ShieldAlert,
   ShieldCheck,
-  HelpCircle
 } from 'lucide-react';
 import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
-import { useAuth } from '../hooks/useAuth';
 
-export default function Navbar({ user, signOut }: { user: any, signOut: () => void }) {
+interface UserMetadata {
+  username?: string;
+  is_founder?: boolean;
+  avatar_url?: string;
+}
+
+export interface UserData {
+  email?: string;
+  user_metadata?: UserMetadata;
+}
+
+export interface NavbarProps {
+  user: UserData | null | undefined;
+  signOut: () => void;
+}
+
+export interface NavLinkProps {
+  href: string;
+  children: React.ReactNode;
+  icon?: React.ElementType;
+  avatarUrl?: string;
+  active?: boolean;
+  onClick?: () => void;
+}
+
+const NavLink = ({ href, children, icon: Icon, avatarUrl, active, onClick }: NavLinkProps) => (
+  <Link href={href} onClick={onClick} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer whitespace-nowrap
+    ${active
+      ? 'bg-[#6C3EF4]/10 text-[#00D4AA] border border-[#6C3EF4]/30'
+      : 'text-[#A8A0D8] hover:text-white hover:bg-white/5 border border-transparent'
+    }`}>
+      {avatarUrl ? (
+        <img 
+          src={avatarUrl} 
+          alt="Avatar" 
+          className="w-5 h-5 rounded-full object-cover border border-[#00D4AA]/40" 
+        />
+      ) : (
+        Icon && <Icon className="w-4 h-4" />
+      )}
+      {children}
+  </Link>
+);
+
+export default function Navbar({ user, signOut }: NavbarProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [location] = useLocation();
+  const pathname = usePathname() || '';
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
     const onScroll = () => {
       const y = window.scrollY || window.pageYOffset || 0;
       setScrolled(y > 12);
@@ -37,36 +80,12 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const isHomePage = location === '/';
-  const displayUsername = user?.user_metadata?.username || user?.email?.split('@')[0] || 'sinn';
+  const isHomePage = pathname === '/';
+  const displayUsername = user?.user_metadata?.username || user?.email?.split('@')[0] || 'User';
   
   const isAdmin = user?.user_metadata?.username === 'sinn' || user?.email?.includes('ogurishinya') || user?.user_metadata?.is_founder === true;
 
   const closeMenu = () => setIsMenuOpen(false);
-
-  const NavLink = ({ href, children, icon: Icon, avatarUrl, active, onClick }: any) => (
-    <Link href={href}>
-      <span
-        onClick={onClick}
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer whitespace-nowrap
-          ${active
-            ? 'bg-[#6C3EF4]/10 text-[#00D4AA] border border-[#6C3EF4]/30'
-            : 'text-[#A8A0D8] hover:text-white hover:bg-white/5 border border-transparent'
-          }`}
-      >
-        {avatarUrl ? (
-          <img 
-            src={avatarUrl} 
-            alt="Avatar" 
-            className="w-5 h-5 rounded-full object-cover border border-[#00D4AA]/40" 
-          />
-        ) : (
-          Icon && <Icon className="w-4 h-4" />
-        )}
-        {children}
-      </span>
-    </Link>
-  );
 
   return (
     <nav className={`w-full border-b sticky top-0 z-[110] no-print transition-all duration-300 ${
@@ -76,10 +95,10 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
     }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-6 relative">
         {/* 1. Logo (左側) */}
-        <Link href="/" className="flex items-center gap-2 sm:gap-3 text-decoration-none group shrink-0">
+        <Link href="/" className="flex items-center gap-2 sm:gap-3 no-underline group shrink-0">
           <div className="relative">
             <div className="absolute inset-0 bg-[#00D4AA]/20 blur-lg rounded-full group-hover:bg-[#00D4AA]/40 transition-all opacity-0 group-hover:opacity-100" />
-            <img src={navbarLogo} alt="ProofMark" className="h-7 w-auto relative z-10" />
+            <img src={navbarLogo.src} alt="ProofMark" className="h-7 w-auto relative z-10" />
           </div>
           <span className="font-['Syne'] text-xl font-extrabold text-[#F0EFF8] tracking-tight">
             Proof<span className="text-[#00D4AA]">Mark</span>
@@ -88,21 +107,11 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
 
         {/* 2. Desktop Navigation (中央) - xl(1280px)以上で表示 */}
         <div className="hidden xl:flex flex-1 justify-center items-center gap-6">
-          <Link href="/how-it-works">
-            <span className={`text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${location === '/how-it-works' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>仕組み</span>
-          </Link>
-          <Link href="/compare-c2pa">
-            <span className={`text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${location === '/compare-c2pa' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>C2PA比較</span>
-          </Link>
-          <Link href="/legal-resources">
-            <span className={`text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${location === '/legal-resources' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>法的ガイド</span>
-          </Link>
-          <Link href="/trust-center">
-            <span className={`text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${location === '/trust-center' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>Trust Center</span>
-          </Link>
-          <Link href="/pricing">
-            <span className={`text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${location === '/pricing' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>料金プラン</span>
-          </Link>
+          <Link href="/how-it-works" className={`text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${pathname === '/how-it-works' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>仕組み</Link>
+          <Link href="/compare-c2pa" className={`text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${pathname === '/compare-c2pa' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>C2PA比較</Link>
+          <Link href="/legal-resources" className={`text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${pathname === '/legal-resources' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>法的ガイド</Link>
+          <Link href="/trust-center" className={`text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${pathname === '/trust-center' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>Trust Center</Link>
+          <Link href="/pricing" className={`text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${pathname === '/pricing' ? 'text-[#00D4AA]' : 'text-[#A8A0D8] hover:text-white'}`}>料金プラン</Link>
         </div>
 
         {/* 3. User Actions (右側) - xl(1280px)以上で表示 */}
@@ -110,17 +119,15 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
           {user ? (
             <>
               {isAdmin && (
-                <Link href="/admin">
-                  <span className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-[#6C3EF4]/20 to-[#00D4AA]/20 border border-[#6C3EF4]/40 rounded-xl hover:from-[#6C3EF4]/40 hover:to-[#00D4AA]/40 transition-all shadow-[0_0_15px_rgba(108,62,244,0.15)] cursor-pointer group">
-                    <Shield className="w-4 h-4 text-[#00D4AA] group-hover:scale-110 transition-transform" />
-                    Admin Center
-                  </span>
+                <Link href="/admin" className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-gradient-to-r from-[#6C3EF4]/20 to-[#00D4AA]/20 border border-[#6C3EF4]/40 rounded-xl hover:from-[#6C3EF4]/40 hover:to-[#00D4AA]/40 transition-all shadow-[0_0_15px_rgba(108,62,244,0.15)] cursor-pointer group">
+                  <Shield className="w-4 h-4 text-[#00D4AA] group-hover:scale-110 transition-transform" />
+                  Admin Center
                 </Link>
               )}
-              <NavLink href="/dashboard" icon={LayoutDashboard} active={location === '/dashboard'}>管理画面</NavLink>
-              <NavLink href={`/u/${displayUsername}`} icon={ImageIcon} active={location.startsWith('/u/')}>公開ギャラリー</NavLink>
-              <NavLink href="/settings" icon={Settings} avatarUrl={user?.user_metadata?.avatar_url} active={location === '/settings'}>設定</NavLink>
-              <NavLink href="/contact" icon={HelpCircle} active={location === '/contact'}>サポート</NavLink>
+              <NavLink href="/dashboard" icon={LayoutDashboard} active={pathname === '/dashboard'}>管理画面</NavLink>
+              <NavLink href={`/u/${displayUsername}`} icon={ImageIcon} active={pathname.startsWith('/u/')}>公開ギャラリー</NavLink>
+              <NavLink href="/settings" icon={Settings} avatarUrl={user?.user_metadata?.avatar_url} active={pathname === '/settings'}>設定</NavLink>
+              <NavLink href="/contact" icon={HelpCircle} active={pathname === '/contact'}>サポート</NavLink>
               <button
                 onClick={signOut}
                 className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-[#A8A0D8] hover:text-[#FF4D4D] transition-all hover:bg-[#FF4D4D]/10 rounded-xl whitespace-nowrap"
@@ -130,13 +137,9 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
             </>
           ) : (
             <div className="flex items-center gap-4">
-              <Link href="/auth">
-                <span className="text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors cursor-pointer whitespace-nowrap">ログイン</span>
-              </Link>
-              <Link href="/auth?mode=signup">
-                <button className="bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-[0_0_20px_rgba(108,62,244,0.4)] hover:scale-105 transition-all whitespace-nowrap">
+              <Link href="/auth" className="text-sm font-bold text-[#A8A0D8] hover:text-white transition-colors cursor-pointer whitespace-nowrap">ログイン</Link>
+              <Link href="/auth?mode=signup" className="bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-[0_0_20px_rgba(108,62,244,0.4)] hover:scale-105 transition-all whitespace-nowrap">
                   無料で始める
-                </button>
               </Link>
             </div>
           )}
@@ -145,10 +148,8 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
         {/* Tablet/Mobile Action & Hamburger - xl(1280px)未満で表示 */}
         <div className="flex items-center gap-2 xl:hidden">
           {user && (
-            <Link href="/dashboard">
-              <span className="w-10 h-10 flex items-center justify-center bg-[#6C3EF4]/10 rounded-xl text-[#00D4AA] border border-[#6C3EF4]/30">
+            <Link href="/dashboard" className="w-10 h-10 flex items-center justify-center bg-[#6C3EF4]/10 rounded-xl text-[#00D4AA] border border-[#6C3EF4]/30">
                 <LayoutDashboard className="w-5 h-5" />
-              </span>
             </Link>
           )}
           <button
@@ -168,83 +169,63 @@ export default function Navbar({ user, signOut }: { user: any, signOut: () => vo
               <div className="grid grid-cols-1 gap-1">
                 <p className="text-[10px] font-black text-[#6C3EF4] tracking-[0.2em] uppercase mb-1 px-2">Navigation</p>
                 {isAdmin && (
-                  <Link href="/admin">
-                    <span onClick={closeMenu} className="flex items-center gap-2 px-4 py-2 mb-1 text-sm font-bold text-white bg-gradient-to-r from-[#6C3EF4]/20 to-[#00D4AA]/20 border border-[#6C3EF4]/40 rounded-xl hover:from-[#6C3EF4]/40 hover:to-[#00D4AA]/40 transition-all shadow-[0_0_15px_rgba(108,62,244,0.15)] cursor-pointer group">
+                  <Link href="/admin" onClick={closeMenu} className="flex items-center gap-2 px-4 py-2 mb-1 text-sm font-bold text-white bg-gradient-to-r from-[#6C3EF4]/20 to-[#00D4AA]/20 border border-[#6C3EF4]/40 rounded-xl hover:from-[#6C3EF4]/40 hover:to-[#00D4AA]/40 transition-all shadow-[0_0_15px_rgba(108,62,244,0.15)] cursor-pointer group">
                       <Shield className="w-4 h-4 text-[#00D4AA] group-hover:scale-110 transition-transform" />
                       Admin Center
-                    </span>
                   </Link>
                 )}
-                <NavLink href="/dashboard" icon={LayoutDashboard} active={location === '/dashboard'} onClick={closeMenu}>管理画面</NavLink>
-                <NavLink href={`/u/${displayUsername}`} icon={ImageIcon} active={location.startsWith('/u/')} onClick={closeMenu}>公開ギャラリー</NavLink>
-                <NavLink href="/settings" icon={Settings} avatarUrl={user?.user_metadata?.avatar_url} active={location === '/settings'} onClick={closeMenu}>プロフィール設定</NavLink>
-                <NavLink href="/contact" icon={HelpCircle} active={location === '/contact'} onClick={closeMenu}>サポート</NavLink>
+                <NavLink href="/dashboard" icon={LayoutDashboard} active={pathname === '/dashboard'} onClick={closeMenu}>管理画面</NavLink>
+                <NavLink href={`/u/${displayUsername}`} icon={ImageIcon} active={pathname.startsWith('/u/')} onClick={closeMenu}>公開ギャラリー</NavLink>
+                <NavLink href="/settings" icon={Settings} avatarUrl={user?.user_metadata?.avatar_url} active={pathname === '/settings'} onClick={closeMenu}>プロフィール設定</NavLink>
+                <NavLink href="/contact" icon={HelpCircle} active={pathname === '/contact'} onClick={closeMenu}>サポート</NavLink>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                <Link href="/auth?mode=signup">
-                  <button onClick={closeMenu} className="w-full bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white py-4 rounded-2xl font-bold">無料で始める</button>
-                </Link>
-                <Link href="/auth">
-                  <button onClick={closeMenu} className="w-full py-4 text-[#A8A0D8] font-bold">既にアカウントをお持ちの方</button>
-                </Link>
+                <Link href="/auth?mode=signup" onClick={closeMenu} className="w-full text-center bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white py-4 rounded-2xl font-bold block">無料で始める</Link>
+                <Link href="/auth" onClick={closeMenu} className="w-full text-center py-4 text-[#A8A0D8] font-bold block">既にアカウントをお持ちの方</Link>
               </div>
             )}
 
             <div className="grid grid-cols-1 gap-1">
               <p className="text-[10px] font-black text-[#6C3EF4] tracking-[0.2em] uppercase mb-1 px-2">Product</p>
-              <Link href="/how-it-works">
-                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
+              <Link href="/how-it-works" onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
                   <Zap className="w-5 h-5 text-[#ffd966]" />
                   <span className="text-sm font-bold text-[#A8A0D8]">ProofMarkの仕組み</span>
-                </span>
               </Link>
-              <Link href="/pricing">
-                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
+              <Link href="/pricing" onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
                   <CreditCard className="w-5 h-5 text-[#6C3EF4]" />
                   <span className="text-sm font-bold text-[#A8A0D8]">料金プラン</span>
-                </span>
               </Link>
-              <Link href="/compare-c2pa">
-                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
+              <Link href="/compare-c2pa" onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
                   <Scale className="w-5 h-5 text-[#00D4AA]" />
                   <span className="text-sm font-bold text-[#A8A0D8]">C2PAとの比較</span>
-                </span>
               </Link>
-              <Link href="/blog">
-                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
+              <Link href="/blog" onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
                   <FileText className="w-5 h-5 text-[#BC78FF]" />
                   <span className="text-sm font-bold text-[#A8A0D8]">公式ブログ</span>
-                </span>
               </Link>
             </div>
 
             <div className="grid grid-cols-1 gap-1">
               <p className="text-[10px] font-black text-[#6C3EF4] tracking-[0.2em] uppercase mb-1 px-2">Trust & Legal</p>
-              <Link href="/trust-center">
-                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
+              <Link href="/trust-center" onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
                   <ShieldCheck className="w-5 h-5 text-[#00D4AA]" />
                   <span className="text-sm font-bold text-[#A8A0D8]">Trust Center</span>
-                </span>
               </Link>
-              <Link href="/legal-resources">
-                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
+              <Link href="/legal-resources" onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
                   <ShieldAlert className="w-5 h-5 text-[#FF6B6B]" />
                   <span className="text-sm font-bold text-[#A8A0D8]">権利行使・法的ガイド</span>
-                </span>
               </Link>
-              <Link href="/terms">
-                <span onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
+              <Link href="/terms" onClick={closeMenu} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
                   <Shield className="w-5 h-5 text-[#A8A0D8]" />
                   <span className="text-sm font-bold text-[#A8A0D8]">利用規約・プライバシー</span>
-                </span>
               </Link>
             </div>
 
             {user && (
               <button
                 onClick={() => { signOut(); closeMenu(); }}
-                className="flex items-center justify-center gap-2 p-3 text-[#FF4D4D] font-bold border border-[#FF4D4D]/20 rounded-2xl bg-[#FF4D4D]/5 active:scale-95 transition-all"
+                className="flex items-center justify-center gap-2 p-3 text-[#FF4D4D] font-bold border border-[#FF4D4D]/20 rounded-2xl bg-[#FF4D4D]/5 active:scale-95 transition-all w-full"
               >
                 <LogOut className="w-4 h-4" /> ログアウト
               </button>

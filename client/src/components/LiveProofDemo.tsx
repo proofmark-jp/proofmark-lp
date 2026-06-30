@@ -1,3 +1,6 @@
+// src/components/LiveProofDemo.tsx
+"use client";
+
 /**
  * LiveProofDemo.tsx — ProofMark LP Section 2 の核心
  * ─────────────────────────────────────────────────────────────
@@ -21,7 +24,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Link } from 'wouter';
+import Link from 'next/link';
 import {
   AnimatePresence,
   LayoutGroup,
@@ -37,7 +40,6 @@ import {
   Copy,
   FileText,
   ImageIcon,
-  Layers,
   Lock,
   Paintbrush,
   ShieldCheck,
@@ -51,7 +53,6 @@ import {
 
 export const EASE_OUT_EXPO: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
-/** NumberRoll — 発行件数カウンタ。digit ごとに縦スクロール。 */
 export function NumberRoll({
   value,
   reduce = false,
@@ -104,7 +105,6 @@ export function NumberRoll({
   );
 }
 
-/** DataRow — 証明書内の label + value 行（CertificatePage と同じ言語） */
 export function DataRow({
   label,
   value,
@@ -158,7 +158,7 @@ interface DemoState {
   fileSize: number | null;
   fileType: string | null;
   thumbnailUrl: string | null;
-  hashProgress: number; // 0-100
+  hashProgress: number; 
   hash: string | null;
 }
 
@@ -170,9 +170,7 @@ interface SampleDescriptor {
   fileName: string;
   fileSize: number;
   fileType: string;
-  /** simulated final hash (64 char hex) */
   hash: string;
-  /** image thumb URL (illust only) */
   thumbnailUrl?: string;
 }
 
@@ -220,13 +218,16 @@ const INITIAL_STATE: DemoState = {
   hash: null,
 };
 
-const ISSUED_COUNT_BASE = 482; // 🚨 誠実なテスト稼働実績値に修正
+const ISSUED_COUNT_BASE = 482;
 
 /* ═════════════════════════════════════════════
  *  hash util — Web Crypto subtle.digest
  * ═════════════════════════════════════════════ */
 
 async function realSha256Hex(file: File): Promise<string> {
+  if (typeof window === 'undefined' || typeof globalThis.crypto === 'undefined' || !globalThis.crypto.subtle) {
+    throw new Error('This function must only be executed in a browser environment');
+  }
   const buf = await file.arrayBuffer();
   const digest = await globalThis.crypto.subtle.digest('SHA-256', buf);
   const arr = new Uint8Array(digest);
@@ -254,9 +255,9 @@ export default function LiveProofDemo(): JSX.Element {
   const previewRef = useRef<HTMLDivElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
 
-  /* IntersectionObserver: viewport 内のときだけ counter を回す */
   const [visible, setVisible] = useState<boolean>(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     const el = rootRef.current;
     if (!el || typeof IntersectionObserver === 'undefined') {
@@ -275,27 +276,29 @@ export default function LiveProofDemo(): JSX.Element {
     return () => io.disconnect();
   }, []);
 
-  /* counter slowly increments while visible (psychological motion) */
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || typeof window === 'undefined') return;
     const id = window.setInterval(() => {
       setCount((c) => c + Math.floor(Math.random() * 2));
     }, 2400);
     return () => window.clearInterval(id);
   }, [visible]);
 
-  /* cleanup */
+  const revokeThumbnail = useCallback(() => {
+    if (objectUrlRef.current && typeof window !== 'undefined') {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  }, []);
+
   useEffect(
     () => () => {
       abortRef.current?.abort();
-      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+      revokeThumbnail();
     },
-    [],
+    [revokeThumbnail],
   );
 
-  /* ─────────────────────────────────────────────
-   *  Mobile auto-scroll on HASHING transition
-   * ───────────────────────────────────────────── */
   const scrollToPreviewOnMobile = useCallback(() => {
     if (typeof window === 'undefined') return;
     if (window.matchMedia('(min-width: 768px)').matches) return;
@@ -307,20 +310,13 @@ export default function LiveProofDemo(): JSX.Element {
     });
   }, [reduce]);
 
-  /* ─────────────────────────────────────────────
-   *  Sample run: シミュレーション (1.6s)
-   * ───────────────────────────────────────────── */
   const runSample = useCallback(
     async (sample: SampleDescriptor): Promise<void> => {
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
 
-      // revoke previous object url (sample doesn't create one, but defensive)
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
+      revokeThumbnail();
 
       setState({
         phase: 'HASHING',
@@ -335,6 +331,7 @@ export default function LiveProofDemo(): JSX.Element {
 
       const steps = reduce ? [100] : [10, 24, 38, 52, 66, 78, 88, 95];
       for (const p of steps) {
+        if (typeof window === 'undefined') return;
         await new Promise((r) => window.setTimeout(r, reduce ? 0 : 165));
         if (ac.signal.aborted) return;
         setState((s) => ({ ...s, hashProgress: p }));
@@ -351,25 +348,19 @@ export default function LiveProofDemo(): JSX.Element {
       }));
       setCount((c) => c + 1);
     },
-    [reduce, scrollToPreviewOnMobile],
+    [reduce, scrollToPreviewOnMobile, revokeThumbnail],
   );
 
-  /* ─────────────────────────────────────────────
-   *  Real file: Web Crypto subtle.digest
-   * ───────────────────────────────────────────── */
   const runRealFile = useCallback(
     async (file: File): Promise<void> => {
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
 
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
+      revokeThumbnail();
 
       let thumb: string | null = null;
-      if (file.type.startsWith('image/')) {
+      if (file.type.startsWith('image/') && typeof window !== 'undefined') {
         thumb = URL.createObjectURL(file);
         objectUrlRef.current = thumb;
       }
@@ -385,9 +376,9 @@ export default function LiveProofDemo(): JSX.Element {
       });
       scrollToPreviewOnMobile();
 
-      // simulate smooth progress (実 SHA-256 は瞬時で終わる)
       const steps = reduce ? [100] : [10, 22, 36, 50, 64, 76, 86, 94];
       for (const p of steps) {
+        if (typeof window === 'undefined') return;
         await new Promise((r) => window.setTimeout(r, reduce ? 0 : 130));
         if (ac.signal.aborted) return;
         setState((s) => ({ ...s, hashProgress: p }));
@@ -408,22 +399,18 @@ export default function LiveProofDemo(): JSX.Element {
         setState(INITIAL_STATE);
       }
     },
-    [reduce, scrollToPreviewOnMobile],
+    [reduce, scrollToPreviewOnMobile, revokeThumbnail],
   );
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
-    }
+    revokeThumbnail();
     setState(INITIAL_STATE);
-  }, []);
+  }, [revokeThumbnail]);
 
   return (
     <MotionConfig transition={{ ease: EASE_OUT_EXPO }}>
       <div ref={rootRef} className="relative">
-        {/* counter chip (top-right) */}
         <div className="mb-6 flex items-center justify-end">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] font-bold" style={{ background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.3)', color: '#00D4AA' }}>
             <ShieldCheck className="w-3.5 h-3.5" />
@@ -446,10 +433,6 @@ export default function LiveProofDemo(): JSX.Element {
     </MotionConfig>
   );
 }
-
-/* ═════════════════════════════════════════════
- *  LEFT — DropZone column
- * ═════════════════════════════════════════════ */
 
 function DropColumn({
   state,
@@ -485,7 +468,6 @@ function DropColumn({
           boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)',
         }}
       >
-        {/* dropzone */}
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -556,7 +538,6 @@ function DropColumn({
           </p>
         </div>
 
-        {/* trust hint */}
         <p
           className="mt-4 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11.5px] font-semibold"
           style={{
@@ -569,7 +550,6 @@ function DropColumn({
           原本はこのブラウザから出ません
         </p>
 
-        {/* divider */}
         <div className="my-5 flex items-center gap-3">
           <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
           <span
@@ -581,7 +561,6 @@ function DropColumn({
           <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
         </div>
 
-        {/* sample buttons */}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {SAMPLES.map((s) => (
             <button
@@ -623,7 +602,6 @@ function DropColumn({
     );
   }
 
-  /* HASHING / READY: file row + (progress | CTA) */
   return (
     <div
       className="rounded-[28px] border p-5 sm:p-6"
@@ -808,10 +786,6 @@ function ReadyCta({ onReset }: { onReset: () => void }): JSX.Element {
   );
 }
 
-/* ═════════════════════════════════════════════
- *  RIGHT — Certificate preview (the heart)
- * ═════════════════════════════════════════════ */
-
 function CertificatePreview({
   state,
   reduce,
@@ -819,23 +793,22 @@ function CertificatePreview({
   state: DemoState;
   reduce: boolean;
 }): JSX.Element {
-  // 完成パルス
   const [pulseKey, setPulseKey] = useState<number>(0);
   useEffect(() => {
     if (state.phase === 'READY') setPulseKey((n) => n + 1);
   }, [state.phase]);
 
-  // 時刻 (READY のみ固定。HASHING はチクタクで「今」感)
-  const [now, setNow] = useState<Date>(() => new Date());
+  const [now, setNow] = useState<Date | null>(null);
+  
   useEffect(() => {
-    if (state.phase === 'IDLE') return;
+    setNow(new Date());
+    if (state.phase === 'IDLE' || typeof window === 'undefined') return;
     const id = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(id);
   }, [state.phase]);
 
   const sealed = state.phase === 'READY';
 
-  // stagger 親
   const container = {
     hidden: {},
     visible: {
@@ -867,7 +840,6 @@ function CertificatePreview({
           transition: 'border-color 600ms cubic-bezier(0.16,1,0.3,1)',
         }}
       >
-        {/* ambient orbs */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div
             className="absolute -top-32 -left-32 h-96 w-96 rounded-full opacity-10 blur-[100px]"
@@ -879,7 +851,6 @@ function CertificatePreview({
           />
         </div>
 
-        {/* READY pulse (1 回限り) */}
         <AnimatePresence>
           {sealed && !reduce ? (
             <motion.div
@@ -900,7 +871,6 @@ function CertificatePreview({
           ) : null}
         </AnimatePresence>
 
-        {/* PREVIEW watermark */}
         <span
           aria-hidden
           className="pointer-events-none absolute inset-0 flex items-center justify-center select-none"
@@ -919,7 +889,6 @@ function CertificatePreview({
           PREVIEW
         </span>
 
-        {/* IDLE — silhouette */}
         {state.phase === 'IDLE' ? (
           <IdleSilhouette />
         ) : (
@@ -930,7 +899,6 @@ function CertificatePreview({
             animate="visible"
             className="relative z-10"
           >
-            {/* Header */}
             <motion.div
               variants={item}
               className="flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-end sm:justify-between sm:gap-4 sm:pb-6"
@@ -996,17 +964,14 @@ function CertificatePreview({
               </div>
             </motion.div>
 
-            {/* Body grid */}
             <motion.div
               variants={item}
               className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-[2fr_3fr] md:gap-8"
             >
-              {/* Artwork slab */}
               <motion.div variants={item}>
                 <ArtworkSlab state={state} />
               </motion.div>
 
-              {/* Data column */}
               <motion.div variants={item} className="flex flex-col justify-center gap-6">
                 <motion.div variants={item}>
                   <DataRow
@@ -1016,12 +981,10 @@ function CertificatePreview({
                   />
                 </motion.div>
 
-                {/* SHA-256 — シマー or 確定値 */}
                 <motion.div variants={item}>
                   <HashPanel state={state} reduce={reduce} />
                 </motion.div>
 
-                {/* Timestamp + QR */}
                 <motion.div
                   variants={item}
                   className="flex flex-row items-center justify-between gap-6 border-t pt-6"
@@ -1041,7 +1004,7 @@ function CertificatePreview({
                             letterSpacing: '-0.015em',
                           }}
                         >
-                          {now.toLocaleString('ja-JP', { hour12: false })}
+                          {now ? now.toLocaleString('ja-JP', { hour12: false }) : '—'}
                         </p>
                       }
                     />
@@ -1057,7 +1020,6 @@ function CertificatePreview({
                   <QrSlab sealed={sealed} />
                 </motion.div>
 
-                {/* preview disclaimer */}
                 <motion.p
                   variants={item}
                   className="border-t border-dashed pt-4 text-[11px] leading-relaxed sm:text-[11.5px]"
@@ -1077,9 +1039,6 @@ function CertificatePreview({
   );
 }
 
-/* ─────────────────────────────────────────────
- *  Idle: 証明書シルエットゴースト
- * ───────────────────────────────────────────── */
 function IdleSilhouette(): JSX.Element {
   return (
     <div className="relative z-10 flex min-h-[420px] flex-col items-center justify-center text-center">
@@ -1116,9 +1075,6 @@ function IdleSilhouette(): JSX.Element {
   );
 }
 
-/* ─────────────────────────────────────────────
- *  Artwork slab
- * ───────────────────────────────────────────── */
 function ArtworkSlab({ state }: { state: DemoState }): JSX.Element {
   return (
     <div
@@ -1140,7 +1096,6 @@ function ArtworkSlab({ state }: { state: DemoState }): JSX.Element {
         <SlabGhost state={state} />
       )}
 
-      {/* scan beam */}
       <AnimatePresence>
         {state.phase === 'HASHING' ? (
           <motion.div
@@ -1164,7 +1119,6 @@ function ArtworkSlab({ state }: { state: DemoState }): JSX.Element {
         ) : null}
       </AnimatePresence>
 
-      {/* sealed corner badge */}
       <AnimatePresence>
         {state.phase === 'READY' ? (
           <motion.div
@@ -1216,9 +1170,6 @@ function SlabGhost({ state }: { state: DemoState }): JSX.Element {
   );
 }
 
-/* ─────────────────────────────────────────────
- *  Hash panel
- * ───────────────────────────────────────────── */
 function HashPanel({
   state,
   reduce,
@@ -1228,7 +1179,7 @@ function HashPanel({
 }): JSX.Element {
   const [copied, setCopied] = useState<boolean>(false);
   const onCopy = useCallback(() => {
-    if (!state.hash) return;
+    if (!state.hash || typeof navigator === 'undefined') return;
     navigator.clipboard?.writeText(state.hash).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1400);
@@ -1326,9 +1277,6 @@ function HashShimmerLines({ reduce }: { reduce: boolean }): JSX.Element {
   );
 }
 
-/* ─────────────────────────────────────────────
- *  RFC chip + QR
- * ───────────────────────────────────────────── */
 function RfcChip({ live }: { live: boolean }): JSX.Element {
   return (
     <div
@@ -1427,7 +1375,6 @@ function FakeQrCells(): JSX.Element {
             border: '2px solid white' 
           }}
         >
-          {/* 🚨 本物の ProofMark 公式ロゴ SVG */}
           <svg viewBox="0 0 100 100" className="h-full w-full rounded-[4px]">
             <defs>
               <linearGradient id="pm-qr-logo-grad" x1="15%" y1="0%" x2="85%" y2="100%">

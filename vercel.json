@@ -1,24 +1,13 @@
 {
   "version": 2,
+  "regions": ["hnd1"],
   "functions": {
-    "api/get-evidence-payload.ts": {
-      "maxDuration": 5
-    },
-    "api/generate-evidence-pack.ts": {
-      "maxDuration": 300
-    },
-    "api/timestamp.ts": {
-      "maxDuration": 30
-    },
-    "api/webhooks/stripe.ts": {
-      "maxDuration": 30
-    },
-    "api/delivery.ts": {
-      "maxDuration": 15
-    },
-    "api/storefront-html.ts": {
-      "includeFiles": "dist/index.html"
-    }
+    "api/get-evidence-payload.ts": { "maxDuration": 5 },
+    "api/generate-evidence-pack.ts": { "maxDuration": 300 },
+    "api/timestamp.ts": { "maxDuration": 30 },
+    "api/webhooks/stripe.ts": { "maxDuration": 30 },
+    "api/delivery.ts": { "maxDuration": 15 }
+    // 削除: "api/storefront-html.ts" の "includeFiles" (Viteのindex.htmlはもう存在しないため)
   },
   "rewrites": [
     {
@@ -28,27 +17,16 @@
     {
       "source": "/u/:username",
       "destination": "/api/storefront-html?username=:username"
-    },
-    {
-      "source": "/((?!api/|cert/|u/|@|src/|node_modules/)[^.]*)",
-      "destination": "/index.html"
     }
+    // 削除: SPA用の "/index.html" へのキャッチオール・フォールバック
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
           "key": "X-XSS-Protection",
           "value": "1; mode=block"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
         },
         {
           "key": "X-AI-Directive",
@@ -67,57 +45,23 @@
     {
       "source": "/api/(certificates/public|certificates/widget|profiles|cert|ogp-proxy)(.*)",
       "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization"
-        }
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
       ]
     },
     {
       "source": "/api/(embed|certificates/widget)(.*)",
       "headers": [
-        {
-          "key": "X-Frame-Options",
-          "value": "ALLOWALL"
-        },
-        {
-          "key": "Content-Security-Policy",
-          "value": "frame-ancestors *"
-        }
-      ]
-    },
-    {
-      "source": "/embed.js",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600, s-maxage=86400"
-        }
+        { "key": "X-Frame-Options", "value": "ALLOWALL" },
+        { "key": "Content-Security-Policy", "value": "frame-ancestors *" }
       ]
     },
     {
       "source": "/api/generate-evidence-pack",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "private, max-age=0, must-revalidate"
-        },
-        {
-          "key": "Access-Control-Expose-Headers",
-          "value": "Content-Disposition, X-Request-Id, X-Evidence-Cert-Id, X-Evidence-Trust-Tier"
-        }
+        { "key": "Cache-Control", "value": "private, max-age=0, must-revalidate" },
+        { "key": "Access-Control-Expose-Headers", "value": "Content-Disposition, X-Request-Id, X-Evidence-Cert-Id, X-Evidence-Trust-Tier" }
       ]
     }
   ],

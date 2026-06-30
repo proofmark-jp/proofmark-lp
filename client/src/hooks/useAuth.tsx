@@ -1,12 +1,13 @@
+"use client";
+
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { supabase } from "../lib/supabase";
 import type { Session, User } from "@supabase/supabase-js";
-import { getCurrentSession, onAuthStateChange } from "../lib/auth";
 
 interface AuthState {
   session: Session | null;
   user: User | null;
-  profile: any | null; // 追加
+  profile: any | null;
   loading: boolean;
 }
 
@@ -24,65 +25,70 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<any | null>(null); // 追加
+  const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 👑 useEffectはブラウザでしか発火しないため、windowチェックは不要。純粋なロジックのみを記述する。
     let isMounted = true;
 
     const fetchUserAndProfile = async (sessionUser: User | null) => {
-        if (!sessionUser) {
-            if (isMounted) {
-                setUser(null);
-                setProfile(null);
-                setLoading(false);
-            }
-            return;
+      if (!sessionUser) {
+        if (isMounted) {
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
         }
-        try {
-            const { data } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', sessionUser.id)
-                .single();
-            if (isMounted) {
-                setUser(sessionUser);
-                setProfile(data || { plan_tier: 'free' });
-                setLoading(false);
-            }
-        } catch (err) {
-            console.error("Failed to fetch profile", err);
-            if (isMounted) {
-                setUser(sessionUser);
-                setLoading(false);
-            }
+        return;
+      }
+      
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', sessionUser.id)
+          .single();
+          
+        if (isMounted) {
+          setUser(sessionUser);
+          setProfile(data || { plan_tier: 'free' });
+          setLoading(false);
         }
+      } catch (err) {
+        console.error("ProofMark Auth: Failed to fetch profile", err);
+        if (isMounted) {
+          setUser(sessionUser);
+          setLoading(false);
+        }
+      }
     };
 
     const initializeAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) throw error;
+        
         if (isMounted) setSession(session);
-        await fetchUserAndProfile(session?.user ?? null); // 修正
+        await fetchUserAndProfile(session?.user ?? null);
       } catch (error) {
-        console.error("Auth initialization error:", error);
+        console.error("ProofMark Auth: Initialization error", error);
         if (isMounted) setLoading(false);
       }
     };
 
     initializeAuth();
 
+    // 👑 認証状態の監視と確実なクリーンアップによるメモリリーク防衛
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (isMounted) {
         setSession(session);
-        fetchUserAndProfile(session?.user ?? null); // 修正
+        fetchUserAndProfile(session?.user ?? null);
       }
     });
 
     return () => {
       isMounted = false;
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, []);
 
@@ -103,8 +109,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetPassword = useCallback(async (email: string) => {
+    // 👑 空文字によるAPIクラッシュを防ぐ、完璧なURLフォールバック
+    const baseUrl = typeof window !== 'undefined' 
+      ? window.location.origin 
+      : (process.env.NEXT_PUBLIC_SITE_URL || 'https://proofmark.jp');
+      
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth`,
+      redirectTo: `${baseUrl}/auth`,
     });
     return { error: error ? new Error(error.message) : null };
   }, []);
