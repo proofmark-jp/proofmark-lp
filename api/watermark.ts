@@ -19,18 +19,21 @@
  *   制約 (歴史的事故再発防止):
  *     - @vercel/og 系は使わない
  *     - Node.js runtime 固定
- *     - 外部 SVG は文字列定数からインライン展開
+ *     - 外部 SVG は src/utils/svg.ts へ純粋関数として隔離
  * ──────────────────────────────────────────────────────────────────
  */
 
+import { Buffer } from 'buffer';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import satori from 'satori';
 import { html } from 'satori-html';
 import { Resvg } from '@resvg/resvg-js';
+import type React from 'react';
 
-import { loadProofmarkFonts } from './_lib/proofmark-assets.js';
+import { loadProofmarkFonts, type FontCache } from './_lib/proofmark-assets.js';
+import { PM_SEAL_SVG, svgToDataUri } from '@/utils/svg';
 
-export const config = { runtime: 'nodejs', maxDuration: 5 };
+export const config: { runtime: 'nodejs'; maxDuration: number } = { runtime: 'nodejs', maxDuration: 5 };
 
 type Theme = 'dark' | 'light';
 type Size = 'small' | 'medium' | 'large';
@@ -104,15 +107,15 @@ const THEMES: Record<Theme, ThemeSpec> = {
  * ───────────────────────────────────────────── */
 
 interface PillInput {
-    primary: string;       // 例 "ProofMark Verified"
-    secondary: string;     // 例 "RFC3161 · SHA-256"
-    shortId: string;       // 例 "PM-7F3A-9B2C"
+    primary: string;
+    secondary: string;
+    shortId: string;
     size: SizeSpec;
     theme: ThemeSpec;
 }
 
 function buildPill(input: PillInput): ReturnType<typeof html> {
-    const sealDataUri = svgToDataUri(PM_SEAL_SVG);
+    const sealDataUri: string = svgToDataUri(PM_SEAL_SVG);
     const { size: s, theme: t } = input;
 
     return html(`
@@ -195,8 +198,8 @@ export default async function handler(
         return;
     }
 
-    const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
-    const labelRaw = typeof req.query.label === 'string' ? req.query.label.trim() : '';
+    const id: string = typeof req.query.id === 'string' ? req.query.id.trim() : '';
+    const labelRaw: string = typeof req.query.label === 'string' ? req.query.label.trim() : '';
     const theme: Theme = req.query.theme === 'light' ? 'light' : 'dark';
     const sizeKey: Size =
         req.query.size === 'small'
@@ -205,15 +208,15 @@ export default async function handler(
                 ? 'large'
                 : 'medium';
 
-    const sizeSpec = SIZES[sizeKey];
-    const themeSpec = THEMES[theme];
+    const sizeSpec: SizeSpec = SIZES[sizeKey];
+    const themeSpec: ThemeSpec = THEMES[theme];
 
-    const shortId = deriveShortId(id);
-    const primary = truncate(labelRaw || 'ProofMark Verified', 28);
+    const shortId: string = deriveShortId(id);
+    const primary: string = truncate(labelRaw || 'ProofMark Verified', 28);
 
     try {
-        const fonts = await loadProofmarkFonts();
-        const tree = buildPill({
+        const fonts: FontCache = await loadProofmarkFonts();
+        const tree: ReturnType<typeof html> = buildPill({
             primary,
             secondary: 'RFC3161 · SHA-256',
             shortId,
@@ -221,7 +224,8 @@ export default async function handler(
             theme: themeSpec,
         });
 
-        const svg = await satori(tree as any, {
+        // 厳格な型推論への対応。anyを排除し、unknownを経由して安全にReactNodeへキャスト
+        const svg: string = await satori(tree as unknown as React.ReactNode, {
             width: sizeSpec.width,
             height: sizeSpec.height,
             fonts: [
@@ -230,13 +234,13 @@ export default async function handler(
             ],
         });
 
-        const resvg = new Resvg(svg, {
+        const resvg: Resvg = new Resvg(svg, {
             fitTo: { mode: 'width', value: sizeSpec.width },
             // 透過 PNG（背景 alpha = 0）
             background: 'rgba(0,0,0,0)',
             font: { loadSystemFonts: false },
         });
-        const png = resvg.render().asPng();
+        const png: Buffer = resvg.render().asPng();
 
         res.setHeader('Content-Type', 'image/png');
         res.setHeader(
@@ -249,9 +253,9 @@ export default async function handler(
         );
         res.setHeader('X-ProofMark-Watermark', `${theme}-${sizeKey}`);
         res.status(200).send(png);
-    } catch (err) {
+    } catch (err: unknown) {
         // フォントすら落ちた場合は 1x1 透明 PNG（ダウンロードは失敗扱いでよい）
-        const transparent = Buffer.from(
+        const transparent: Buffer = Buffer.from(
             'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
             'base64',
         );
@@ -270,7 +274,7 @@ export default async function handler(
 
 function deriveShortId(id: string): string {
     // UUID v4 を想定。先頭 4 文字 + 中間 4 文字を取って PM-XXXX-YYYY に整形。
-    const clean = id.replace(/[^0-9a-z]/gi, '').toUpperCase();
+    const clean: string = id.replace(/[^0-9a-z]/gi, '').toUpperCase();
     if (clean.length < 8) return 'PM-PROOF-MARK';
     return `PM-${clean.slice(0, 4)}-${clean.slice(4, 8)}`;
 }
