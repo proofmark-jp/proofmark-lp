@@ -31,7 +31,7 @@ import { Resvg } from '@resvg/resvg-js';
 import type React from 'react';
 
 import { loadProofmarkFonts, type FontCache } from './_lib/proofmark-assets.js';
-import { PM_SEAL_SVG, svgToDataUri } from '@/utils/svg';
+import { PM_SEAL_SVG, svgToDataUri } from '../src/utils/svg';
 
 export const config: { runtime: 'nodejs'; maxDuration: number } = { runtime: 'nodejs', maxDuration: 5 };
 
