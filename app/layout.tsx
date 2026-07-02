@@ -1,17 +1,23 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Geist } from 'next/font/google';
 import '../index.css'; // 既存のグローバルCSS（Tailwind v4）をバインド
 
-// Geistフォントのインポーズ（サブセット化による超高速ロード）
+// Geistフォントのインポート（サブセット化による超高速ロード）
 const geist = Geist({
   subsets: ['latin'],
   variable: '--font-geist',
 });
 
+// Viewportを完全に独立させてエクスポート（initialScaleの型も正確に数値化）
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+};
+
+// Metadataからviewportを完全に排除
 export const metadata: Metadata = {
   title: 'ProofMark | Cryptographic Human Attestation',
   description: 'AI生成の冤罪からクリエイターの技術と誇りを守る、世界標準の公証インフラ。',
-  viewport: 'width=device-width, initial-scale=true',
 };
 
 export default function RootLayout({
