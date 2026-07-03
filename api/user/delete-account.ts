@@ -2,7 +2,7 @@ export const config = { runtime: 'edge' };
 import { json, supabaseAdmin, getAuthenticatedUserId } from '../_shared.js';
 
 async function chunkedRemove(bucket: string, paths: string[]) {
-    const uniquePaths = [...new Set(paths)].filter(Boolean);
+    const uniquePaths = Array.from(new Set(paths)).filter(Boolean);
     if (uniquePaths.length === 0) return;
     const storage = supabaseAdmin.storage.from(bucket);
     for (let i = 0; i < uniquePaths.length; i += 100) {
