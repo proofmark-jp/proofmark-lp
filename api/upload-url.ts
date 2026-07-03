@@ -86,7 +86,8 @@ export async function POST(request: Request): Promise<Response> {
 
     // 6. Payload & MIME Defense (200MB / 20MB / 2MB)
     let totalPayload = 0;
-    for (const [index, file] of files.entries()) {
+    for (let index = 0; index < files.length; index++) {
+      const file = files[index];
       if (!ALLOWED_MIME_TYPES.includes(file.mimeType)) {
         throw new HttpError(415, `Unsupported MIME type: ${file.mimeType}`);
       }
