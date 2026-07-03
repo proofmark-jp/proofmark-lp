@@ -207,7 +207,7 @@ export async function verifyEvidenceChain(bundle: {
 
   return {
     valid,
-    mismatches: [...new Set(mismatches)],
+    mismatches: Array.from(new Set(mismatches)),
     chainDepth,
     headChainSha256,
     headStepId: head?.id || null,
