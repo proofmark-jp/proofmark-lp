@@ -1,113 +1,133 @@
 'use client';
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { UploadCloud, Loader2, CheckCircle2, ArrowRight, FileVideo } from 'lucide-react';
 import { toast } from 'sonner';
-import { UploadCloud, FileVideo, Loader2 } from 'lucide-react';
-
-const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
-const ALLOWED_TYPES = ['video/mp4', 'video/quicktime'];
 
 export default function Dropzone() {
-  const [isDragging, setIsDragging] = useState(false);
+  const router = useRouter();
   const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // 【The Apex】成功状態をロックするためのState
+  const [successKey, setSuccessKey] = useState<string | null>(null);
 
-  const validateAndUpload = useCallback(async (file: File) => {
-    if (isUploading) return;
-
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      toast.error('無効なファイル形式です。MP4またはMOV形式のみ対応しています。');
-      return;
+  const onDrop = useCallback(async (e: React.DragEvent | React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    
+    let file: File | null = null;
+    if ('dataTransfer' in e) {
+      file = e.dataTransfer.files[0];
+    } else if (e.target && 'files' in e.target && e.target.files) {
+      file = e.target.files[0];
     }
-    if (file.size > MAX_FILE_SIZE) {
-      toast.error(`サイズ超過です。最大500MBまで（現在: ${(file.size / 1024 / 1024).toFixed(1)}MB）`);
+
+    if (!file) return;
+
+    if (!file.type.includes('video/')) {
+      toast.error('動画ファイル（MP4 / MOV）のみアップロード可能です。');
       return;
     }
 
     setIsUploading(true);
-    const toastId = toast.loading('セキュア通信経路を構築中...');
+    const toastId = toast.loading('セキュアトンネルを構築中...');
 
     try {
-      // 1. Next.js APIへ署名付きURLを要求（Cookieが自動送信されるため認証ヘッダーは不要）
+      // 1. 署名付きURLの取得（Vercel API経由）
       const res = await fetch('/api/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contentType: file.type }),
+        body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size })
       });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || '経路の構築に失敗しました。');
-      }
-
+      
+      if (!res.ok) throw new Error('APIの初期化に失敗しました');
       const { url, key } = await res.json();
-      toast.loading('Cloudflare R2 へ暗号化転送中...', { id: toastId });
 
-      // 2. R2へ直接PUT（Next.jsサーバーの帯域を一切消費しない）
+      // 2. Cloudflare R2 へのダイレクト・セキュア転送
+      toast.loading('Cloudflare R2 へ暗号化転送中...', { id: toastId });
       const uploadRes = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': file.type },
         body: file,
       });
 
-      if (!uploadRes.ok) throw new Error('ストレージへのデータ転送に失敗しました。');
+      if (!uploadRes.ok) throw new Error('R2ストレージへの転送に失敗しました');
 
+      // 3. 転送成功 ➔ UIを「成功状態」で物理ロックする
       toast.success('動画のセキュアアップロードが完了しました。', { id: toastId });
-      console.log('[Upload Success] File securely stored at:', key);
+      setSuccessKey(key);
 
     } catch (error: any) {
-      console.error('[Dropzone Error]', error);
-      toast.error(error.message || '予期せぬエラーが発生しました。', { id: toastId });
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      console.error('[Upload Error]', error);
+      toast.error(error.message || 'アップロード中にエラーが発生しました。', { id: toastId });
+      setIsUploading(false); // エラー時のみ初期画面に戻す
     }
-  }, [isUploading]);
+  }, []);
 
+  // ─────────────────────────────────────────────────────────
+  // 状態 1: 成功ロック画面 (The Success Lock)
+  // ─────────────────────────────────────────────────────────
+  if (successKey) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-4 border border-[#00D4AA]/30 bg-[#00D4AA]/5 rounded-2xl animate-in fade-in duration-500">
+        <CheckCircle2 className="w-16 h-16 text-[#00D4AA] mb-4" />
+        <h3 className="text-2xl font-extrabold text-white mb-3 tracking-tight">アップロード完了</h3>
+        <p className="text-sm text-zinc-400 mb-10 text-center leading-relaxed">
+          原本データは安全なセキュア領域に隔離されました。<br />
+          続いて、この動画ハッシュに基づく証明書を発行します。
+        </p>
+        <button
+          // ※TODO: 次の画面（証明書発行画面）のURLに合わせて `/console/issue` 等を変更してください
+          onClick={() => router.push(`/console/issue?key=${successKey}`)}
+          className="flex items-center gap-2 bg-[#00D4AA] hover:bg-[#00D4AA]/90 text-black px-8 py-4 rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(0,212,170,0.2)]"
+        >
+          証明書の発行へ進む <ArrowRight className="w-5 h-5" />
+        </button>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // 状態 2: 初期待機 ＆ アップロード中 (Idle & Uploading)
+  // ─────────────────────────────────────────────────────────
   return (
     <div
-      onClick={() => !isUploading && fileInputRef.current?.click()}
-      onDragOver={(e) => { e.preventDefault(); if (!isUploading) setIsDragging(true); }}
-      onDragLeave={() => setIsDragging(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setIsDragging(false);
-        if (e.dataTransfer.files?.length) validateAndUpload(e.dataTransfer.files[0]);
-      }}
-      className={`
-        relative flex flex-col items-center justify-center w-full h-80 rounded-2xl border-2 border-dashed transition-all duration-300 ease-in-out cursor-pointer overflow-hidden
-        ${isUploading ? 'pointer-events-none opacity-60 border-zinc-700 bg-zinc-900/50' : ''}
-        ${isDragging ? 'border-[#00D4AA] bg-[#00D4AA]/10 shadow-[0_0_30px_rgba(0,212,170,0.15)]' : 'border-zinc-700 hover:border-zinc-500 hover:bg-zinc-800/30'}
-      `}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={onDrop}
+      className={`relative flex flex-col items-center justify-center py-20 px-4 border-2 border-dashed rounded-2xl transition-all duration-300 ${
+        isUploading 
+          ? 'border-[#00D4AA]/50 bg-[#00D4AA]/5' 
+          : 'border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900/50 cursor-pointer'
+      }`}
     >
       <input 
         type="file" 
-        ref={fileInputRef} 
-        onChange={(e) => { if (e.target.files?.length) validateAndUpload(e.target.files[0]); }} 
-        accept="video/mp4, video/quicktime" 
-        className="hidden" 
+        accept="video/mp4,video/quicktime" 
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+        onChange={onDrop}
+        disabled={isUploading}
       />
-      
-      <div className="flex flex-col items-center justify-center space-y-4 p-8 text-center z-10">
-        {isUploading ? (
-          <>
-            <Loader2 className="w-14 h-14 text-[#00D4AA] animate-spin" />
-            <p className="text-lg font-bold text-white tracking-wide">Uploading securely...</p>
-          </>
-        ) : (
-          <>
-            <div className={`p-4 rounded-full transition-colors duration-300 ${isDragging ? 'bg-[#00D4AA]/20 text-[#00D4AA]' : 'bg-zinc-800/80 text-zinc-400'}`}>
-              <UploadCloud className="w-10 h-10" />
-            </div>
-            <p className="text-xl font-bold text-white tracking-tight">原本動画をドロップして証明書を作成</p>
-            <div className="flex items-center gap-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">
-              <span className="flex items-center gap-1.5"><FileVideo className="w-4 h-4" /> MP4 / MOV</span>
-              <span>•</span>
-              <span>MAX 500MB</span>
-            </div>
-          </>
-        )}
-      </div>
+
+      {isUploading ? (
+        <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300">
+          <Loader2 className="w-14 h-14 text-[#00D4AA] animate-spin mb-6" />
+          <p className="text-white font-extrabold text-xl mb-3 tracking-tight">Uploading securely...</p>
+          <p className="text-xs text-[#00D4AA] font-bold animate-pulse uppercase tracking-widest">
+            Cloudflare R2 へ暗号化転送中...
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center">
+          <div className="bg-zinc-900 p-5 rounded-full mb-6 ring-1 ring-zinc-800">
+            <UploadCloud className="w-10 h-10 text-zinc-400" />
+          </div>
+          <p className="text-xl font-bold text-white mb-5">原本動画をドロップして証明書を作成</p>
+          <div className="flex items-center gap-4 text-xs font-bold text-zinc-500 tracking-widest">
+            <span className="flex items-center gap-1"><FileVideo className="w-4 h-4"/> MP4 / MOV</span>
+            <span>•</span>
+            <span>MAX 500MB</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
