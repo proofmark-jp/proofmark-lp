@@ -65,8 +65,27 @@ import {
   Star,
 } from 'lucide-react';
 
-// 🚨 プロジェクトのパス規約に合わせて調整してください
-import type { CertificateRecord } from '@/lib/proofmark-types';
+// 【The Apex】外部ファイル依存を物理排除した、自己完結型の堅牢なインターフェース
+export interface CertificateRecord {
+  id: string;
+  title: string | null;
+  sha256: string;
+  proof_mode: string;
+  visibility: string;
+  public_verify_token: string;
+  public_image_url: string | null;
+  storage_path: string | null;
+  file_name: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  width_px: number | null;
+  height_px: number | null;
+  badge_tier: string;
+  process_bundle_id: string | null;
+  metadata_json: Record<string, unknown> | null;
+  proven_at: string | null;
+  created_at: string;
+}
 import { executeEvidencePackDownload } from '@/components/EvidencePackDownloadButton';
 
 // Chain of Evidence builder
