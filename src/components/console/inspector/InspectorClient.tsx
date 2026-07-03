@@ -86,14 +86,43 @@ export interface CertificateRecord {
   proven_at: string | null;
   created_at: string;
 }
-import { executeEvidencePackDownload } from '@/components/EvidencePackDownloadButton';
 
-// Chain of Evidence builder
-const ProcessBundleComposer = lazy(() =>
-  import('@/components/proof/ProcessBundleComposer').then((m) => ({
-    default: m.ProcessBundleComposer,
-  })),
-);
+// 【The Apex 防衛線1】外部のダウンロードボタン依存を物理破壊し、自己完結型のエンジンを実装
+const executeEvidencePackDownload = async ({ certId }: { certId: string }) => {
+  const res = await fetch(`/api/generate-evidence-pack?cert=${certId}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Evidence Packの生成APIが応答しませんでした。');
+  }
+  // メモリ上にBlobを展開し、安全にZIPダウンロードを発火
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.style.display = 'none';
+  a.href = url;
+  a.download = `ProofMark_Evidence_${certId.substring(0, 8)}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  a.remove();
+};
+
+// 【The Apex 防衛線2】未移植の外部コンポーネントによるビルド崩壊を防ぐ、完璧なUIを持つ内部モックへ換装
+// ※バックエンドのAPI結線と本実装が完了するまでの間、画面を美しく保つためのプレースホルダー
+const ProcessBundleComposer = ({ certificate, onComplete }: any) => {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 px-4 border border-dashed border-white/10 rounded-2xl bg-white/[0.02]">
+      <Lock className="w-8 h-8 text-[#A8A0D8] mb-4" />
+      <p className="text-[13px] text-white/60 font-bold tracking-widest uppercase">
+        Chain of Evidence Engine
+      </p>
+      <p className="text-[11px] text-white/40 mt-2 text-center max-w-sm leading-relaxed">
+        このモジュールは現在 Next.js 15 へ移植中です。<br/>
+        バックエンドAPIの結線が完了次第、稼働を開始します。
+      </p>
+    </div>
+  );
+};
 
 /* ══════════════════════════════════════════════════════════════
  *  Visual DNA (PublicProfile.tsx と完全同一の DNA)
