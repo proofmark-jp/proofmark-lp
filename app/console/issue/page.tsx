@@ -1,18 +1,17 @@
 import React from 'react';
 import { redirect } from 'next/navigation';
-import { FileVideo, ShieldCheck, Cpu } from 'lucide-react';
+import { FileVideo, ShieldCheck } from 'lucide-react';
+// 【The Apex】先ほど作った動的エンジンをインポート
+import IssueProcessor from '@/components/console/IssueProcessor';
 
-// 【The Apex仕様】Next.js 15における破壊的変更: searchParamsは必ずPromiseとして扱う
 interface IssuePageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export default async function IssuePage({ searchParams }: IssuePageProps) {
-  // Promiseを展開してパラメータを抽出
   const resolvedParams = await searchParams;
   const fileKey = resolvedParams.key as string;
 
-  // 鍵(key)を持たずにこのURLに直接アクセスしてきた不届き者は、トップへ強制送還
   if (!fileKey) {
     redirect('/console');
   }
@@ -47,24 +46,21 @@ export default async function IssuePage({ searchParams }: IssuePageProps) {
         {/* ターゲットファイルの確認パネル */}
         <div className="bg-zinc-900/40 border border-zinc-800 rounded-3xl p-6 shadow-2xl mb-8">
           <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-black rounded-xl border border-zinc-800">
+            <div className="p-3 bg-black rounded-xl border border-zinc-800 ring-1 ring-zinc-700/50">
               <FileVideo className="w-6 h-6 text-[#00D4AA]" />
             </div>
-            <div>
-              <h2 className="text-sm text-zinc-500 font-bold tracking-widest uppercase mb-1">Target File Key</h2>
-              <p className="text-zinc-300 font-mono text-sm break-all">
+            <div className="overflow-hidden">
+              <h2 className="text-xs text-zinc-500 font-bold tracking-widest uppercase mb-1">Target File Key</h2>
+              <p className="text-zinc-300 font-mono text-sm break-all truncate">
                 {fileKey}
               </p>
             </div>
           </div>
         </div>
 
-        {/* 次のフェーズへのアクションボタン（現時点ではUIのみ） */}
+        {/* 🚀 【The Ignition】クライアントコンポーネントへ処理を完全委譲 */}
         <div className="flex justify-end">
-          <button className="flex items-center gap-2 bg-white text-black hover:bg-zinc-200 px-8 py-4 rounded-xl font-bold transition-all shadow-lg">
-            <Cpu className="w-5 h-5" />
-            解析と証明書生成を開始
-          </button>
+          <IssueProcessor fileKey={fileKey} />
         </div>
       </main>
       
