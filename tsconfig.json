@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
-    "target": "es2022",
-    "downlevelIteration": true,
+    "target": "es5",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
@@ -14,16 +13,33 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    "baseUrl": ".",
     "plugins": [
       {
         "name": "next"
       }
     ],
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      // 【絶対座標の定義】
+      // Next.jsのコンパイラに対し、「@/」から始まるパスは「プロジェクトルートの src/」配下のみを
+      // 探索するよう絶対命令を下す。Vite側のエイリアス設定とはここで完全に決別する。
+      "@/*": ["./src/*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "client", "dist", ".next", "supabase"]
+  // 【Next.jsの管轄エリア】
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  // 【物理遮断（The Quarantine）】
+  // Next.jsのコンパイラと型チェッカーから、Viteの遺産（client）や過去のビルド結果を物理的に隠蔽する。
+  // これにより、Next.jsがViteのコードを誤って解釈・コンパイルして自爆するリスクを根絶する。
+  "exclude": [
+    "node_modules",
+    "client",
+    "dist",
+    "build"
+  ]
 }

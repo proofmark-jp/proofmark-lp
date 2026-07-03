@@ -1,130 +1,54 @@
-'use client';
+import React from 'react';
+import { redirect } from 'next/navigation';
+import { ShieldCheck } from 'lucide-react';
+import { createClient } from '@/utils/supabase/server';
+import Dropzone from '@/components/console/Dropzone';
+import SignOutButton from '@/components/console/SignOutButton';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ShieldCheck, Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
-import { toast } from 'sonner';
-import { createClient } from '../../src/utils/supabase/client';
+// 完全な Server Component。JSバンドルサイズは実質ゼロ。
+export default async function ConsolePage() {
+  const supabase = await createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
 
-export default function LoginPage() {
-  const router = useRouter();
-  const supabase = createClient();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password) {
-      toast.error('メールアドレスとパスワードを入力してください。');
-      return;
-    }
-
-    setIsLoading(true);
-    const toastId = toast.loading('安全な接続を確立中...');
-
-    try {
-      // @supabase/ssr の BrowserClient を使うことで、自動的にセキュアCookieが発行・同期される
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      toast.success('認証に成功しました。コンソールへ転送します。', { id: toastId });
-      
-      // router.push後に router.refresh() を呼ぶことで、ミドルウェアを強制的に再評価させる
-      router.push('/console');
-      router.refresh();
-      
-    } catch (error: any) {
-      console.error('[Login Error]', error);
-      toast.error(error.message || '認証に失敗しました。認証情報を確認してください。', { id: toastId });
-      setIsLoading(false);
-    }
-  };
+  // ミドルウェアをすり抜けた異常アクセス（またはセッション切れ）を物理遮断
+  if (error || !user) {
+    redirect('/login');
+  }
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col justify-center py-12 sm:px-6 lg:px-8 selection:bg-[#00D4AA]/30">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md flex flex-col items-center">
-        <ShieldCheck className="w-16 h-16 text-[#00D4AA] mb-4" />
-        <h2 className="text-center text-3xl font-extrabold tracking-tight">
-          ProofMark Console
-        </h2>
-        <p className="mt-2 text-center text-sm text-zinc-400 font-medium">
-          Authorized Personnel Only
-        </p>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-zinc-900/50 border border-zinc-800 py-8 px-4 shadow-2xl sm:rounded-2xl sm:px-10 backdrop-blur-sm">
-          <form className="space-y-6" onSubmit={handleLogin}>
-            
-            <div>
-              <label htmlFor="email" className="block text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">
-                Email Address
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-zinc-500" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="appearance-none block w-full pl-10 pr-3 py-3 border border-zinc-700 rounded-xl bg-black text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#00D4AA] focus:border-transparent transition-all sm:text-sm"
-                  placeholder="admin@proofmark.jp"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-zinc-500" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none block w-full pl-10 pr-3 py-3 border border-zinc-700 rounded-xl bg-black text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#00D4AA] focus:border-transparent transition-all sm:text-sm"
-                  placeholder="••••••••"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
-
-            <div>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-black bg-[#00D4AA] hover:bg-[#00D4AA]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-[#00D4AA] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <>
-                    Sign In <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+    <div className="min-h-screen bg-black text-white selection:bg-[#00D4AA]/30">
+      <header className="border-b border-zinc-800 bg-black/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <ShieldCheck className="w-6 h-6 text-[#00D4AA]" />
+            <span className="font-bold text-lg tracking-wide">
+              ProofMark <span className="text-zinc-500 font-normal">Console</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-6">
+            <span className="text-sm font-bold text-zinc-400 hidden sm:inline-block">
+              {user.email}
+            </span>
+            <SignOutButton />
+          </div>
         </div>
-      </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-6 py-12">
+        <div className="mb-10 space-y-3">
+          <h1 className="text-3xl font-extrabold tracking-tight">New Certification</h1>
+          <p className="text-zinc-400 leading-relaxed font-medium">
+            AI生成の冤罪からあなたの作品を守るため、原本となる動画ファイルをアップロードしてください。<br />
+            アップロードされたデータはエンドツーエンドで暗号化され、Cloudflare R2 のセキュア領域に隔離保存されます。
+          </p>
+        </div>
+
+        <div className="bg-zinc-900/40 border border-zinc-800 rounded-3xl p-2 shadow-2xl">
+          <div className="bg-black rounded-[1.25rem] border border-zinc-800/50 p-6">
+            <Dropzone />
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

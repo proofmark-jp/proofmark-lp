@@ -10,6 +10,14 @@
   },
   "rewrites": [
     {
+      "source": "/console(.*)",
+      "destination": "/console$1"
+    },
+    {
+      "source": "/login(.*)",
+      "destination": "/login$1"
+    },
+    {
       "source": "/cert/:id",
       "destination": "/api/cert?id=:id"
     },
