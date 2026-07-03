@@ -1,6 +1,6 @@
 import React from 'react';
 import { redirect } from 'next/navigation';
-import Link from 'next/link'; // 🚀 【The Apex】Next.jsの高速ルーターをインポート
+import Link from 'next/link';
 import { ShieldCheck, FileBadge, Search, Clock, ChevronRight } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
 import Dropzone from '@/components/console/Dropzone';
@@ -14,18 +14,20 @@ export default async function ConsolePage() {
     redirect('/login');
   }
 
-  const { data: bundles, error: dbError } = await supabase
-    .from('process_bundles')
-    .select('id, title, status, created_at, certificate_id')
+  // 🚨 【完全修正】過去の全資産が眠る certificates テーブルから直接取得する
+  const { data: certs, error: dbError } = await supabase
+    .from('certificates')
+    .select('id, title, file_name, created_at, certified_at, timestamp_token, is_archived')
     .eq('user_id', user.id)
+    .eq('is_archived', false) // アーカイブ済みは一覧から除外
     .order('created_at', { ascending: false })
     .limit(5);
 
   if (dbError) {
-    console.error('[Console] Failed to fetch bundles:', dbError);
+    console.error('[Console] Failed to fetch certificates:', dbError);
   }
 
-  const hasBundles = bundles && bundles.length > 0;
+  const hasCerts = certs && certs.length > 0;
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-[#00D4AA]/30">
@@ -71,14 +73,14 @@ export default async function ConsolePage() {
               <FileBadge className="w-5 h-5 text-[#00D4AA]" />
               Recent Certificates
             </h2>
-            {hasBundles && (
+            {hasCerts && (
               <button className="text-sm font-bold text-zinc-500 hover:text-white transition-colors">
                 View All
               </button>
             )}
           </div>
 
-          {!hasBundles ? (
+          {!hasCerts ? (
             <div className="flex flex-col items-center justify-center py-16 px-4 border border-zinc-800/50 rounded-2xl bg-zinc-900/20">
               <Search className="w-10 h-10 text-zinc-600 mb-4" />
               <p className="text-zinc-300 font-bold mb-1">証明書はまだありません</p>
@@ -88,11 +90,10 @@ export default async function ConsolePage() {
             </div>
           ) : (
             <div className="grid gap-3">
-              {bundles.map((bundle) => (
-                /* 🚀 【The Apex】divをNext.jsのLinkコンポーネントに換装し、個別のダッシュボードURLへ物理接続 */
+              {certs.map((cert) => (
                 <Link 
-                  href={`/console/${bundle.id}`} 
-                  key={bundle.id} 
+                  href={`/console/${cert.id}`} 
+                  key={cert.id} 
                   className="flex items-center justify-between p-4 bg-zinc-900/40 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50 transition-all rounded-xl cursor-pointer group"
                 >
                   <div className="flex items-center gap-4">
@@ -101,18 +102,18 @@ export default async function ConsolePage() {
                     </div>
                     <div>
                       <p className="font-bold text-white text-sm mb-0.5">
-                        {bundle.title || 'Untitled Certificate'}
+                        {cert.title || cert.file_name || 'Untitled Certificate'}
                       </p>
                       <div className="flex items-center gap-3 text-xs text-zinc-500 font-mono">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3"/> 
-                          {new Date(bundle.created_at).toLocaleDateString()}
+                          {new Date(cert.created_at).toLocaleDateString()}
                         </span>
-                        <span>ID: {bundle.id.split('-')[0]}...</span>
+                        <span>ID: {cert.id.split('-')[0]}...</span>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider ${
-                          bundle.status === 'issued' ? 'bg-[#00D4AA]/10 text-[#00D4AA]' : 'bg-zinc-800 text-zinc-400'
+                          cert.timestamp_token && cert.certified_at ? 'bg-[#00D4AA]/10 text-[#00D4AA]' : 'bg-zinc-800 text-zinc-400'
                         }`}>
-                          {bundle.status}
+                          {cert.timestamp_token && cert.certified_at ? 'ISSUED' : 'PENDING'}
                         </span>
                       </div>
                     </div>
