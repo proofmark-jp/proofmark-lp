@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+/* The Apex: Next.jsの管轄エリア（appとsrc）だけをスキャン対象として絶対指定 */
+@source "../app";
+@source "../src";
+
+@layer base {
+  body {
+    background-color: #000000;
+    color: #ffffff;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}

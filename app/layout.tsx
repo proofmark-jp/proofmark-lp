@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Geist } from 'next/font/google';
-import '../index.css'; // 既存のグローバルCSS（Tailwind v4）をバインド
+import { Toaster } from 'sonner'; // 【The Monitor】通知エンジンを注入
+import './globals.css'; // 【The Engine】Viteのindex.cssを捨て、Next.js専用のCSSエンジンをバインド
 
 // Geistフォントのインポート（サブセット化による超高速ロード）
 const geist = Geist({
@@ -8,15 +9,15 @@ const geist = Geist({
   variable: '--font-geist',
 });
 
-// Viewportを完全に独立させてエクスポート（initialScaleの型も正確に数値化）
+// Viewportを完全に独立させてエクスポート
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
 };
 
-// Metadataからviewportを完全に排除
+// Metadata
 export const metadata: Metadata = {
-  title: 'ProofMark | Cryptographic Human Attestation',
+  title: 'ProofMark Console',
   description: 'AI生成の冤罪からクリエイターの技術と誇りを守る、世界標準の公証インフラ。',
 };
 
@@ -27,9 +28,6 @@ export default function RootLayout({
 }) {
   
   // 【防衛線 4: The Cache Guillotine (古いViteキャッシュの強制破壊)】
-  // ユーザーの端末に残留しているVite時代の `sw.js` (Service Worker) や古いPWAキャッシュが、
-  // Next.jsのApp Routerと大衝突を起こして画面がバグるのを防ぐため、
-  // クライアントのブラウザ起動の瞬間（インラインJavaScript）で古い登録を物理的に抹殺・浄化します。
   const cacheWiperScript = `
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
@@ -46,14 +44,35 @@ export default function RootLayout({
   `;
 
   return (
-    <html lang="ja" className={`${geist.variable}`}>
+    // HTML全体にGeistの変数を適用し、背景を漆黒に固定
+    <html lang="ja" className={`${geist.variable} bg-black`}>
       <head>
         {/* ハイドレーション前に確実に実行させ、キャッシュの先祖返りを防ぐ */}
         <script dangerouslySetInnerHTML={{ __html: cacheWiperScript }} />
       </head>
-      <body className="antialiased bg-black text-white selection:bg-zinc-800 selection:text-white">
-        {/* 既存のレイアウト（NavbarやFooter）は、移行の進捗に合わせてここに流し込みます */}
+      {/* font-sans を指定してGeistを適用し、
+        selection (テキスト選択時) の色をProofMarkブルー (#00D4AA) に設定 
+      */}
+      <body className="antialiased bg-black text-white font-sans selection:bg-[#00D4AA]/30 min-h-screen flex flex-col">
+        
+        {/* Next.js 16 Server Components Output */}
         {children}
+
+        {/* 【The Monitor】UI Feedback Engine (Dropzoneの通知を可視化) */}
+        <Toaster 
+          theme="dark" 
+          position="bottom-right" 
+          richColors 
+          expand={true}
+          toastOptions={{
+            style: {
+              background: '#18181b', 
+              border: '1px solid #27272a',
+              color: '#fff',
+            },
+          }}
+        />
+        
       </body>
     </html>
   );
