@@ -71,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 5. HTML文字列の置換
     const modifiedHtml = rawHtml
-      .replace(/<title>.*?<\/title>/is, '')
+      .replace(/<title>[\s\S]*?<\/title>/i, '')
       .replace('</head>', `${ogpTags}\n</head>`);
 
     // 6. レスポンス（エッジキャッシュの最強設定）
