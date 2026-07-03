@@ -125,7 +125,7 @@ export async function POST(request: Request): Promise<Response> {
     const isNewBundle = !body.certificateId;
     const finalCertId = body.certificateId ? body.certificateId.replace('root-', '') : crypto.randomUUID();
 
-    for (const [index, item] of items.entries()) {
+    items.forEach((item, index) => {
       const stepId = item.id || crypto.randomUUID();
       if (index === 0) rootStepId = stepId;
       
