@@ -1,5 +1,6 @@
 import React from 'react';
 import { redirect } from 'next/navigation';
+import Link from 'next/link'; // 🚀 【The Apex】Next.jsの高速ルーターをインポート
 import { ShieldCheck, FileBadge, Search, Clock, ChevronRight } from 'lucide-react';
 import { createClient } from '@/utils/supabase/server';
 import Dropzone from '@/components/console/Dropzone';
@@ -13,8 +14,6 @@ export default async function ConsolePage() {
     redirect('/login');
   }
 
-  // サーバーサイドでユーザーの「証明書履歴（process_bundles）」を最新5件取得
-  // ※エラーが出ても画面を壊さないよう安全にフォールバック
   const { data: bundles, error: dbError } = await supabase
     .from('process_bundles')
     .select('id, title, status, created_at, certificate_id')
@@ -31,7 +30,6 @@ export default async function ConsolePage() {
   return (
     <div className="min-h-screen bg-black text-white selection:bg-[#00D4AA]/30">
       
-      {/* 統合ヘッダー (The Header) */}
       <header className="border-b border-zinc-800 bg-black/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -49,12 +47,8 @@ export default async function ConsolePage() {
         </div>
       </header>
 
-      {/* メイン・ワークスペース (The Workspace) */}
       <main className="max-w-4xl mx-auto px-6 py-12">
         
-        {/* ───────────────────────────────────────────────────────── */}
-        {/* 1. アクション領域: New Certification (The Dropzone) */}
-        {/* ───────────────────────────────────────────────────────── */}
         <div className="mb-10 space-y-3">
           <h1 className="text-3xl font-extrabold tracking-tight">
             New Certification
@@ -71,9 +65,6 @@ export default async function ConsolePage() {
           </div>
         </div>
 
-        {/* ───────────────────────────────────────────────────────── */}
-        {/* 2. 確認領域: Recent Certificates (The Archive) */}
-        {/* ───────────────────────────────────────────────────────── */}
         <div className="mt-20 pt-10 border-t border-zinc-800/50">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
@@ -88,7 +79,6 @@ export default async function ConsolePage() {
           </div>
 
           {!hasBundles ? (
-            // 空の状態（Empty State）の完璧なUX
             <div className="flex flex-col items-center justify-center py-16 px-4 border border-zinc-800/50 rounded-2xl bg-zinc-900/20">
               <Search className="w-10 h-10 text-zinc-600 mb-4" />
               <p className="text-zinc-300 font-bold mb-1">証明書はまだありません</p>
@@ -97,10 +87,14 @@ export default async function ConsolePage() {
               </p>
             </div>
           ) : (
-            // 発行済み証明書のリスト表示
             <div className="grid gap-3">
               {bundles.map((bundle) => (
-                <div key={bundle.id} className="flex items-center justify-between p-4 bg-zinc-900/40 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50 transition-all rounded-xl cursor-pointer group">
+                /* 🚀 【The Apex】divをNext.jsのLinkコンポーネントに換装し、個別のダッシュボードURLへ物理接続 */
+                <Link 
+                  href={`/console/${bundle.id}`} 
+                  key={bundle.id} 
+                  className="flex items-center justify-between p-4 bg-zinc-900/40 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-800/50 transition-all rounded-xl cursor-pointer group"
+                >
                   <div className="flex items-center gap-4">
                     <div className="p-2 bg-black rounded-lg border border-zinc-800">
                       <ShieldCheck className="w-5 h-5 text-[#00D4AA]" />
@@ -124,7 +118,7 @@ export default async function ConsolePage() {
                     </div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-zinc-600 group-hover:text-[#00D4AA] transition-colors" />
-                </div>
+                </Link>
               ))}
             </div>
           )}
