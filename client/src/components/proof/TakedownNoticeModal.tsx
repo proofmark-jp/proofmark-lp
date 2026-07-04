@@ -1,3 +1,4 @@
+"use client";
 /**
  * TakedownNoticeModal.tsx
  * ─────────────────────────────────────────────────────────────────────────
@@ -14,7 +15,7 @@
  *      タイポグラフィで担い、UI 自体は静謐に保つ。
  *
  *  Zero-Server:
- *    - PDF 生成は完全クライアントサイド (jsPDF)
+ *    - PDF 生成は完全クライアントサイド (@react-pdf/renderer)
  *    - ProofMark のサーバーへ申告内容は一切送信しない
  *    - ダウンロードは Blob → URL.createObjectURL → <a download>
  * ─────────────────────────────────────────────────────────────────────────
@@ -24,8 +25,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AnimatePresence,
   motion,
-  useReducedMotion,
 } from 'framer-motion';
+import { useSafeReducedMotion } from '@/hooks/useSafeReducedMotion';
 import {
   AlertTriangle,
   Briefcase,
@@ -72,13 +73,15 @@ import {
   G,
 } from '@react-pdf/renderer';
 
-Font.register({
-  family: 'Noto Sans JP',
-  fonts: [
-    { src: '/fonts/NotoSansJP-Regular.ttf' },
-    { src: '/fonts/NotoSansJP-Bold.ttf', fontWeight: 'bold' }
-  ]
-});
+if (typeof window !== 'undefined') {
+  Font.register({
+    family: 'Noto Sans JP',
+    fonts: [
+      { src: '/fonts/NotoSansJP-Regular.ttf' },
+      { src: '/fonts/NotoSansJP-Bold.ttf', fontWeight: 'bold' }
+    ]
+  });
+}
 
 const PM_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
@@ -145,7 +148,7 @@ export default function TakedownNoticeModal({
   defaultLanguage = 'ja',
   onComplete,
 }: TakedownNoticeModalProps): JSX.Element | null {
-  const reduce = useReducedMotion() ?? false;
+  const reduce = useSafeReducedMotion();
 
   /* ── Inputs ── */
   const [infringingUrl, setInfringingUrl] = useState<string>('');
@@ -228,7 +231,7 @@ export default function TakedownNoticeModal({
       setProgress(PROGRESS_STEPS[1]);
       await wait(reduce ? 80 : 460);
 
-      // ステップ 3: Notarizing — 実際の PDF 生成 (この間に jsPDF が走る)
+      // ステップ 3: Notarizing — 実際の PDF 生成
       setProgress(PROGRESS_STEPS[2]);
 
       const input: TakedownNoticeInput = {
