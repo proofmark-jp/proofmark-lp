@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * ContentCredentialsSection — God-Mode "C2PA Vault Terminal".
  *

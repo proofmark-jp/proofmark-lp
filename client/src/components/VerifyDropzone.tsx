@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * components/VerifyDropzone.tsx — God Mode "Optical Scanner"
  * ──────────────────────────────────────────────────────────────────
@@ -11,7 +13,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useSafeReducedMotion } from '@/hooks/useSafeReducedMotion';
 import {
   AlertTriangle, Check, FileArchive, Info, Lock, Scan, Upload,
 } from 'lucide-react';
@@ -28,7 +31,7 @@ export default function VerifyDropzone(): JSX.Element {
   const { state, verify, reset, resumeWithOriginal } = useVerifier();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const reduceMotion = useReducedMotion();
+  const reduceMotion = useSafeReducedMotion();
 
   const handleFiles = useCallback(
     async (files: FileList | File[]): Promise<void> => {
