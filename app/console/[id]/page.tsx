@@ -120,52 +120,21 @@ async function getSupabaseServerClient() {
 async function fetchCertificateById(id: string): Promise<CertificateRow | null> {
   const supabase = await getSupabaseServerClient();
 
+  // 【The Apex防衛線】存在しない列の要求によるクラッシュを防ぐため、ワイルドカード(*)を使用する
   const { data, error } = await supabase
     .from('certificates')
-    .select(
-      [
-        'id',
-        'user_id',
-        'title',
-        'is_starred',
-        'file_name',
-        'file_hash',
-        'sha256',
-        'thumbnail_url',
-        'public_image_url',
-        'proof_mode',
-        'visibility',
-        'created_at',
-        'certified_at',
-        'tsa_provider',
-        'timestamp_token',
-        'cross_anchors',
-        'is_archived',
-        'client_project',
-        'project_id',
-        'delivery_status',
-        'team_id',
-        'original_filename',
-        'metadata',
-        'metadata_json',
-        'process_bundle_id',
-      ].join(', '),
-    )
+    .select('*')
     .eq('id', id)
     .single();
 
   if (error) {
-    // PGRST116 = single() で 0 行ヒット (= NotFound 相当)
     if (error.code === 'PGRST116') {
       return null;
     }
-    // RLS 拒否含むそれ以外のエラーは 500 に上げる (Next の error boundary が処理)
-    throw new Error(
-      `[ProofMark] certificates fetch failed (id=${id}): ${error.message}`,
-    );
+    // エラーの内容をVercelのログに詳細に出力させる（原因特定のため）
+    console.error(`[Supabase Error] ID: ${id}, Code: ${error.code}, Message: ${error.message}, Details: ${error.details}`);
+    throw new Error(`[ProofMark] certificates fetch failed: ${error.message}`);
   }
-
-  if (!data) return null;
 
   return data as unknown as CertificateRow;
 }
