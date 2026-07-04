@@ -24,7 +24,6 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
-import Navbar from '@/components/Navbar';
 import { InspectorClient } from '@/components/console/inspector/InspectorClient';
 
 /* ═══════════════════════════════════════════════════════════════
@@ -256,9 +255,6 @@ export default async function ConsoleInspectorPage(
           className="absolute -bottom-40 -right-40 w-[700px] h-[700px] rounded-full bg-[#00D4AA] opacity-[0.08] blur-[160px]"
         />
       </div>
-
-      {/* Global Navbar (旧 Vite 版の配置を踏襲) */}
-      <Navbar />
 
       {/* Main content — Client 側 Inspector にデータを引き渡す */}
       <main className="relative z-10 max-w-[1240px] mx-auto px-4 sm:px-6 pb-24 pt-8">
