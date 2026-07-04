@@ -24,7 +24,7 @@ import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
-import { InspectorClient } from '@/components/console/inspector/InspectorClient';
+import InspectorClient from '@/components/console/inspector/InspectorClient';
 
 /* ═══════════════════════════════════════════════════════════════
    TYPES — 旧 Vite 版 CertRow を完全踏襲した Server-Side 型
