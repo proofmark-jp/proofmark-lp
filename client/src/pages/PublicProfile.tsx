@@ -11,7 +11,8 @@ import {
   ShieldCheck, ExternalLink, Lock, ArrowLeft, ArrowRight,
   Sparkles, Globe, Heart, Video, DollarSign, PenTool, Search, Layers, Edit3, Check,
 } from 'lucide-react';
-import { motion, AnimatePresence, LayoutGroup, useReducedMotion, type Variants } from 'framer-motion';
+import { motion, AnimatePresence, LayoutGroup, type Variants } from 'framer-motion';
+import { useSafeReducedMotion } from '../hooks/useSafeReducedMotion';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import Navbar from '../components/Navbar';
@@ -438,7 +439,7 @@ const getOptimizedImageUrl = (url: string | null): string | undefined => {
  * ════════════════════════════════════════════════════════════════ */
 
 const NotFoundScreen = ({ username }: { username: string }) => {
-  const reduce = useReducedMotion() ?? false;
+  const reduce = useSafeReducedMotion();
   return (
     <div className="min-h-screen bg-[#07061A] flex flex-col items-center justify-center gap-10 px-6 text-center relative overflow-hidden">
       <motion.div
@@ -515,7 +516,7 @@ const SocialLink = ({ href, icon: Icon, label, colorClass = "hover:border-[#6C3E
 export default function PublicProfile() {
   const [match, params] = useRoute('/u/:username');
   const username = match && params ? params.username : null;
-  const reduce = useReducedMotion() ?? false;
+  const reduce = useSafeReducedMotion();
 
   const [certs, setCerts] = useState<CertRecord[]>([]);
   const [loading, setLoading] = useState(true);

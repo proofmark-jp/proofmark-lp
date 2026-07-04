@@ -11,23 +11,30 @@ export default function IssueProcessor({ fileKey }: { fileKey: string }) {
 
   const handleProcess = async () => {
     setIsProcessing(true);
-    const toastId = toast.loading('動画の解析とC2PAマニフェストを生成中...');
+    const toastId = toast.loading('原本動画のセキュアリンクを構築中...');
 
     try {
       // ─────────────────────────────────────────────────────────
-      // 🚀 【The Ignition】証明書発行APIへの発火点
+      // 🚀 【The Ignition】本物の証明書発行APIへの発火
       // ─────────────────────────────────────────────────────────
-      // TODO: ここを実際のバックエンドAPIのエンドポイントに書き換えます
-      // 例: const res = await fetch('/api/process-bundles/create-json', { ... })
-      
-      // ※現在はUIとUXの完璧な動作を検証するためのシミュレーション（3秒の遅延）
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      const res = await fetch('/api/certificates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileKey }), // 厳格にfileKeyのみを送信
+      });
 
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || '証明書の生成APIが拒絶されました。');
+      }
+
+      // APIからの応答（新しく発行された証明書のID）を受信
+      // const { id } = await res.json(); 
       // ─────────────────────────────────────────────────────────
 
-      toast.success('暗号化ハッシュチェーンの構築が完了しました。', { id: toastId });
+      toast.success('証明書のインフラ登録が完了しました。', { id: toastId });
       
-      // 処理完了後、ダッシュボード（または完了画面）へ帰還させる
+      // ダッシュボードへ帰還（ここで最新のリストが再フェッチされ、今上げた動画が出現します）
       router.replace('/console'); 
 
     } catch (error: any) {
