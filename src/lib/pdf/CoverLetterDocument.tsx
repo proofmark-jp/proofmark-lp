@@ -315,7 +315,6 @@ const styles = StyleSheet.create({
     color: PDF_COLORS.ink,
     textAlign: 'left',
     flexWrap: 'wrap',
-    // @ts-expect-error wordBreak は @react-pdf にて実装されているが型未公開
     wordBreak: 'break-word',
   },
 
@@ -343,7 +342,6 @@ const styles = StyleSheet.create({
     color: PDF_COLORS.inkDeep,
     flexWrap: 'wrap',
     // break-all → break-word: ファイル名を文字単位で切断しない
-    // @ts-expect-error
     wordBreak: 'break-word',
   },
   treeDesc: {
@@ -431,7 +429,6 @@ const styles = StyleSheet.create({
     color: PDF_COLORS.inkDeep,
     letterSpacing: 0.4,
     flexWrap: 'wrap',
-    // @ts-expect-error
     wordBreak: 'break-all',
   },
   qrFrame: {
@@ -487,7 +484,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     flexWrap: 'wrap',
     // break-all → break-word: 発行者名を文字単位で切断しない
-    // @ts-expect-error
     wordBreak: 'break-word',
   },
   sigMeta: {
@@ -532,7 +528,6 @@ const styles = StyleSheet.create({
     fontSize: SCALE.micro,
     color: PDF_COLORS.inkDeep,
     flexWrap: 'wrap',
-    // @ts-expect-error
     wordBreak: 'break-all',
   },
   pageNum: {

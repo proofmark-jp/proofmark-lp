@@ -305,7 +305,6 @@ const styles = StyleSheet.create({
     color: PDF_COLORS.inkDeep,
     fontWeight: 500,
     flexWrap: 'wrap',
-    // @ts-expect-error
     wordBreak: 'break-all',
   },
   metaValMono: {
@@ -315,7 +314,6 @@ const styles = StyleSheet.create({
     fontSize: SCALE.small + 0.5, // 9
     color: PDF_COLORS.inkDeep,
     flexWrap: 'wrap',
-    // @ts-expect-error
     wordBreak: 'break-all',
   },
 
@@ -349,7 +347,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     lineHeight: 1.5,
     flexWrap: 'wrap',
-    // @ts-expect-error
     wordBreak: 'break-all',
   },
 
@@ -400,7 +397,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     flexWrap: 'wrap',
     // break-all → break-word: 発行者名を文字単位で切断しない
-    // @ts-expect-error
     wordBreak: 'break-word',
   },
   certificateIdLabel: {
@@ -457,7 +453,6 @@ const styles = StyleSheet.create({
     fontSize: SCALE.micro,
     color: PDF_COLORS.inkDeep,
     flexWrap: 'wrap',
-    // @ts-expect-error
     wordBreak: 'break-all',
   },
   pageNum: {

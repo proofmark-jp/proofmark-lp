@@ -273,7 +273,7 @@ export async function verifyTimestamp(
   const statusValue =
     typeof tsResp.status.status === 'number'
       ? tsResp.status.status
-      : tsResp.status.status.valueBlock.valueDec;
+      : (tsResp.status.status as unknown as { valueBlock: { valueDec: number } }).valueBlock.valueDec;
   // 0 = granted, 1 = grantedWithMods, それ以外は失敗
   if (statusValue !== 0 && statusValue !== 1) {
     throw new VerifierError(

@@ -1,5 +1,6 @@
+"use client";
 /**
- * hooks/useVerifier.ts
+ * src/hooks/useVerifier.ts
  * ──────────────────────────────────────────────────────────────────
  *  ProofMark Web Verifier — state machine hook
  *
