@@ -13,14 +13,14 @@ import {
 import { motion } from 'framer-motion';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useAuth } from '../../../client/src/hooks/useAuth';
-import EvidencePackDownloadButton from '../../../client/src/components/EvidencePackDownloadButton';
+import EvidencePackDownloadButton from '@/components/EvidencePackDownloadButton';
 import Navbar from '../../../client/src/components/Navbar';
 import VerifiedBadge from '../../../client/src/components/ui/VerifiedBadge';
 import type { ProcessBundlePublic } from '../../../client/src/lib/proofmark-types';
-import { supabase } from '../../../client/src/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { getC2paSummary } from '../../../client/src/lib/c2pa-schema';
 import { ContentCredentialsSection } from '../../../client/src/components/cert/ContentCredentialsSection';
-import VerifyDropzone from '../../../client/src/components/VerifyDropzone';
+import VerifyDropzone from '@/components/VerifyDropzone';
 import type { CertificateInitialData } from './page';
 import { useSafeReducedMotion } from '@/hooks/useSafeReducedMotion';
 import React from 'react';
@@ -30,7 +30,7 @@ import React from 'react';
 //  ダイナミックインポート (ssr: false) で物理的に隔離する
 // ══════════════════════════════════════════════════════════════════
 const TakedownNoticeModal = dynamic(
-    () => import('../../../client/src/components/proof/TakedownNoticeModal'),
+    () => import('@/components/proof/TakedownNoticeModal'),
     { ssr: false }
 );
 

@@ -1,5 +1,6 @@
+"use client";
 /**
- * client/src/lib/zipStreamer.ts — The Native Stream Engine
+ * src/lib/zipStreamer.ts — The Native Stream Engine
  * ─────────────────────────────────────────────────────────────────────────────
  * 【アーキテクチャの極致】
  * - AsyncGenerator を用いた完全なストリーミング (バケツリレー) 処理。
@@ -12,11 +13,13 @@
 
 import { downloadZip } from 'client-zip';
 import streamSaver from 'streamsaver';
-import type { EvidencePackPayload } from '../components/EvidencePackDownloadButton';
+import type { EvidencePackPayload } from '@/components/EvidencePackDownloadButton';
 
 // 🚨 【防衛線1: Supply Chain 防衛】
 // 外部のGitHub Pagesへの依存を断ち切り、自社ドメインのmitmを使用する。
-streamSaver.mitm = window.location.origin + '/mitm.html';
+if (typeof window !== 'undefined') {
+  streamSaver.mitm = window.location.origin + '/mitm.html';
+}
 
 export interface StreamZipInput {
   filename: string;
@@ -25,7 +28,7 @@ export interface StreamZipInput {
   coverPdfBlob: Blob;
   onProgress?: (fileName: string) => void;
   // 🚨 【防衛線2: Zombie Fetch 防衛】通信キャンセルのためのシグナル
-  signal?: AbortSignal; 
+  signal?: AbortSignal;
 }
 
 /**
@@ -48,25 +51,25 @@ async function* generateZipFiles(
     // 🚨 ユーザーがキャンセルした瞬間にループを即時脱出する
     if (signal?.aborted) {
       console.warn('Zip streaming aborted by user.');
-      break; 
+      break;
     }
 
     onProgress?.(f.name);
 
     if (f.type === 'text') {
       yield { name: f.name, lastModified: new Date(), input: f.content };
-    } 
+    }
     else if (f.type === 'base64') {
       // signalを渡して、裏側のデコードもキャンセル可能にする
       const res = await fetch(`data:application/octet-stream;base64,${f.content}`, { signal });
       const blob = await res.blob();
       yield { name: f.name, lastModified: new Date(), input: blob };
-      URL.revokeObjectURL(URL.createObjectURL(blob)); 
-    } 
+      URL.revokeObjectURL(URL.createObjectURL(blob));
+    }
     else if (f.type === 'url') {
       try {
         let response = cache ? await cache.match(f.url) : undefined;
-        
+
         if (!response) {
           // 🚨 signalを渡して、Supabaseからの重いダウンロードをいつでもKillできるようにする
           response = await fetch(f.url, { mode: 'cors', signal });
