@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { useAuth } from '../../../client/src/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 import EvidencePackDownloadButton from '@/components/EvidencePackDownloadButton';
 import Navbar from '../../../client/src/components/Navbar';
 import VerifiedBadge from '../../../client/src/components/ui/VerifiedBadge';
