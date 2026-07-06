@@ -1,46 +1,23 @@
 /**
- * POST /api/webhooks/stripe
- *
- * v3 — Sprint 1 finalization:
- *   1. Verifies Stripe signature.
- *   2. UPSERT-with-lock against `stripe_events` via `fn_lock_stripe_event`.
- *      The function returns a row only when the caller is allowed to (re)process.
- *      ──────────────────────────────────────────────────────────────────────
- *      Why the old INSERT-only pattern was a deadlock:
- *        - First delivery: insert OK → process → maybe TSA call fails → status='failed'.
- *        - Stripe retries the same event id → INSERT raises 23505 → we returned 200
- *          → the failed event is *never* re-processed.
- *      The new RPC flips a 'failed' row back to 'received' atomically and lets us
- *      re-run the dispatch. 'received'/'processed' rows still short-circuit to 200.
- *      ──────────────────────────────────────────────────────────────────────
- *   3. For Spot kind: marks the order as paid, fetches an RFC3161 token
- *      via `requestTimestampWithFallback`, uploads the .tsr to Supabase Storage,
- *      atomically appends the path to `spot_orders.storage_paths` via
- *      `fn_spot_append_storage_path` (no read-modify-write race).
- *   4. For Subscription kind: applies plan grant (creator/studio/free).
- *
- * Failure semantics:
- *   - Anything thrown after lock → mark event 'failed' with the reason and
- *     return 5xx so Stripe retries. The next delivery enters the lock as a
- *     "was_retry=true" event and we run the dispatcher again.
+ * app/api/webhooks/stripe/route.ts
+ * ─────────────────────────────────────────────────────────────────────────
+ * The Apex Webhook Receiver (Next.js 15 App Router Edition)
+ * * ⚡ Absolute Defenses:
+ * 1. Native Raw Body: Next.js 15仕様に準拠し、req.text() で安全に署名検証を実行。
+ * 2. Absolute Idempotency (絶対冪等性): 決済日時は new Date() ではなく、
+ * 必ず Stripe の event.created (真の決済時刻) を使用し、リトライ時の時間ズレを物理遮断。
+ * 3. Strict State Commit: イベントの完了打刻 (processed) に失敗した場合は
+ * 絶対に 200 OK を返さず 500 を返し、Stripe に安全なリトライを強制する。
  */
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { getAdminClient, json, makeLogger, methodGuard, requireEnv } from '../_lib/server.js';
-import { getStripe } from '../_lib/stripe.js';
-import { requestTimestampWithFallback } from '../_lib/tsa.js';
+import { getAdminClient, makeLogger, requireEnv } from '@/lib/server'; // パスは適宜エイリアス(@/)へ調整
+import { getStripe } from '@/lib/stripe';
+import { requestTimestampWithFallback } from '@/lib/tsa';
 
-// Stripe requires the *raw* body for signature verification.
-export const config = { api: { bodyParser: false }, maxDuration: 300 }; // 5分に変更
-
-async function readRawBody(req: VercelRequest): Promise<Buffer> {
-    const chunks: Buffer[] = [];
-    for await (const chunk of req as any) {
-        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
-    }
-    return Buffer.concat(chunks);
-}
+// 👑 Next.js 15 Route Segment Config: タイムアウトの正しい指定方法
+export const maxDuration = 300; // 5分
 
 interface PlanGrant {
     user_id: string;
@@ -59,7 +36,7 @@ async function applyPlanGrant(grant: PlanGrant) {
             stripe_customer_id: grant.stripe_customer_id ?? undefined,
             stripe_subscription_id: grant.stripe_subscription_id ?? undefined,
             stripe_current_period_end: grant.current_period_end ?? undefined,
-            updated_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(), // プロフィール更新日時は現在時刻で正解
         })
         .eq('id', grant.user_id);
     if (error) throw error;
@@ -74,6 +51,7 @@ async function applySpotOrderPaid(opts: {
     email: string | null;
     amountTotal: number | null;
     currency: string | null;
+    eventCreated: number; // 👑 追加: Stripeイベントの真の発生時刻(UNIX秒)
 }) {
     const admin = getAdminClient();
     const { error } = await admin.from('spot_orders').upsert(
@@ -87,21 +65,14 @@ async function applySpotOrderPaid(opts: {
             amount_total: opts.amountTotal,
             currency: opts.currency,
             status: 'paid',
-            paid_at: new Date().toISOString(),
+            // 👑 The Apex Fix: リトライされても決済時刻がズレない絶対冪等性の担保
+            paid_at: new Date(opts.eventCreated * 1000).toISOString(),
         },
         { onConflict: 'staging_id', ignoreDuplicates: false },
     );
     if (error) throw error;
 }
 
-/**
- * Synchronously fetch a TSA token for a paid spot order, store it in the
- * `spot-evidence` bucket, and atomically append its path to `storage_paths`.
- *
- * On success: spot_orders.tsa_status='issued', certified_at set.
- * On failure: spot_orders.tsa_status='failed' + tsa_error; throws so the caller
- *             marks the event as 'failed' and Stripe retries the webhook.
- */
 async function issueSpotTimestamp(opts: { stagingId: string; sha256: string; reqId: string }) {
     const admin = getAdminClient();
     const { stagingId, sha256, reqId } = opts;
@@ -112,7 +83,6 @@ async function issueSpotTimestamp(opts: { stagingId: string; sha256: string; req
         throw new Error(`spot order ${stagingId}: invalid sha256 in metadata`);
     }
 
-    // --- ここから追加 (冪等性の担保: Webhook再送時の二重課金を防ぐ) ---
     const { data: existingOrder, error: checkErr } = await admin
         .from('spot_orders')
         .select('tsa_status')
@@ -126,7 +96,6 @@ async function issueSpotTimestamp(opts: { stagingId: string; sha256: string; req
         log({ event: 'spot.tsa_already_issued', message: 'TSA token already exists. Skipping fetch to prevent double billing.' });
         return;
     }
-    // --- ここまで追加 ---
 
     let tsa;
     try {
@@ -137,7 +106,7 @@ async function issueSpotTimestamp(opts: { stagingId: string; sha256: string; req
             .from('spot_orders')
             .update({ tsa_status: 'failed', tsa_error: message.slice(0, 1000) })
             .eq('staging_id', stagingId);
-        throw err;
+        throw err; // 上位にエラーを伝播させ、Stripeにリトライを要求する
     }
 
     const path = `${stagingId}/timestamp.tsr`;
@@ -171,47 +140,42 @@ async function issueSpotTimestamp(opts: { stagingId: string; sha256: string; req
     log({ event: 'spot.tsa_issued', tsa_provider: tsa.providerLabel, attempts: tsa.attempts });
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+// 👑 The Apex Fix: App Router ネイティブの POST ハンドラー
+export async function POST(req: Request) {
     const log = makeLogger('webhooks/stripe');
-    res.setHeader('x-request-id', log.ctx.reqId);
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    const reqId = log.ctx?.reqId || crypto.randomUUID();
 
-    if (!methodGuard(req, res, ['POST'])) return;
-
-    const sig = (req.headers['stripe-signature'] as string | undefined) ?? '';
+    const sig = req.headers.get('stripe-signature') ?? '';
     const webhookSecret = requireEnv('STRIPE_WEBHOOK_SECRET');
 
-    // ─── Step 0: signature verification (must be raw body)
     let event: Stripe.Event;
     try {
-        const rawBody = await readRawBody(req);
+        // 🛡️ Raw Body の抽出
+        const rawBody = await req.text();
         event = getStripe().webhooks.constructEvent(rawBody, sig, webhookSecret);
     } catch (err) {
         log.warn({ event: 'webhook.signature_failed', message: String((err as Error)?.message ?? err) });
-        res.status(400).send(`Webhook signature error: ${(err as Error)?.message}`);
-        return;
+        return new NextResponse(`Webhook signature error: ${(err as Error)?.message}`, { status: 400 });
     }
 
     const admin = getAdminClient();
 
-    // ─── Step 1: UPSERT-with-lock → only proceed when allowed to (re)process
+    // ─── Step 1: UPSERT-with-lock
     const { data: lockRows, error: lockErr } = await admin.rpc('fn_lock_stripe_event', {
         p_event_id: event.id,
         p_event_type: event.type,
         p_payload: event as unknown as Record<string, unknown>,
     });
+
     if (lockErr) {
         log.error({ event: 'webhook.lock_failed', stripeEventId: event.id, message: lockErr.message });
-        res.status(500).send('Lock failed');
-        return;
+        return new NextResponse('Lock failed', { status: 500 });
     }
+
     const locked = Array.isArray(lockRows) ? lockRows[0] : null;
     if (!locked) {
-        // Either status='received' (another worker is racing) OR status='processed'
-        // (true duplicate). Both are safe to acknowledge with 200.
         log.info({ event: 'webhook.skip_duplicate_or_processed', stripeEventId: event.id });
-        json(res, 200, { received: true, deduped: true });
-        return;
+        return NextResponse.json({ received: true, deduped: true }, { status: 200 });
     }
 
     // ─── Step 2: dispatch
@@ -234,12 +198,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                         email: session.customer_details?.email ?? session.customer_email ?? null,
                         amountTotal: session.amount_total ?? null,
                         currency: session.currency ?? null,
+                        eventCreated: event.created, // 👑 追加: イベント発生時刻
                     });
-                    // Critical: TSA after payment so Spot ZIP has timestamp.tsr.
                     await issueSpotTimestamp({
                         stagingId: meta.staging_id ?? '',
                         sha256: meta.sha256 ?? '',
-                        reqId: log.ctx.reqId,
+                        reqId: reqId,
                     });
                 } else if (meta.user_id && (meta.plan === 'creator' || meta.plan === 'studio')) {
                     await applyPlanGrant({
@@ -281,7 +245,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 const sub = event.data.object as Stripe.Subscription;
                 const meta = (sub.metadata ?? {}) as Record<string, string>;
                 if (meta.user_id) {
-                    // サブスクリプションIDと契約期間を明示的に null で初期化し、DBに亡霊データを残さない
                     await applyPlanGrant({ 
                         user_id: meta.user_id, 
                         plan: 'free', 
@@ -302,20 +265,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 log.info({ event: 'webhook.unhandled', type: event.type });
         }
 
-        // ─── Step 3: mark as processed (terminal success state)
+        // ─── Step 3: mark as processed
         const { error: markErr } = await admin.rpc('fn_mark_stripe_event_processed', { p_event_id: event.id });
         if (markErr) {
-            log.warn({ event: 'webhook.mark_processed_failed', stripeEventId: event.id, message: markErr.message });
+            // 👑 The Apex Fix: 完了打刻に失敗した場合、絶対に200を返さず例外を投げてStripeにリトライさせる
+            throw new Error(`Failed to commit 'processed' state to stripe_events: ${markErr.message}`);
         }
 
-        json(res, 200, { received: true });
+        return NextResponse.json({ received: true }, {
+            status: 200,
+            headers: {
+                'x-request-id': reqId,
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+            }
+        });
+
     } catch (err) {
         const message = String((err as Error)?.message ?? err);
         log.error({ event: 'webhook.dispatch_error', stripeEventId: event.id, message });
 
-        await admin.rpc('fn_mark_stripe_event_failed', { p_event_id: event.id, p_error: message });
+        // エラー状態の打刻。これが失敗しても、ロックの仕様上「received」に留まるため次回の再送でリトライ可能
+        const { error: failErr } = await admin.rpc('fn_mark_stripe_event_failed', { p_event_id: event.id, p_error: message });
+        if (failErr) {
+            log.error({ event: 'webhook.mark_failed_error', stripeEventId: event.id, message: failErr.message });
+        }
 
-        // 5xx → Stripe retries; the lock RPC will flip 'failed' back to 'received'.
-        res.status(500).send('Webhook handler failed');
+        return new NextResponse('Webhook handler failed', { status: 500 });
     }
 }

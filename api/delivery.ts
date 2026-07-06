@@ -11,6 +11,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Readable } from 'stream';
 
+export const maxDuration = 15;
+
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 

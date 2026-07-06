@@ -19,6 +19,8 @@ import { Redis } from '@upstash/redis';
 import { incrementAndCheckCertIssue, rollbackIncrement } from './_lib/rate-limit.js';
 import { getClientIp } from './_lib/server.js';
 
+export const maxDuration = 30;
+
 // ──────────────────────────────────────────────────────────────────────────
 // 0. Config
 // ──────────────────────────────────────────────────────────────────────────

@@ -34,6 +34,8 @@ import {
 import { buildChainOfEvidence } from './_lib/chain-of-evidence.js';
 import { getLegalCopyrightPdf } from './_lib/legal-pdf-cache.js';
 
+export const maxDuration = 300;
+
 export const config = { maxDuration: 120 };
 
 // ─────────────────────────────────────────────────────────

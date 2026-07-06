@@ -25,6 +25,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createHash } from 'node:crypto';
 
+export const maxDuration = 5;
+
 export const config = { runtime: 'nodejs' };
 
 /* ─────────────────────────────────────────────

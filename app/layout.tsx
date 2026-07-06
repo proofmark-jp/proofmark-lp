@@ -9,14 +9,17 @@ const geist = Geist({
   variable: '--font-geist',
 });
 
-// Viewportを完全に独立させてエクスポート
+// 👑 The Apex Fix 1: 漆黒のUIをネイティブブラウザ(Safariノッチ等)まで完全に貫通させる
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  themeColor: '#000000',
+  colorScheme: 'dark',
 };
 
-// Metadata
+// 👑 The Apex Fix 2: OGP画像の絶対パス解決に必要な metadataBase を装填
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://proofmark.jp'),
   title: 'ProofMark Console',
   description: 'AI生成の冤罪からクリエイターの技術と誇りを守る、世界標準の公証インフラ。',
 };
@@ -27,25 +30,28 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   
-  // 【防衛線 4: The Cache Guillotine (古いViteキャッシュの強制破壊)】
+  // 👑 The Apex Fix 3: Promise.allによる非同期競合(レースコンディション)の殺害
+  // 以前のforループ内reloadでは、複数のSW登録があった場合に他の解除処理が強制アボートされ、
+  // 永遠に画面がリロードされ続ける「無限リロード地獄」に陥る致死的バグを回避。
   const cacheWiperScript = `
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for (let registration of registrations) {
-          registration.unregister().then(function(boolean) {
-            if (boolean) {
-              console.log('ProofMark Security: Vite時代の古いService Workerを強制解除しました。');
+        if (registrations.length > 0) {
+          Promise.all(registrations.map(function(r) { return r.unregister(); }))
+            .then(function() {
+              console.log('ProofMark Security: Vite時代の古いService Workerを完全パージしました。');
               window.location.reload();
-            }
-          });
+            });
         }
       });
     }
   `;
 
   return (
-    // HTML全体にGeistの変数を適用し、背景を漆黒に固定
-    <html lang="ja" className={`${geist.variable} bg-black`}>
+    // 👑 The Apex Fix 4: suppressHydrationWarning の強制注入
+    // これがないと、ユーザーのブラウザ拡張機能(Grammarly, 1Password等)がHTMLを汚染した瞬間に
+    // React 19の厳格なハイドレーションがパニックを起こし、画面がクラッシュする。
+    <html lang="ja" className={`${geist.variable} bg-black`} suppressHydrationWarning>
       <head>
         {/* ハイドレーション前に確実に実行させ、キャッシュの先祖返りを防ぐ */}
         <script dangerouslySetInnerHTML={{ __html: cacheWiperScript }} />
@@ -53,7 +59,10 @@ export default function RootLayout({
       {/* font-sans を指定してGeistを適用し、
         selection (テキスト選択時) の色をProofMarkブルー (#00D4AA) に設定 
       */}
-      <body className="antialiased bg-black text-white font-sans selection:bg-[#00D4AA]/30 min-h-screen flex flex-col">
+      <body 
+        className="antialiased bg-black text-white font-sans selection:bg-[#00D4AA]/30 min-h-screen flex flex-col"
+        suppressHydrationWarning
+      >
         
         {/* Next.js 16 Server Components Output */}
         {children}
