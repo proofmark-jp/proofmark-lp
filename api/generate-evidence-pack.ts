@@ -34,9 +34,7 @@ import {
 import { buildChainOfEvidence } from './_lib/chain-of-evidence.js';
 import { getLegalCopyrightPdf } from './_lib/legal-pdf-cache.js';
 
-export const maxDuration = 300;
-
-export const config = { maxDuration: 120 };
+export const config = { maxDuration: 300 };
 
 // ─────────────────────────────────────────────────────────
 // Types
@@ -329,9 +327,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const certParam   = (req.query.cert    as string | undefined) ?? '';
-        const spotSession = (req.query.spot    as string | undefined) ?? '';
-        const stagingId   = (req.query.staging as string | undefined) ?? '';
+        const rawCert = Array.isArray(req.query.cert) ? req.query.cert[0] : req.query.cert;
+        const rawSpot = Array.isArray(req.query.spot) ? req.query.spot[0] : req.query.spot;
+        const rawStaging = Array.isArray(req.query.staging) ? req.query.staging[0] : req.query.staging;
+        
+        const certParam   = (rawCert as string | undefined) ?? '';
+        const spotSession = (rawSpot as string | undefined) ?? '';
+        const stagingId   = (rawStaging as string | undefined) ?? '';
 
         if (!certParam && !spotSession) throw new HttpError(400, 'cert or spot is required');
 

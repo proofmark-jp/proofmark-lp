@@ -10,18 +10,28 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 
-export const maxDuration = 15;
+export const config = { maxDuration: 15 };
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // 🚨 The Apex Fix: 1. OPTIONSリクエスト(Preflight)の高速許可
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.status(204).end();
+  }
+
   if (req.method !== 'GET') {
     return res.status(405).send('Method Not Allowed');
   }
 
-  const targetUrl = req.query.url as string;
+  const rawUrl = Array.isArray(req.query.url) ? req.query.url[0] : req.query.url;
+  const targetUrl = rawUrl as string;
   if (!targetUrl) {
     return res.status(400).send('URL is required');
   }
@@ -34,8 +44,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).send('Forbidden Host');
     }
 
-    // 🚨 2. Privateバケット突破: URLを認証用エンドポイントに書き換えて神の鍵でFetch
-    const fetchUrl = targetUrl.replace('/object/public/', '/object/authenticated/');
+    // 🚨 1.5. SSRF完全封じ込め: Storageパスの厳格抽出
+    const pathMatch = parsedTarget.pathname.match(/^\/storage\/v1\/object\/(public|authenticated)\/(.+)$/);
+    if (!pathMatch) {
+      return res.status(403).send('Invalid Storage Execution Path');
+    }
+    const bucketAndPath = pathMatch[2];
+    const fetchUrl = `${SUPABASE_URL}/storage/v1/object/authenticated/${bucketAndPath}`;
     
     const upstreamRes = await fetch(fetchUrl, {
       headers: {
@@ -47,7 +62,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(upstreamRes.status).send('Asset not found');
     }
 
-    // 🚨 無害化ヘッダー強制付与（Sandboxed Delivery）
+    // 🚨 The Apex Fix: 2. 外部ウィジェットからの画像参照(CORS)を許可
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    // 無害化ヘッダー強制付与（Sandboxed Delivery）
     res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox;");
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -57,19 +77,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const contentType = upstreamRes.headers.get('content-type');
     if (contentType) res.setHeader('Content-Type', contentType);
 
-    // 🚨 3. OOM防御: メモリに溜め込まず、直接ストリーミング（Pipe）する
+    // 🚨 3. OOM防御 & メモリリーク防止: 絶対安全なPipeline
     if (upstreamRes.body) {
-      // Web StreamをNode.jsのReadable Streamに変換してレスポンスに繋ぐ
-      const readable = Readable.fromWeb(upstreamRes.body as any);
-      readable.pipe(res);
-      
-      // ストリームの完了またはエラーを監視
-      readable.on('error', (err) => {
-        console.error('[Stream Error]', err);
-        if (!res.headersSent) res.status(500).end();
-      });
+      try {
+        await pipeline(Readable.fromWeb(upstreamRes.body as any), res);
+      } catch (streamErr) {
+        console.error('[Stream Disconnected or Error]', streamErr);
+      }
     } else {
-      res.status(204).end(); // bodyがない場合
+      res.status(204).end();
     }
 
   } catch (err) {

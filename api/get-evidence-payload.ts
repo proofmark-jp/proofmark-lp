@@ -25,9 +25,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createHash } from 'node:crypto';
 
-export const maxDuration = 5;
-
-export const config = { runtime: 'nodejs' };
+export const config = { runtime: 'nodejs', maxDuration: 5 };
 
 /* ─────────────────────────────────────────────
  *  Constants & Types
@@ -118,10 +116,16 @@ async function authorize(
 ): Promise<AuthContext> {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (!token) throw new HttpError(401, 'Missing bearer token');
+
+    // 🚨 ゲスト検証の許可: トークンがなくても即死させず匿名として扱う
+    if (!token) {
+        return { userId: '', isFounder: false };
+    }
 
     const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user) throw new HttpError(401, 'Invalid token');
+    if (error || !data.user) {
+        return { userId: '', isFounder: false };
+    }
     const user = data.user;
 
     return {
@@ -152,7 +156,8 @@ export default async function handler(
         return;
     }
 
-    const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
+    const rawId = Array.isArray(req.query.id) ? req.query.id[0] : req.query.id;
+    const id = typeof rawId === 'string' ? rawId.trim() : '';
     if (!id) {
         res.status(400).json({ error: 'missing_id' });
         return;
@@ -246,17 +251,18 @@ async function buildPayload(
     }
 
     // FreeTSA 証明書の動的取得
+    // 🚨 The Apex Fix: 5秒の関数タイムアウトを道連れにしないため、2秒で強制アボート(タイムアウト)させる
     try {
         const [caRes, tsaRes] = await Promise.all([
-            fetch('https://freetsa.org/files/cacert.pem'),
-            fetch('https://freetsa.org/files/tsa.crt')
+            fetch('https://freetsa.org/files/cacert.pem', { signal: AbortSignal.timeout(2000) }),
+            fetch('https://freetsa.org/files/tsa.crt', { signal: AbortSignal.timeout(2000) })
         ]);
         if (caRes.ok && tsaRes.ok) {
             texts.push({ pathInZip: 'freetsa-ca.crt', content: await caRes.text() });
             texts.push({ pathInZip: 'freetsa-tsa.crt', content: await tsaRes.text() });
         }
     } catch (e) {
-        // 無視して続行
+        // タイムアウトした場合は無視して続行（Payload自体の生成を優先）
     }
 
     // ── 4. 整合性チェック ───────────────────────
@@ -278,9 +284,12 @@ async function buildPayload(
         },
     };
 
-    // 監査ログ
-    void supabase.from('evidence_pack_audit').insert({
-        cert_id: cert.id, user_id: auth.userId, payload_fingerprint: fingerprint, issued_at: new Date().toISOString(),
+    // 監査ログ (🚨 Ghost Audit防御のため確実にawaitする。ゲスト検証時はuser_idをnullとする)
+    await supabase.from('evidence_pack_audit').insert({
+        cert_id: cert.id, 
+        user_id: auth.userId || null, 
+        payload_fingerprint: fingerprint, 
+        issued_at: new Date().toISOString(),
     });
 
     return payload;

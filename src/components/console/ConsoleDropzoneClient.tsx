@@ -31,7 +31,7 @@
  *      + hash-wasm (CDN 経由 · npm install 不要)
  */
 
-import {
+import React, {
   useCallback,
   useEffect,
   useMemo,
@@ -553,7 +553,7 @@ function PhaseBadge({
 }) {
   const map: Record<
     PhaseKey,
-    { label: string; icon: JSX.Element; color: string; rgb: string }
+    { label: string; icon: React.ReactNode; color: string; rgb: string }
   > = {
     idle: {
       label: 'READY · DROP THE TAPE',
