@@ -771,6 +771,7 @@ function MetaRow({
 }) {
   return (
     <div
+      suppressHydrationWarning
       className="rounded-xl px-3.5 py-2.5"
       style={{
         background: 'rgba(255,255,255,0.025)',
@@ -802,6 +803,7 @@ function formatDate(iso: string): string {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Asia/Tokyo',
   });
 }
 

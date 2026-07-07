@@ -21,8 +21,9 @@
 
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { cache } from 'react';
 
 import InspectorClient from '@/components/console/inspector/InspectorClient';
 
@@ -114,30 +115,36 @@ async function getSupabaseServerClient() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Data Fetch — .eq('id', id).single() / no cache
+   Data Fetch — React cache() による二重フェッチ防止と認証ゲートウェイ
    ═══════════════════════════════════════════════════════════════ */
 
-async function fetchCertificateById(id: string): Promise<CertificateRow | null> {
+const fetchCertificateById = cache(async (id: string): Promise<CertificateRow | null> => {
   const supabase = await getSupabaseServerClient();
+  
+  // 🚨 The Apex Fix 1: 認証チェックと /login への安全なリダイレクト
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    redirect('/login');
+  }
 
-  // 【The Apex防衛線】存在しない列の要求によるクラッシュを防ぐため、ワイルドカード(*)を使用する
+  // 🚨 The Apex Fix 2: ワイルドカード防衛を維持しつつ、user_id の二重ロックを掛ける
   const { data, error } = await supabase
     .from('certificates')
     .select('*')
     .eq('id', id)
+    .eq('user_id', user.id) // The Multi-Tenant Shield
     .single();
 
   if (error) {
     if (error.code === 'PGRST116') {
       return null;
     }
-    // エラーの内容をVercelのログに詳細に出力させる（原因特定のため）
     console.error(`[Supabase Error] ID: ${id}, Code: ${error.code}, Message: ${error.message}, Details: ${error.details}`);
     throw new Error(`[ProofMark] certificates fetch failed: ${error.message}`);
   }
 
   return data as unknown as CertificateRow;
-}
+});
 
 /* ═══════════════════════════════════════════════════════════════
    Metadata — Console 用の最小限メタ
@@ -185,25 +192,18 @@ export const revalidate = 0;
 export default async function ConsoleInspectorPage(
   { params }: ConsolePageProps,
 ) {
-  // 1) Next.js 15: params は Promise なので必ず await
   const { id } = await params;
 
-  // 2) ID 形式の防御 (空文字 / 極端な値の遮断)
   if (!id || typeof id !== 'string' || id.trim().length === 0) {
     notFound();
   }
 
-  // 3) Supabase から 1 件フェッチ
   const cert = await fetchCertificateById(id);
 
-  // 4) 存在しなければ Next の 404 へ
   if (!cert) {
     notFound();
   }
 
-  // 5) 旧 Vite の大枠 <div className="min-h-screen text-white relative" ...>
-  //    を維持したまま、Server Component としてレンダリング。
-  //    Client UI は <InspectorClient cert={cert} /> にすべて委譲する。
   return (
     <div
       className="min-h-screen text-white relative"
