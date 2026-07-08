@@ -229,17 +229,21 @@ async function fetchTsaCa(): Promise<{ ca: Buffer; tsa: Buffer } | null> {
         try {
             const [ca, tsa] = await Promise.all([
                 fetch('https://freetsa.org/files/cacert.pem', {
-                    signal: AbortSignal.timeout(TSA_CA_FETCH_TIMEOUT_MS),
+                    signal: AbortSignal.timeout(3000),
                 }).then((r) => (r.ok ? r.arrayBuffer() : null)),
                 fetch('https://freetsa.org/files/tsa.crt', {
-                    signal: AbortSignal.timeout(TSA_CA_FETCH_TIMEOUT_MS),
+                    signal: AbortSignal.timeout(3000),
                 }).then((r) => (r.ok ? r.arrayBuffer() : null)),
             ]);
-            if (!ca || !tsa) return null;
+            if (!ca || !tsa) {
+                console.warn('[TSA CA Fetch] Null response. Safely falling back to TSA-less configuration.');
+                return null;
+            }
             const result = { ca: Buffer.from(ca), tsa: Buffer.from(tsa) };
             tsaCaCache = { ...result, expiresAt: Date.now() + TSA_CA_TTL_MS };
             return result;
-        } catch {
+        } catch (error) {
+            console.warn('[TSA CA Fetch Timeout/Error] AbortSignal limit (3000ms) exceeded or network failure. Safely falling back to TSA-less configuration.', error);
             return null;
         } finally {
             tsaCaInflight = null;

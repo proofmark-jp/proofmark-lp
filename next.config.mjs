@@ -36,7 +36,7 @@ const nextConfig = {
       ],
       fallback: [
         {
-          source: '/:path*',
+          source: '/:path((?!api/|_next/|spa/|static/|favicon\\.ico).*)',
           destination: '/spa/index.html',
         }
       ]
