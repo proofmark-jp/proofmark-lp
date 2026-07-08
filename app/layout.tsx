@@ -9,7 +9,7 @@ const geist = Geist({
   variable: '--font-geist',
 });
 
-// 👑 The Apex Fix 1: 漆黒のUIをネイティブブラウザ(Safariノッチ等)まで完全に貫通させる
+// 👑 The Apex Fix 1: 漆黒 of UI をネイティブブラウザ(Safariノッチ等)まで完全に貫通させる
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -33,15 +33,24 @@ export default function RootLayout({
   // 👑 The Apex Fix 3: Promise.allによる非同期競合(レースコンディション)の殺害
   // 以前のforループ内reloadでは、複数のSW登録があった場合に他の解除処理が強制アボートされ、
   // 永遠に画面がリロードされ続ける「無限リロード地獄」に陥る致死的バグを回避。
+  // StreamSaver用の sw.js は意図的に除外してアンインストールを阻止。
   const cacheWiperScript = `
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(registrations) {
         if (registrations.length > 0) {
-          Promise.all(registrations.map(function(r) { return r.unregister(); }))
-            .then(function() {
+          var unregisterPromises = registrations.map(function(r) {
+            if (r.active && r.active.scriptURL.includes('sw.js')) {
+              return Promise.resolve(false);
+            }
+            return r.unregister();
+          });
+          Promise.all(unregisterPromises).then(function(results) {
+            var anyUnregistered = results.some(function(success) { return success === true; });
+            if (anyUnregistered) {
               console.log('ProofMark Security: Vite時代の古いService Workerを完全パージしました。');
               window.location.reload();
-            });
+            }
+          });
         }
       });
     }

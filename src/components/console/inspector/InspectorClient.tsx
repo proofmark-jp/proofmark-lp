@@ -47,6 +47,7 @@ import {
 import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
 import { toast } from 'sonner';
+import { createClient } from '@/utils/supabase/client'; // 🚨 追加
 import {
   Archive,
   ArchiveRestore,
@@ -781,7 +782,9 @@ function MetaRow({
       <p className="text-[9.5px] font-mono uppercase tracking-[0.22em] text-white/45">
         {label}
       </p>
+      {/* 🚨 The Apex Fix: Reactの仕様に従い、直接描画するノードに警告抑止を撃ち込む */}
       <p
+        suppressHydrationWarning
         className={[
           'mt-1 text-[12px] text-white/90',
           mono ? 'font-mono break-all text-[11.5px]' : '',
@@ -1271,6 +1274,43 @@ export default function InspectorClient({
   const [cert, setCert] = useState<CertificateRow>(initialCert);
   const [tab, setTab] = useState<'overview' | 'chain'>('overview');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // 🚨 The Apex Fix: 神経系の結線（Inspectorでのリアルタイム状態昇格）
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`inspector-db-changes-${cert.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'certificates',
+          filter: `id=eq.${cert.id}`, // この証明書のみを極限監視
+        },
+        (payload) => {
+          const updatedCert = payload.new as CertificateRow;
+          
+          // Pending から Sealed に昇格した瞬間を検知し、官能的な通知を発火
+          const wasPending = !cert.timestamp_token;
+          const isNowSealed = Boolean(updatedCert.timestamp_token && updatedCert.certified_at);
+          
+          setCert(updatedCert);
+
+          if (wasPending && isNowSealed) {
+            toast.success('TSAタイムスタンプが発行され、証拠が封印されました', {
+              icon: <Sparkles className="w-4 h-4 text-[#00D4AA]" />,
+              style: { background: '#07061A', color: '#00D4AA', borderColor: 'rgba(0,212,170,0.4)' }
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [cert.id, cert.timestamp_token]);
 
   /* ── Handlers ── */
   const handleCopyLink = async (target: CertificateRow) => {

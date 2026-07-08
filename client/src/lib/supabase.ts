@@ -36,6 +36,39 @@ export const supabase = createClient(
   }
 );
 
+/* ══════════════════════════════════════════════════════════════
+ *  The Auth Sync Bridge: LocalStorage <-> Next.js Cookies
+ * ══════════════════════════════════════════════════════════════ */
+
+if (typeof window !== 'undefined') {
+  const getProjectId = (url?: string): string => {
+    if (!url) return 'default';
+    try {
+      const parsed = new URL(url);
+      const parts = parsed.hostname.split('.');
+      return parts[0] || 'default';
+    } catch {
+      return 'default';
+    }
+  };
+  const projectId = getProjectId(supabaseUrl);
+
+  supabase.auth.onAuthStateChange((event, session) => {
+    const cookieName = `sb-${projectId}-auth-token`;
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (session) {
+        // @supabase/ssr expects access_token and refresh_token inside the cookie value
+        const sessionData = [session.access_token, session.refresh_token];
+        const cookieValue = encodeURIComponent(JSON.stringify(sessionData));
+        const maxAge = session.expires_in ?? 604800;
+        document.cookie = `${cookieName}=${cookieValue}; path=/; max-age=${maxAge}; SameSite=Lax; secure`;
+      }
+    } else if (event === 'SIGNED_OUT') {
+      document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; secure`;
+    }
+  });
+}
+
 /**
  * Database型定義（将来の型安全性のため）
  * Supabase CLI で生成する場合: supabase gen types typescript --local > src/lib/database.types.ts

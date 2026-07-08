@@ -30,10 +30,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 // ─────────────────────────────────────────────────────────
 // Types (API Payload 契約 & Export)
 // ─────────────────────────────────────────────────────────
-export type FileEntry =
-    | { name: string; type: 'text';   content: string }
-    | { name: string; type: 'base64'; content: string }
-    | { name: string; type: 'url';    url: string };
 
 export interface PdfMetaCertInput {
     certificateId: string;
@@ -55,7 +51,9 @@ export interface PdfMetaCoverInput extends PdfMetaCertInput {
 export interface EvidencePackPayload {
     filename: string;
     pdfMeta: { certInput: PdfMetaCertInput; coverInput: PdfMetaCoverInput; };
-    files: FileEntry[];
+    archiveMtimeIso?: string;
+    assets: Array<{ pathInZip: string; signedUrl: string }>;
+    texts: Array<{ pathInZip: string; content: string; encoding?: 'utf8' | 'base64' }>;
 }
 
 export interface EvidencePackDownloadParams {
@@ -181,7 +179,8 @@ export default function EvidencePackDownloadButton({
     const abortControllerRef = useRef<AbortController | null>(null);
 
     const isProcessing = phase !== 'idle' && phase !== 'magic-handoff';
-    const resolvedCertId = certId ?? apiData?.id ?? '';
+    const extractedApiDataId = apiData?.id ?? '';
+    const resolvedCertId = certId ?? extractedApiDataId;
     const toastKey = `evidence-${resolvedCertId || stagingId || 'pack'}`;
     const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -190,45 +189,17 @@ export default function EvidencePackDownloadButton({
     }, []);
 
     // 🚨 究極のスピード: ホバー時にAPIを先行フェッチしてキャッシュする
-    const prefetchPayload = async () => {
+    const prefetchPayload = useCallback(async () => {
         if (payloadCache || phase !== 'idle') return; // すでにキャッシュがあるか、実行中なら何もしない
         try {
             abortControllerRef.current = new AbortController();
-            const payload = await fetchEvidencePayload({ certId, spotSession, stagingId, apiData }, abortControllerRef.current.signal);
+            const payload = await fetchEvidencePayload({ certId, spotSession, stagingId, apiData: { id: extractedApiDataId } }, abortControllerRef.current.signal);
             setPayloadCache(payload);
         } catch (e) { /* 事前フェッチのエラーは無視して本番クリックに委ねる */ }
-    };
-
-    // ── 司令塔 1: Fetch と判定 ──
-    const handleInitialClick = async () => {
-        if (isProcessing) return;
-        setPhase('fetching');
-        
-        let payload = payloadCache;
-        if (!payload) {
-            abortControllerRef.current = new AbortController();
-            try {
-                payload = await fetchEvidencePayload({ certId, spotSession, stagingId, apiData }, abortControllerRef.current.signal);
-                setPayloadCache(payload);
-            } catch (e: any) {
-                if (e.name !== 'AbortError') {
-                    toast.error('ダウンロード準備に失敗しました', { description: e.message });
-                    setPhase('idle');
-                }
-                return;
-            }
-        }
-
-        // 動的しきい値判定
-        if (isMobile && payload!.files.length > 20) {
-            setPhase('magic-handoff');
-        } else {
-            await processStream(payload!);
-        }
-    };
+    }, [payloadCache, phase, certId, spotSession, stagingId, extractedApiDataId]);
 
     // ── 司令塔 2: Stream の発火 ──
-    const processStream = async (payload: EvidencePackPayload) => {
+    const processStream = useCallback(async (payload: EvidencePackPayload) => {
         if (!abortControllerRef.current || abortControllerRef.current.signal.aborted) {
             abortControllerRef.current = new AbortController();
         }
@@ -255,29 +226,61 @@ export default function EvidencePackDownloadButton({
                 toast.error('ストリーム保存に失敗しました', { description: e.message });
             }
         } finally {
+            abortControllerRef.current?.abort(); // 🚨 The Dangling PDF Ghost 防衛
             setPhase('idle');
             setPayloadCache(null);
             abortControllerRef.current = null;
         }
-    };
+    }, [resolvedCertId, toastKey]);
 
-    const cancelDownload = () => {
+    // ── 司令塔 1: Fetch と判定 ──
+    const handleInitialClick = useCallback(async () => {
+        if (isProcessing) return;
+        setPhase('fetching');
+        
+        let payload = payloadCache;
+        if (!payload) {
+            abortControllerRef.current = new AbortController();
+            try {
+                payload = await fetchEvidencePayload({ certId, spotSession, stagingId, apiData: { id: extractedApiDataId } }, abortControllerRef.current.signal);
+                setPayloadCache(payload);
+            } catch (e: any) {
+                if (e.name !== 'AbortError') {
+                    toast.error('ダウンロード準備に失敗しました', { description: e.message });
+                    setPhase('idle');
+                }
+                return;
+            }
+        }
+
+        // 動的しきい値判定
+        const totalFiles = (payload.assets?.length ?? 0) + (payload.texts?.length ?? 0);
+        if (isMobile && totalFiles > 20) {
+            setPhase('magic-handoff');
+        } else {
+            await processStream(payload);
+        }
+    }, [isProcessing, payloadCache, certId, spotSession, stagingId, extractedApiDataId, isMobile, processStream]);
+
+    const cancelDownload = useCallback(() => {
         abortControllerRef.current?.abort();
         setPhase('idle');
         // 🚨 setPayloadCache(null) は削除！ (Signed URL再計算のコストを防ぐ)
         toast.dismiss(toastKey);
-    };
+    }, [toastKey]);
 
-    const copyUrlToClipboard = () => {
+    const copyUrlToClipboard = useCallback(() => {
         navigator.clipboard.writeText(window.location.href);
         toast.success('URLをコピーしました', { description: 'PCのブラウザに貼り付けてダウンロードしてください。' });
         setPhase('idle');
-    };
+    }, []);
 
     const currentLabel = phase === 'idle' ? label : PHASE_LABELS[phase];
     const baseBtn = variant === 'primary'
         ? 'bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] text-white shadow-[0_12px_28px_rgba(108,62,244,0.4)]'
         : 'border border-white/12 bg-white/[0.04] text-white hover:bg-white/[0.08]';
+
+    const cacheTotalFiles = payloadCache ? ((payloadCache.assets?.length ?? 0) + (payloadCache.texts?.length ?? 0)) : 0;
 
     return (
         <>
@@ -324,7 +327,7 @@ export default function EvidencePackDownloadButton({
                             </div>
                             
                             <p className="text-[#A8A0D8] text-sm leading-relaxed mb-6">
-                                この Evidence Pack は <strong className="text-white">{payloadCache.files.length}枚</strong> の検証用アセットを含んでいます。
+                                この Evidence Pack は <strong className="text-white">{cacheTotalFiles}枚</strong> の検証用アセットを含んでいます。
                                 モバイル端末での大容量ZIPの一括解凍は、メモリ不足によるファイルの破損やフリーズを引き起こす可能性があります。プロジェクトの安全を期すため、PC環境でのダウンロードを強く推奨いたします。
                             </p>
 
