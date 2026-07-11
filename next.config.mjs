@@ -18,12 +18,7 @@ const nextConfig = {
     },
   },
 
-
-
   // 👑 【防衛線 4: The Apex Rewrites (生命線の完全移植)】
-  // vercel.json から剥がしたルーティングを Next.js コンパイラへネイティブ統合。
-  // ビジネス上必須な公開URLのみを確実なAPIへバイパスさせます。
-  // Next.jsのルーティングにマッチしなかった全リクエストを Vite SPA (/spa/index.html) へフォールバックします。
   async rewrites() {
     return {
       afterFiles: [
@@ -37,6 +32,12 @@ const nextConfig = {
         }
       ],
       fallback: [
+        // 👑 The Root Bypass: 追加。トップページ('/')を確実にVite SPAへ流す
+        {
+          source: '/',
+          destination: '/spa/index.html',
+        },
+        // 既存のCatch-all Bypass: API等以外の全パスをViteへ流す
         {
           source: '/:path((?!api/|_next/|spa/|static/|favicon\\.ico).*)',
           destination: '/spa/index.html',
