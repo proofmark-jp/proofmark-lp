@@ -21,6 +21,13 @@ const nextConfig = {
   // 👑 【防衛線 4: The Apex Rewrites (生命線の完全移植)】
   async rewrites() {
     return {
+      // 👑 The Absolute Override: Next.jsのルーターが404を吐く前に、最優先でトップページをSPAへ拉致する
+      beforeFiles: [
+        {
+          source: '/',
+          destination: '/spa/index.html',
+        }
+      ],
       afterFiles: [
         {
           source: '/cert/:id',
@@ -32,11 +39,6 @@ const nextConfig = {
         }
       ],
       fallback: [
-        // 👑 The Root Bypass: 追加。トップページ('/')を確実にVite SPAへ流す
-        {
-          source: '/',
-          destination: '/spa/index.html',
-        },
         // 既存のCatch-all Bypass: API等以外の全パスをViteへ流す
         {
           source: '/:path((?!api/|_next/|spa/|static/|favicon\\.ico).*)',
