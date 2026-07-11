@@ -6,7 +6,7 @@
  * URLエンコード問題やCDNのキャッシュ罠を完全に回避する堅牢版。
  */
 
-import { getAdminClient } from './server.js';
+import { getAdminClient } from './server';
 
 const TTL_MS = 6 * 60 * 60 * 1000;
 const SOFT_SIZE_WARN_BYTES = 4 * 1024 * 1024; // 4MB を超えたら警告
