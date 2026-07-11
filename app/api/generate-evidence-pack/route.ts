@@ -278,7 +278,8 @@ export async function GET(request: NextRequest) {
     
     // 🚨 Rate Limit Defense (Fail-open Pattern)
     if (ratelimit) {
-        const ip = request.ip || request.headers.get('x-forwarded-for') || '127.0.0.1';
+        // Next.js 15+ 互換: 廃止された request.ip を破棄し、VercelのプロキシヘッダーからIPを抽出する
+        const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '127.0.0.1';
         try {
             const { success } = await ratelimit.limit(ip);
             if (!success) {
