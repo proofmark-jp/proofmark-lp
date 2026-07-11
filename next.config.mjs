@@ -1,5 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // 【追加】The Turbopack Override: Vercelのパニックを鎮圧し、Webpackを強制する
+  webpack: (config) => {
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true,
+      syncWebAssembly: true,
+    };
+    return config;
+  },
   // 【防衛線 1: The Image Tax Evasion (画像課金爆発の物理的遮断)】
   images: {
     unoptimized: true,
