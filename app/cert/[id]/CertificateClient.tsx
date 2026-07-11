@@ -13,7 +13,7 @@ import {
 import { motion } from 'framer-motion';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useAuth } from '@/hooks/useAuth';
-import EvidencePackDownloadButton from '@/components/EvidencePackDownloadButton';
+
 import Navbar from '../../../client/src/components/Navbar';
 import VerifiedBadge from '../../../client/src/components/ui/VerifiedBadge';
 import type { ProcessBundlePublic } from '../../../client/src/lib/proofmark-types';
@@ -31,6 +31,11 @@ import React from 'react';
 // ══════════════════════════════════════════════════════════════════
 const TakedownNoticeModal = dynamic(
     () => import('@/components/proof/TakedownNoticeModal'),
+    { ssr: false }
+);
+
+const EvidencePackDownloadButton = dynamic(
+    () => import('@/components/EvidencePackDownloadButton'),
     { ssr: false }
 );
 

@@ -9,7 +9,7 @@
  *
  * アルゴリズム:
  *   - hash-wasm の createSHA256() で Incremental Hasher を生成
- *   - File を 4MB 単位の Blob.slice() でチャンク化（端末メモリへの安全マージン）
+ *   - File を 5MB 単位の Blob.slice() でチャンク化（端末メモリへの安全マージン）
  *   - 各チャンクは arrayBuffer() で取得 → update() → すぐ GC 対象化
  *   - 進捗は 60ms throttle / 1% 単位 でメインスレッドへ通知
  *   - 完了時は digest() を hex で返却
@@ -77,8 +77,8 @@ export type HashResponse =
  *  Constants
  * ───────────────────────────────────────────── */
 
-/** 既定チャンクサイズ。4MB は「メモリ安全 × syscall 効率」のスイートスポット。 */
-const DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024;
+/** 既定チャンクサイズ。5MB は「メモリ安全 × syscall 効率」のスイートスポット。 */
+const DEFAULT_CHUNK_SIZE = 5 * 1024 * 1024;
 
 /** 進捗 postMessage の throttle インターバル (ms)。 */
 const PROGRESS_THROTTLE_MS = 60;

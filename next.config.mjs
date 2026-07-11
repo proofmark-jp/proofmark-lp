@@ -24,15 +24,7 @@ const nextConfig = {
     },
   },
 
-  // 【防衛線 3: The Wasm Shield (サーバーコンポーネントの完全解放)】
-  webpack: (config) => {
-    config.experiments = {
-      ...config.experiments,
-      asyncWebAssembly: true,
-      syncWebAssembly: true,
-    };
-    return config;
-  },
+
 
   // 👑 【防衛線 4: The Apex Rewrites (生命線の完全移植)】
   // vercel.json から剥がしたルーティングを Next.js コンパイラへネイティブ統合。
