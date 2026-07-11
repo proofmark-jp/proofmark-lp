@@ -20,9 +20,10 @@ import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 import { createClient } from '@supabase/supabase-js';
 
-// 🚨 既存のサーバーユーティリティ依存（プロジェクトの配置に合わせてインポートパスを微調整してください）
-import { buildChainOfEvidence } from './_lib/chain-of-evidence.js';
-import { getLegalCopyrightPdf } from './_lib/legal-pdf-cache.js';
+// 👑 The Apex Fix: App Routerの深層から、ルートディレクトリの旧API資産（api/_lib）へ正確に結線。
+// Turbopackの解釈エラーを防ぐため、Node ESM特有の .js 拡張子指定を物理的にパージ。
+import { buildChainOfEvidence } from '../../../api/_lib/chain-of-evidence';
+import { getLegalCopyrightPdf } from '../../../api/_lib/legal-pdf-cache';
 
 // ワークスペースの環境変数から管理用Supabaseクライアント（Bypass RLS）を生成
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
