@@ -8,6 +8,13 @@ const nextConfig = {
   // 【防衛線 2: Strict Mode (潜在的バグの炙り出し)】
   reactStrictMode: true,
 
+  // 【防衛線 2.B: The Payload Shield (Server Actionsのボディサイズ上限を解放)】
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '500mb',
+    },
+  },
+
   // 【防衛線 3: The Wasm Shield (サーバーコンポーネントの完全解放)】
   webpack: (config) => {
     config.experiments = {
@@ -124,12 +131,16 @@ const nextConfig = {
           {
             key: 'Access-Control-Allow-Headers',
             value: 'Content-Type, Authorization',
+          },
+          {
+            key: 'Access-Control-Max-Age',
+            value: '86400',
           }
         ]
       },
       {
         // ── Evidence Packのダウンロード制御 ──
-        source: '/api/generate-evidence-pack',
+        source: '/api/generate-evidence-pack(.*)',
         headers: [
           {
             key: 'Cache-Control',

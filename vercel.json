@@ -6,8 +6,9 @@
       "source": "/api/(certificates/public|certificates/widget|profiles|cert|ogp-proxy)(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" },
+        { "key": "Access-Control-Max-Age", "value": "86400" }
       ]
     },
     {
@@ -17,9 +18,13 @@
       ]
     },
     {
-      "source": "/api/generate-evidence-pack",
+      "source": "/api/generate-evidence-pack(.*)",
       "headers": [
-        { "key": "Access-Control-Expose-Headers", "value": "Content-Disposition, X-Request-Id, X-Evidence-Cert-Id, X-Evidence-Trust-Tier" }
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" },
+        { "key": "Access-Control-Expose-Headers", "value": "Content-Disposition, X-Request-Id, X-Evidence-Cert-Id, X-Evidence-Trust-Tier" },
+        { "key": "Access-Control-Max-Age", "value": "86400" }
       ]
     }
   ],
@@ -27,6 +32,10 @@
     {
       "path": "/api/cron/upsell-warning",
       "schedule": "0 16 * * *" 
+    },
+    {
+      "path": "/api/cron/gc",
+      "schedule": "0 18 * * *" 
     }
   ]
 }

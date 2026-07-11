@@ -1,5 +1,7 @@
 "use server";
 
+export const maxDuration = 300;
+
 /**
  * src/actions/upload.ts
  * ─────────────────────────────────────────────────────────────────────────
