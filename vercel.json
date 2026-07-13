@@ -1,12 +1,6 @@
 {
   "version": 2,
   "regions": ["hnd1"],
-  "rewrites": [
-    { "source": "/cert/:id", "destination": "/api/cert?id=:id" },
-    { "source": "/u/:username", "destination": "/api/storefront-html?username=:username" },
-    { "source": "/", "destination": "/spa/index.html" },
-    { "source": "/:path((?!api/|_next/|spa/|static/|favicon\\\\.ico).*)", "destination": "/spa/index.html" }
-  ],
   "headers": [
     {
       "source": "/api/(certificates/public|certificates/widget|profiles|cert|ogp-proxy)(.*)",
