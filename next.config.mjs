@@ -18,7 +18,25 @@ const nextConfig = {
     },
   },
 
-
+  // 👑 【防衛線 4: The Flat Array Override (絶対的ルーティング)】
+  // Vercelに無視されないよう、フラットな配列としてNext.jsのルーターへ直接命令を下す。
+  // App Routerが404を吐き出す直前にインターセプトし、SPAへ強制連行する。
+  async rewrites() {
+    return [
+      // 1. APIバイパス（Next.js側のAPIルートへ流すもの）
+      { source: '/cert/:id', destination: '/api/cert?id=:id' },
+      { source: '/u/:username', destination: '/api/storefront-html?username=:username' },
+      
+      // 2. The Root Catch: トップページ('/')を確実にVite SPAへ拉致する
+      { source: '/', destination: '/spa/index.html' },
+      
+      // 3. The Catch-All: APIや静的ファイル以外の全アクセスをVite SPAへ叩き込む
+      { 
+        source: '/:path((?!api/|_next/|spa/|static/|favicon\\.ico).*)', 
+        destination: '/spa/index.html' 
+      }
+    ];
+  },
 
   // 【防衛線 5: The Absolute Header Injection (一切の妥協なきゼロトラスト防壁 & 寄生プロトコル)】
   async headers() {
