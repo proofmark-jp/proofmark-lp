@@ -1,0 +1,14 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/cert/route": "/api/cert",
+  "/api/certificates/route": "/api/certificates",
+  "/api/generate-evidence-pack/route": "/api/generate-evidence-pack",
+  "/api/upload/route": "/api/upload",
+  "/cert/[id]/page": "/cert/[id]",
+  "/console/[id]/page": "/console/[id]",
+  "/console/issue/page": "/console/issue",
+  "/console/page": "/console",
+  "/login/page": "/login",
+  "/verify/[id]/page": "/verify/[id]"
+}

@@ -22,8 +22,8 @@ import { createClient } from '@supabase/supabase-js';
 
 // 👑 The Apex Fix: App Routerの深層から、ルートディレクトリの旧API資産（api/_lib）へ正確に結線。
 // Turbopackの解釈エラーを防ぐため、Node ESM特有の .js 拡張子指定を物理的にパージ。
-import { buildChainOfEvidence } from '../../../api/_lib/chain-of-evidence';
-import { getLegalCopyrightPdf } from '../../../api/_lib/legal-pdf-cache';
+import { buildChainOfEvidence } from '../_lib/chain-of-evidence';
+import { getLegalCopyrightPdf } from '../_lib/legal-pdf-cache';
 
 // ワークスペースの環境変数から管理用Supabaseクライアント（Bypass RLS）を生成
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';

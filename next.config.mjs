@@ -50,8 +50,7 @@ const nextConfig = {
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       font-src 'self' data: https://fonts.gstatic.com;
       img-src 'self' data: blob: https:;
-      connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.r2.cloudflarestorage.com https://vitals.vercel-insights.com ${isDev ? 'ws://localhost:* http://localhost:*' : ''};
-    `.replace(/\s{2,}/g, ' ').trim();
+      connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.r2.cloudflarestorage.com https://vitals.vercel-insights.com https://*.sentry.io ${isDev ? 'ws://localhost:* http://localhost:*' : ''};    `.replace(/\s{2,}/g, ' ').trim();
 
     return [
       {

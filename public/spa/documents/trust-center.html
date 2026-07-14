@@ -1,0 +1,1642 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProofMark Trust Center | Technical Security Whitepaper v1.0</title>
+  <meta name="description" content="AI生成作品の真正性を証明する暗号アーキテクチャの詳細解説。SHA-256、RFC3161、Supabase RLSの全仕様を公開。">
+  <meta property="og:title" content="ProofMark Technical Security Whitepaper v1.0">
+  <meta property="og:description" content="SHA-256・RFC3161・Supabase RLSの全仕様を完全公開。AI生成作品の存在証明インフラのアーキテクチャ解説。">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://proofmark.jp/trust-center">
+
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "name": "ProofMark Technical Security Whitepaper v1.0",
+  "headline": "Cryptographic Proof-of-Creation Architecture for AI-Generated Digital Works",
+  "description": "AI生成作品の真正性を証明する暗号アーキテクチャの詳細解説。SHA-256、RFC3161、Supabase RLSの全仕様を公開。",
+  "version": "1.0",
+  "datePublished": "2026-04-11",
+  "dateModified": "2026-05-12",
+  "author": {
+    "@type": "Organization",
+    "name": "ProofMark Engineering",
+    "url": "https://proofmark.jp"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "ProofMark",
+    "url": "https://proofmark.jp"
+  },
+  "about": [
+    { "@type": "Thing", "name": "RFC3161 Timestamping" },
+    { "@type": "Thing", "name": "SHA-256 Cryptographic Hashing" },
+    { "@type": "Thing", "name": "Digital Rights Management" }
+  ],
+  "inLanguage": "ja",
+  "isAccessibleForFree": true,
+  "license": "https://proofmark.jp/terms"
+}
+</script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap&display=swap"
+    rel="stylesheet">
+
+  <style>
+    /* ── Reset & Tokens ──────────────────────────────────────────── */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --p: #6C3EF4;
+      --p-l: rgba(108, 62, 244, .12);
+      --p-d: #2D1B69;
+      --t: #00D4AA;
+      --t-l: rgba(0, 212, 170, .1);
+      --g: #F0BB38;
+      --g-l: rgba(240, 187, 56, .1);
+      --void: #07061A;
+      --surf: #0F0E26;
+      --card: #15132E;
+      --card2: #1C1940;
+      --border: rgba(255, 255, 255, .07);
+      --text: #E8E6FF;
+      --muted: #8B88B8;
+      --dim: #4A4880;
+      --code: #0B0A1F;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--void);
+      color: var(--text);
+      line-height: 1.75;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Scrollbar ───────────────────────────────────────────────── */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--p-d);
+      border-radius: 2px;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────── */
+    .wrap {
+      display: grid;
+      grid-template-columns: 230px 1fr;
+      grid-template-rows: 56px 1fr auto;
+      min-height: 100vh;
+    }
+
+    /* ── Topbar ──────────────────────────────────────────────────── */
+    .bar {
+      grid-column: 1 / -1;
+      grid-row: 1;
+      background: var(--surf);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+
+    .logo {
+      font-weight: 700;
+      font-size: 1.1rem;
+      text-decoration: none;
+      display: flex;
+      gap: .25rem;
+    }
+
+    .logo .lp {
+      color: var(--p);
+    }
+
+    .logo .lm {
+      color: var(--text);
+    }
+
+    .bar-r {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .rfc {
+      font-size: .62rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      background: var(--p);
+      color: #fff;
+      padding: .25rem .75rem;
+      border-radius: 99px;
+      white-space: nowrap;
+    }
+
+    .nav-a {
+      font-size: .85rem;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color .2s;
+    }
+
+    .nav-a:hover,
+    .nav-a[aria-current="page"] {
+      color: var(--t);
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────── */
+    .side {
+      grid-row: 2;
+      position: sticky;
+      top: 56px;
+      height: calc(100vh - 56px);
+      overflow-y: auto;
+      padding: 2rem 0 2rem 1.5rem;
+      border-right: 1px solid var(--border);
+    }
+
+    .toc-label {
+      font-size: .62rem;
+      font-weight: 700;
+      letter-spacing: .14em;
+      color: var(--dim);
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+
+    .toc {
+      list-style: none;
+    }
+
+    .toc li {
+      margin: .1rem 0;
+    }
+
+    .toc a {
+      font-size: .78rem;
+      color: var(--muted);
+      text-decoration: none;
+      padding: .3rem .75rem;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      transition: all .2s;
+      border-left: 2px solid transparent;
+    }
+
+    .toc a:hover {
+      color: var(--text);
+      background: var(--card);
+      border-left-color: var(--p);
+    }
+
+    .toc a[aria-current="true"] {
+      color: var(--t);
+      border-left-color: var(--t);
+      background: var(--t-l);
+    }
+
+    .toc-n {
+      color: var(--p);
+      font-family: 'DM Mono', monospace;
+      font-size: .68rem;
+      min-width: 1.5rem;
+    }
+
+    /* ── Main ────────────────────────────────────────────────────── */
+    main {
+      grid-row: 2;
+      max-width: 800px;
+      padding: 3rem max(2rem, 4vw) 6rem;
+    }
+
+    /* ── Hero ────────────────────────────────────────────────────── */
+    .hero {
+      padding: 2.5rem 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 3rem;
+    }
+
+    .eyebrow {
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: var(--t);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+    }
+
+    .eyebrow::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--t-l);
+    }
+
+    .hero-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      font-size: clamp(1.8rem, 4vw, 2.7rem);
+      font-weight: 700;
+      line-height: 1.2;
+      color: #fff;
+      margin-bottom: 1rem;
+    }
+
+    h1 em {
+      font-style: normal;
+      background: linear-gradient(135deg, var(--p), var(--t));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .version-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: .35rem;
+      flex-shrink: 0;
+      padding-top: .25rem;
+    }
+
+    .vb-tag {
+      font-family: 'DM Mono', monospace;
+      font-size: .72rem;
+      font-weight: 500;
+      color: var(--t);
+      background: var(--t-l);
+      border: 1px solid rgba(0, 212, 170, .2);
+      padding: .25rem .75rem;
+      border-radius: 99px;
+    }
+
+    .vb-date {
+      font-size: .7rem;
+      color: var(--muted);
+    }
+
+    .vb-gh {
+      font-size: .7rem;
+      color: var(--p);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: .3rem;
+      transition: color .2s;
+    }
+
+    .vb-gh:hover {
+      color: var(--t);
+    }
+
+    .hero-sub {
+      font-size: 1rem;
+      color: var(--muted);
+      max-width: 580px;
+      line-height: 1.75;
+      margin-bottom: 2rem;
+    }
+
+    .ctas {
+      display: flex;
+      gap: .75rem;
+      flex-wrap: wrap;
+      margin-bottom: 2.5rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .6rem 1.3rem;
+      border-radius: 8px;
+      font-size: .88rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all .2s;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    .btn svg {
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+    }
+
+    .btn-p {
+      background: var(--p);
+      color: #fff;
+      border-color: var(--p);
+    }
+
+    .btn-p:hover {
+      background: #7B52F5;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(108, 62, 244, .4);
+    }
+
+    .btn-o {
+      background: transparent;
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    .btn-o:hover {
+      border-color: var(--p);
+      color: #fff;
+      background: var(--p-l);
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: .6rem;
+    }
+
+    .mc {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .7rem 1rem;
+    }
+
+    .mk {
+      font-size: .62rem;
+      color: var(--dim);
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: .2rem;
+    }
+
+    .mv {
+      font-size: .83rem;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    /* ── Sections ────────────────────────────────────────────────── */
+    .sec {
+      margin-bottom: 4rem;
+      scroll-margin-top: 80px;
+    }
+
+    .sh {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: 1.75rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sn {
+      font-family: 'DM Mono', monospace;
+      font-size: .72rem;
+      font-weight: 600;
+      color: #fff;
+      background: var(--p);
+      padding: .28rem .55rem;
+      border-radius: 6px;
+    }
+
+    .sh h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    h3 {
+      font-size: .92rem;
+      font-weight: 700;
+      color: var(--t);
+      margin: 2rem 0 .75rem;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+    }
+
+    h3::before {
+      content: '';
+      width: 3px;
+      height: 1em;
+      background: var(--t);
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    p {
+      color: var(--text);
+      font-size: .93rem;
+      margin-bottom: 1rem;
+      line-height: 1.8;
+    }
+
+    /* ── Callout ─────────────────────────────────────────────────── */
+    .co {
+      border-radius: 8px;
+      padding: .9rem 1.1rem;
+      margin: 1rem 0;
+      border-left: 3px solid;
+      font-size: .88rem;
+      line-height: 1.7;
+    }
+
+    .co-i {
+      background: var(--p-l);
+      border-color: var(--p);
+      color: var(--text);
+    }
+
+    .co-w {
+      background: var(--g-l);
+      border-color: var(--g);
+      color: #E8D4A0;
+    }
+
+    .co-s {
+      background: var(--t-l);
+      border-color: var(--t);
+      color: #A0E8D8;
+    }
+
+    .co b {
+      color: #fff;
+    }
+
+    /* ── Claim ───────────────────────────────────────────────────── */
+    .claim {
+      background: var(--card);
+      border: 1px solid var(--p-d);
+      border-radius: 10px;
+      padding: 1.1rem 1.4rem;
+      margin: 1rem 0;
+      border-left: 4px solid var(--t);
+      font-size: .95rem;
+      font-weight: 500;
+      color: #fff;
+      font-family: 'DM Mono', monospace;
+      line-height: 1.6;
+    }
+
+    /* ── Scope grid ──────────────────────────────────────────────── */
+    .scope {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .75rem;
+      margin: 1rem 0;
+    }
+
+    .sc {
+      border-radius: 8px;
+      padding: .9rem 1.1rem;
+    }
+
+    .sc-i {
+      background: rgba(0, 212, 170, .06);
+      border: 1px solid rgba(0, 212, 170, .2);
+    }
+
+    .sc-o {
+      background: rgba(240, 187, 56, .06);
+      border: 1px solid rgba(240, 187, 56, .2);
+    }
+
+    .sc h4 {
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      margin-bottom: .6rem;
+    }
+
+    .sc-i h4 {
+      color: var(--t);
+    }
+
+    .sc-o h4 {
+      color: var(--g);
+    }
+
+    .sc ul {
+      list-style: none;
+    }
+
+    .sc li {
+      font-size: .83rem;
+      padding: .2rem 0;
+      display: flex;
+      gap: .4rem;
+    }
+
+    /* ── Table ───────────────────────────────────────────────────── */
+    .tw {
+      overflow-x: auto;
+      margin: 1rem 0;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .83rem;
+    }
+
+    caption {
+      font-size: .7rem;
+      color: var(--dim);
+      text-align: left;
+      padding: .5rem 1rem;
+      border-bottom: 1px solid var(--border);
+      font-style: italic;
+    }
+
+    thead tr {
+      background: var(--p);
+    }
+
+    thead th {
+      padding: .6rem 1rem;
+      text-align: left;
+      font-size: .67rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #fff;
+      white-space: nowrap;
+    }
+
+    tbody tr:nth-child(even) {
+      background: var(--card);
+    }
+
+    tbody tr:nth-child(odd) {
+      background: var(--card2);
+    }
+
+    tbody tr:hover {
+      background: rgba(108, 62, 244, .1);
+    }
+
+    td {
+      padding: .55rem 1rem;
+      color: var(--text);
+      vertical-align: top;
+      border-top: 1px solid var(--border);
+    }
+
+    td:first-child {
+      color: var(--p);
+      font-weight: 600;
+    }
+
+    /* ── Flow ────────────────────────────────────────────────────── */
+    .flow {
+      list-style: none;
+      margin: 1rem 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .flow li {
+      display: grid;
+      grid-template-columns: 1.8rem 7rem 1fr;
+      gap: .75rem;
+      padding: .7rem 1rem;
+      border-top: 1px solid var(--border);
+      font-size: .83rem;
+      align-items: start;
+    }
+
+    .flow li:first-child {
+      border-top: none;
+    }
+
+    .flow li:nth-child(even) {
+      background: var(--card);
+    }
+
+    .flow li:nth-child(odd) {
+      background: var(--card2);
+    }
+
+    .fn {
+      color: var(--p);
+      font-family: 'DM Mono', monospace;
+      font-weight: 700;
+      font-size: .95rem;
+    }
+
+    .fa {
+      color: var(--t);
+      font-weight: 600;
+      font-size: .75rem;
+      padding-top: .15rem;
+    }
+
+    .fd {
+      color: var(--text);
+    }
+
+    /* ── Code ────────────────────────────────────────────────────── */
+    .cw {
+      background: var(--code);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--p);
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+
+    .ch {
+      background: rgba(255, 255, 255, .03);
+      padding: .45rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .cl-lang {
+      font-size: .62rem;
+      color: var(--dim);
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .cp-btn {
+      font-size: .68rem;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid var(--border);
+      padding: .18rem .55rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all .2s;
+      font-family: inherit;
+    }
+
+    .cp-btn:hover,
+    .cp-btn.copied {
+      color: var(--t);
+      border-color: var(--t);
+    }
+
+    pre {
+      padding: 1.1rem 1.2rem;
+      overflow-x: auto;
+      font-family: 'DM Mono', monospace;
+      font-size: .78rem;
+      line-height: 1.7;
+      margin: 0;
+    }
+
+    /* Code token colors */
+    .kw {
+      color: #B89EFF;
+    }
+
+    .kt {
+      color: #00D4AA;
+    }
+
+    .km {
+      color: #5A587A;
+    }
+
+    .ks {
+      color: #F0BB38;
+    }
+
+    /* ── Limits ──────────────────────────────────────────────────── */
+    .lims {
+      list-style: none;
+      margin: 1rem 0;
+    }
+
+    .li {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+      padding: .9rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: .88rem;
+    }
+
+    .li:last-child {
+      border-bottom: none;
+    }
+
+    .li-i {
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    .li b {
+      color: #fff;
+      display: block;
+      margin-bottom: .2rem;
+    }
+
+    .li span {
+      color: var(--muted);
+    }
+
+    /* ── Changelog ───────────────────────────────────────────────── */
+    .cl-list {
+      list-style: none;
+      margin: 1rem 0;
+    }
+
+    .cli {
+      display: grid;
+      grid-template-columns: 5.5rem 1fr;
+      gap: .75rem;
+      padding: .7rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: .85rem;
+    }
+
+    .clv {
+      font-family: 'DM Mono', monospace;
+      color: var(--p);
+      font-weight: 600;
+    }
+
+    .cld {
+      color: var(--muted);
+    }
+
+    .cld b {
+      color: var(--text);
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────── */
+    footer {
+      grid-column: 1 / -1;
+      border-top: 1px solid var(--border);
+      padding: 1.5rem max(2rem, 4vw);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      font-size: .78rem;
+      color: var(--dim);
+    }
+
+    .fl {
+      display: flex;
+      gap: 1.25rem;
+    }
+
+    .fl a {
+      color: var(--muted);
+      text-decoration: none;
+      transition: color .2s;
+    }
+
+    .fl a:hover {
+      color: var(--t);
+    }
+
+    /* ── Reveal animation ────────────────────────────────────────── */
+    .rv {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity .5s ease, transform .5s ease;
+    }
+
+    .rv.visible {
+      opacity: 1;
+      transform: none;
+    }
+
+    /* ── Print ───────────────────────────────────────────────────── */
+    @media print {
+      :root {
+        --void: #fff;
+        --surf: #f8f8f8;
+        --card: #f0f0f0;
+        --card2: #f5f5f5;
+        --border: #ddd;
+        --text: #111;
+        --muted: #555;
+        --dim: #888;
+        --p: #5B2EE8;
+        --t: #007A63;
+        --g: #8A6000;
+        --code: #f4f4f4;
+        --p-l: #ece8ff;
+        --t-l: #e0f5f0;
+        --g-l: #fff8e0;
+        --p-d: #c0b0ff;
+      }
+
+      .bar,
+      .side,
+      .ctas,
+      .cp-btn {
+        display: none !important;
+      }
+
+      .wrap {
+        display: block;
+      }
+
+      main {
+        max-width: 100%;
+        padding: 0;
+      }
+
+      .co-w {
+        color: #5a3a00;
+      }
+
+      .co-s {
+        color: #004a38;
+      }
+
+      .co-i {
+        color: #2a0a80;
+      }
+
+      .claim {
+        background: #f0ecff;
+        border-color: #c0b0ff;
+        color: #111;
+      }
+
+      pre {
+        font-size: .7rem;
+      }
+
+      .kw {
+        color: #5B2EE8;
+      }
+
+      .kt {
+        color: #007A63;
+      }
+
+      .km {
+        color: #888;
+      }
+
+      .ks {
+        color: #8A6000;
+      }
+
+      h1 em {
+        -webkit-text-fill-color: var(--p);
+        color: var(--p);
+      }
+
+      .sec {
+        break-inside: avoid;
+      }
+
+      .sh {
+        break-after: avoid;
+      }
+    }
+
+    /* ── Responsive ──────────────────────────────────────────────── */
+    @media (max-width: 860px) {
+      .wrap {
+        grid-template-columns: 1fr;
+      }
+
+      .side {
+        display: none;
+      }
+
+      main {
+        padding: 2rem 1.25rem 4rem;
+      }
+
+      .scope {
+        grid-template-columns: 1fr;
+      }
+
+      .flow li {
+        grid-template-columns: 1.8rem 1fr;
+      }
+
+      .fa {
+        display: none;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .ctas {
+        flex-direction: column;
+      }
+
+      .btn {
+        justify-content: center;
+      }
+
+      .hero-top {
+        flex-direction: column;
+      }
+
+      .version-badge {
+        align-items: flex-start;
+      }
+    }
+  </style>
+
+</head>
+
+<body>
+  <div class="wrap">
+
+    <!-- Topbar -->
+
+    <header class="bar" role="banner">
+      <a href="/" class="logo" aria-label="ProofMark ホームへ">
+        <span class="lp">Proof</span><span class="lm">Mark</span>
+      </a>
+      <nav class="bar-r" aria-label="サイトナビゲーション">
+        <a href="/" class="nav-a">製品</a>
+        <a href="/trust-center" class="nav-a" aria-current="page">Trust Center</a>
+        <a href="/blog" class="nav-a">ブログ</a>
+        <span class="rfc" aria-label="RFC3161準拠">RFC3161 COMPLIANT</span>
+      </nav>
+    </header>
+
+    <!-- Sidebar TOC -->
+
+    <aside class="side" aria-label="ページ内目次">
+      <p class="toc-label" id="toc-heading">目次</p>
+      <ul class="toc" role="list" aria-labelledby="toc-heading">
+        <li><a href="#s1"><span class="toc-n" aria-hidden="true">§1</span>脅威モデル</a></li>
+        <li><a href="#s2"><span class="toc-n" aria-hidden="true">§2</span>SHA-256</a></li>
+        <li><a href="#s3"><span class="toc-n" aria-hidden="true">§3</span>RFC3161</a></li>
+        <li><a href="#s4"><span class="toc-n" aria-hidden="true">§4</span>TSA選定</a></li>
+        <li><a href="#s5"><span class="toc-n" aria-hidden="true">§5</span>DB / RLS</a></li>
+        <li><a href="#s6"><span class="toc-n" aria-hidden="true">§6</span>データフロー</a></li>
+        <li><a href="#s7"><span class="toc-n" aria-hidden="true">§7</span>第三者検証</a></li>
+        <li><a href="#s8"><span class="toc-n" aria-hidden="true">§8</span>制限事項</a></li>
+        <li><a href="#s9"><span class="toc-n" aria-hidden="true">§9</span>更新履歴</a></li>
+        <li><a href="#sa"><span class="toc-n" aria-hidden="true">§A</span>Appendix</a></li>
+      </ul>
+    </aside>
+
+    <!-- Main content -->
+
+    <main id="main-content" aria-labelledby="hero-title">
+
+      <!-- Hero -->
+
+      <div class="hero rv" role="region" aria-label="白書概要">
+        <div class="eyebrow" aria-hidden="true">Trust Center &nbsp;/&nbsp; Technical Whitepaper</div>
+        <div class="hero-top">
+          <div>
+            <h1 id="hero-title">Technical Security<br><em>Whitepaper</em></h1>
+          </div>
+          <div class="version-badge" aria-label="バージョン情報">
+            <span class="vb-tag">v1.0 — Public Release</span>
+            <span class="vb-date">最終更新: 2026年4月11日</span>
+            <a href="https://github.com/proofmark-jp/proofmark-verify" target="_blank" rel="noopener" class="vb-gh"
+              aria-label="GitHubで検証スクリプトを確認">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path
+                  d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+              </svg>
+              github/verify
+            </a>
+          </div>
+        </div>
+        <p class="hero-sub">AI生成作品の真正性を証明する暗号アーキテクチャの完全仕様。SHA-256・RFC3161・Supabase RLSの実装詳細を完全公開します。</p>
+        <div class="ctas">
+          <a href="ProofMark_Whitepaper_v1.0.pdf" class="btn btn-p" download aria-label="PDFをダウンロード（バージョン1.0）">
+            <svg viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M7.5 2v7M4 7l3.5 3.5L11 7M1 13h13" />
+            </svg>
+            PDF ダウンロード (v1.0)
+          </a>
+          <a href="https://github.com/proofmark-jp/proofmark-verify" target="_blank" rel="noopener" class="btn btn-o"
+            aria-label="GitHubで検証スクリプトを確認（新しいタブで開く）">
+            <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+            </svg>
+            検証スクリプト (GitHub)
+          </a>
+        </div>
+        <div class="meta" role="list" aria-label="ドキュメントメタ情報">
+          <div class="mc" role="listitem">
+            <div class="mk">Version</div>
+            <div class="mv">v1.0 — April 2026</div>
+          </div>
+          <div class="mc" role="listitem">
+            <div class="mk">Status</div>
+            <div class="mv" style="color:var(--t)">Public Release</div>
+          </div>
+          <div class="mc" role="listitem">
+            <div class="mk">Standards</div>
+            <div class="mv">RFC3161 · SHA-256</div>
+          </div>
+          <div class="mc" role="listitem">
+            <div class="mk">Author</div>
+            <div class="mv">ProofMark Engineering</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- §1 Threat Model -->
+
+      <section class="sec rv" id="s1" aria-labelledby="h-s1">
+        <div class="sh"><span class="sn" aria-hidden="true">§1</span>
+          <h2 id="h-s1">脅威モデル &amp; 信頼境界</h2>
+        </div>
+        <p>暗号システムを評価する前に、脅威モデルを明確にする必要があります。ProofMarkは特定の、限定された主張に対処します。</p>
+        <h3>唯一の検証可能な主張</h3>
+        <div class="claim" role="note" aria-label="ProofMarkの証明範囲">
+          <strong style="color:var(--t)">Claim:</strong> SHA-256ハッシュ <strong>H</strong>
+          を持つファイルが、信頼された第三者TSAによって証明されたタイムスタンプ <strong>T</strong> の時点で、改ざんされていない状態で存在していた。
+        </div>
+        <div class="scope">
+          <div class="sc sc-i">
+            <h4>✓ In Scope（証明できること）</h4>
+            <ul>
+              <li><span style="color:var(--t)" aria-hidden="true">✓</span> 時刻Tにおけるファイル完全性</li>
+              <li><span style="color:var(--t)" aria-hidden="true">✓</span> タイムスタンプの否認不可性</li>
+              <li><span style="color:var(--t)" aria-hidden="true">✓</span> 第三者による独立検証</li>
+              <li><span style="color:var(--t)" aria-hidden="true">✓</span> 発行後はProofMark依存なし</li>
+            </ul>
+          </div>
+          <div class="sc sc-o">
+            <h4>✗ Out of Scope（証明できないこと）</h4>
+            <ul>
+              <li><span style="color:var(--g)" aria-hidden="true">✗</span> 著作権の帰属</li>
+              <li><span style="color:var(--g)" aria-hidden="true">✗</span> 芸術的独自性</li>
+              <li><span style="color:var(--g)" aria-hidden="true">✗</span> 世界初の創作であること</li>
+              <li><span style="color:var(--g)" aria-hidden="true">✗</span> AI生成コンテンツの合法性</li>
+            </ul>
+          </div>
+        </div>
+        <h3>Adversary Model</h3>
+        <div class="tw">
+          <table>
+            <caption>ProofMarkが対処する攻撃者と防御策</caption>
+            <thead>
+              <tr>
+                <th scope="col">攻撃者</th>
+                <th scope="col">能力</th>
+                <th scope="col">ProofMarkの防御</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>主張偽造</td>
+                <td>先に作ったと主張</td>
+                <td>TSAタイムスタンプが事実を証明；ハッシュ衝突は不可能（2¹²⁸）</td>
+              </tr>
+              <tr>
+                <td>ファイル改ざん</td>
+                <td>タイムスタンプ後に改ざん</td>
+                <td>SHA-256ダイジェストが即座に無効化；第三者が検証可能</td>
+              </tr>
+              <tr>
+                <td>タイムスタンプ再利用</td>
+                <td>古いTSTを新ファイルに</td>
+                <td>TSTはhash+nonceをバインド；暗号的に検知可能</td>
+              </tr>
+              <tr>
+                <td>サーバー侵害</td>
+                <td>DBハッシュ漏洩</td>
+                <td>ハッシュは公開安全；Private Proofモードでは原画なし</td>
+              </tr>
+              <tr>
+                <td>TSA共謀</td>
+                <td>偽タイムスタンプ発行</td>
+                <td>TSA選定（§4）+ RFC3161チェーン検証で軽減</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- §2 SHA-256 -->
+
+      <section class="sec rv" id="s2" aria-labelledby="h-s2">
+        <div class="sh"><span class="sn" aria-hidden="true">§2</span>
+          <h2 id="h-s2">暗号ハッシュ — SHA-256 via Web Crypto API</h2>
+        </div>
+        <p>ProofMarkはブラウザネイティブの <strong>Web Crypto API</strong>（W3C仕様）を使用し、SHA-256ダイジェストを完全にクライアントサイドで計算します。Private
+          Proofモードでは原画はサーバーに一切送信されません。</p>
+        <h3>実装コード</h3>
+        <div class="cw">
+          <div class="ch">
+            <span class="cl-lang">TypeScript</span>
+            <button class="cp-btn" onclick="copyCode(this)" aria-label="TypeScriptコードブロックをコピー">コピー</button>
+          </div>
+          <pre><span class="km">// ProofMark client-side hashing pipeline
+// Requires: SubtleCrypto (window.crypto.subtle)</span>
+
+<span class="kw">async function</span> <span class="kt">computeProofHash</span>(file: File): Promise<string> {
+<span class="km">// 1. 非対応ブラウザを明示的に拒否 — フォールバックなし</span>
+<span class="kw">if</span> (!window.crypto?.subtle) {
+<span class="kw">throw new</span> Error(<span class="ks">“SubtleCrypto unavailable — use a modern browser”</span>);
+}
+<span class="km">// 2. ArrayBufferとして読み込み（ブラウザメモリ内で完結）</span>
+<span class="kw">const</span> buffer = <span class="kw">await</span> file.arrayBuffer();
+<span class="km">// 3. SHA-256計算 — ハードウェアアクセラレーション</span>
+<span class="kw">const</span> hashBuffer = <span class="kw">await</span> window.crypto.subtle.<span class="kt">digest</span>(<span class="ks">“SHA-256”</span>, buffer);
+<span class="km">// 4. 小文字hex文字列（64文字）にエンコード</span>
+<span class="kw">return</span> Array.from(<span class="kw">new</span> Uint8Array(hashBuffer))
+.map(b => b.toString(16).padStart(2, <span class="ks">“0”</span>)).join(<span class="ks">””</span>);
+}</pre>
+        </div>
+        <div class="co co-w"><b>⚠ No-Fallback Policy.</b>
+          SubtleCryptoが利用できない場合（非HTTPS、レガシーブラウザ）、UIは明示的なエラーを表示します。JSポリフィルへのサイレントフォールバックは行いません。</div>
+        <h3>SHA-256のセキュリティ特性</h3>
+        <div class="tw">
+          <table>
+            <caption>SHA-256アルゴリズムのセキュリティ特性一覧</caption>
+            <thead>
+              <tr>
+                <th scope="col">特性</th>
+                <th scope="col">値 / 保証</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>出力サイズ</td>
+                <td>256ビット（32バイト）— 64文字hex</td>
+              </tr>
+              <tr>
+                <td>衝突耐性</td>
+                <td>2¹²⁸回演算（誕生日攻撃の下界）</td>
+              </tr>
+              <tr>
+                <td>原像耐性</td>
+                <td>2²⁵⁶回演算 — 計算的に不可能</td>
+              </tr>
+              <tr>
+                <td>雪崩効果</td>
+                <td>1ビット変化 → 出力の約50%が変化</td>
+              </tr>
+              <tr>
+                <td>標準</td>
+                <td>NIST FIPS 180-4 — TLS 1.3、Git、Bitcoinでも使用</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </section>
+
+      <!-- §3 RFC3161 -->
+
+      <section class="sec rv" id="s3" aria-labelledby="h-s3">
+        <div class="sh"><span class="sn" aria-hidden="true">§3</span>
+          <h2 id="h-s3">RFC3161 タイムスタンプ — アーキテクチャ &amp; 信頼チェーン</h2>
+        </div>
+        <p>RFC3161は、ハッシュ値を特定の時刻にバインドする暗号的に安全なプロトコルを定義します。生成されたTime-Stamp Token（TST）は、ProofMarkを信頼することなく独立して検証可能です。</p>
+        <h3>プロトコルフロー</h3>
+        <ol class="flow" aria-label="RFC3161タイムスタンプ取得フロー">
+          <li><span class="fn" aria-label="ステップ1">①</span><span class="fa">Browser</span><span class="fd">SHA-256(file)
+              を計算 → ダイジェストH（32バイト）</span></li>
+          <li><span class="fn" aria-label="ステップ2">②</span><span class="fa">Browser</span><span
+              class="fd">暗号ノンスN生成（リプレイ攻撃防止）</span></li>
+          <li><span class="fn" aria-label="ステップ3">③</span><span class="fa">Browser</span><span class="fd">TimeStampReq
+              := { hashAlgorithm: SHA-256, hash: H, nonce: N, certReq: true }</span></li>
+          <li><span class="fn" aria-label="ステップ4">④</span><span class="fa">→ TSA</span><span class="fd">TSAへHTTPS POST —
+              ハッシュのみ送信、ファイルは送信しない</span></li>
+          <li><span class="fn" aria-label="ステップ5">⑤</span><span class="fa">TSA</span><span class="fd">{ hash, time, cert
+              } を秘密鍵で署名 → TST生成</span></li>
+          <li><span class="fn" aria-label="ステップ6">⑥</span><span class="fa">→ DB</span><span
+              class="fd">TST（DER/base64）をSupabaseに保存</span></li>
+          <li><span class="fn" aria-label="ステップ7">⑦</span><span class="fa">第三者</span><span class="fd">TSA公開鍵でTSTを検証 —
+              ProofMark不要</span></li>
+        </ol>
+        <h3>Time-Stamp Token（ASN.1構造）</h3>
+        <div class="cw">
+          <div class="ch">
+            <span class="cl-lang">ASN.1</span>
+            <button class="cp-btn" onclick="copyCode(this)" aria-label="ASN.1コードブロックをコピー">コピー</button>
+          </div>
+          <pre><span class="kt">TimeStampToken</span> ::= ContentInfo {
+  contentType : id-signedData,
+  content : SignedData {
+    encapContent : TSTInfo {
+      messageImprint : { SHA-256, <span class="kt">hash_of_your_file</span> },
+      genTime        : GeneralizedTime,  <span class="km">-- e.g. 20260410153042Z</span>
+      nonce          : INTEGER,           <span class="km">-- replay protection</span>
+    },
+    signerInfo : { TSA_cert_chain, RSA_signature }
+  }
+}</pre>
+        </div>
+      </section>
+
+      <!-- §4 TSA -->
+
+      <section class="sec rv" id="s4" aria-labelledby="h-s4">
+        <div class="sh"><span class="sn" aria-hidden="true">§4</span>
+          <h2 id="h-s4">TSA選定：現状と移行計画</h2>
+        </div>
+        <div class="co co-i">TSAの選択を透明に公開します。すべての証明の信頼性はこの決定に依存します。曖昧な表現で隠しません。</div>
+        <h3>現在の設定（ベータ版）</h3>
+        <p style="font-size:1.05rem"><strong>TSA: FreeTSA.org</strong> — <code
+            style="color:var(--t);font-family:'DM Mono',monospace;font-size:.85rem">freetsa.org/tsr</code></p>
+        <div class="co co-w"><b>⚠ 正直な評価：</b> FreeTSA.orgはRFC3161準拠で暗号的に有効なタイムスタンプを発行します。ただし：(1) 正式なSLAなし、(2)
+          ルートCAがWindows/macOS/Mozillaトラストストアに未収録、(3) 正式な紛争での法的証明力は裁判所の判断に依存します。ベータ版には適切ですが有料プランには不適切。</div>
+        <h3>本番環境TSAロードマップ</h3>
+        <div class="tw">
+          <table>
+            <caption>TSA候補の比較と採用プラン</caption>
+            <thead>
+              <tr>
+                <th scope="col">TSA</th>
+                <th scope="col">ルートCA信頼</th>
+                <th scope="col">SLA</th>
+                <th scope="col">対象プラン</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>FreeTSA.org</td>
+                <td>自己署名</td>
+                <td>なし</td>
+                <td>Beta のみ</td>
+              </tr>
+              <tr>
+                <td>DigiCert TSA</td>
+                <td>DigiCert（グローバル）</td>
+                <td>99.9%</td>
+                <td>Pro / Business</td>
+              </tr>
+              <tr>
+                <td>GlobalSign TSA</td>
+                <td>GlobalSign（グローバル）</td>
+                <td>99.95%</td>
+                <td>Enterprise</td>
+              </tr>
+              <tr>
+                <td>セイコーソリューションズ</td>
+                <td>SECOM / 日本政府</td>
+                <td>99.9%</td>
+                <td>JP法的効力</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="co co-s">
+          <b>移行コミットメント：</b>有料プランリリース前に、Microsoft/Apple/MozillaトラストストアのTSAへ移行します。既存のTSTは暗号的に有効なまま維持されます。
+        </div>
+      </section>
+
+      <!-- §5 DB/RLS -->
+
+      <section class="sec rv" id="s5" aria-labelledby="h-s5">
+        <div class="sh"><span class="sn" aria-hidden="true">§5</span>
+          <h2 id="h-s5">データ永続化 &amp; セキュリティ（Supabase / RLS）</h2>
+        </div>
+        <p>ProofMarkはSupabase（PostgreSQLベースのBaaS）を使用します。セキュリティはRow-Level Security（RLS）ポリシーによりデータベース層で強制されます。</p>
+        <h3>スキーマ</h3>
+        <div class="cw">
+          <div class="ch">
+            <span class="cl-lang">PostgreSQL</span>
+            <button class="cp-btn" onclick="copyCode(this)" aria-label="PostgreSQLスキーマをコピー">コピー</button>
+          </div>
+          <pre><span class="km">-- 証明レコード（追記専用）</span>
+<span class="kw">CREATE TABLE</span> proof_records (
+  id           UUID <span class="kw">PRIMARY KEY DEFAULT</span> gen_random_uuid(),
+  user_id      UUID <span class="kw">NOT NULL REFERENCES</span> auth.users(id),
+  sha256_hash  <span class="kt">CHAR(64) NOT NULL</span>,
+  proof_mode   TEXT <span class="kw">CHECK</span> (proof_mode IN (<span class="ks">'private'</span>, <span class="ks">'shareable'</span>)),
+  tst_base64   TEXT,        <span class="km">-- 完全なRFC3161 TST（DER/base64）</span>
+  tst_time     TIMESTAMPTZ, <span class="km">-- TSTから抽出したgenTime</span>
+  created_at   TIMESTAMPTZ <span class="kw">DEFAULT</span> now()
+);</pre>
+        </div>
+        <h3>Row-Level Security ポリシー</h3>
+        <div class="cw">
+          <div class="ch">
+            <span class="cl-lang">PostgreSQL RLS</span>
+            <button class="cp-btn" onclick="copyCode(this)" aria-label="RLSポリシーをコピー">コピー</button>
+          </div>
+          <pre><span class="kw">ALTER TABLE</span> proof_records <span class="kw">ENABLE ROW LEVEL SECURITY</span>;
+
+<span class="km">– SELECT: 自分のレコードのみ</span>
+<span class="kw">CREATE POLICY</span> <span class="ks">“own_records_select”</span> <span class="kw">ON</span> proof_records
+<span class="kw">FOR SELECT USING</span> (<span class="kt">auth.uid() = user_id</span>);
+
+<span class="km">– INSERT: 自分のレコードのみ</span>
+<span class="kw">CREATE POLICY</span> <span class="ks">“own_records_insert”</span> <span class="kw">ON</span> proof_records
+<span class="kw">FOR INSERT WITH CHECK</span> (<span class="kt">auth.uid() = user_id</span>);
+
+<span class="km">– UPDATEとDELETEのポリシーなし → レコードは不変</span>
+
+<span class="km">– 公開検証用: shareableのみ</span>
+<span class="kw">CREATE POLICY</span> <span class="ks">“public_shareable”</span> <span class="kw">ON</span> proof_records
+<span class="kw">FOR SELECT USING</span> (<span class="kt">proof_mode = ‘shareable’</span>);</pre>
+        </div>
+        <div class="co co-s"><b>設計上の重要な判断：</b> (1) UPDATEポリシーなし — タイムスタンプ操作が不可能。(2) IPアドレスはSHA-256(IP)のみ保存。(3) <code
+            style="font-family:'DM Mono',monospace">tst_base64</code>が完全なRFC3161 TSTを保持 — ProofMark停止後も外部検証が可能。</div>
+
+      </section>
+
+      <!-- §6 Data Flow -->
+
+      <section class="sec rv" id="s6" aria-labelledby="h-s6">
+        <div class="sh"><span class="sn" aria-hidden="true">§6</span>
+          <h2 id="h-s6">エンドツーエンド データフロー</h2>
+        </div>
+        <p><strong>Private Proofモード（デフォルト）</strong></p>
+        <ol class="flow" aria-label="Private Proofモードのデータフロー">
+          <li><span class="fn" aria-label="ステップ1">1</span><span class="fa">Browser</span><span class="fd">ファイル選択 —
+              ブラウザメモリ内に留まる（FileReader API）</span></li>
+          <li><span class="fn" aria-label="ステップ2">2</span><span class="fa">Browser</span><span
+              class="fd">SubtleCrypto.digest()でSHA-256計算 — ネットワーク通信ゼロ</span></li>
+          <li><span class="fn" aria-label="ステップ3">3</span><span class="fa">→ Supabase</span><span class="fd">POST
+              /functions/v1/process-hash { hash, filename, size, nonce }</span></li>
+          <li><span class="fn" aria-label="ステップ4">4</span><span class="fa">Edge Fn</span><span class="fd">JWT検証（Supabase
+              Auth）、user_id抽出</span></li>
+          <li><span class="fn" aria-label="ステップ5">5</span><span class="fa">→ TSA</span><span class="fd">RFC3161
+              TimeStampReqをTSAへHTTPS送信</span></li>
+          <li><span class="fn" aria-label="ステップ6">6</span><span class="fa">TSA →</span><span
+              class="fd">署名済みTSTを含むTimeStampRespを受信</span></li>
+          <li><span class="fn" aria-label="ステップ7">7</span><span class="fa">→ DB</span><span class="fd">INSERT into
+              proof_records { user_id, hash, tst_base64, tst_time }</span></li>
+          <li><span class="fn" aria-label="ステップ8">8</span><span class="fa">→ Browser</span><span class="fd">{ proof_id,
+              tst_time, certificate_url } を返却</span></li>
+          <li><span class="fn" aria-label="ステップ9">9</span><span class="fa">Browser</span><span
+              class="fd">PDF証明書をクライアントサイドで生成 — 原画は一切送信されていない</span></li>
+        </ol>
+        <div class="co co-s"><b>プライバシー保証：</b> Private
+          Proofモードでは、原画ファイルはブラウザの外に出ません。SHA-256は一方向関数であり、ハッシュ値から元ファイルを復元することは計算的に不可能です。</div>
+      </section>
+
+      <!-- §7 Verification -->
+
+      <section class="sec rv" id="s7" aria-labelledby="h-s7">
+        <div class="sh"><span class="sn" aria-hidden="true">§7</span>
+          <h2 id="h-s7">検証ガイド — 第三者監査</h2>
+        </div>
+        <p>ProofMarkの証明は、標準的なオープンソースツールを使って誰でも検証できます。ProofMarkインフラへの信頼は不要です。</p>
+        <h3>Step 1 — SHA-256ハッシュの再計算</h3>
+        <div class="cw">
+          <div class="ch">
+            <span class="cl-lang">Python 3</span>
+            <button class="cp-btn" onclick="copyCode(this)" aria-label="Pythonハッシュ検証スクリプトをコピー">コピー</button>
+          </div>
+          <pre><span class="km"># Python 3 -- SHA-256ハッシュ検証</span>
+<span class="kw">import</span> hashlib
+
+<span class="kw">def</span> <span class="kt">verify_hash</span>(filepath: str, expected: str) -> bool:
+<span class="kw">with</span> open(filepath, <span class="ks">“rb”</span>) <span class="kw">as</span> f:
+computed = hashlib.sha256(f.read()).hexdigest()
+ok = computed == expected.lower()
+print(<span class="ks">“Result: PASS ✓”</span> <span class="kw">if</span> ok <span class="kw">else</span> <span class="ks">“Result: FAIL ✗”</span>)
+<span class="kw">return</span> ok</pre>
+        </div>
+        <h3>Step 2 — RFC3161タイムスタンプの検証</h3>
+        <div class="cw">
+          <div class="ch">
+            <span class="cl-lang">Shell (OpenSSL)</span>
+            <button class="cp-btn" onclick="copyCode(this)" aria-label="OpenSSL検証コマンドをコピー">コピー</button>
+          </div>
+
+          <pre><span class="km"># TSTを抽出（base64）</span>
+<span class="kt">echo</span> <span class="ks">"&lt;tst_base64&gt;"</span> | base64 -d > proof.tsr
+
+<span class="km"># OpenSSLで検証 — ProofMarkへの依存ゼロ</span>
+<span class="kt">openssl</span> ts -verify \
+  -in proof.tsr \
+  -digest &lt;sha256_hash_hex&gt; \
+  -CAfile freetsa-ca.crt \
+  -untrusted freetsa-tsa.crt
+
+<span class="km"># 期待される出力:</span>
+<span class="kt">Verification: OK</span></pre>
+
+          ```
+        </div>
+        <div class="co co-i">
+          TSAのルート証明書はTSAのウェブサイトで公開されています。この検証はProofMarkへの信頼を一切必要とせず、TSAの公開鍵とOpenSSLのRFC3161実装のみに依存します。</div>
+        ```
+
+      </section>
+
+      <!-- §8 Limitations -->
+
+      <section class="sec rv" id="s8" aria-labelledby="h-s8">
+        <div class="sh"><span class="sn" aria-hidden="true">§8</span>
+          <h2 id="h-s8">制限事項 &amp; 正直な開示</h2>
+        </div>
+        <p>制限事項についての誠実な開示が、それを隠すよりも信頼を築くと考えています。</p>
+        <ul class="lims" aria-label="現時点での制限事項一覧">
+          <li class="li"><span class="li-i" aria-hidden="true">⚠</span>
+            <div><b>Beta TSA（FreeTSA.org）</b><span>SLAなし、自己署名ルートCA。有料リリース前に商用TSAへ移行予定。既存TSTは暗号的に有効のまま維持。</span></div>
+          </li>
+          <li class="li"><span class="li-i" aria-hidden="true">⚠</span>
+            <div><b>HSMなし</b><span>TSA署名鍵はTSA運営者が管理。軽減策：本番では信頼できる商用TSAを使用。</span></div>
+          </li>
+          <li class="li"><span class="li-i" aria-hidden="true">⚠</span>
+            <div><b>証明ごとに単一TSA</b><span>マルチTSAクロスタイムスタンプ（耐性向上）はProロードマップ。</span></div>
+          </li>
+          <li class="li"><span class="li-i" aria-hidden="true">⚠</span>
+            <div><b>ブラウザ信頼境界</b><span>悪意のある拡張機能がハッシュ前のデータをインターセプト可能。全ブラウザ暗号ツールと共有するリスク。</span></div>
+          </li>
+          <li class="li"><span class="li-i" aria-hidden="true">⚠</span>
+            <div><b>C2PA未対応（現時点）</b><span>C2PAマニフェストの埋め込みは未対応。長期ロードマップに含まれています。</span></div>
+          </li>
+          <li class="li"><span class="li-i" aria-hidden="true">⚠</span>
+            <div><b>第三者コード監査なし</b><span>ハッシュ計算ロジックをGitHubでMITライセンス公開。§Aの検証スクリプトで独立検証が可能。</span></div>
+          </li>
+        </ul>
+      </section>
+
+      <!-- §9 Changelog -->
+
+      <section class="sec rv" id="s9" aria-labelledby="h-s9">
+        <div class="sh"><span class="sn" aria-hidden="true">§9</span>
+          <h2 id="h-s9">更新履歴</h2>
+        </div>
+        <ul class="cl-list" aria-label="バージョン履歴">
+          <li class="cli"><span class="clv">v1.0</span><span class="cld"><b>April 2026</b> — 初版公開。SHA-256パイプライン、RFC3161
+              TST（ASN.1構造含む）、Supabase RLSスキーマ、脅威モデル、TSA選定理由、第三者検証ガイド、完全なAppendixスクリプト。</span></li>
+          <li class="cli"><span class="clv">v1.1</span><span class="cld"><b>May 2026</b> — §4.3に商用TSAへの移行条件（有償顧客30名トリガー）を明記。FreeTSAの稼働ステータスを2026-05-12付けで確認。</span></li>
+          <li class="cli"><span class="clv">v1.2（予定）</span><span class="cld"><b>Q3 2026</b> —
+              商用TSAへの移行完了後に発行。TSA移行証明書・旧TSTの継続有効性の確認手順を追記。</span></li>
+        </ul>
+      </section>
+
+      <!-- §A Appendix -->
+
+      <section class="sec rv" id="sa" aria-labelledby="h-sa">
+        <div class="sh"><span class="sn" aria-hidden="true">§A</span>
+          <h2 id="h-sa">Appendix：Python検証スクリプト（完全版）</h2>
+        </div>
+        <p>ProofMark証明書を検証するスタンドアロンスクリプト。Python 3.8+とOpenSSLが必要。完全版ソース: <a
+            href="https://github.com/proofmark-jp/proofmark-verify" target="_blank" rel="noopener"
+            style="color:var(--t)" aria-label="GitHubリポジトリ（新しいタブで開く）">github.com/proofmark-jp/verify</a></p>
+        <div class="cw">
+          <div class="ch">
+            <span class="cl-lang">Python 3</span>
+            <button class="cp-btn" onclick="copyCode(this)" aria-label="完全な検証スクリプトをコピー">コピー</button>
+          </div>
+          <pre><span class="km">#!/usr/bin/env python3
+"""ProofMark RFC3161 Timestamp Verifier
+   Usage: python verify_proofmark.py &lt;file&gt; &lt;hash_hex&gt; &lt;tst_base64&gt;
+"""</span>
+<span class="kw">import</span> sys, hashlib, base64, subprocess
+<span class="kw">from</span> pathlib <span class="kw">import</span> Path
+
+<span class="kw">def</span> <span class="kt">verify_file_hash</span>(filepath: str, expected_hex: str) -> bool:
+actual = hashlib.sha256(Path(filepath).read_bytes()).hexdigest()
+ok = actual == expected_hex.lower()
+print(f<span class="ks">”[HASH] Expected : {expected_hex}”</span>)
+print(f<span class="ks">”[HASH] Computed : {actual}”</span>)
+print(<span class="ks">”[HASH] Result   : PASS ✓”</span> <span class="kw">if</span> ok <span class="kw">else</span> <span class="ks">”[HASH] Result   : FAIL ✗”</span>)
+<span class="kw">return</span> ok
+
+<span class="kw">def</span> <span class="kt">verify_rfc3161_tst</span>(tst_b64: str, hash_hex: str,
+ca: str = <span class="ks">“freetsa-ca.crt”</span>,
+tsa: str = <span class="ks">“freetsa-tsa.crt”</span>) -> bool:
+tsr = Path(<span class="ks">”/tmp/proof.tsr”</span>)
+tsr.write_bytes(base64.b64decode(tst_b64))
+r = subprocess.run(
+[<span class="ks">“openssl”</span>, <span class="ks">“ts”</span>, <span class="ks">”-verify”</span>,
+<span class="ks">”-in”</span>, str(tsr), <span class="ks">”-digest”</span>, hash_hex,
+<span class="ks">”-CAfile”</span>, ca, <span class="ks">”-untrusted”</span>, tsa],
+capture_output=<span class="kt">True</span>, text=<span class="kt">True</span>
+)
+ok = <span class="ks">“Verification: OK”</span> <span class="kw">in</span> r.stdout
+print(f<span class="ks">”[TST]  openssl : {r.stdout.strip()}”</span>)
+print(<span class="ks">”[TST]  Result  : PASS ✓”</span> <span class="kw">if</span> ok <span class="kw">else</span> <span class="ks">”[TST]  Result  : FAIL ✗”</span>)
+<span class="kw">return</span> ok
+
+<span class="kw">if</span> **name** == <span class="ks">”**main**”</span>:
+filepath, hash_hex, tst_b64 = sys.argv[1], sys.argv[2], sys.argv[3]
+h_ok = verify_file_hash(filepath, hash_hex)
+t_ok = verify_rfc3161_tst(tst_b64, hash_hex)
+sys.exit(<span class="kt">0</span> <span class="kw">if</span> (h_ok <span class="kw">and</span> t_ok) <span class="kw">else</span> <span class="kt">1</span>)</pre>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+
+    <footer role="contentinfo">
+      <span>© 2026 ProofMark. All rights reserved. &nbsp;·&nbsp; Last updated: 2026-05-12</span>
+      <nav class="fl" aria-label="フッターナビゲーション">
+        <a href="/trust-center">Trust Center</a>
+        <a href="https://twitter.com/ProofMark_jp" target="_blank" rel="noopener"
+          aria-label="X（Twitter）@ProofMark_jp（新しいタブで開く）">@ProofMark_jp</a>
+        <a href="https://github.com/proofmark-jp/proofmark-verify" target="_blank" rel="noopener"
+          aria-label="GitHubリポジトリ（新しいタブで開く）">GitHub</a>
+        <a href="/privacy">プライバシー</a>
+      </nav>
+    </footer>
+
+  </div><!-- .wrap -->
+
+  <script>
+    (function () {
+      'use strict';
+
+      // ── Copy button ─────────────────────────────────────────────
+      function copyCode(btn) {
+        var pre = btn.closest('.cw').querySelector('pre');
+        navigator.clipboard.writeText(pre.innerText).then(function () {
+          btn.textContent = 'コピー済！';
+          btn.classList.add('copied');
+          btn.setAttribute('aria-label', 'コピーしました');
+          setTimeout(function () {
+            btn.textContent = 'コピー';
+            btn.classList.remove('copied');
+            btn.setAttribute('aria-label', btn.closest('.cw').querySelector('.cl-lang').textContent + 'コードブロックをコピー');
+          }, 2000);
+        });
+      }
+      window.copyCode = copyCode;
+
+      // ── Scroll-reveal ────────────────────────────────────────────
+      var revealObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            revealObserver.unobserve(entry.target); // fire once only
+          }
+        });
+      }, { threshold: 0.06 });
+
+      document.querySelectorAll('.rv').forEach(function (el) {
+        revealObserver.observe(el);
+      });
+
+      // ── Active TOC highlight ─────────────────────────────────────
+      var tocLinks = document.querySelectorAll('.toc a');
+      var sections = document.querySelectorAll('.sec');
+
+      var tocObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            tocLinks.forEach(function (link) {
+              link.removeAttribute('aria-current');
+            });
+            var active = document.querySelector('.toc a[href="#' + entry.target.id + '"]');
+            if (active) active.setAttribute('aria-current', 'true');
+          }
+        });
+      }, { threshold: 0.25, rootMargin: '-80px 0px -60% 0px' });
+
+      sections.forEach(function (sec) {
+        tocObserver.observe(sec);
+      });
+
+    }());
+  </script>
+
+</body>
+
+</html>

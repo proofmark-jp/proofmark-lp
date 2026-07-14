@@ -1,0 +1,1 @@
+import{h as e}from"./vendor-react-CZ_2T2h_.js";import{d as u}from"./vendor-motion-Db-qrU0J.js";function a(){const[t,s]=e.useState(!1),o=u();return e.useEffect(()=>{s(!0)},[]),t?o??!1:!1}export{a as u};
