@@ -10,9 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "build:vite": "vite build --base=/spa/ --outDir public/spa --emptyOutDir",
-    "build:next": "next build",
-    "build": "npm run build:vite && npm run build:next",
-    "vercel-build": "npm run build",
+    "build": "npm run build:vite && next build",
     "start": "next start",
     "lint": "next lint"
   },
