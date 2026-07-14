@@ -1,0 +1,23 @@
+module.exports=[69771,a=>{a.v({className:"geist_9c6cb61b-module__8NX9hq__className",variable:"geist_9c6cb61b-module__8NX9hq__variable"})},11143,a=>{"use strict";a.s(["Toaster",()=>c,"toast",()=>d,"useSonner",()=>e]);var b=a.i(11857);let c=(0,b.registerClientReference)(function(){throw Error("Attempted to call Toaster() from the server but Toaster is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.")},"[project]/node_modules/sonner/dist/index.mjs <module evaluation>","Toaster"),d=(0,b.registerClientReference)(function(){throw Error("Attempted to call toast() from the server but toast is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.")},"[project]/node_modules/sonner/dist/index.mjs <module evaluation>","toast"),e=(0,b.registerClientReference)(function(){throw Error("Attempted to call useSonner() from the server but useSonner is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.")},"[project]/node_modules/sonner/dist/index.mjs <module evaluation>","useSonner")},34817,a=>{"use strict";a.s(["Toaster",()=>c,"toast",()=>d,"useSonner",()=>e]);var b=a.i(11857);let c=(0,b.registerClientReference)(function(){throw Error("Attempted to call Toaster() from the server but Toaster is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.")},"[project]/node_modules/sonner/dist/index.mjs","Toaster"),d=(0,b.registerClientReference)(function(){throw Error("Attempted to call toast() from the server but toast is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.")},"[project]/node_modules/sonner/dist/index.mjs","toast"),e=(0,b.registerClientReference)(function(){throw Error("Attempted to call useSonner() from the server but useSonner is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.")},"[project]/node_modules/sonner/dist/index.mjs","useSonner")},61097,a=>{"use strict";a.i(11143);var b=a.i(34817);a.n(b)},33290,a=>{"use strict";var b=a.i(7997),c=a.i(69771);let d={className:c.default.className,style:{fontFamily:"'Geist', 'Geist Fallback'",fontStyle:"normal"}};null!=c.default.variable&&(d.variable=c.default.variable);var e=a.i(61097);let f={metadataBase:new URL(process.env.NEXT_PUBLIC_BASE_URL||"https://proofmark.jp"),title:"ProofMark Console",description:"AI生成の冤罪からクリエイターの技術と誇りを守る、世界標準の公証インフラ。"};a.s(["default",0,function({children:a}){let c=`
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        if (registrations.length > 0) {
+          var unregisterPromises = registrations.map(function(r) {
+            if (r.active && r.active.scriptURL.includes('sw.js')) {
+              return Promise.resolve(false);
+            }
+            return r.unregister();
+          });
+          Promise.all(unregisterPromises).then(function(results) {
+            var anyUnregistered = results.some(function(success) { return success === true; });
+            if (anyUnregistered) {
+              console.log('ProofMark Security: Vite時代の古いService Workerを完全パージしました。');
+              window.location.reload();
+            }
+          });
+        }
+      });
+    }
+  `;return(0,b.jsxs)("html",{lang:"ja",className:`${d.variable} bg-black`,suppressHydrationWarning:!0,children:[(0,b.jsx)("head",{children:(0,b.jsx)("script",{dangerouslySetInnerHTML:{__html:c}})}),(0,b.jsxs)("body",{className:"antialiased bg-black text-white font-sans selection:bg-[#00D4AA]/30 min-h-screen flex flex-col",suppressHydrationWarning:!0,children:[a,(0,b.jsx)(e.Toaster,{theme:"dark",position:"bottom-right",richColors:!0,expand:!0,toastOptions:{style:{background:"#18181b",border:"1px solid #27272a",color:"#fff"}}})]})]})},"metadata",0,f,"viewport",0,{width:"device-width",initialScale:1,themeColor:"#000000",colorScheme:"dark"}],33290)},70864,a=>{a.n(a.i(33290))}];
+
+//# sourceMappingURL=%5Broot-of-the-server%5D__08ojx6b._.js.map

@@ -1,0 +1,3 @@
+{
+  "/api/generate-evidence-pack/route": "app/api/generate-evidence-pack/route.js"
+}

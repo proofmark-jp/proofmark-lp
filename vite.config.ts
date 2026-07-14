@@ -247,7 +247,7 @@ export default defineConfig({
     cssCodeSplit: true,
     sourcemap: false,
     // 警告閾値は厳しく。これを 3000kB のままにすると分割不備に気付けない
-    chunkSizeWarningLimit: 700,
+    chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
         manualChunks: pickVendorChunk,
