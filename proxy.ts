@@ -36,6 +36,7 @@ export async function proxy(request: NextRequest) {
       pathname.startsWith('/console') || 
       pathname.startsWith('/login') ||
       pathname.startsWith('/auth') || 
+      pathname.startsWith('/cert') ||
       pathname.startsWith('/verify') // SPAのその他の主要ルートがあればここに追加
     ) {
       // url を /spa/index.html に書き換えて返す（リダイレクトではなく裏側での Rewrite）
@@ -88,6 +89,7 @@ export const config = {
     '/console/:path*',
     '/login/:path*',
     '/auth/:path*',
+    '/cert/:path*',
     '/api/:path*',
     '/verify/:path*' 
   ],

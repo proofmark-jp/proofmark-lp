@@ -24,7 +24,6 @@ const nextConfig = {
   async rewrites() {
     return [
       // 1. APIバイパス（Next.js側のAPIルートへ流すもの）
-      { source: '/cert/:id', destination: '/api/cert?id=:id' },
       { source: '/u/:username', destination: '/api/storefront-html?username=:username' },
       
       // 2. The Root Catch: トップページ('/')を確実にVite SPAへ拉致する
