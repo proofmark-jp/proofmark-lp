@@ -81,12 +81,13 @@ export async function proxy(request: NextRequest) {
   }
 }
 
-// 🚨 matcher の更新: トップページ('/')もインターセプトの対象に含める
+// 🚨 matcher の更新: トップページ('/')と、SPAの主要ルートをすべて監視網に入れる
 export const config = {
   matcher: [
     '/',
     '/console/:path*',
     '/login/:path*',
+    '/auth/:path*',
     '/api/:path*',
     '/verify/:path*' 
   ],
