@@ -19,3 +19,4 @@ docs/vault/.obsidian/graph.json
 # キャッシュや一時ファイルの除外
 docs/vault/.obsidian/cache/
 .DS_Store.next
+.next
