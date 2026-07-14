@@ -886,7 +886,7 @@ function SuccessCard({
       }}
     >
       <img
-        src="/logo-white.png"
+        src="/spa/logo-white.png"
         alt="ProofMark"
         className="h-12 w-auto mx-auto drop-shadow-lg"
       />

@@ -27,7 +27,7 @@ const PM_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 const SAMPLE_HASH =
   '90fb4a8a2c47e1b5d3f6c08e7a194d2f5b6a17c84f9e3a02d1b4af3d2c6e8b71';
 
-const ARTWORK_SRC = '/fantasy_artwork_final.jpg';
+const ARTWORK_SRC = '/spa/fantasy_artwork_final.jpg';
 
 export default function HeroCertificateShowcase(): JSX.Element {
   const reduce = useReducedMotion() ?? false;
