@@ -27,16 +27,19 @@ export async function proxy(request: NextRequest) {
       return NextResponse.next();
     }
 
-    // 👑 The Apex Fix 4 (追加): The Edge Interceptor (404バイパス)
-    // Next.js (App Router) が404を吐く前に、ルート('/') および
-    // Vite SPAが担当すべきパスへのアクセスを、物理的に /spa/index.html へ強制連行する。
-    // ※ '/console', '/login' などはVite側で処理されるため、ここで横取りする。
+    // 🛡️ 防衛線 1.5: APIとNext.js内部通信の確実なバイパス
+    if (pathname.startsWith('/api/') || pathname.startsWith('/_next/')) {
+      return NextResponse.next();
+    }
+
+    // 👑 The Edge Interceptor (404バイパス)
     if (
       pathname === '/' || 
       pathname.startsWith('/console') || 
       pathname.startsWith('/login') ||
       pathname.startsWith('/auth') || 
       pathname.startsWith('/cert') ||
+      pathname.startsWith('/u/') ||
       pathname.startsWith('/verify') // SPAのその他の主要ルートがあればここに追加
     ) {
       // url を /spa/index.html に書き換えて返す（リダイレクトではなく裏側での Rewrite）
@@ -90,6 +93,7 @@ export const config = {
     '/login/:path*',
     '/auth/:path*',
     '/cert/:path*',
+    '/u/:path*',
     '/api/:path*',
     '/verify/:path*' 
   ],
