@@ -43,12 +43,12 @@ const nextConfig = {
     const isDev = process.env.NODE_ENV !== 'production';
 
     // 👑 ベースとなる究極のホワイトリストCSP
-    // 開発環境(isDev)のみ、Hot Module Replacement用の localhost 通信を許可しDXを守る
     const baseCsp = `
       default-src 'self';
       script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net/npm/hash-wasm@4/ https://va.vercel-scripts.com;
       worker-src 'self' blob:;
-      style-src 'self' 'unsafe-inline';
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      font-src 'self' data: https://fonts.gstatic.com;
       img-src 'self' data: blob: https:;
       connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.r2.cloudflarestorage.com https://vitals.vercel-insights.com ${isDev ? 'ws://localhost:* http://localhost:*' : ''};
     `.replace(/\s{2,}/g, ' ').trim();
