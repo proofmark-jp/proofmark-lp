@@ -9,8 +9,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "next dev",
-    "build:vite": "vite build --base=/spa/ --outDir .vite-dist --emptyOutDir",
-    "build": "npm run build:vite && rm -rf public/spa && mkdir -p public/spa && cp -R .vite-dist/* public/spa/ && next build",
+    "build:vite": "vite build --base=/spa/ --outDir temp-spa --emptyOutDir",
+    "build": "npm run build:vite && rm -rf public/spa && mv temp-spa public/spa && next build",
     "start": "next start",
     "lint": "next lint"
   },
