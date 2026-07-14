@@ -656,53 +656,7 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
     return () => window.removeEventListener('popstate', sync);
   }, []);
 
-  // ── Console 2.0: 全画面ドロップゾーンのための鉄壁のSRE防衛線およびドラッグ監視 ──
-  useEffect(() => {
-    // UI着火用：ブラウザ全体へのドラッグ監視
-    const handleDragEnter = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragActive(true);
-      setGlobalDragError(null);
-    };
 
-    const handleDragLeave = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      // ブラウザ外に出た時のみOverlayを閉じる（子要素でのチラつき防止）
-      if (!e.relatedTarget) {
-        setIsDragActive(false);
-      }
-    };
-
-    const handleDragOver = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    const handleDrop = async (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragActive(false); 
-      
-      const droppedFiles = Array.from(e.dataTransfer?.files || []);
-      if (droppedFiles.length === 0) return;
-
-      await handleGlobalDrop(droppedFiles);
-    };
-
-    window.addEventListener('dragenter', handleDragEnter);
-    window.addEventListener('dragover', handleDragOver);
-    window.addEventListener('dragleave', handleDragLeave);
-    window.addEventListener('drop', handleDrop);
-
-    return () => {
-      window.removeEventListener('dragenter', handleDragEnter);
-      window.removeEventListener('dragover', handleDragOver);
-      window.removeEventListener('dragleave', handleDragLeave);
-      window.removeEventListener('drop', handleDrop);
-    };
-  }, [handleGlobalDrop]);
 
   // ── state → URL (history push/replace)
   const syncInspectorToUrl = useCallback((id: string | null, tab: 'overview' | 'chain' = 'overview', replace = false) => {
@@ -1283,6 +1237,54 @@ function StudioCanvas({ user, signOut, ops, isStudio }: StudioCanvasProps) {
       setIsProcessingDrop(false);
     }
   }, [isProcessingDrop]);
+
+  // ── Console 2.0: 全画面ドロップゾーンのための鉄壁のSRE防衛線およびドラッグ監視 ──
+  useEffect(() => {
+    // UI着火用：ブラウザ全体へのドラッグ監視
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragActive(true);
+      setGlobalDragError(null);
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // ブラウザ外に出た時のみOverlayを閉じる（子要素でのチラつき防止）
+      if (!e.relatedTarget) {
+        setIsDragActive(false);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const handleDrop = async (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragActive(false); 
+      
+      const droppedFiles = Array.from(e.dataTransfer?.files || []);
+      if (droppedFiles.length === 0) return;
+
+      await handleGlobalDrop(droppedFiles);
+    };
+
+    window.addEventListener('dragenter', handleDragEnter);
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
+
+    return () => {
+      window.removeEventListener('dragenter', handleDragEnter);
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, [handleGlobalDrop]);
 
   /* ━━━━━━━━━━━━━━━━ Render ━━━━━━━━━━━━━━━━ */
 
