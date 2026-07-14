@@ -904,7 +904,7 @@ function BackdropPlasma() {
 function SyntaxColoredSnippet({ code }: { code: string }) {
   // <タグ>, "文字列", 属性名= をネオン/パープルで彩色
   // セキュリティ: code は内部生成のため XSS リスクなし。HTML 表示は escapeHtml 経由で行う。
-  const html = code
+  const html = (code || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -941,7 +941,7 @@ function SyntaxColoredSnippet({ code }: { code: string }) {
    ═══════════════════════════════════════════════════════════════ */
 
 function escapeHtml(s: string): string {
-  return s
+  return (s || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
