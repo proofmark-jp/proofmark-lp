@@ -190,11 +190,11 @@ const styles = StyleSheet.create({
   },
   brandText: {
     fontFamily: PDF_FONT_FAMILY.sans,
-    fontSize: SCALE.subheading - 1, // 12
-    fontWeight: 700,
+    fontSize: SCALE.subheading + 1, // 14 — 力強いロゴタイプ
+    fontWeight: 900,
     color: PDF_COLORS.inkDeep,
-    letterSpacing: 0.6,
-    marginLeft: SCALE.s2,
+    letterSpacing: -0.2,            // 文字間を詰めてロゴらしく
+    marginLeft: SCALE.s2 - 2,
   },
   headerRight: {
     alignItems: 'flex-end',
@@ -574,10 +574,7 @@ export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
             → "永続的に" は誇大表現。「オフライン環境でも独立して確認することができる」へ。
         */}
         <Text style={styles.statementBody}>
-          {zwsp('本証明書は、対象のデジタルアセットおよびその制作プロセスが、記録された日時において確実に存在し、')}
-          {zwsp('以降いかなる改変も加えられていないことを、SHA-256 暗号ハッシュ関数および RFC 3161 タイムスタンプに基づき暗号技術により証明するものである。')}
-          {'\n'}
-          {zwsp('本証明の効力は ProofMark のサービスに依存せず、同梱の検証スクリプトによってオフライン環境でも独立して確認することができる。')}
+          {'本証明書は、対象のデジタルアセットおよびその制作プロセスが、記録された日時において\n確実に存在し、以降いかなる改変も加えられていないことを、SHA-256 暗号ハッシュ関数\nおよび RFC 3161 タイムスタンプに基づき暗号技術により証明するものである。\n\n本証明の効力は ProofMark のサービスに依存せず、同梱の検証スクリプト、または\n公式の検証ポータルを通じて、オフライン環境下でも独立して確認することができる。'}
         </Text>
 
         {/*

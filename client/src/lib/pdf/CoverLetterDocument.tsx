@@ -67,8 +67,8 @@ const SCALE = {
   s1: 4,
   s2: 8,
   s3: 13,
-  s4: 20,
-  s5: 33,
+  s4: 14,   // compressed: was 20
+  s5: 22,   // compressed: was 33
   s6: 52,
   caption: 6.5,
   micro: 7.5,
@@ -151,9 +151,9 @@ const styles = StyleSheet.create({
     fontFamily: PDF_FONT_FAMILY.sans,
     backgroundColor: PDF_COLORS.paper,
     color: PDF_COLORS.ink,
-    paddingTop: SCALE.s5 + SCALE.s2,      // 41
-    paddingBottom: SCALE.s5 + SCALE.s4,   // 53
-    paddingHorizontal: PDF_LAYOUT.marginX, // 56
+    paddingTop: 32,
+    paddingBottom: 40,
+    paddingHorizontal: PDF_LAYOUT.marginX,
     position: 'relative',
   },
 
@@ -200,11 +200,11 @@ const styles = StyleSheet.create({
   },
   brandText: {
     fontFamily: PDF_FONT_FAMILY.sans,
-    fontSize: SCALE.subheading - 1, // 12
-    fontWeight: 700,
+    fontSize: SCALE.subheading + 1, // 14 — 力強いロゴタイプ
+    fontWeight: 900,
     color: PDF_COLORS.inkDeep,
-    letterSpacing: 0.6,
-    marginLeft: SCALE.s2,
+    letterSpacing: -0.2,            // 文字間を詳めてロゴらしく
+    marginLeft: SCALE.s2 - 2,
   },
   headerTag: {
     fontFamily: PDF_FONT_FAMILY.sans,
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
 
   /* ── Section Band ────────────────────────────────────────────────────── */
   sectionBand: {
-    marginBottom: SCALE.s4 + SCALE.s1, // 24
+    marginBottom: 16,
     borderTopWidth: 1,
     borderTopColor: PDF_COLORS.inkDeep,
     borderBottomWidth: 0.5,
@@ -247,10 +247,10 @@ const styles = StyleSheet.create({
   /* ── Body ────────────────────────────────────────────────────────────── */
   body: {
     fontFamily: PDF_FONT_FAMILY.sans,
-    fontSize: SCALE.body,        // 10.5
+    fontSize: 10,                // compressed: was 10.5
     lineHeight: 1.5,
     color: PDF_COLORS.ink,
-    marginBottom: 12,            // compressed: was 20
+    marginBottom: 16,            // fixed
     textAlign: 'left',
   },
   bodyEmphasis: {
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
   pillarRow: {
     flexDirection: 'row',
     gap: SCALE.s2,
-    marginBottom: 12,            // compressed: was 24
+    marginBottom: 16,
   },
   pillar: {
     flexGrow: 1,
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
     borderTopColor: PDF_COLORS.inkDeep,
     borderBottomWidth: 1,
     borderBottomColor: PDF_COLORS.inkDeep,
-    marginBottom: 12,            // compressed: was 24
+    marginBottom: 16,
   },
   treeRow: {
     flexDirection: 'row',
@@ -368,9 +368,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: PDF_COLORS.inkDeep,
     borderStyle: 'solid',
-    padding: SCALE.s4 - 2, // 18
+    padding: SCALE.s4 - 2,
     borderRadius: 4,
-    marginBottom: 12,            // compressed: was 24
+    marginBottom: 16,
   },
   verifyEyebrow: {
     fontFamily: PDF_FONT_FAMILY.sans,
@@ -631,15 +631,7 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
 
         {/* ─── Body ─── */}
         <Text style={styles.body}>
-          {zwsp('本パッケージ（Evidence Pack）は、クリエイターが制作・納品したデジタルデータの存在事実および制作プロセスの完全性を、')}
-          {zwsp('暗号技術によって客観的に証明する公式記録文書です。')}
-          {'\n'}
-          {zwsp('RFC 3161 規格に準拠したタイムスタンプ認証局が発行する署名トークンにより、タイムスタンプ発行後、')}
-          <Text style={styles.bodyEmphasis}>{zwsp('対象データに一切の改変が加えられていないこと')}</Text>
-          {zwsp('が第三者に対して客観的に立証可能な状態で担保されます。')}
-          {'\n'}
-          {zwsp('クリエイターの著作権保護と、貴社における適正なコンテンツ利用の両立を目的として設計されており、')}
-          {zwsp('同梱の検証スクリプトまたは下記URLから完全性を確認できます。その際、原本ファイルが外部へ送信されることは一切ありません。')}
+          {'\u672c\u30d1\u30c3\u30b1\u30fc\u30b8\uff08Evidence Pack\uff09\u306f\u3001\u30af\u30ea\u30a8\u30a4\u30bf\u30fc\u304c\u5236\u4f5c\u30fb\u7d0d\u54c1\u3057\u305f\u30c7\u30b8\u30bf\u30eb\u30c7\u30fc\u30bf\u306e\n\u5b58\u5728\u4e8b\u5b9f\u304a\u3088\u3073\u5236\u4f5c\u30d7\u30ed\u30bb\u30b9\u306e\u5b8c\u5168\u6027\u3092\u3001\u6697\u53f7\u6280\u8853\u306b\u3088\u3063\u3066\u5ba2\u89b3\u7684\u306b\u8a3c\u660e\u3059\u308b\u516c\u5f0f\u8a18\u9332\u6587\u66f8\u3067\u3059\u3002\n\nRFC 3161 \u898f\u683c\u306b\u6e96\u62e0\u3057\u305f\u30bf\u30a4\u30e0\u30b9\u30bf\u30f3\u30d7\u8a8d\u8a3c\u5c40\u304c\u767a\u884c\u3059\u308b\u7f72\u540d\u30c8\u30fc\u30af\u30f3\u306b\u3088\u308a\u3001\n\u5bfe\u8c61\u30c7\u30fc\u30bf\u306b\u4e00\u5207\u306e\u6539\u5909\u304c\u52a0\u3048\u3089\u308c\u3066\u3044\u306a\u3044\u3053\u3068\u304c\u3001\u7b2c\u4e09\u8005\u306b\u5bfe\u3057\u5ba2\u89b3\u7684\u306b\u7acb\u8a3c\u53ef\u80fd\u3067\u3059\u3002\n\n\u30af\u30ea\u30a8\u30a4\u30bf\u30fc\u306e\u8457\u4f5c\u6a29\u4fdd\u8b77\u3068\u3001\u8cb4\u793e\u306b\u304a\u3051\u308b\u9069\u6b63\u306a\u30b3\u30f3\u30c6\u30f3\u30c4\u5229\u7528\u306e\u4e21\u7acb\u3092\u76ee\u7684\u3068\u3057\u3066\u304a\u308a\u3001\n\u539f\u672c\u30d5\u30a1\u30a4\u30eb\u304c\u5916\u90e8\u3078\u9001\u4fe1\u3055\u308c\u308b\u3053\u3068\u306a\u304f\u3001\u5b89\u5168\u304b\u3064\u72ec\u7acb\u3057\u305f\u691c\u8a3c\u3092\u4fdd\u8a3c\u3057\u307e\u3059\u3002'}
         </Text>
 
         {/* ─── THREE PILLARS ─── */}
@@ -700,7 +692,7 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
             <View style={styles.verifyBodyRow}>
               <View style={styles.verifyTextCol}>
                 <Text style={styles.verifyText}>
-                  {zwsp('対象データに一切の改変が加えられていないことは、下記URLまたはQRコードより、ブラウザ上で即座に検証可能です（原本ファイルが外部へ送信されることはありません）。')}
+                  {'対象データの完全性と発行日時は、下記URLまたはQRコードより、\nブラウザ上で即座に検証可能です（原本ファイルは外部へ送信されません）。'}
                 </Text>
               </View>
               {hasQr && (
@@ -746,22 +738,17 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
           <View style={styles.footerRow}>
             <View style={styles.footerCol}>
               <Text style={styles.footerLabel}>PROOFMARK</Text>
-              <Text style={[styles.footerMono, { marginTop: 1 }]}>
-                EVIDENCE PACK
-              </Text>
+              <Text style={[styles.footerMono, { marginTop: 1 }]}>EVIDENCE PACK</Text>
             </View>
             <View style={[styles.footerCol, { alignItems: 'center' }]}>
               <Text style={styles.footerLabel}>VERIFY</Text>
-              <Link
-                src={verifyHref}
-                style={[styles.footerMono, { marginTop: 1 }]}
-              >
+              <Link src={verifyHref} style={[styles.footerMono, { marginTop: 1 }]}>
                 proofmark.jp
               </Link>
             </View>
             <View style={[styles.footerCol, { alignItems: 'flex-end' }]}>
-              <Text style={styles.footerLabel}>COVER LETTER</Text>
-              <Text style={[styles.footerMono, { marginTop: 1 }]}>01 / 01</Text>
+              <Text style={styles.footerLabel}>ISSUED BY</Text>
+              <Text style={[styles.footerMono, { marginTop: 1 }]}>ProofMark</Text>
             </View>
           </View>
         </View>
