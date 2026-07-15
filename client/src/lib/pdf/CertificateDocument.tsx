@@ -56,6 +56,14 @@ import type { CertificatePdfInput } from './types';
 // 日本語テキストのハイフネーションを完全無効化
 Font.registerHyphenationCallback((word: string) => [word]);
 
+/**
+ * ゼロ幅スペース注入 — @react-pdf のハイフネーションエンジンが
+ * 英字ルールで日本語を強制分割する至命的バグを物理排除する。
+ */
+function zwsp(text: string): string {
+  return text.replace(/([\u3000-\u9FFF\uF900-\uFAFF\uFF01-\uFF60\u3040-\u30FF])/g, '$1\u200B');
+}
+
 /* =============================================================================
  * モジュラースケール (黄金比 φ = 1.618)
  * =========================================================================== */
@@ -365,7 +373,7 @@ const styles = StyleSheet.create({
   statementBody: {
     fontFamily: PDF_FONT_FAMILY.sans,
     fontSize: SCALE.body,       // 10.5
-    lineHeight: 1.65,           // 旧 1.72 は PDF 日本語の適正値を超えている
+    lineHeight: 1.5,            // 行政文書グレードの視認性（推奨値）
     color: PDF_COLORS.ink,
     marginBottom: SCALE.s4,     // 20
     textAlign: 'left',
@@ -582,7 +590,10 @@ export const CertificateDocument: React.FC<{ input: CertificatePdfInput }> = ({
             → "永続的に" は誇大表現。「オフライン環境でも独立して確認することができる」へ。
         */}
         <Text style={styles.statementBody}>
-          本証明書は、対象のデジタルアセットおよびその制作プロセスが、記録された日時において確実に存在し、以降いかなる改ざんも加えられていないことを暗号技術により証明するものである。本証明の効力は RFC 3161 タイムスタンプおよび SHA-256 ハッシュ値に裏付けられており、証拠能力は ProofMark のサービスに依存せず、同梱の検証スクリプトによってオフライン環境でも独立して確認することができる。
+          {zwsp('本証明書は、対象のデジタルアセットおよびその制作プロセスが、記録された日時において確実に存在し、')}
+          {zwsp('以降いかなる改変も加えられていないことを、SHA-256 暗号ハッシュ関数および RFC 3161 タイムスタンプに基づき暗号技術により証明するものである。')}
+          {'\n'}
+          {zwsp('本証明の効力は ProofMark のサービスに依存せず、同梱の検証スクリプトによってオフライン環境でも独立して確認することができる。')}
         </Text>
 
         {/*

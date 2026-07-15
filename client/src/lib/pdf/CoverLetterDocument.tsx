@@ -52,6 +52,17 @@ import type { CoverLetterPdfInput } from './types';
 // 日本語テキストのハイフネーションを完全無効化
 Font.registerHyphenationCallback((word: string) => [word]);
 
+/**
+ * ゼロ幅スペース注入 — @react-pdf のハイフネーションエンジンが
+ * 英字ルールで日本語を強制分割する致命的バグを物理排除する。
+ * 日本語Unicode文字間に U+200B を挿入し、
+ * レンダラーに対して任意の文字間での折り返しを許可させる。
+ */
+function zwsp(text: string): string {
+  // ASCII文字・記号・スペース以外の文字（主に日本語）の間に U+200B を挿入
+  return text.replace(/([\u3000-\u9FFF\uF900-\uFAFF\uFF01-\uFF60\u3040-\u30FF])/g, '$1\u200B');
+}
+
 /* =============================================================================
  * モジュラースケール (黄金比 φ = 1.618) — Certificate と完全共通
  * =========================================================================== */
@@ -250,7 +261,7 @@ const styles = StyleSheet.create({
   body: {
     fontFamily: PDF_FONT_FAMILY.sans,
     fontSize: SCALE.body,        // 10.5
-    lineHeight: 1.65,            // PDF 日本語の適正行間（旧 1.78 は過剰に緩い）
+    lineHeight: 1.5,             // 行政文書グレードの視認性（推奨値）
     color: PDF_COLORS.ink,
     marginBottom: SCALE.s4,
     textAlign: 'left',
@@ -629,17 +640,16 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
         <Text style={styles.title}>納品物の真正性証明について</Text>
 
         {/* ─── Body ─── */}
-        {/*
-          推敲ポイント:
-          × 旧「暗号学的に証明するものです」→ 機械的な直訳調
-          × 旧「数学的に保証し」→ 理系論文調で法務文書に不適
-          × 旧「最新のゼロ知識証明アプローチを用いて」→ 製品カタログ調
-          ○ 新: 法務担当が自然に読める平易な文体へ
-        */}
         <Text style={styles.body}>
-          本パッケージ（Evidence Pack）は、クリエイターから納品されたデジタルデータの存在事実と制作プロセスの完全性を、暗号技術によって証明するものです。タイムスタンプ発行後、データに<Text style={styles.bodyEmphasis}>一切の改ざんが加えられていないこと</Text>を客観的に担保し、第三者への立証においても有効な証拠能力を持ちます。
+          {zwsp('本パッケージ（Evidence Pack）は、クリエイターが制作・納品したデジタルデータの存在事実および制作プロセスの完全性を、')}
+          {zwsp('暗号技術によって客観的に証明する公式記録文書です。')}
           {'\n'}
-          クリエイターの権利保護と、貴社における安全なコンテンツ利用の両立を目的として設計されています。同梱のスクリプトまたは下記URLから検証が可能であり、その際に原本ファイルが外部へ送信されることは一切ありません。
+          {zwsp('RFC 3161 規格に準拠したタイムスタンプ認証局が発行する署名トークンにより、タイムスタンプ発行後、')}
+          <Text style={styles.bodyEmphasis}>{zwsp('対象データに一切の改変が加えられていないこと')}</Text>
+          {zwsp('が第三者に対して客観的に立証可能な状態で担保されます。')}
+          {'\n'}
+          {zwsp('クリエイターの著作権保護と、貴社における適正なコンテンツ利用の両立を目的として設計されており、')}
+          {zwsp('同梱の検証スクリプトまたは下記URLから完全性を確認できます。その際、原本ファイルが外部へ送信されることは一切ありません。')}
         </Text>
 
         {/* ─── THREE PILLARS ─── */}
@@ -649,35 +659,23 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
         <View style={styles.pillarRow}>
           <View style={styles.pillar}>
             <Text style={styles.pillarBadge}>① CRYPTOGRAPHIC</Text>
-            <Text style={styles.pillarTitle}>SHA-256 指紋</Text>
-            {/*
-              推敲: 「1ビットの改変で完全に異なる値となる」は直訳的。
-              クライアントが知りたいのは「なぜ安全か」であり「どう機能するか」ではない。
-            */}
+            <Text style={styles.pillarTitle}>SHA-256 暗号指紋</Text>
             <Text style={styles.pillarText}>
-              納品ファイルから算出された256ビットの固有値。内容が少しでも変更されると値が完全に変わるため、改ざんの有無を即座に検出できる。
+              {zwsp('SHA-256 暗号ハッシュ関数により算出された256ビットの固有識別値。対象データの内容が1ビットでも変更された場合、値は完全に変化するため、改ざんの有無を即座かつ確定論的に検出できる。')}
             </Text>
           </View>
           <View style={styles.pillar}>
             <Text style={styles.pillarBadge}>② NOTARIZED</Text>
             <Text style={styles.pillarTitle}>RFC 3161 タイムスタンプ</Text>
-            {/*
-              推敲: 「指紋と日時を暗号署名で強固に連結している」→ 機械的。
-              「強固に」は不要な副詞。動作を端的に説明する文体へ。
-            */}
             <Text style={styles.pillarText}>
-              国際標準規格に準拠した第三者認証局が、ファイルの指紋と発行日時を暗号署名で結合。時刻の正確性と不変性を公式に保証する。
+              {zwsp('国際標準規格 RFC 3161 に準拠した第三者認証局が、ファイルの暗号指紋と発行日時を電子署名で結合し、時刻の真正性と不変性を公式に保証する。')}
             </Text>
           </View>
           <View style={styles.pillar}>
             <Text style={styles.pillarBadge}>③ PROCESS PROVEN</Text>
             <Text style={styles.pillarTitle}>制作過程の連鎖証明</Text>
-            {/*
-              推敲: 「ハッシュチェーンにより数学的に連結・証明されている」→ 技術説明に終始。
-              「第三者に示せる」という実用上の価値を前面に出す。
-            */}
             <Text style={styles.pillarText}>
-              完成品だけでなく、構想から納品までの各制作段階が連鎖証明されており、制作過程の真正性を第三者に対して客観的に示すことができる。
+              {zwsp('最終成果物のみならず、構想から納品に至る各制作段階を連鎖的に記録・証明することで、制作過程の真正性を第三者に対して客観的に提示できる。')}
             </Text>
           </View>
         </View>
@@ -709,14 +707,10 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
             <Text style={styles.verifyTitle}>検証方法</Text>
             <View style={styles.verifyBodyRow}>
               <View style={styles.verifyTextCol}>
-                {/*
-                  推敲: 「貴社内のみで完結する形で」→ 冗長。
-                  「ファイルと TSA 署名の整合を検証する」→ 名詞過多で読みにくい。
-                */}
                 <Text style={styles.verifyText}>
-                  同梱の <Text style={styles.verifyMono}>verify.sh</Text> または{' '}
+                  {zwsp('同梱の ')}<Text style={styles.verifyMono}>verify.sh</Text>{zwsp(' または ')}
                   <Text style={styles.verifyMono}>verify.py</Text>{' '}
-                  を実行することで、外部への通信を一切行わずにファイルとタイムスタンプ署名の整合性を確認できます。オンラインでの検証は、下記URLまたはQRコードからもご利用いただけます。
+                  {zwsp('を実行することで、外部への通信を一切行わずに、ファイルの完全性とタイムスタンプ署名の整合性を独立して確認できます。オンラインでの検証は、下記URLまたはQRコードよりご利用いただけます。')}
                 </Text>
               </View>
               {hasQr && (

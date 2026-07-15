@@ -606,6 +606,7 @@ export async function GET(request: NextRequest) {
         const payload: EvidencePackPayload = {
             filename: evidencePackName,
             pdfMeta: pdfMeta!,
+            archiveMtimeIso: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString(),
             files,
         };
 
