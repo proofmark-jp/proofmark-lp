@@ -207,7 +207,7 @@ export default function Footer(): JSX.Element {
               <div className="relative">
                 <div className="absolute inset-0 bg-[#00D4AA]/20 blur-lg rounded-full group-hover:bg-[#00D4AA]/40 transition-all opacity-0 group-hover:opacity-100" />
                 <img
-                  src={navbarLogo}
+                  src="/spa/logo.svg"
                   alt="ProofMark"
                   className="h-7 w-auto relative z-10"
                 />

@@ -27,7 +27,7 @@ export default function ArticleCopyright() {
       <div className="w-full border-b border-[#1C1A38] bg-[#0D0B24]/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-3 text-decoration-none">
-            <img src={navbarLogo} alt="ProofMark" className="h-6 w-auto" />
+            <img src="/spa/logo.svg" alt="ProofMark" className="h-6 w-auto" />
             <span className="font-['Syne'] text-lg font-extrabold text-[#F0EFF8]">
               Proof<span className="text-[#00D4AA]">Mark</span>
             </span>

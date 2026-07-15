@@ -33,8 +33,9 @@ import {
    ═══════════════════════════════════════════════════════════════ */
 
 export interface WidgetBuilderProps {
-  certificateId: string;
-  certificateTitle: string;
+  certificateId?: string;
+  certificateTitle?: string;
+  username?: string;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -53,16 +54,26 @@ const BORDER_PURPLE = 'rgba(108,62,244,0.3)';
 export default function WidgetBuilder({
   certificateId,
   certificateTitle,
+  username,
 }: WidgetBuilderProps) {
+  const isUserWidget = !!username && !certificateId;
+  const targetId = isUserWidget ? username : certificateId || '';
+
   /* ─── 動的スニペット生成 (Parasitic Payload) ─── */
-  const snippet = useMemo(
-    () =>
-      `<blockquote class="proofmark-embed" data-proofmark-id="${certificateId}">
-  <a href="https://proofmark.jp/cert/${certificateId}">ProofMark Verified: ${escapeHtml(certificateTitle)}</a>
+  const snippet = useMemo(() => {
+    const safeTitle = escapeHtml(certificateTitle || username || '');
+    if (isUserWidget) {
+      return `<blockquote class="proofmark-embed" data-proofmark-user="${username}">
+  <a href="https://proofmark.jp/u/${username}">ProofMark Creator: ${safeTitle}</a>
 </blockquote>
-<script async src="https://proofmark.jp/embed.js" charset="utf-8"></script>`,
-    [certificateId, certificateTitle],
-  );
+<script async src="https://proofmark.jp/embed.js" charset="utf-8"></script>`;
+    } else {
+      return `<blockquote class="proofmark-embed" data-proofmark-id="${certificateId}">
+  <a href="https://proofmark.jp/cert/${certificateId}">ProofMark Verified: ${safeTitle}</a>
+</blockquote>
+<script async src="https://proofmark.jp/embed.js" charset="utf-8"></script>`;
+    }
+  }, [certificateId, certificateTitle, username, isUserWidget]);
 
   /* ─── Copy 状態 ─── */
   const [copied, setCopied] = useState(false);
@@ -115,7 +126,9 @@ export default function WidgetBuilder({
 
   /* ─── iframe Load 状態 ─── */
   const [previewLoaded, setPreviewLoaded] = useState(false);
-  const iframeSrc = `/api/embed?id=${encodeURIComponent(certificateId)}`;
+  const iframeSrc = isUserWidget 
+    ? `/api/embed?username=${encodeURIComponent(targetId)}`
+    : `/api/embed?id=${encodeURIComponent(targetId)}`;
 
   return (
     <section
@@ -275,9 +288,9 @@ export default function WidgetBuilder({
                 <Fingerprint size={11} className="text-white/35" />
                 <code
                   className="text-[10px] font-mono text-white/45 truncate max-w-[140px]"
-                  title={certificateId}
+                  title={targetId}
                 >
-                  {certificateId}
+                  {targetId}
                 </code>
               </div>
             </div>
@@ -401,7 +414,7 @@ export default function WidgetBuilder({
 
               {/* Iframe (fades in after onLoad) */}
               <motion.iframe
-                title={`ProofMark Embed Preview · ${certificateId}`}
+                title={`ProofMark Embed Preview · ${targetId}`}
                 src={iframeSrc}
                 onLoad={() => setPreviewLoaded(true)}
                 initial={{ opacity: 0 }}

@@ -27,16 +27,6 @@
  */
 
 import { downloadZip } from 'client-zip';
-import streamSaver from 'streamsaver';
-
-/* ══════════════════════════════════════════════════════════════
- *  Supply Chain 防衛 — mitm は同一オリジンに固定
- * ══════════════════════════════════════════════════════════════ */
-
-if (typeof window !== 'undefined') {
-  // 外部ドメイン (jimmywarting.github.io) への依存を物理排除
-  streamSaver.mitm = window.location.origin + '/mitm.html';
-}
 
 /* ══════════════════════════════════════════════════════════════
  *  Constants — The Physics
@@ -449,25 +439,7 @@ function pipeThroughIntegrity(
 }
 
 /* ══════════════════════════════════════════════════════════════
- *  Feature Detection
- * ══════════════════════════════════════════════════════════════ */
-
-interface WindowWithFSA extends Window {
-  showSaveFilePicker?: (options?: {
-    suggestedName?: string;
-    types?: Array<{
-      description?: string;
-      accept: Record<string, string[]>;
-    }>;
-  }) => Promise<FileSystemFileHandle>;
-}
-
-function hasNativeSaveFilePicker(): boolean {
-  return typeof window !== 'undefined' && 'showSaveFilePicker' in window;
-}
-
-/* ══════════════════════════════════════════════════════════════
- *  The Native Stream Executor — Locked Stream Shield 完全装備
+ *  The Native Blob Executor — 完全なるブラウザネイティブ Blob DL
  * ══════════════════════════════════════════════════════════════ */
 
 export async function executeNativeStreamZip(input: StreamZipInput): Promise<void> {
@@ -486,89 +458,30 @@ export async function executeNativeStreamZip(input: StreamZipInput): Promise<voi
   // 🚨 Integrity Hook: 装着があれば pipeThrough で挟み込む
   const zipStream = pipeThroughIntegrity(rawStream, input.integrityStream);
 
-  const pipeOptions = input.signal ? { signal: input.signal } : undefined;
-
-  /* ── ルート A: File System Access API ────────────────────────
-   *   Phase 1 (Init) と Phase 2 (Execute) を物理的に分離。
-   *   Phase 2 でエラーが出ても、既にストリームは消費/ロック済み。
-   *   従って StreamSaver へのフォールバックは絶対に行わない。
-   * ────────────────────────────────────────────────────────── */
-  if (hasNativeSaveFilePicker()) {
-    const w = window as WindowWithFSA;
-
-    // Phase 1: OS アクセス権の確保
-    let writable: FileSystemWritableFileStream | undefined;
-    let handleAcquired = false;
-    try {
-      const fileHandle = await w.showSaveFilePicker!({
-        suggestedName: input.filename,
-        types: [
-          {
-            description: 'ZIP Archive',
-            accept: { 'application/zip': ['.zip'] },
-          },
-        ],
-      });
-      writable = await fileHandle.createWritable();
-      handleAcquired = true;
-    } catch (e) {
-      const err = e as DOMException | Error;
-      if ((err as DOMException).name === 'AbortError') {
-        // ダイアログのキャンセル。
-        throw err;
-      }
-      // ハンドル取得失敗 (SecurityError / TypeError 等) は fallback を許可
-      console.warn(
-        '[ProofMark] File System Access API init failed; falling back to StreamSaver.',
-        err,
-      );
-    }
-
-    // Phase 2: 実行フェーズ — ここに入った瞬間 zipStream は消費される
-    if (handleAcquired && writable) {
-      const hb = startHeartbeat(input.signal); // 保険で叩いておく (無害)
-      try {
-        await zipStream.pipeTo(writable, pipeOptions);
-        return; // ✅ 成功
-      } catch (e) {
-        const err = e as DOMException | Error;
-        if ((err as DOMException).name === 'AbortError') {
-          try { await writable.abort?.(); } catch { /* noop */ }
-          throw err;
-        }
-        // 🚨 Locked Stream Shield:
-        //   ここでは絶対にフォールバックしてはいけない。
-        try { await writable.abort?.(); } catch { /* noop */ }
-        throw new Error(
-          `OSへのディスク書き込み中にエラーが発生しました: ${err.message ?? String(err)}`,
-        );
-      } finally {
-        hb.stop();
-      }
-    }
-    // handleAcquired === false のときのみ、fall-through で StreamSaver へ
-  }
-
-  /* ── ルート B: StreamSaver.js (Safari / Firefox / Fallback) ──
-   *   ITP/省電力による Service Worker の kill を Ping-Pong で防衛。
-   *   fallback ルート単独。pipeTo は 1 回のみ実行される。
-   * ────────────────────────────────────────────────────────── */
-  const heartbeat = startHeartbeat(input.signal);
-  let fileStream: WritableStream<Uint8Array> | undefined;
+  // ネイティブ Blob ダウンロードへ完全移行 (StreamSaver / FSA を排除)
   try {
-    fileStream = streamSaver.createWriteStream(input.filename);
-    await zipStream.pipeTo(fileStream, pipeOptions);
-  } catch (e) {
-    const err = e as DOMException | Error;
-    if ((err as DOMException).name === 'AbortError') {
-      try { await fileStream?.abort?.(); } catch { /* noop */ }
-      throw err;
+    const reader = zipStream.getReader();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      if (input.signal?.aborted) {
+        reader.cancel(new DOMException('aborted', 'AbortError'));
+        throw new DOMException('aborted', 'AbortError');
+      }
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) chunks.push(value);
     }
-    console.error('[ProofMark] StreamSaver pipeline failed.', err);
-    try { await fileStream?.abort?.(); } catch { /* noop */ }
-    // 🚨 Unboxing UX Hack & Hybrid Rescue Interface
-    throw new Error('STREAM_SAVER_DISCONNECTED_FALLBACK_RESCUE');
-  } finally {
-    heartbeat.stop();
+    const blob = new Blob(chunks, { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = input.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err;
+    throw new Error(`ダウンロードに失敗しました: ${err.message ?? String(err)}`);
   }
 }

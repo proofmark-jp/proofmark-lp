@@ -194,7 +194,7 @@ export default function Auth() {
           <a href="/" className="flex items-center text-decoration-none group cursor-pointer w-fit inline-flex relative z-50 pointer-events-auto">
             <div className="relative">
               <div className="absolute inset-0 bg-[#00D4AA]/20 blur-lg rounded-full group-hover:bg-[#00D4AA]/40 transition-all opacity-0 group-hover:opacity-100" />
-              <img src={navbarLogo} alt="ProofMark" className="h-10 w-auto relative z-10" />
+              <img src="/spa/logo.svg" alt="ProofMark" className="h-10 w-auto relative z-10" />
             </div>
             <span className="font-['Syne'] text-3xl font-extrabold text-[#F0EFF8] tracking-tight ml-3">
               Proof<span className="text-[#00D4AA]">Mark</span>
@@ -256,7 +256,7 @@ export default function Auth() {
             <a href="/" className="flex items-center text-decoration-none group cursor-pointer hover:opacity-80 transition-opacity">
               <div className="relative">
                 <div className="absolute inset-0 bg-[#00D4AA]/20 blur-lg rounded-full group-hover:bg-[#00D4AA]/40 transition-all opacity-0 group-hover:opacity-100" />
-                <img src={navbarLogo} alt="ProofMark" className="h-7 w-auto relative z-10" />
+                <img src="/spa/logo.svg" alt="ProofMark" className="h-7 w-auto relative z-10" />
               </div>
               <span className="font-['Syne'] text-xl font-extrabold text-[#F0EFF8] tracking-tight ml-2">
                 Proof<span className="text-[#00D4AA]">Mark</span>

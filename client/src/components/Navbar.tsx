@@ -98,7 +98,7 @@ export default function Navbar({ user, signOut }: NavbarProps) {
         <Link href="/" className="flex items-center gap-2 sm:gap-3 no-underline group shrink-0">
           <div className="relative">
             <div className="absolute inset-0 bg-[#00D4AA]/20 blur-lg rounded-full group-hover:bg-[#00D4AA]/40 transition-all opacity-0 group-hover:opacity-100" />
-            <img src={navbarLogo.src} alt="ProofMark" className="h-7 w-auto relative z-10" />
+            <img src="/spa/logo.svg" alt="ProofMark" className="h-7 w-auto relative z-10" />
           </div>
           <span className="font-['Syne'] text-xl font-extrabold text-[#F0EFF8] tracking-tight">
             Proof<span className="text-[#00D4AA]">Mark</span>

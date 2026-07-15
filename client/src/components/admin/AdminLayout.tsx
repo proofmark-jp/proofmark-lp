@@ -47,7 +47,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
             <aside className="w-64 bg-[#0D0B24] border-r border-[#1C1A38] flex flex-col h-full shrink-0 relative z-20">
                 <div className="h-16 flex items-center px-6 border-b border-[#1C1A38]">
                     <Link href="/" className="flex items-center gap-3 text-decoration-none group">
-                        <img src={navbarLogo} alt="ProofMark" className="h-6 w-auto" />
+                        <img src="/spa/logo.svg" alt="ProofMark" className="h-6 w-auto" />
                         <span className="font-['Syne'] text-lg font-extrabold tracking-tight">
                             Admin<span className="text-[#00D4AA]">Center</span>
                         </span>
