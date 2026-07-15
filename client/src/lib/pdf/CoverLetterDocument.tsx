@@ -36,9 +36,6 @@ import {
   Image,
   StyleSheet,
   Svg,
-  Defs,
-  LinearGradient,
-  Stop,
   Path,
   Polygon,
   Rect,
@@ -104,38 +101,28 @@ const PM_CHECK_POINTS = '17,46 27,47 39,62 79,22 83,28 36,70 23,58';
  *  - <polygon> → <Polygon> (Path 変換不要)
  *  - LinearGradient id: ハイフンなし英数字のみ
  * =========================================================================== */
+/* =============================================================================
+ * <ProofMarkLogo /> — グラデーションバグ回避: ソリッド単色 (#00D4AA) 実装
+ * @react-pdf の LinearGradient url(#id) 参照不具合を完全回避する安全実装。
+ * =========================================================================== */
 interface ProofMarkLogoProps {
   size?: number;
-  instanceId: string; // 例: "clheader", "clsig" — ハイフン不可
+  instanceId?: string;
 }
-const ProofMarkLogo: React.FC<ProofMarkLogoProps> = ({
-  size = 20,
-  instanceId,
-}) => {
-  // ハイフン等の記号を除去して純英数字 ID に変換
-  const gradId = `G${instanceId.replace(/[^a-zA-Z0-9]/g, '')}`;
-  return (
-    <Svg width={size} height={size} viewBox="0 0 100 100">
-      <Defs>
-        <LinearGradient id={gradId} x1="15%" y1="0%" x2="85%" y2="100%">
-          <Stop offset="0%" stopColor="#5830CC" />
-          <Stop offset="100%" stopColor="#00B896" />
-        </LinearGradient>
-      </Defs>
-      <Rect width={100} height={100} rx={22} ry={22} fill="#0D0B24" />
-      <Path
-        d={PM_HEX_PATH}
-        fill="none"
-        stroke={`url(#${gradId})`}
-        strokeWidth={3.8}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        opacity={0.85}
-      />
-      <Polygon points={PM_CHECK_POINTS} fill="#00D4AA" />
-    </Svg>
-  );
-};
+const ProofMarkLogo: React.FC<ProofMarkLogoProps> = ({ size = 20 }) => (
+  <Svg width={size} height={size} viewBox="0 0 100 100">
+    <Rect width={100} height={100} rx={22} ry={22} fill="#0D0B24" />
+    <Path
+      d={PM_HEX_PATH}
+      fill="none"
+      stroke="#00D4AA"
+      strokeWidth={3.8}
+      strokeLinejoin="round"
+      strokeLinecap="round"
+    />
+    <Polygon points={PM_CHECK_POINTS} fill="#00D4AA" />
+  </Svg>
+);
 
 /* =============================================================================
  * <ProofMarkWatermark />
@@ -261,9 +248,9 @@ const styles = StyleSheet.create({
   body: {
     fontFamily: PDF_FONT_FAMILY.sans,
     fontSize: SCALE.body,        // 10.5
-    lineHeight: 1.5,             // 行政文書グレードの視認性（推奨値）
+    lineHeight: 1.5,
     color: PDF_COLORS.ink,
-    marginBottom: SCALE.s4,
+    marginBottom: 12,            // compressed: was 20
     textAlign: 'left',
   },
   bodyEmphasis: {
@@ -271,22 +258,25 @@ const styles = StyleSheet.create({
     color: PDF_COLORS.inkDeep,
   },
 
-  /* ── Section heading ─────────────────────────────────────────────────── */
+  /* ── Section heading ───────────────────────────────────────────────────── */
   sectionH: {
     fontFamily: PDF_FONT_FAMILY.sans,
     fontSize: SCALE.small,
     fontWeight: 700,
-    letterSpacing: PDF_TRACKING.eyebrow,
     color: PDF_COLORS.purple,
     marginTop: SCALE.s1,
     marginBottom: SCALE.s3,
   },
+  /* letterSpacing を英字部のみに局限するため、日本語部は別 Text で包む */
+  sectionHEn: {
+    letterSpacing: PDF_TRACKING.eyebrow,
+  },
 
-  /* ── Three Pillars ───────────────────────────────────────────────────── */
+  /* ── Three Pillars ───────────────────────────────────────────────────────── */
   pillarRow: {
     flexDirection: 'row',
     gap: SCALE.s2,
-    marginBottom: SCALE.s4 + SCALE.s1,
+    marginBottom: 12,            // compressed: was 24
   },
   pillar: {
     flexGrow: 1,
@@ -330,13 +320,13 @@ const styles = StyleSheet.create({
     wordBreak: 'break-word',
   },
 
-  /* ── File tree ───────────────────────────────────────────────────────── */
+  /* ── File tree ────────────────────────────────────────────────────────────── */
   treeWrap: {
     borderTopWidth: 1,
     borderTopColor: PDF_COLORS.inkDeep,
     borderBottomWidth: 1,
     borderBottomColor: PDF_COLORS.inkDeep,
-    marginBottom: SCALE.s4 + SCALE.s1,
+    marginBottom: 12,            // compressed: was 24
   },
   treeRow: {
     flexDirection: 'row',
@@ -373,14 +363,14 @@ const styles = StyleSheet.create({
     color: PDF_COLORS.inkMuted,
   },
 
-  /* ── Verify card ─────────────────────────────────────────────────────── */
+  /* ── Verify card ───────────────────────────────────────────────────────────── */
   verifyCard: {
     borderWidth: 1,
     borderColor: PDF_COLORS.inkDeep,
     borderStyle: 'solid',
     padding: SCALE.s4 - 2, // 18
     borderRadius: 4,
-    marginBottom: SCALE.s4 + SCALE.s1,
+    marginBottom: 12,            // compressed: was 24
   },
   verifyEyebrow: {
     fontFamily: PDF_FONT_FAMILY.sans,
@@ -654,7 +644,8 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
 
         {/* ─── THREE PILLARS ─── */}
         <Text style={styles.sectionH}>
-          THE THREE PILLARS  /  本証拠を支える 3 つの担保
+          <Text style={styles.sectionHEn}>THE THREE PILLARS</Text>
+          <Text style={{ letterSpacing: 0 }}>{'  /  本証拠を支える 3 つの担保'}</Text>
         </Text>
         <View style={styles.pillarRow}>
           <View style={styles.pillar}>
@@ -682,7 +673,8 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
 
         {/* ─── Package Contents ─── */}
         <Text style={styles.sectionH}>
-          PACKAGE CONTENTS  /  同梱ファイル
+          <Text style={styles.sectionHEn}>PACKAGE CONTENTS</Text>
+          <Text style={{ letterSpacing: 0 }}>{'  /  同梱ファイル'}</Text>
         </Text>
         <View style={styles.treeWrap}>
           {tree.map((f, idx) => {
@@ -708,9 +700,7 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
             <View style={styles.verifyBodyRow}>
               <View style={styles.verifyTextCol}>
                 <Text style={styles.verifyText}>
-                  {zwsp('同梱の ')}<Text style={styles.verifyMono}>verify.sh</Text>{zwsp(' または ')}
-                  <Text style={styles.verifyMono}>verify.py</Text>{' '}
-                  {zwsp('を実行することで、外部への通信を一切行わずに、ファイルの完全性とタイムスタンプ署名の整合性を独立して確認できます。オンラインでの検証は、下記URLまたはQRコードよりご利用いただけます。')}
+                  {zwsp('対象データに一切の改変が加えられていないことは、下記URLまたはQRコードより、ブラウザ上で即座に検証可能です（原本ファイルが外部へ送信されることはありません）。')}
                 </Text>
               </View>
               {hasQr && (
@@ -770,15 +760,8 @@ export const CoverLetterDocument: React.FC<{ input: CoverLetterPdfInput }> = ({
               </Link>
             </View>
             <View style={[styles.footerCol, { alignItems: 'flex-end' }]}>
-              <Text style={styles.footerLabel}>PAGE</Text>
-              <Text
-                style={[styles.pageNum, { marginTop: 1 }]}
-                render={({ pageNumber, totalPages }) =>
-                  `${String(pageNumber).padStart(2, '0')} / ${String(
-                    totalPages,
-                  ).padStart(2, '0')}`
-                }
-              />
+              <Text style={styles.footerLabel}>COVER LETTER</Text>
+              <Text style={[styles.footerMono, { marginTop: 1 }]}>01 / 01</Text>
             </View>
           </View>
         </View>

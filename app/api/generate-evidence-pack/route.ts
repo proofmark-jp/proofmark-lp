@@ -20,11 +20,6 @@ import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 import { createClient } from '@supabase/supabase-js';
 
-// 👑 The Apex Fix: App Routerの深層から、ルートディレクトリの旧API資産（api/_lib）へ正確に結線。
-// Turbopackの解釈エラーを防ぐため、Node ESM特有の .js 拡張子指定を物理的にパージ。
-import { buildChainOfEvidence } from '../_lib/chain-of-evidence';
-import { getLegalCopyrightPdf } from '../_lib/legal-pdf-cache';
-
 // ワークスペースの環境変数から管理用Supabaseクライアント（Bypass RLS）を生成
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -66,7 +61,7 @@ export interface EvidencePackPayload {
         certInput: PdfMetaCertInput;
         coverInput: PdfMetaCoverInput;
     };
-    archiveMtimeIso?: string;  // 👑 この1行を追加: ZIPの基準タイムスタンプ（JST）
+    archiveMtimeIso?: string;
     files: FileEntry[];
 }
 
@@ -132,127 +127,12 @@ function formatJst(dateStr: string | null | undefined): string {
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const C2PA_HARD_CAP_BYTES = 10 * 1024;
-const TSA_CA_FETCH_TIMEOUT_MS = 3_000;
-const TSA_CA_TTL_MS = 6 * 60 * 60 * 1000;
-const SIGNED_URL_EXPIRY_SEC = 300;
 
 function safeFilename(input: string | null | undefined, fallback: string): string {
     const base = (input ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim();
     return base.length > 0 ? base : fallback;
 }
 
-function safeC2paJson(raw: Record<string, unknown> | null): { json: string; bytes: number } | null {
-    if (!raw) return null;
-    if (typeof raw !== 'object' || Array.isArray(raw)) return null;
-    let json: string;
-    try { json = JSON.stringify(raw, null, 2); } catch { return null; }
-    const bytes = Buffer.byteLength(json, 'utf8');
-    if (bytes <= 0 || bytes > C2PA_HARD_CAP_BYTES) return null;
-    return { json, bytes };
-}
-
-function buildVerifyShellScript(): string {
-    return [
-        '#!/usr/bin/env bash',
-        '# ProofMark Evidence Pack — RFC3161 Verifier (OpenSSL)',
-        'set -euo pipefail',
-        'HASH=$(awk -F"= " "/^SHA256/ {print \\$2}" hash.txt)',
-        '',
-        'if [ -z "$HASH" ]; then',
-        '  echo "Cannot read SHA-256 from hash.txt" >&2',
-        '  exit 1',
-        'fi',
-        '',
-        'ORIG="${1:-}"',
-        'if [ -n "$ORIG" ] && [ -f "$ORIG" ]; then',
-        '  ACTUAL=$(openssl dgst -sha256 "$ORIG" | awk "{print \\$2}")',
-        '  echo "[HASH] expected=$HASH"',
-        '  echo "[HASH] actual  =$ACTUAL"',
-        '  if [ "$HASH" != "$ACTUAL" ]; then',
-        '    echo "[HASH] MISMATCH" >&2',
-        '    exit 2',
-        '  fi',
-        'fi',
-        '',
-        'openssl ts -verify \\',
-        '  -in timestamp.tsr \\',
-        '  -digest "$HASH" \\',
-        '  -CAfile freetsa-ca.crt \\',
-        '  -untrusted freetsa-tsa.crt',
-        '',
-        'echo "[TST] OK"',
-    ].join('\n');
-}
-
-function buildVerifyPython(): string {
-    return [
-        '#!/usr/bin/env python3',
-        '"""ProofMark Evidence Pack — RFC3161 Verifier (Python+OpenSSL)"""',
-        'import sys, hashlib, subprocess, pathlib',
-        '',
-        'def main(argv):',
-        '    if len(argv) < 2:',
-        '        print("Usage: verify.py <original-file>", file=sys.stderr)',
-        '        sys.exit(2)',
-        '    orig = pathlib.Path(argv[1])',
-        '    expected = open("hash.txt").read().split("=")[1].strip()',
-        '    actual = hashlib.sha256(orig.read_bytes()).hexdigest()',
-        '    if actual.lower() != expected.lower():',
-        '        print(f"[HASH] MISMATCH expected={expected} actual={actual}", file=sys.stderr)',
-        '        sys.exit(3)',
-        '    print(f"[HASH] OK {actual}")',
-        '    r = subprocess.run([',
-        '        "openssl","ts","-verify",',
-        '        "-in","timestamp.tsr","-digest", expected,',
-        '        "-CAfile","freetsa-ca.crt","-untrusted","freetsa-tsa.crt"',
-        '    ], capture_output=True, text=True)',
-        '    print(r.stdout.strip())',
-        '    if "Verification: OK" not in r.stdout:',
-        '        print(r.stderr, file=sys.stderr)',
-        '        sys.exit(4)',
-        '',
-        'if __name__ == "__main__":',
-        '    main(sys.argv)',
-    ].join('\n');
-}
-
-let tsaCaCache: { ca: Buffer; tsa: Buffer; expiresAt: number } | null = null;
-let tsaCaInflight: Promise<{ ca: Buffer; tsa: Buffer } | null> | null = null;
-
-async function fetchTsaCa(): Promise<{ ca: Buffer; tsa: Buffer } | null> {
-    const now = Date.now();
-    if (tsaCaCache && tsaCaCache.expiresAt > now) {
-        return { ca: tsaCaCache.ca, tsa: tsaCaCache.tsa };
-    }
-    if (tsaCaInflight) return tsaCaInflight;
-
-    tsaCaInflight = (async () => {
-        try {
-            const [ca, tsa] = await Promise.all([
-                fetch('https://freetsa.org/files/cacert.pem', {
-                    signal: AbortSignal.timeout(3000),
-                }).then((r) => (r.ok ? r.arrayBuffer() : null)),
-                fetch('https://freetsa.org/files/tsa.crt', {
-                    signal: AbortSignal.timeout(3000),
-                }).then((r) => (r.ok ? r.arrayBuffer() : null)),
-            ]);
-            if (!ca || !tsa) {
-                console.warn('[TSA CA Fetch] Null response. Safely falling back to TSA-less configuration.');
-                return null;
-            }
-            const result = { ca: Buffer.from(ca), tsa: Buffer.from(tsa) };
-            tsaCaCache = { ...result, expiresAt: Date.now() + TSA_CA_TTL_MS };
-            return result;
-        } catch (error) {
-            console.warn('[TSA CA Fetch Timeout/Error] AbortSignal limit (3000ms) exceeded or network failure. Safely falling back to TSA-less configuration.', error);
-            return null;
-        } finally {
-            tsaCaInflight = null;
-        }
-    })();
-    return tsaCaInflight;
-}
 
 // Upstash Redis Rate Limit Core
 let ratelimit: Ratelimit | null = null;
@@ -373,17 +253,17 @@ export async function GET(request: NextRequest) {
                 .eq('staging_id', stagingId)
                 .eq('stripe_session_id', spotSession)
                 .maybeSingle();
-                
+
             if (error) throw error;
             if (!data) return NextResponse.json({ error: 'Spot order not found' }, { status: 404 });
             if (data.status !== 'paid') return NextResponse.json({ error: 'Payment not completed' }, { status: 402 });
-            
+
             spotOrder = data as SpotOrderRecord;
             downloadKind = 'spot';
             evidencePackName = `evidence-pack-spot-${stagingId.slice(0, 8)}.zip`;
         }
 
-        // ── Build JSON Payload ───────────────────────────────────
+        // ── Build JSON Payload ───────────────────────────────────────────────
         const files: FileEntry[] = [];
         let pdfMeta: EvidencePackPayload['pdfMeta'];
 
@@ -395,58 +275,10 @@ export async function GET(request: NextRequest) {
             const humanSize = formatBytes(cert.file_size);
             const displayCreatorName = profileRecord?.display_name ?? profileRecord?.username ?? 'ProofMark Creator';
 
-            const c2paBlob = safeC2paJson(cert.c2pa_manifest);
-            const c2paIncluded = c2paBlob !== null;
-
-            let chainIncluded = false;
-            try {
-                const chainBuffer = await buildChainOfEvidence(adminClient, cert.id, { log: console });
-                if (chainBuffer && chainBuffer.byteLength > 0) {
-                    files.push({ name: 'chain_of_evidence.json', type: 'text', content: chainBuffer.toString('utf8') });
-                    chainIncluded = true;
-                }
-            } catch (err) {
-                console.warn('[Chain Build Warning]', err);
-            }
-
-            const legalPdf = await getLegalCopyrightPdf(console);
-            const legalGuideIncluded = legalPdf !== null;
-
-            let originalIncluded = false;
-            if (cert.proof_mode === 'shareable' && cert.storage_path) {
-                try {
-                    const { data: signedData, error: signErr } = await adminClient
-                        .storage
-                        .from('proofmark-originals')
-                        .createSignedUrl(cert.storage_path, SIGNED_URL_EXPIRY_SEC);
-                    if (signErr || !signedData?.signedUrl) throw new Error(signErr?.message);
-                    
-                    files.push({ name: `original/${baseFile}`, type: 'url', url: signedData.signedUrl });
-                    originalIncluded = true;
-                } catch (err) {
-                    console.warn('[Storage Sign Warning]', err);
-                    files.push({
-                        name: `original/${baseFile}.MISSING.txt`,
-                        type: 'text',
-                        content: 'Original file could not be retrieved at this time.\n',
-                    });
-                }
-            }
-
             const fileTree: Array<{ name: string; size: string; description?: string }> = [
-                { name: 'Cover_Letter.pdf', size: '—', description: 'ProofMark Client Hand-off Letter (PDF)' },
+                { name: 'Cover_Letter.pdf',               size: '—', description: 'ProofMark Client Hand-off Letter (PDF)' },
                 { name: 'Certificate_of_Authenticity.pdf', size: '—', description: 'Cryptographic Certificate of Authenticity (PDF)' },
-                { name: 'hash.txt', size: '—', description: 'Target file SHA-256 hash value' },
-                ...(cert.timestamp_token ? [{ name: 'timestamp.tsr', size: '—', description: 'RFC3161 tamper-proof timestamp token' }] : []),
-                ...(c2paIncluded ? [{ name: 'c2pa.json', size: '—', description: 'Scrubbed Content Credentials manifest' }] : []),
-                ...(chainIncluded ? [{ name: 'chain_of_evidence.json', size: '—', description: 'Tamper-evident audit trail' }] : []),
-                ...(legalGuideIncluded ? [{ name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf', size: '—', description: 'Legal Copyright & Compliance PDF' }] : []),
-                ...(originalIncluded ? [{ name: `original/${baseFile}`, size: '—', description: 'Original verified asset' }] : []),
-                { name: 'verify.sh', size: '—', description: 'Shell verification script (OpenSSL)' },
-                { name: 'verify.py', size: '—', description: 'Python verification script (OpenSSL)' },
-                { name: 'metadata.json', size: '—', description: 'Machine-readable evidence metadata' },
-                { name: 'freetsa-ca.crt', size: '—', description: 'FreeTSA CA Certificate' },
-                { name: 'freetsa-tsa.crt', size: '—', description: 'FreeTSA TSA Certificate' },
+                { name: 'metadata.json',                  size: '—', description: 'Machine-readable evidence metadata' },
             ];
 
             const certInput: PdfMetaCertInput = {
@@ -462,54 +294,22 @@ export async function GET(request: NextRequest) {
             };
             pdfMeta = { certInput, coverInput: { ...certInput, fileTree } };
 
-            files.push({ name: 'hash.txt', type: 'text', content: `SHA256= ${sha256}\n` });
-
-            if (cert.timestamp_token) {
-                files.push({ name: 'timestamp.tsr', type: 'base64', content: cert.timestamp_token });
-            } else {
-                files.push({
-                    name: 'timestamp.MISSING.txt',
-                    type: 'text',
-                    content: 'Timestamp token is not yet issued for this certificate.\n',
-                });
-            }
-
-            if (c2paBlob) files.push({ name: 'c2pa.json', type: 'text', content: c2paBlob.json });
-            if (legalPdf) {
-                files.push({
-                    name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf',
-                    type: 'base64',
-                    content: legalPdf.buffer.toString('base64'),
-                });
-            }
-
-            files.push({ name: 'verify.sh', type: 'text', content: buildVerifyShellScript() });
-            files.push({ name: 'verify.py', type: 'text', content: buildVerifyPython() });
-
-            // JSON メタデータのエクスポート
-            const meta = {
-                certificate_id: cert.id,
-                title: cert.title ?? null,
-                sha256,
-                proof_mode: cert.proof_mode,
-                visibility: cert.visibility,
-                certified_at: cert.certified_at,
-                created_at: cert.created_at,
-                tsa_provider: cert.tsa_provider,
-                tsa_url: cert.tsa_url,
-                verify_url: verifyUrl,
-                c2pa_present: c2paIncluded,
-                c2pa_bytes: c2paBlob?.bytes ?? 0,
-                chain_present: chainIncluded,
-                legal_guide_present: legalGuideIncluded,
-            };
-            files.push({ name: 'metadata.json', type: 'text', content: JSON.stringify(meta, null, 2) });
-
-            const caBundle = await fetchTsaCa();
-            if (caBundle) {
-                files.push({ name: 'freetsa-ca.crt', type: 'base64', content: caBundle.ca.toString('base64') });
-                files.push({ name: 'freetsa-tsa.crt', type: 'base64', content: caBundle.tsa.toString('base64') });
-            }
+            files.push({
+                name: 'metadata.json',
+                type: 'text',
+                content: JSON.stringify({
+                    certificate_id: cert.id,
+                    title: cert.title ?? null,
+                    sha256,
+                    proof_mode: cert.proof_mode,
+                    visibility: cert.visibility,
+                    certified_at: cert.certified_at,
+                    created_at: cert.created_at,
+                    tsa_provider: cert.tsa_provider,
+                    tsa_url: cert.tsa_url,
+                    verify_url: verifyUrl,
+                }, null, 2),
+            });
 
         } else if (downloadKind === 'spot' && spotOrder) {
             const sha256 = spotOrder.sha256 ?? '';
@@ -517,20 +317,10 @@ export async function GET(request: NextRequest) {
             const baseFile = safeFilename(spotOrder.filename, 'artwork.bin');
             const jstTime = formatJst(spotOrder.paid_at);
 
-            const legalPdf = await getLegalCopyrightPdf(console);
-            const legalGuideIncluded = legalPdf !== null;
-
             const fileTree: Array<{ name: string; size: string; description?: string }> = [
-                { name: 'Cover_Letter.pdf', size: '—', description: 'ProofMark Spot Client Hand-off Letter (PDF)' },
+                { name: 'Cover_Letter.pdf',               size: '—', description: 'ProofMark Spot Client Hand-off Letter (PDF)' },
                 { name: 'Certificate_of_Authenticity.pdf', size: '—', description: 'Cryptographic Certificate of Authenticity (PDF)' },
-                { name: 'hash.txt', size: '—', description: 'Target file SHA-256 hash value' },
-                { name: 'timestamp.tsr', size: '—', description: 'RFC3161 tamper-proof timestamp token' },
-                ...(legalGuideIncluded ? [{ name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf', size: '—', description: 'Legal Copyright & Compliance PDF' }] : []),
-                { name: 'verify.sh', size: '—', description: 'Shell verification script (OpenSSL)' },
-                { name: 'verify.py', size: '—', description: 'Python verification script (OpenSSL)' },
-                { name: 'metadata.json', size: '—', description: 'Machine-readable evidence metadata' },
-                { name: 'freetsa-ca.crt', size: '—', description: 'FreeTSA CA Certificate' },
-                { name: 'freetsa-tsa.crt', size: '—', description: 'FreeTSA TSA Certificate' },
+                { name: 'metadata.json',                  size: '—', description: 'Machine-readable evidence metadata' },
             ];
 
             const certInput: PdfMetaCertInput = {
@@ -546,62 +336,18 @@ export async function GET(request: NextRequest) {
             };
             pdfMeta = { certInput, coverInput: { ...certInput, fileTree } };
 
-            files.push({ name: 'hash.txt', type: 'text', content: `SHA256= ${sha256}\n` });
-
-            try {
-                const { data: tsrBlob, error: tsrErr } = await adminClient
-                    .storage
-                    .from('spot-evidence')
-                    .download(`${spotOrder.staging_id}/timestamp.tsr`);
-                if (tsrErr || !tsrBlob) throw new Error(tsrErr?.message);
-                
-                const arrayBuf = await tsrBlob.arrayBuffer();
-                files.push({ name: 'timestamp.tsr', type: 'base64', content: Buffer.from(arrayBuf).toString('base64') });
-            } catch (err) {
-                console.warn('[Spot TSR Fetch Failed]', err);
-                files.push({
-                    name: 'timestamp.MISSING.txt',
-                    type: 'text',
-                    content: 'Timestamp token (timestamp.tsr) could not be retrieved.\n',
-                });
-            }
-
-            if (legalPdf) {
-                files.push({
-                    name: 'legal_guide/ProofMark_Legal_and_Compliance_Guide.pdf',
-                    type: 'base64',
-                    content: legalPdf.buffer.toString('base64'),
-                });
-            }
-
-            files.push({ name: 'verify.sh', type: 'text', content: buildVerifyShellScript() });
-            files.push({ name: 'verify.py', type: 'text', content: buildVerifyPython() });
-
             files.push({
                 name: 'metadata.json',
                 type: 'text',
-                content: JSON.stringify(
-                    {
-                        kind: 'spot',
-                        staging_id: spotOrder.staging_id,
-                        stripe_session_id: spotOrder.stripe_session_id,
-                        sha256,
-                        paid_at: spotOrder.paid_at,
-                        verify_url: verifyUrl,
-                        c2pa_present: false,
-                        chain_present: false,
-                        legal_guide_present: legalGuideIncluded,
-                    },
-                    null,
-                    2,
-                ),
+                content: JSON.stringify({
+                    kind: 'spot',
+                    staging_id: spotOrder.staging_id,
+                    stripe_session_id: spotOrder.stripe_session_id,
+                    sha256,
+                    paid_at: spotOrder.paid_at,
+                    verify_url: verifyUrl,
+                }, null, 2),
             });
-
-            const caBundle = await fetchTsaCa();
-            if (caBundle) {
-                files.push({ name: 'freetsa-ca.crt', type: 'base64', content: caBundle.ca.toString('base64') });
-                files.push({ name: 'freetsa-tsa.crt', type: 'base64', content: caBundle.tsa.toString('base64') });
-            }
         }
 
         const payload: EvidencePackPayload = {

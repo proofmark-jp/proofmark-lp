@@ -1,4 +1,4 @@
-import{j as e}from"./vendor-react-CZ_2T2h_.js";import{t as p}from"./vendor-ui-CyK7ri9I.js";import{N as m}from"./Navbar-DKTdRnrO.js";import{u as h}from"./index-D3uUb-sI.js";import{S as u}from"./SEO-Dg6Wewa1.js";import{m as a}from"./vendor-motion-Db-qrU0J.js";import{a6 as b,b8 as o,aO as f,aW as L,t as i,aA as j,W as R,a2 as N,z as A,as as w,I as t}from"./vendor-icons-6CzG7-cW.js";import"./vendor-router-DG4KAN_4.js";import"./vendor-supabase-CXJ7sEI0.js";import"./proofmark-copy-ovbHHDcN.js";function _(){const{user:n,signOut:d}=h(),l=`著作権侵害に関する通知（DMCAに基づく削除要請）
+import{j as e}from"./vendor-react-CZ_2T2h_.js";import{t as p}from"./vendor-ui-CyK7ri9I.js";import{N as m}from"./Navbar-DKTdRnrO.js";import{u as h}from"./index-CwkOd5EG.js";import{S as u}from"./SEO-Dg6Wewa1.js";import{m as a}from"./vendor-motion-Db-qrU0J.js";import{a6 as b,b8 as o,aO as f,aW as L,t as i,aA as j,W as R,a2 as N,z as A,as as w,I as t}from"./vendor-icons-6CzG7-cW.js";import"./vendor-router-DG4KAN_4.js";import"./vendor-supabase-CXJ7sEI0.js";import"./proofmark-copy-ovbHHDcN.js";function _(){const{user:n,signOut:d}=h(),l=`著作権侵害に関する通知（DMCAに基づく削除要請）
 
 担当者様
 

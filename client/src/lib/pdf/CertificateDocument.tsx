@@ -40,9 +40,6 @@ import {
   Link,
   StyleSheet,
   Svg,
-  Defs,
-  LinearGradient,
-  Stop,
   Path,
   Polygon,
   Rect,
@@ -96,39 +93,26 @@ const PM_HEX_PATH =
 const PM_CHECK_POINTS = '17,46 27,47 39,62 79,22 83,28 36,70 23,58';
 
 /* =============================================================================
- * <ProofMarkLogo />
+ * <ProofMarkLogo /> — グラデーションバグ回避: ソリッド単色 (#00D4AA) 実装
  * =========================================================================== */
 interface ProofMarkLogoProps {
   size?: number;
-  instanceId: string; // ハイフンなし英数字のみ
+  instanceId?: string;
 }
-const ProofMarkLogo: React.FC<ProofMarkLogoProps> = ({
-  size = 22,
-  instanceId,
-}) => {
-  const gradId = `G${instanceId.replace(/[^a-zA-Z0-9]/g, '')}`;
-  return (
-    <Svg width={size} height={size} viewBox="0 0 100 100">
-      <Defs>
-        <LinearGradient id={gradId} x1="15%" y1="0%" x2="85%" y2="100%">
-          <Stop offset="0%" stopColor="#5830CC" />
-          <Stop offset="100%" stopColor="#00B896" />
-        </LinearGradient>
-      </Defs>
-      <Rect width={100} height={100} rx={22} ry={22} fill="#0D0B24" />
-      <Path
-        d={PM_HEX_PATH}
-        fill="none"
-        stroke={`url(#${gradId})`}
-        strokeWidth={3.8}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        opacity={0.85}
-      />
-      <Polygon points={PM_CHECK_POINTS} fill="#00D4AA" />
-    </Svg>
-  );
-};
+const ProofMarkLogo: React.FC<ProofMarkLogoProps> = ({ size = 22 }) => (
+  <Svg width={size} height={size} viewBox="0 0 100 100">
+    <Rect width={100} height={100} rx={22} ry={22} fill="#0D0B24" />
+    <Path
+      d={PM_HEX_PATH}
+      fill="none"
+      stroke="#00D4AA"
+      strokeWidth={3.8}
+      strokeLinejoin="round"
+      strokeLinecap="round"
+    />
+    <Polygon points={PM_CHECK_POINTS} fill="#00D4AA" />
+  </Svg>
+);
 
 /* =============================================================================
  * <ProofMarkWatermark />
