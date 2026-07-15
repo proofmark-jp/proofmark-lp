@@ -66,6 +66,7 @@ export interface EvidencePackPayload {
         certInput: PdfMetaCertInput;
         coverInput: PdfMetaCoverInput;
     };
+    archiveMtimeIso?: string;  // 👑 この1行を追加: ZIPの基準タイムスタンプ（JST）
     files: FileEntry[];
 }
 
