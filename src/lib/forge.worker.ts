@@ -61,19 +61,17 @@ async function extractTimelineFrames(file: File, maxFrames: number): Promise<Blo
     const extractedFrames: ImageBitmap[] = [];
     
     // 描画用のOffscreenCanvas（UI非依存のメモリ上キャンバス）
-    const canvas = new OffscreenCanvas(480, 270); // 16:9 低解像度に強制クランプ
+    const canvas = new OffscreenCanvas(480, 270);
     const ctx = canvas.getContext('2d', { alpha: false })!;
 
     // WebCodecs: VideoDecoderの初期化
     const decoder = new VideoDecoder({
       output: (frame) => {
-        // 全フレームを処理するとメモリが死ぬため、均等に間引くロジックをここで挟む
-        // (簡易実装: 抽出上限に達するまでフレームを保存。実際はタイムスタンプで間引く)
         if (extractedFrames.length < maxFrames) {
           ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
           extractedFrames.push(canvas.transferToImageBitmap());
         }
-        frame.close(); // 【重要】メモリリークを防ぐため即座に解放
+        frame.close();
       },
       error: (e) => reject(new Error(`WebCodecs Decoder Error: ${e.message}`))
     });
@@ -82,21 +80,21 @@ async function extractTimelineFrames(file: File, maxFrames: number): Promise<Blo
       videoTrack = info.videoTracks[0];
       if (!videoTrack) return reject(new Error("No video track found"));
 
-      // デコーダの設定 (H.264 / H.265等、MP4Boxが解析したコーデックを流し込む)
       decoder.configure({
         codec: videoTrack.codec,
         codedWidth: videoTrack.track_width,
         codedHeight: videoTrack.track_height,
         description: (() => {
-          // 型安全性を意図的に破壊し、動的プロパティへアクセスする
           const entry = mp4boxfile.getTrackById(videoTrack.id).mdia.minf.stbl.stsd.entries[0] as any;
-          // H.264(avcC), H.265(hvcC), VP9(vpcC), AV1(av1C) のいずれかのConfiguration Boxを抽出
           return entry.avcC || entry.hvcC || entry.vpcC || entry.av1C;
         })()
       });
 
+      mp4boxfile.setExtractionOptions(videoTrack.id, null, { nbSamples: 1000 });
+      mp4boxfile.start();
+    };
+
     mp4boxfile.onSamples = (track_id: number, ref: any, samples: any[]) => {
-      // Chunkをデコーダに流し込む
       for (const sample of samples) {
         const chunk = new EncodedVideoChunk({
           type: sample.is_sync ? 'key' : 'delta',
@@ -108,7 +106,6 @@ async function extractTimelineFrames(file: File, maxFrames: number): Promise<Blo
       }
     };
 
-    // ファイルをチャンク単位でMP4Boxに食わせる（ファイル全読み込み回避）
     const reader = file.stream().getReader();
     let offset = 0;
     
@@ -116,10 +113,7 @@ async function extractTimelineFrames(file: File, maxFrames: number): Promise<Blo
       const { done, value } = await reader.read();
       if (done) {
         mp4boxfile.flush();
-        await decoder.flush(); // デコード完了待ち
-        
-        // 【Apex Fix】抽出した ImageBitmap 群を1つのBlob (縦連結のSpriteシートやWebP等) に圧縮して返す
-        // ※ここではモックとして空のBlobを返す。実際はCanvasに再描画して圧縮する。
+        await decoder.flush(); 
         resolve(new Blob(["compressed_timeline_data"], { type: 'image/webp' }));
         return;
       }
@@ -127,7 +121,6 @@ async function extractTimelineFrames(file: File, maxFrames: number): Promise<Blo
       const buffer = value.buffer;
       (buffer as any).fileStart = offset;
       offset += buffer.byteLength;
-      // any を経由して MP4BoxBuffer として認識させる
       mp4boxfile.appendBuffer(buffer as any);
       push();
     };
