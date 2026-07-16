@@ -66,6 +66,7 @@ import {
 } from 'lucide-react';
 
 import { useSafeReducedMotion } from '@/hooks/useSafeReducedMotion';
+import { useForge } from '@/hooks/useForge';
 import { getPresignedUrlAction, commitUploadAction } from '@/actions/upload';
 
 /* ══════════════════════════════════════════════════════════════
@@ -631,6 +632,7 @@ export default function ConsoleDropzoneClient({
   className,
 }: ConsoleDropzoneClientProps) {
   const reduce = useSafeReducedMotion();
+  const { state, startForge } = useForge();
 
   const [phase, setPhase] = useState<PhaseKey>('idle');
   const [file, setFile] = useState<File | null>(null);
@@ -639,6 +641,19 @@ export default function ConsoleDropzoneClient({
   const [result, setResult] = useState<HashResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const displayPhase = useMemo<PhaseKey>(() => {
+    if (state.error) return 'error';
+    if (state.cid) return 'success';
+    if (state.isForging) {
+      if (state.stage === 'uploading') return 'uploading';
+      return 'hashing';
+    }
+    return phase;
+  }, [phase, state]);
+
+  const isActive = displayPhase === 'dragging';
+  const isBusy = displayPhase === 'hashing' || displayPhase === 'uploading' || state.isForging;
 
   const dragCounter = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -935,6 +950,13 @@ export default function ConsoleDropzoneClient({
         return;
       }
 
+      // Check if it's an MP4 file, if so route to useForge worker pipeline
+      if (dropped.name.toLowerCase().endsWith('.mp4')) {
+        setFile(dropped);
+        startForge(dropped);
+        return;
+      }
+
       setFile(dropped);
       setError(null);
       setResult(null);
@@ -1013,14 +1035,14 @@ export default function ConsoleDropzoneClient({
       // Fallback: main-thread chunked hasher (2GB 上限で防弾化済み)
       await runFallback(dropped);
     },
-    [buildWorker, runDirectToR2, runFallback],
+    [buildWorker, runDirectToR2, runFallback, startForge],
   );
 
   /* ─── Drop / file input handlers ─── */
   const openPicker = useCallback(() => {
-    if (phase === 'hashing' || phase === 'uploading') return;
+    if (isBusy) return;
     inputRef.current?.click();
-  }, [phase]);
+  }, [isBusy]);
 
   const handleFileInput = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
@@ -1034,14 +1056,14 @@ export default function ConsoleDropzoneClient({
 
   const onDragEnter = useCallback(
     (e: DragEvent<HTMLDivElement>) => {
-      if (phase === 'hashing' || phase === 'uploading') return;
+      if (isBusy) return;
       if (!Array.from(e.dataTransfer.types).includes('Files')) return;
       e.preventDefault();
       e.stopPropagation();
       dragCounter.current += 1;
       setPhase((p) => (p === 'idle' || p === 'dragging' ? 'dragging' : p));
     },
-    [phase],
+    [isBusy],
   );
 
   const onDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
@@ -1068,7 +1090,7 @@ export default function ConsoleDropzoneClient({
       e.preventDefault();
       e.stopPropagation();
       dragCounter.current = 0;
-      if (phase === 'hashing' || phase === 'uploading') return;
+      if (isBusy) return;
       const dropped = e.dataTransfer.files?.[0];
       if (!dropped) {
         setPhase('idle');
@@ -1076,7 +1098,7 @@ export default function ConsoleDropzoneClient({
       }
       void beginHash(dropped);
     },
-    [beginHash, phase],
+    [beginHash, isBusy],
   );
 
   /* ─── Magnetic pointer ─── */
@@ -1108,12 +1130,9 @@ export default function ConsoleDropzoneClient({
     }
   }, [result]);
 
-  const isActive = phase === 'dragging';
-  const isBusy = phase === 'hashing' || phase === 'uploading';
-
   /* ─── Derived styles ─── */
   const borderColor = useMemo(() => {
-    switch (phase) {
+    switch (displayPhase) {
       case 'dragging': return 'rgba(0,212,170,0.75)';
       case 'hashing': return 'rgba(188,120,255,0.55)';
       case 'uploading': return 'rgba(0,212,170,0.60)';
@@ -1121,10 +1140,10 @@ export default function ConsoleDropzoneClient({
       case 'error': return 'rgba(255,107,107,0.55)';
       default: return 'rgba(255,255,255,0.09)';
     }
-  }, [phase]);
+  }, [displayPhase]);
 
   const boxGlow = useMemo(() => {
-    switch (phase) {
+    switch (displayPhase) {
       case 'dragging':
         return '0 0 0 1px rgba(0,212,170,0.35), 0 40px 80px -30px rgba(0,212,170,0.45), 0 0 80px rgba(108,62,244,0.25) inset';
       case 'hashing':
@@ -1137,7 +1156,7 @@ export default function ConsoleDropzoneClient({
       default:
         return '0 30px 60px -30px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.03) inset';
     }
-  }, [phase]);
+  }, [displayPhase]);
 
   /* ══════════════════════════════════════════════════════════════
    *  Render
@@ -1179,7 +1198,7 @@ export default function ConsoleDropzoneClient({
             {subheadline}
           </p>
         </div>
-        <PhaseBadge phase={phase} reduce={reduce} />
+        <PhaseBadge phase={displayPhase} reduce={reduce} />
       </div>
 
       {/* The Dropzone */}
@@ -1668,6 +1687,63 @@ export default function ConsoleDropzoneClient({
           tabIndex={-1}
         />
       </motion.div>
+
+      {/* Test Console UI */}
+      {(state.isForging || state.cid || state.error || state.stage !== 'idle') && (
+        <div className="mt-6 rounded-2xl border border-[#00D4AA]/30 bg-black/60 p-6 backdrop-blur-md shadow-[0_20px_50px_-20px_rgba(0,212,170,0.15)] text-left">
+          <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-3">
+            <h4 className="text-sm font-mono font-bold tracking-[0.15em] text-[#00D4AA]">
+              [ FORGE INTEGRATION TEST CONSOLE ]
+            </h4>
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
+              state.stage === 'uploading' ? 'bg-[#00D4AA]/10 text-[#00D4AA] border border-[#00D4AA]/30' :
+              state.stage === 'decoding' ? 'bg-[#BC78FF]/10 text-[#BC78FF] border border-[#BC78FF]/30' :
+              state.stage === 'hashing' ? 'bg-[#6C3EF4]/10 text-white border border-[#6C3EF4]/30' :
+              'bg-white/5 text-white/40'
+            }`}>
+              STAGE: {state.stage}
+            </span>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="space-y-2 mb-4">
+            <div className="flex justify-between text-xs font-mono">
+              <span className="text-white/50">PROCESSING PIPELINE</span>
+              <span className="text-[#00D4AA] font-bold">{state.progress}%</span>
+            </div>
+            <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
+              <div
+                className="h-full bg-gradient-to-r from-[#6C3EF4] via-[#BC78FF] to-[#00D4AA] transition-all duration-300"
+                style={{ width: `${state.progress}%` }}
+              />
+            </div>
+          </div>
+
+          {/* SHA-256 CID */}
+          {state.cid && (
+            <div className="rounded-xl bg-[#00D4AA]/5 border border-[#00D4AA]/20 p-3 mb-3">
+              <p className="text-[10px] font-mono text-[#00D4AA]/60 uppercase tracking-widest mb-1">
+                COMPUTED SHA-256 CID
+              </p>
+              <code className="text-xs font-mono text-white select-all break-all">
+                {state.cid}
+              </code>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {state.error && (
+            <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3">
+              <p className="text-[10px] font-mono text-red-400 uppercase tracking-widest mb-1">
+                RUNTIME ERROR
+              </p>
+              <p className="text-xs font-mono text-red-500">
+                {state.error}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Footer copy */}
       <div className="mt-3 flex items-center justify-between text-[10.5px] font-mono uppercase tracking-[0.24em] text-white/35 px-1">
