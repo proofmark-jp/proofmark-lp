@@ -87,12 +87,13 @@ async function extractTimelineFrames(file: File, maxFrames: number): Promise<Blo
         codec: videoTrack.codec,
         codedWidth: videoTrack.track_width,
         codedHeight: videoTrack.track_height,
-        description: mp4boxfile.getTrackById(videoTrack.id).mdia.minf.stbl.stsd.entries[0].avcC
+        description: (() => {
+          // 型安全性を意図的に破壊し、動的プロパティへアクセスする
+          const entry = mp4boxfile.getTrackById(videoTrack.id).mdia.minf.stbl.stsd.entries[0] as any;
+          // H.264(avcC), H.265(hvcC), VP9(vpcC), AV1(av1C) のいずれかのConfiguration Boxを抽出
+          return entry.avcC || entry.hvcC || entry.vpcC || entry.av1C;
+        })()
       });
-
-      mp4boxfile.setExtractionOptions(videoTrack.id, null, { nbSamples: 1000 });
-      mp4boxfile.start();
-    };
 
     mp4boxfile.onSamples = (track_id: number, ref: any, samples: any[]) => {
       // Chunkをデコーダに流し込む
