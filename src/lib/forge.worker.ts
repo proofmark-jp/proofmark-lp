@@ -1,6 +1,6 @@
 // client/src/lib/forge.worker.ts
 import { createSHA256 } from 'hash-wasm';
-import MP4Box from 'mp4box';
+import * as MP4Box from 'mp4box';
 
 // Workerとメインスレッド間の通信インターフェース
 export type ForgeMessage = 
