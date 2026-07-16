@@ -127,7 +127,8 @@ async function extractTimelineFrames(file: File, maxFrames: number): Promise<Blo
       const buffer = value.buffer;
       (buffer as any).fileStart = offset;
       offset += buffer.byteLength;
-      mp4boxfile.appendBuffer(buffer);
+      // any を経由して MP4BoxBuffer として認識させる
+      mp4boxfile.appendBuffer(buffer as any);
       push();
     };
     
