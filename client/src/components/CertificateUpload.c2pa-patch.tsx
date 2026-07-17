@@ -19,6 +19,7 @@ import { cn } from '../lib/utils';
 import { PM, EASE, D } from './dashboard/obsidian-tokens';
 
 import { useAuth } from '../hooks/useAuth';
+import { useForge } from '../hooks/useForge';
 import { ProcessBundleComposer } from './proof/ProcessBundleComposer';
 import { createPortal } from 'react-dom';
 
@@ -38,6 +39,7 @@ function chainLimitFor(planTier: string): number {
 
 export default function CertificateUpload() {
   const [, setLocation] = useLocation();
+  const { state, startForge } = useForge();
 
   // Obsidian Desk UI States
   const [windowDragActive, setWindowDragActive] = useState(false);
@@ -88,6 +90,21 @@ export default function CertificateUpload() {
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (!acceptedFiles || acceptedFiles.length === 0) return;
 
+    // Check if there are accepted MP4/MOV videos to bypass legacy image validation
+    const videoFiles = acceptedFiles.filter((f) => {
+      const type = f.type.toLowerCase();
+      const name = f.name.toLowerCase();
+      const isMp4 = type === 'video/mp4' || name.endsWith('.mp4');
+      const isMov = type === 'video/quicktime' || name.endsWith('.mov');
+      return isMp4 || isMov;
+    });
+
+    if (videoFiles.length > 0) {
+      // Trigger the Web Worker & WebCodecs pipeline immediately
+      startForge(videoFiles[0]);
+      return;
+    }
+
     // すべて画像のみで構成する
     const imageOnly = acceptedFiles.filter((f) => f.type.startsWith('image/'));
     if (imageOnly.length === 0) {
@@ -119,7 +136,7 @@ export default function CertificateUpload() {
 
     // ─── Composer をフルスクリーンで起動 ───────────────────────────
     setBundleInitialFiles(accepted);
-  }, [canUseChain, chainLimit, planTier]);
+  }, [canUseChain, chainLimit, planTier, startForge]);
 
   /* ═══════════════════════════════════════════════════════════════
      useDropzone — Magic Dropzone (multiple: true)
@@ -127,6 +144,12 @@ export default function CertificateUpload() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     multiple: true,
+    accept: {
+      'image/*': [],
+      'video/mp4': ['.mp4'],
+      'video/quicktime': ['.mov'],
+    },
+    disabled: state.isForging,
   });
 
   const computedPhase = shellError ? 'error' : windowDragActive ? 'hover' : 'idle';
@@ -207,6 +230,63 @@ export default function CertificateUpload() {
             }
           />
         </div>
+
+        {/* Test Console UI */}
+        {(state.isForging || state.cid || state.error || state.stage !== 'idle') && (
+          <div className="mt-6 rounded-2xl border border-[#00D4AA]/30 bg-black/60 p-6 backdrop-blur-md shadow-[0_20px_50px_-20px_rgba(0,212,170,0.15)] text-left">
+            <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-3">
+              <h4 className="text-sm font-mono font-bold tracking-[0.15em] text-[#00D4AA]">
+                [ FORGE INTEGRATION TEST CONSOLE ]
+              </h4>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
+                state.stage === 'uploading' ? 'bg-[#00D4AA]/10 text-[#00D4AA] border border-[#00D4AA]/30' :
+                state.stage === 'decoding' ? 'bg-[#BC78FF]/10 text-[#BC78FF] border border-[#BC78FF]/30' :
+                state.stage === 'hashing' ? 'bg-[#6C3EF4]/10 text-white border border-[#6C3EF4]/30' :
+                'bg-white/5 text-white/40'
+              }`}>
+                STAGE: {state.stage}
+              </span>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-2 mb-4">
+              <div className="flex justify-between text-xs font-mono">
+                <span className="text-white/50">PROCESSING PIPELINE</span>
+                <span className="text-[#00D4AA] font-bold">{state.progress}%</span>
+              </div>
+              <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden border border-white/5">
+                <div
+                  className="h-full bg-gradient-to-r from-[#6C3EF4] via-[#BC78FF] to-[#00D4AA] transition-all duration-300"
+                  style={{ width: `${state.progress}%` }}
+                />
+              </div>
+            </div>
+
+            {/* SHA-256 CID */}
+            {state.cid && (
+              <div className="rounded-xl bg-[#00D4AA]/5 border border-[#00D4AA]/20 p-3 mb-3">
+                <p className="text-[10px] font-mono text-[#00D4AA]/60 uppercase tracking-widest mb-1">
+                  COMPUTED SHA-256 CID
+                </p>
+                <code className="text-xs font-mono text-white select-all break-all">
+                  {state.cid}
+                </code>
+              </div>
+            )}
+
+            {/* Error Message */}
+            {state.error && (
+              <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3">
+                <p className="text-[10px] font-mono text-red-400 uppercase tracking-widest mb-1">
+                  RUNTIME ERROR
+                </p>
+                <p className="text-xs font-mono text-red-500">
+                  {state.error}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

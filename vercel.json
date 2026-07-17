@@ -1,6 +1,19 @@
 {
   "version": 2,
   "regions": ["hnd1"],
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "(?i)^.*\\.vercel\\.app$"
+        }
+      ],
+      "destination": "https://proofmark.jp/$1",
+      "permanent": true
+    }
+  ],
   "headers": [
     {
       "source": "/api/(certificates/public|certificates/widget|profiles|cert|ogp-proxy)(.*)",
