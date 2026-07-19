@@ -209,9 +209,11 @@ export function useForge(options?: UseForgeOptions) {
               if (!presignRes.ok) {
                 throw new Error(`Failed to get secure URL (HTTP ${presignRes.status})`);
               }
-              const presignData = (await presignRes.json()) as { signedUrl?: string; error?: string };
-              if (presignData.error || !presignData.signedUrl) {
-                throw new Error(presignData.error || 'Failed to get secure URL');
+              // 👑 修正: objectKey の型定義と抽出を追加
+              const presignData = (await presignRes.json()) as { signedUrl?: string; objectKey?: string; error?: string };
+              // 👑 修正: objectKey の欠落もエラーとして弾く
+              if (presignData.error || !presignData.signedUrl || !presignData.objectKey) {
+                throw new Error(presignData.error || 'Failed to get secure URL or Object Key');
               }
 
               // 2) R2 への直接 PUT (retry 付き)
@@ -230,6 +232,7 @@ export function useForge(options?: UseForgeOptions) {
                 cid: msg.cid,
                 sizeBytes: msg.framesBlob.size,
                 mimeType: msg.framesBlob.type,
+                objectKey: presignData.objectKey, // 👑 修正: R2の保存先パスをDB打刻アクションへ確実に渡す
                 title: file.name,
               });
 

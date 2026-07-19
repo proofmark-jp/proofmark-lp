@@ -1,4 +1,4 @@
-// client/src/lib/forge.worker.ts
+// src/lib/forge.worker.ts
 /**
  * ProofMark · Forge Worker (Apex Edition)
  * ─────────────────────────────────────────────────────────────────────────
@@ -20,11 +20,10 @@
 
 import { createSHA256 } from 'hash-wasm';
 import * as MP4Box from 'mp4box';
-// mp4-muxer: Worker 内で動作する軽量 MP4 Muxer
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 
 /* ══════════════════════════════════════════════════════════════
- *  Types
+ *  Types & Strict Interfaces (No as any)
  * ══════════════════════════════════════════════════════════════ */
 
 export type ForgeMessage =
@@ -32,6 +31,74 @@ export type ForgeMessage =
   | { type: 'PROGRESS'; percent: number; stage: 'hashing' | 'decoding' | 'muxing' }
   | { type: 'SUCCESS'; cid: string; framesBlob: Blob }
   | { type: 'ERROR'; message: string };
+
+export interface MP4BoxVideoTrack {
+  id: number;
+  codec: string;
+  track_width: number;
+  track_height: number;
+  nb_samples?: number;
+}
+
+export interface MP4Info {
+  videoTracks: MP4BoxVideoTrack[];
+}
+
+export interface MP4Sample {
+  track_id: number;
+  description: unknown;
+  units: { data: Uint8Array }[];
+  cts: number;
+  dts: number;
+  duration: number;
+  timescale: number;
+  is_sync: boolean;
+  data: Uint8Array | null;
+}
+
+export interface MP4BoxFile {
+  onReady?: (info: MP4Info) => void;
+  onSamples?: (track_id: number, ref: unknown, samples: MP4Sample[]) => void;
+  onError?: (err: unknown) => void;
+  appendBuffer: (buf: ArrayBuffer) => number;
+  setExtractionOptions: (track_id: number, ref?: unknown, options?: { nbSamples?: number }) => void;
+  start: () => void;
+  stop: () => void;
+  flush: () => void;
+  getTrackById: (id: number) => {
+    mdia?: {
+      minf?: {
+        stbl?: {
+          stsd?: {
+            entries?: unknown[];
+          };
+        };
+      };
+    };
+  } | undefined;
+}
+
+export interface DataStreamInstance {
+  buffer: ArrayBuffer;
+}
+
+export interface DataStreamConstructor {
+  new (
+    buffer: undefined,
+    byteOffset: number,
+    byteLength: boolean
+  ): DataStreamInstance;
+  BIG_ENDIAN: boolean;
+}
+
+export interface MP4BoxModule {
+  DataStream?: DataStreamConstructor;
+}
+
+export interface SafeVideoEncoderConfig extends VideoEncoderConfig {
+  avc?: { format: 'avc' | 'annexb' };
+  hevc?: { format: 'hevc' | 'annexb' };
+}
 
 /* ══════════════════════════════════════════════════════════════
  *  Constants — The Physics
@@ -85,46 +152,40 @@ async function waitForDecoderDrain(decoder: VideoDecoder): Promise<void> {
  * "Annex-B / in-band-config" ストリームでも継続動作を試みる。
  */
 function extractCodecDescription(
-  mp4boxfile: ReturnType<typeof MP4Box.createFile>,
+  mp4boxfile: MP4BoxFile,
   trackId: number,
 ): Uint8Array | undefined {
   try {
-    const track = (mp4boxfile as unknown as { getTrackById: (id: number) => unknown }).getTrackById(trackId);
+    const track = mp4boxfile.getTrackById(trackId);
     if (!track || typeof track !== 'object') return undefined;
 
-    // stbl.stsd.entries[0] の avcC/hvcC/vpcC/av1C を安全に走査
-    // MP4Box の型がゆるいため慎重に段階的に触る
-    const entries: unknown =
-      (track as { mdia?: { minf?: { stbl?: { stsd?: { entries?: unknown[] } } } } })
-        ?.mdia?.minf?.stbl?.stsd?.entries;
+    const entries = track.mdia?.minf?.stbl?.stsd?.entries;
     if (!Array.isArray(entries) || entries.length === 0) return undefined;
 
-    const entry = entries[0] as Record<string, unknown>;
+    const entry = entries[0];
+    if (!entry || typeof entry !== 'object') return undefined;
+    const entryRecord = entry as Record<string, unknown>;
     const candidates: Array<'avcC' | 'hvcC' | 'vpcC' | 'av1C'> = ['avcC', 'hvcC', 'vpcC', 'av1C'];
 
     for (const key of candidates) {
-      const box = entry[key] as unknown;
+      const box = entryRecord[key];
       if (!box) continue;
 
-      // Case A: 一部の MP4Box フォークは write() 経由で DataStream にシリアライズが必要
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const DS = (MP4Box as unknown as { DataStream?: any }).DataStream;
+        const mp4boxModule = MP4Box as unknown as MP4BoxModule;
+        const DS = mp4boxModule.DataStream;
         if (DS && typeof (box as { write?: (ds: unknown) => void }).write === 'function') {
           const ds = new DS(undefined, 0, DS.BIG_ENDIAN);
           (box as { write: (ds: unknown) => void }).write(ds);
-          // avcC/hvcC ヘッダの直前 8byte (size + type) を削除
-          const buf = new Uint8Array(ds.buffer as ArrayBuffer);
+          const buf = new Uint8Array(ds.buffer);
           if (buf.byteLength > 8) return buf.slice(8);
           return buf;
         }
       } catch { /* fallback */ }
 
-      // Case B: 生の Uint8Array/ArrayBuffer プロパティがある実装
       if (box instanceof Uint8Array) return box;
       if (box instanceof ArrayBuffer) return new Uint8Array(box);
 
-      // Case C: data フィールドを持つ実装
       const maybeData = (box as { data?: unknown }).data;
       if (maybeData instanceof Uint8Array) return maybeData;
       if (maybeData instanceof ArrayBuffer) return new Uint8Array(maybeData);
@@ -199,8 +260,6 @@ async function computeHashSafely(file: File): Promise<string> {
       lastPct = pct;
       post({ type: 'PROGRESS', percent: pct, stage: 'hashing' });
     }
-    // GC hint: 参照を切る
-    // (次イテレーションで再バインドされる)
   }
 
   return `sha256:${hasher.digest('hex')}`;
@@ -227,7 +286,7 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
     }
 
     // ── State ────────────────────────────────────────────
-    const mp4boxfile = MP4Box.createFile();
+    const mp4boxfile = MP4Box.createFile() as unknown as MP4BoxFile;
     let videoTrack: { id: number; codec: string; track_width: number; track_height: number; nb_samples: number } | null = null;
     let sampledFramesCount = 0;    // decoder に投入したフレーム総数
     let outputFramesCount = 0;     // encoder に流し込んだフレーム数
@@ -243,16 +302,22 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
       return;
     }
 
-    // Muxer は onReady で codec 判定後に構築する
-    let muxer: Muxer<ArrayBufferTarget> | null = null;
-    let encoder: VideoEncoder | null = null;
-    let decoder: VideoDecoder | null = null;
+    // Object wrapper to completely bypass TypeScript control flow analysis narrowing variables to 'never'
+    const pipeline: {
+      decoder: VideoDecoder | null;
+      encoder: VideoEncoder | null;
+      muxer: Muxer<ArrayBufferTarget> | null;
+    } = {
+      decoder: null,
+      encoder: null,
+      muxer: null,
+    };
 
     const safeReject = (err: Error) => {
       if (finished) return;
       finished = true;
-      try { decoder?.close(); } catch { /* noop */ }
-      try { encoder?.close(); } catch { /* noop */ }
+      try { pipeline.decoder?.close(); } catch { /* noop */ }
+      try { pipeline.encoder?.close(); } catch { /* noop */ }
       reject(err);
     };
 
@@ -261,9 +326,9 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
       const enc = new VideoEncoder({
         output: (chunk, meta) => {
           if (finished) return;
-          if (!muxer) return;
+          if (!pipeline.muxer) return;
           try {
-            muxer.addVideoChunk(chunk, meta);
+            pipeline.muxer.addVideoChunk(chunk, meta);
           } catch (mErr) {
             safeReject(new Error(`Muxer 書き込み失敗: ${(mErr as Error).message}`));
           }
@@ -272,9 +337,6 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
       });
 
       // codec 文字列 for VideoEncoder.configure
-      // "純度100%のネイティブ動画" として素直な AVC を第一選択
-      // muxerCodec は Muxer 側の種別を決めるのみで、
-      // encoder 側は avc1.42E01F (Baseline/L3.1) を採用
       const encoderCodec =
         muxerCodec === 'avc'
           ? 'avc1.42E01F'
@@ -284,7 +346,7 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
               ? 'vp09.00.10.08'
               : 'av01.0.04M.08';
 
-      enc.configure({
+      const config: SafeVideoEncoderConfig = {
         codec: encoderCodec,
         width: REEL_W,
         height: REEL_H,
@@ -292,26 +354,20 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
         framerate: REEL_FPS,
         // AVC は "annexb" ではなく "avc" (in-band nothing) にして
         // mp4-muxer が avcC を自動生成できる形式にする
-        // hevc も同様に "hevc"
-        // (Chrome の実装で "avc" bitstreamFormat は "description" を出力する)
-        // - Safari では未対応キーの場合は無視される
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        avc: muxerCodec === 'avc' ? ({ format: 'avc' } as any) : undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        hevc: muxerCodec === 'hevc' ? ({ format: 'hevc' } as any) : undefined,
-      });
+        avc: muxerCodec === 'avc' ? { format: 'avc' } : undefined,
+        hevc: muxerCodec === 'hevc' ? { format: 'hevc' } : undefined,
+      };
 
+      enc.configure(config);
       return enc;
     };
 
     // ── Frame 制御 ────────────────────────────────────────
-    // 均等サンプリングのための「n フレームごとに 1 枚採用」係数
     let sampleEveryN = 1;
 
     // decoder が吐いた VideoFrame を Downscale + Encode
     const handleDecodedFrame = (frame: VideoFrame) => {
       if (finished) {
-        // finished 後に到着したフレームは即 close
         try { frame.close(); } catch { /* noop */ }
         return;
       }
@@ -330,26 +386,22 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
       }
 
       try {
-        // Downscale draw
         ctx.drawImage(frame, 0, 0, REEL_W, REEL_H);
       } catch (drawErr) {
         try { frame.close(); } catch { /* noop */ }
         safeReject(new Error(`Downscale 描画失敗: ${(drawErr as Error).message}`));
         return;
       }
-      // 使用済み Source Frame の即時解放 (VRAM の即時 GC)
       try { frame.close(); } catch { /* noop */ }
 
-      // Reel 用の VideoFrame を canvas から生成
       const outFrame = new VideoFrame(canvas, {
         timestamp: outputFramesCount * FRAME_INTERVAL_US,
         duration: FRAME_INTERVAL_US,
       });
 
       try {
-        if (encoder && !encoderClosed) {
-          // All-Intra: 全フレームをキーフレーム化
-          encoder.encode(outFrame, { keyFrame: true });
+        if (pipeline.encoder && !encoderClosed) {
+          pipeline.encoder.encode(outFrame, { keyFrame: true });
         }
       } catch (encErr) {
         try { outFrame.close(); } catch { /* noop */ }
@@ -368,8 +420,7 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
     };
 
     // ── MP4Box: onReady ──────────────────────────────────
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (mp4boxfile as any).onReady = (info: any) => {
+    mp4boxfile.onReady = (info: MP4Info) => {
       const track = info?.videoTracks?.[0];
       if (!track) {
         safeReject(new Error('この動画には映像トラックが見つかりませんでした'));
@@ -383,16 +434,13 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
         nb_samples: track.nb_samples ?? 0,
       };
 
-      // 動画が極端に短い場合 (0 サンプル) は明示的にエラー
       if (videoTrack.nb_samples <= 0) {
         safeReject(new Error('動画が短すぎるかフレームが検出できませんでした'));
         return;
       }
 
-      // Downscale 比率と間引き係数を算出
       sampleEveryN = Math.max(1, Math.floor(videoTrack.nb_samples / maxFrames));
 
-      // Muxer 種別を決定
       let muxerCodec: 'avc' | 'hevc' | 'vp9' | 'av1';
       try {
         muxerCodec = mapCodecForMuxer(videoTrack.codec);
@@ -401,9 +449,8 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
         return;
       }
 
-      // Muxer / Encoder の構築
       try {
-        muxer = new Muxer({
+        pipeline.muxer = new Muxer({
           target: new ArrayBufferTarget(),
           video: {
             codec: muxerCodec,
@@ -419,28 +466,25 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
       }
 
       try {
-        encoder = buildEncoder(muxerCodec);
+        pipeline.encoder = buildEncoder(muxerCodec);
       } catch (encInitErr) {
         safeReject(new Error(`Encoder 初期化失敗: ${(encInitErr as Error).message}`));
         return;
       }
 
-      // Decoder の構築
-      decoder = new VideoDecoder({
+      pipeline.decoder = new VideoDecoder({
         output: (frame) => handleDecodedFrame(frame),
         error: (e) => safeReject(new Error(`Decoder Error: ${e.message}`)),
       });
 
-      // Extradata を堅牢に抽出 (失敗しても configure は継続)
       const description = extractCodecDescription(mp4boxfile, videoTrack.id);
 
       try {
-        decoder.configure({
+        pipeline.decoder.configure({
           codec: videoTrack.codec,
           codedWidth: videoTrack.track_width,
           codedHeight: videoTrack.track_height,
           ...(description ? { description } : {}),
-          // ハードウェア優先 (Safari も尊重される)
           hardwareAcceleration: 'prefer-hardware',
         });
       } catch (cfgErr) {
@@ -448,18 +492,14 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
         return;
       }
 
-      // 抽出開始
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (mp4boxfile as any).setExtractionOptions(videoTrack.id, null, { nbSamples: 100 });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (mp4boxfile as any).start();
+      mp4boxfile.setExtractionOptions(videoTrack.id, null, { nbSamples: 100 });
+      mp4boxfile.start();
     };
 
     // ── MP4Box: onSamples (Backpressure 心臓部) ───────────
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (mp4boxfile as any).onSamples = async (_track_id: number, _ref: unknown, samples: any[]) => {
+    mp4boxfile.onSamples = async (_track_id: number, _ref: unknown, samples: MP4Sample[]) => {
       if (finished) return;
-      if (!decoder || decoder.state !== 'configured') return;
+      if (!pipeline.decoder || pipeline.decoder.state !== 'configured') return;
       if (!videoTrack) return;
 
       try {
@@ -467,10 +507,9 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
           if (finished) return;
           if (outputFramesCount >= maxFrames) return;
 
-          // 🩸 Backpressure: decoder のキューが積み上がる前に待機
-          if (decoder.decodeQueueSize > DECODE_QUEUE_HIGH_WATERMARK) {
-            await waitForDecoderDrain(decoder);
-            if (finished || decoder.state !== 'configured') return;
+          if (pipeline.decoder.decodeQueueSize > DECODE_QUEUE_HIGH_WATERMARK) {
+            await waitForDecoderDrain(pipeline.decoder);
+            if (finished || pipeline.decoder.state !== 'configured') return;
           }
 
           const timescale = sample.timescale || 90000;
@@ -481,17 +520,16 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
             type: sample.is_sync ? 'key' : 'delta',
             timestamp,
             duration: duration > 0 ? duration : undefined,
-            data: sample.data,
+            data: sample.data || new Uint8Array(0),
           });
 
           try {
-            decoder.decode(chunk);
+            pipeline.decoder.decode(chunk);
           } catch (decErr) {
             safeReject(new Error(`Decode 投入失敗: ${(decErr as Error).message}`));
             return;
           }
 
-          // sample.data の参照を切って GC を促す
           sample.data = null;
         }
       } catch (loopErr) {
@@ -500,8 +538,7 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
     };
 
     // ── MP4Box: onError ──────────────────────────────────
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (mp4boxfile as any).onError = (err: unknown) => {
+    mp4boxfile.onError = (err: unknown) => {
       safeReject(new Error(`MP4 コンテナ解析失敗: ${String(err)}`));
     };
 
@@ -511,55 +548,47 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
         const reader = file.stream().getReader();
         let offset = 0;
 
-        // eslint-disable-next-line no-constant-condition
         while (true) {
           if (finished) return;
           const { done, value } = await reader.read();
           if (done) break;
           if (!value || value.byteLength === 0) continue;
 
-          // ArrayBuffer を切り出し fileStart を付与
           const ab = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer & { fileStart?: number };
           ab.fileStart = offset;
           offset += ab.byteLength;
 
           try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (mp4boxfile as any).appendBuffer(ab);
+            mp4boxfile.appendBuffer(ab);
           } catch (appendErr) {
             safeReject(new Error(`appendBuffer 失敗: ${(appendErr as Error).message}`));
             return;
           }
 
-          // maxFrames 到達したら早期打ち切り (ロングファイル対応)
           if (outputFramesCount >= maxFrames) break;
         }
 
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (mp4boxfile as any).flush();
+          mp4boxfile.flush();
         } catch { /* noop */ }
 
-        // ── Drain 待機 → decoder.flush → encoder.flush → mux finalize ──
         if (finished) return;
 
         try {
-          if (decoder && decoder.state === 'configured') {
-            // 残キューをすべて排出
-            while (decoder.decodeQueueSize > 0 && decoder.state === 'configured') {
+          if (pipeline.decoder && pipeline.decoder.state === 'configured') {
+            while (pipeline.decoder.decodeQueueSize > 0 && pipeline.decoder.state === 'configured') {
               await sleep(BACKPRESSURE_POLL_MS);
             }
-            await decoder.flush();
+            await pipeline.decoder.flush();
           }
         } catch (dfErr) {
           safeReject(new Error(`Decoder flush 失敗: ${(dfErr as Error).message}`));
           return;
         }
 
-        try { decoder?.close(); } catch { /* noop */ }
+        try { pipeline.decoder?.close(); } catch { /* noop */ }
         decoderClosed = true;
 
-        // フレームが 1 枚も出なかった → 短すぎる/壊れた動画
         if (outputFramesCount === 0) {
           safeReject(new Error('デコード可能なフレームが見つかりませんでした'));
           return;
@@ -568,25 +597,26 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
         // Encoder flush
         post({ type: 'PROGRESS', percent: 90, stage: 'muxing' });
         try {
-          if (encoder && encoder.state !== 'closed') {
-            await encoder.flush();
+          if (pipeline.encoder && pipeline.encoder.state !== 'closed') {
+            await pipeline.encoder.flush();
           }
         } catch (efErr) {
           safeReject(new Error(`Encoder flush 失敗: ${(efErr as Error).message}`));
           return;
         }
-        try { encoder?.close(); } catch { /* noop */ }
+        try { pipeline.encoder?.close(); } catch { /* noop */ }
         encoderClosed = true;
 
         // Muxer finalize
         try {
-          if (!muxer) {
+          const mux = pipeline.muxer;
+          if (!mux) {
             safeReject(new Error('Muxer が初期化されていません'));
             return;
           }
-          muxer.finalize();
+          mux.finalize();
 
-          const target = muxer.target as ArrayBufferTarget;
+          const target = mux.target;
           const buf: ArrayBuffer = target.buffer;
 
           if (!buf || buf.byteLength === 0) {
@@ -597,7 +627,7 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
             safeReject(
               new Error(
                 `生成されたMP4が上限 (1MiB) を超過しました (${buf.byteLength} B)`,
-              ),
+               ),
             );
             return;
           }
@@ -615,7 +645,6 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
       }
     })().catch((err) => safeReject(err instanceof Error ? err : new Error(String(err))));
 
-    // 使用してない変数を警告抑制のため参照 (GC の意図明示)
     void encoderClosed;
     void decoderClosed;
   });

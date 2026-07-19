@@ -8,42 +8,17 @@ export const maxDuration = 300;
  * Direct-to-R2 Pipeline: The Authorization & Atomic Commit Engine (Apex Edition)
  *
  * ⚡ Absolute Defenses:
- * 1. Multi-Layer Authentication (多層防御): Server ActionsはURLさえ分かれば
- * cURL等で直接叩ける。そのため、すべてのアクションの冒頭でサーバーサイドの
- * セッショントークンを検証(`auth.getUser()`)し、未認証の不正リクエストを物理遮断する。
- * 2. Identity Forgery Prevention (ID偽装防止): フロントエンドから送られる
- * userIdは信用せず、サーバーで検証したセッションから抽出した `user.id` を
- * 強制的に使用してDBへ打刻する。これにより他人へのなりすましを完全排除。
- * 3. Payload Bypass (Vercel 4.5MB Limit): 動画本体をVercelに経由させず、
- * R2への直接アップロード用 Presigned URL を発行する。
- * 4. Safe UTF-8 Object Key (日本語破壊防止): パストラバーサル攻撃のみを弾き、
- * 日本語のファイル名を無傷でR2のオブジェクトキーとして保存する。
- * 5. Service Role Domination: Supabaseへのキュー書き込みは、RLSをバイパスする
- * Service Role Key を用いて確実に執行し、フロントエンドからの不完全な挿入を防ぐ。
+ * 1. Multi-Layer Authentication: Server Actionsは全て `auth.getUser()` で検証。
+ * 2. RLS & RPC Domination: データの打刻は Service Role ではなく、ユーザーのJWTを
+ *    持った標準クライアントから PostgreSQL の RPC を叩く。これにより、データベース層の
+ *    RLS (Row Level Security) とトランザクション (Atomic) を強制発動させる。
+ * 3. Safe UTF-8 Object Key: 日本語ファイル名を無傷で保存。
  */
 
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { r2Client, R2_BUCKET_NAME } from '@/lib/r2';
-import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js';
-import { createClient } from '@/utils/supabase/server'; // サーバー用のSupabaseクライアント
-
-// 🛡️ 防衛線 1: Fail-Fast (バックエンド環境変数の厳格監査)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error(
-    'CRITICAL: SUPABASE_SERVICE_ROLE_KEY または NEXT_PUBLIC_SUPABASE_URL が設定されていません。バックエンドの打刻エンジンが起動できません。'
-  );
-}
-
-// 🛡️ 防衛線 2: Admin Client の初期化 (システムによる絶対権限のDB打刻用)
-const supabaseAdmin = createSupabaseAdminClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    persistSession: false, // サーバーサイドではセッションを保持しない（メモリリーク防止）
-  },
-});
+import { createClient } from '@/utils/supabase/server'; 
 
 /**
  * ─────────────────────────────────────────────────────────────────────────
@@ -57,8 +32,6 @@ export async function getPresignedUrlAction(
   sha256: string
 ) {
   try {
-    // 🛡️ 防衛線 3: Multi-Layer Authentication (多層防御)
-    // リクエストの実行者が本当に認証済みか、サーバーサイドでセッションを検証
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -70,27 +43,23 @@ export async function getPresignedUrlAction(
       throw new Error('ファイル名またはハッシュ値が欠落しています。');
     }
 
-    // 🛡️ 防衛線 4: Safe UTF-8 Object Key (日本語破壊防止)
-    // 古い正規表現 /[^a-zA-Z0-9.\-_]/g は日本語を破壊するため破棄。
-    // パストラバーサル (../ 等) の原因となるスラッシュとバックスラッシュのみを無害化する。
+    // パストラバーサル攻撃を弾きつつ、日本語ファイル名は維持
     const safeFileName = fileName.replace(/[\/\\]/g, '_');
     const objectKey = `uploads/${sha256}/${Date.now()}_${safeFileName}`;
 
     const command = new PutObjectCommand({
       Bucket: R2_BUCKET_NAME,
       Key: objectKey,
-      ContentType: mimeType,
-      // 署名付きURLを用いたPUTでは、ここで指定したContentTypeと
-      // クライアントが実際に送信するヘッダーが完全一致しなければAWS SDKが弾く（改ざん防止）
+      // クライアント(useForge.ts)が Blob に設定した type と完全に一致させる必要がある
+      ContentType: mimeType, 
     });
 
-    // URLの有効期限を1時間（3600秒）に限定
-    const presignedUrl = await getSignedUrl(r2Client, command, { expiresIn: 3600 });
+    const presignedUrl = await getSignedUrl(r2Client, command, { expiresIn: 300 });
 
     return {
       success: true,
       url: presignedUrl,
-      objectKey: objectKey,
+      objectKey: objectKey, // フロントエンドには返すが、改ざん防止のためDB打刻時はパスを再構築推奨
     };
   } catch (error) {
     console.error('[UploadAction: getPresignedUrl] 致命的エラー:', error);
@@ -103,66 +72,54 @@ export async function getPresignedUrlAction(
 
 /**
  * ─────────────────────────────────────────────────────────────────────────
- * Action 2: commitUploadAction
- * R2への直接アップロードが成功した直後に呼び出され、Supabaseへメタデータを打刻する。
- * この打刻により status が 'pending' となり、Mac mini (Oracle) が処理を開始する。
+ * Action 2: registerCertificateAction
+ * R2への直接アップロード成功後、Supabase RPCを呼び出しアトミックに台帳を確定する。
+ * (※ commitUploadAction からフロントエンドの実態に合わせてリネーム＆堅牢化)
  * ─────────────────────────────────────────────────────────────────────────
  */
-export async function commitUploadAction(
-  sha256: string,
-  objectKey: string,
-  fileName: string,
-  bytes: number,
-  durationMs: number
-  // ⚠️ 削除: userId?: string はフロントから受け取らない（ID偽装の物理的遮断）
-) {
+export async function registerCertificateAction(input: {
+  cid: string;
+  sizeBytes: number;
+  mimeType: string;
+  objectKey: string;
+  title?: string;
+}) {
   try {
-    // 🛡️ 防衛線 3: Multi-Layer Authentication (多層防御) & ID偽装防止
-    // 誰がこのコミットを発行したか、サーバーサイドのセッションから確実に特定する
     const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    
+    // 🛡️ 認証チェック
+    const { data: { user }, error: authErr } = await supabase.auth.getUser();
+    if (authErr || !user) {
       throw new Error('Unauthorized: 台帳へ打刻する権限がありません。ログインしてください。');
     }
 
-    if (!sha256 || !objectKey) {
-      throw new Error('コミットに必要なマスターハッシュまたはオブジェクトキーが欠落しています。');
+    if (!input.cid || !input.objectKey) {
+      throw new Error('マスターハッシュまたはオブジェクトキーが欠落しています。');
     }
 
-    // 🛡️ 防衛線 5: Atomic Insert (システム権限での強制打刻)
-    // process_bundles (または proof_requests) テーブルへの打刻
-    // user_id は必ずサーバーで検証した user.id を使用する
-    const { data, error } = await supabaseAdmin
-      .from('process_bundles')
-      .insert([
-        {
-          sha256_hash: sha256,
-          file_name: fileName,
-          file_size_bytes: bytes,
-          storage_key: objectKey,
-          status: 'pending', // Mac mini (Oracle) への処理依頼ステータス
-          client_processing_ms: durationMs,
-          user_id: user.id, // 🔒 サーバー側で検証済みのユーザーIDを強制バインド
-          created_at: new Date().toISOString(),
-        },
-      ])
-      .select('id')
-      .single();
+    // 🛡️ RPCによるアトミックトランザクション実行
+    // ユーザーIDはフロントから受け取らず、PostgreSQL内部で auth.uid() により解決される
+    const { data: certId, error: rpcErr } = await supabase.rpc('register_certificate_atomic', {
+      p_cid: input.cid,
+      p_title: input.title || 'Untitled Archive',
+      p_size_bytes: input.sizeBytes,
+      p_mime_type: input.mimeType,
+      p_storage_key: input.objectKey
+    });
 
-    if (error) {
-      throw new Error(`Supabaseへのメタデータ打刻に失敗しました: ${error.message}`);
+    if (rpcErr || !certId) {
+      throw new Error(`Atomic Transaction Failed: ${rpcErr?.message || 'Unknown DB error'}`);
     }
 
-    return {
-      success: true,
-      bundleId: data.id,
+    return { 
+      success: true, 
+      certificateId: certId as string 
     };
-  } catch (error) {
-    console.error('[UploadAction: commitUpload] 致命的エラー:', error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'データベースへのコミットに失敗しました。',
+  } catch (err: any) {
+    console.error('[ServerAction Error]', err);
+    return { 
+      success: false, 
+      error: err.message || 'データベースへのコミットに失敗しました。' 
     };
   }
 }

@@ -3,7 +3,8 @@ CREATE OR REPLACE FUNCTION register_certificate_atomic(
   p_cid TEXT,
   p_title TEXT,
   p_size_bytes BIGINT,
-  p_mime_type TEXT
+  p_mime_type TEXT,
+  p_storage_key TEXT
 ) RETURNS UUID AS $$
 DECLARE
   v_cert_id UUID;
@@ -16,9 +17,9 @@ BEGIN
   END IF;
 
   -- 1. 証明書の初期レコード作成
-  INSERT INTO certificates (id, user_id, chain_sha256, visibility, metadata_json)
+  INSERT INTO certificates (id, user_id, chain_sha256, visibility, storage_path, metadata_json)
   VALUES (
-    gen_random_uuid(), v_user_id, p_cid, 'private',
+    gen_random_uuid(), v_user_id, p_cid, 'private', p_storage_key,
     jsonb_build_object(
       'version', 'proofmark-v1',
       'title', COALESCE(p_title, 'Untitled Workspace'),
