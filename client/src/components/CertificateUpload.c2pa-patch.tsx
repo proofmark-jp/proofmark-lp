@@ -19,7 +19,7 @@ import { cn } from '../lib/utils';
 import { PM, EASE, D } from './dashboard/obsidian-tokens';
 
 import { useAuth } from '../hooks/useAuth';
-import { useForge } from '../hooks/useForge';
+import { useForge } from '@/hooks/useForge';
 import { ProcessBundleComposer } from './proof/ProcessBundleComposer';
 import { createPortal } from 'react-dom';
 

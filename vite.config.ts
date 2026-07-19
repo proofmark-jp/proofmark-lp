@@ -233,6 +233,8 @@ export default defineConfig({
   plugins,
   resolve: {
     alias: {
+      '@/hooks/useForge': path.resolve(import.meta.dirname, 'src/hooks/useForge.ts'),
+      '@/actions/upload': path.resolve(import.meta.dirname, 'client/src/lib/mocks/uploadMock.ts'),
       '@': path.resolve(import.meta.dirname, 'client', 'src'),
       '@shared': path.resolve(import.meta.dirname, 'shared'),
       '@assets': path.resolve(import.meta.dirname, 'attached_assets'),
