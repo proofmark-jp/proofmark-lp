@@ -3,7 +3,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'node:fs';
 import path from 'node:path';
-import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
+import { defineConfig, loadEnv, type Plugin, type ViteDevServer } from 'vite'; // 🩸 loadEnv を追加
 import { vitePluginManusRuntime } from 'vite-plugin-manus-runtime';
 
 // =============================================================================
@@ -116,21 +116,6 @@ function vitePluginManusDebugCollector(): Plugin {
 // =============================================================================
 //  Manual Chunks — Vendor の論理分割
 // =============================================================================
-//
-//  方針:
-//   1. ルーター/Reactコアは初期 critical bundle に残す (Suspense 動作に必須)
-//   2. framer-motion / lucide-react は LP 中で多用するが、ルート遅延の対象
-//      コンポーネントが import しているので副次的に chunk 化させる
-//   3. supabase / @supabase は認証必須のためログイン後に主に使う → 別チャンク
-//   4. 暗号系 (hash-wasm, c2pa, openpgp 等) は Dropzone 経由なので別チャンク
-//   5. icon ライブラリ (lucide-react) も体積が大きい → 単独 chunk
-//   6. 解析系 (recharts / d3) があれば admin 専用 chunk
-//
-//  注意:
-//   - manualChunks 関数は「同じ module を 2 つの chunk に入れない」必要がある
-//   - 戻り値が undefined のモジュールは Rollup の自動分割に任せる
-//
-// =============================================================================
 
 type ChunkName =
   | 'vendor-react'
@@ -145,7 +130,6 @@ type ChunkName =
 function pickVendorChunk(id: string): ChunkName | undefined {
   if (!id.includes('node_modules')) return undefined;
 
-  // React core (critical) — Suspense fallback を出すために最初に到着させる
   if (
     id.includes('/node_modules/react/') ||
     id.includes('/node_modules/react-dom/') ||
@@ -155,12 +139,10 @@ function pickVendorChunk(id: string): ChunkName | undefined {
     return 'vendor-react';
   }
 
-  // Routing — wouter は小さいが React と密結合
   if (id.includes('/node_modules/wouter')) {
     return 'vendor-router';
   }
 
-  // Motion (LP/HeroDemo 専用、admin では呼ばれない)
   if (
     id.includes('/node_modules/framer-motion') ||
     id.includes('/node_modules/motion/') ||
@@ -169,12 +151,10 @@ function pickVendorChunk(id: string): ChunkName | undefined {
     return 'vendor-motion';
   }
 
-  // Icons (lucide-react は ESM tree-shake が効くが nominal で chunk 化)
   if (id.includes('/node_modules/lucide-react')) {
     return 'vendor-icons';
   }
 
-  // Supabase / GoTrue / Realtime (認証必須・ログイン後の主役)
   if (
     id.includes('/node_modules/@supabase/') ||
     id.includes('/node_modules/postgrest-js') ||
@@ -183,7 +163,6 @@ function pickVendorChunk(id: string): ChunkName | undefined {
     return 'vendor-supabase';
   }
 
-  // Crypto (hash-wasm / c2pa-js / openpgp 等)
   if (
     id.includes('/node_modules/hash-wasm') ||
     id.includes('/node_modules/c2pa') ||
@@ -195,7 +174,6 @@ function pickVendorChunk(id: string): ChunkName | undefined {
     return 'vendor-crypto';
   }
 
-  // 分析系 (admin で必要、LP では未使用)
   if (
     id.includes('/node_modules/recharts') ||
     id.includes('/node_modules/d3-') ||
@@ -204,7 +182,6 @@ function pickVendorChunk(id: string): ChunkName | undefined {
     return 'vendor-charts';
   }
 
-  // shadcn/Radix UI primitives (Dialog/Tooltip 等)
   if (
     id.includes('/node_modules/@radix-ui/') ||
     id.includes('/node_modules/sonner') ||
@@ -229,59 +206,65 @@ const plugins = [
   vitePluginManusDebugCollector(),
 ];
 
-export default defineConfig({
-  plugins,
-  resolve: {
-    alias: {
-      '@/hooks/useForge': path.resolve(import.meta.dirname, 'src/hooks/useForge.ts'),
-      '@/actions/upload': path.resolve(import.meta.dirname, 'client/src/lib/mocks/uploadMock.ts'),
-      '@': path.resolve(import.meta.dirname, 'client', 'src'),
-      '@shared': path.resolve(import.meta.dirname, 'shared'),
-      '@assets': path.resolve(import.meta.dirname, 'attached_assets'),
-    },
-  },
-  envDir: path.resolve(import.meta.dirname),
-  root: path.resolve(import.meta.dirname, 'client'),
-  build: {
-    outDir: path.resolve(import.meta.dirname, 'dist/public'),
-    emptyOutDir: true,
-    target: 'es2020',
-    cssCodeSplit: true,
-    sourcemap: false,
-    // 警告閾値は厳しく。これを 3000kB のままにすると分割不備に気付けない
-    chunkSizeWarningLimit: 2000,
-    rollupOptions: {
-      output: {
-        manualChunks: pickVendorChunk,
-        // ハッシュ付与で長期キャッシュを効かせる
-        entryFileNames: 'assets/[name]-[hash].js',
-        chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash][extname]',
+// 🩸 変更：オブジェクト渡しから関数渡しへ変更し、loadEnv を実行可能にする
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+
+  return {
+    plugins,
+    resolve: {
+      alias: {
+        '@/hooks/useForge': path.resolve(import.meta.dirname, 'src/hooks/useForge.ts'),
+        '@/actions/upload': path.resolve(import.meta.dirname, 'client/src/lib/mocks/uploadMock.ts'),
+        '@': path.resolve(import.meta.dirname, 'client', 'src'),
+        '@shared': path.resolve(import.meta.dirname, 'shared'),
+        '@assets': path.resolve(import.meta.dirname, 'attached_assets'),
       },
     },
-  },
-  // hash-wasm は wasm を fetch するため pre-bundle 対象から外す
-  // pkijs はブラウザ実行時の pre-bundle クラッシュ（時限爆弾）を防ぐために除外する
-  optimizeDeps: {
-    exclude: ['hash-wasm', 'pkijs'],
-    include: ['asn1js', 'jszip'],
-  },
-  server: {
-    port: 3000,
-    strictPort: false,
-    host: true,
-    allowedHosts: [
-      '.manuspre.computer',
-      '.manus.computer',
-      '.manus-asia.computer',
-      '.manuscomputer.ai',
-      '.manusvm.computer',
-      'localhost',
-      '127.0.0.1',
-    ],
-    fs: {
-      strict: true,
-      deny: ['**/.*'],
+    envDir: path.resolve(import.meta.dirname),
+    root: path.resolve(import.meta.dirname, 'client'),
+    build: {
+      outDir: path.resolve(import.meta.dirname, 'dist/public'),
+      emptyOutDir: true,
+      target: 'es2020',
+      cssCodeSplit: true,
+      sourcemap: false,
+      chunkSizeWarningLimit: 2000,
+      rollupOptions: {
+        output: {
+          manualChunks: pickVendorChunk,
+          entryFileNames: 'assets/[name]-[hash].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]',
+        },
+      },
     },
-  },
+    optimizeDeps: {
+      exclude: ['hash-wasm', 'pkijs'],
+      include: ['asn1js', 'jszip'],
+    },
+    server: {
+      port: 3000,
+      strictPort: false,
+      host: true,
+      allowedHosts: [
+        '.manuspre.computer',
+        '.manus.computer',
+        '.manus-asia.computer',
+        '.manuscomputer.ai',
+        '.manusvm.computer',
+        'localhost',
+        '127.0.0.1',
+      ],
+      fs: {
+        strict: true,
+        deny: ['**/.*'],
+      },
+    },
+    // 🩸 追加：Next.js環境変数の Vite クライアント空間への完全注入
+    define: {
+      'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_URL),
+      'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+    }
+  };
 });
