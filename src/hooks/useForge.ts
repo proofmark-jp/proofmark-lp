@@ -18,7 +18,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ForgeMessage } from '../lib/forge.worker';
-import { registerCertificateAction } from '../actions/upload';
 import { createClient } from '../utils/supabase/client';
 
 export type ForgeStage =
@@ -235,17 +234,41 @@ export function useForge(options?: UseForgeOptions) {
                 signal,
               });
 
-              // 3) DB 打刻 (Server Action)
+              // 3) DB 打刻 (API Route Handler)
               if (isMountedRef.current) {
                 setState((s) => ({ ...s, stage: 'finalizing' }));
               }
-              const actionRes = await registerCertificateAction({
-                cid: msg.cid,
-                sizeBytes: msg.framesBlob.size,
-                mimeType: msg.framesBlob.type,
-                objectKey: presignData.objectKey, // 👑 修正: R2の保存先パスをDB打刻アクションへ確実に渡す
-                title: file.name,
+
+              const supabaseClient = createClient();
+              const { data: { session: currentSession } } = await supabaseClient.auth.getSession();
+              const accessToken = currentSession?.access_token;
+
+              const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+              };
+              if (accessToken) {
+                headers['Authorization'] = `Bearer ${accessToken}`;
+              }
+
+              const commitRes = await fetch('/api/certificates/commit', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                  cid: msg.cid,
+                  sizeBytes: msg.framesBlob.size,
+                  mimeType: msg.framesBlob.type,
+                  objectKey: presignData.objectKey,
+                  title: file.name,
+                }),
+                signal,
               });
+
+              if (!commitRes.ok) {
+                const errData = (await commitRes.json().catch(() => ({}))) as { error?: string };
+                throw new Error(errData.error || `DB commit failed (HTTP ${commitRes.status})`);
+              }
+
+              const actionRes = (await commitRes.json()) as { success: boolean; certificateId?: string; error?: string };
 
               if (!actionRes.success) {
                 throw new Error(actionRes.error || 'DB 打刻に失敗しました');
