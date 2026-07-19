@@ -3,23 +3,20 @@
 /**
  * src/components/console/ConsoleDropzoneClient.tsx
  * ─────────────────────────────────────────────────────────────────────────
- * Console 2.0 · The Video Dropzone (Apex Zero-Jank Edition)
+ * Console 2.0 · The Video Dropzone (Apex Zero-Jank + Oracle Sync Edition)
  *
  * 🩸 Zero-Jank Doctrine:
- *   - Worker から届く 60ms 間隔の高頻度 PROGRESS は useState を一切踏まない。
+ *   - Worker から届く 60ms 間隔の高頻度 PROGRESS は useState を一切前提としない。
  *   - useForge({ onProgressDirect }) から流れる percent を、
  *     useMotionValue → useMotionTemplate 経由で直接 CSS width にバインド。
  *   - Framer Motion の <motion.div style={{ width: … }} /> は
  *     Virtual DOM を再計算しない (transform/width はコンポジタで完結)。
  *   - 数値表示 (%, MB) は <motion.span> の onChange で innerText を
  *     直接ミューテーションし、React 経由の再レンダーをゼロに封殺。
- *
- * 5つの絶対防衛線 (継承):
- *  ① Main-Thread Protection — Worker (Blob URL) で SHA-256 / decode をオフロード
- *  ② Labor Illusion — 16進スクランブラー + Egress Meter
- *  ③ Bento-Glassmorphism + Magnetic Snap — カーソル追従傾き、呼吸グロー
- *  ④ 厳密な State Machine — idle → dragging → hashing → decoding → muxing → uploading → success
- *  ⑤ Cockroach Cleanup — Worker / Blob URL / listener / timer / XHR 完全解放
+ * 
+ * 🔮 The Oracle Sync:
+ *   - アップロード完了 (success) と同時に useOracleSync が起動。
+ *   - Supabase Realtime (WebSocket) 経由で Mac mini のジョブステータスを監視。
  */
 
 import React, {
@@ -56,10 +53,13 @@ import {
   UploadCloud,
   X,
   Zap,
+  Server,
+  Activity,
 } from 'lucide-react';
 
 import { useSafeReducedMotion } from '@/hooks/useSafeReducedMotion';
 import { useForge, type ForgeStage } from '@/hooks/useForge';
+import { useOracleSync } from '@/hooks/useOracleSync';
 
 /* ══════════════════════════════════════════════════════════════
  *  Constants — The Physics
@@ -160,13 +160,6 @@ function ScramblingHash({ reduce }: { reduce: boolean }) {
   );
 }
 
-/**
- * DirectFlowMeter — Zero-Render 進捗メーター
- * ------------------------------------------------------------------
- *  - 幅は useMotionTemplate で width に直接バインド
- *  - パーセント / MB 表示は <motion.span> の onChange で
- *    innerText を直接書き換え、React の再レンダーを完全に殺害
- */
 function DirectFlowMeter({
   reduce,
   percentMV,
@@ -184,14 +177,12 @@ function DirectFlowMeter({
   const bytesRef = useRef<HTMLSpanElement | null>(null);
   const stageRef = useRef<HTMLSpanElement | null>(null);
 
-  // 幅の CSS を motionValue から直接生成
   const clampedPercent = useTransform(percentMV, (v) => {
     if (!Number.isFinite(v)) return 0;
     return Math.max(0, Math.min(100, v));
   });
   const width = useMotionTemplate`${clampedPercent}%`;
 
-  // 数値表示は React state を経由せず innerText を直流
   useMotionValueEvent(clampedPercent, 'change', (v) => {
     if (pctRef.current) pctRef.current.innerText = `${v.toFixed(1)}%`;
     if (bytesRef.current) {
@@ -223,7 +214,7 @@ function DirectFlowMeter({
       <div className="flex items-center justify-between mb-1.5">
         <span
           ref={stageRef}
-          className="text-[10px] font-mono uppercase tracking-[0.28em] text-white/50"
+          className="text-[10px] font-mono uppercase tracking-[0.28em] text-white/55"
         >
           {stageLabelMV.get()}
         </span>
@@ -352,7 +343,6 @@ export default function ConsoleDropzoneClient({
 }: ConsoleDropzoneClientProps) {
   const reduce = useSafeReducedMotion();
 
-  /* ─── React-side low-frequency state (フェーズ遷移だけ) ─── */
   const [phase, setPhase] = useState<PhaseKey>('idle');
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -360,17 +350,14 @@ export default function ConsoleDropzoneClient({
   const [committedCid, setCommittedCid] = useState<string | null>(null);
   const [certificateId, setCertificateId] = useState<string | null>(null);
 
-  /* ─── 高頻度 progress は MotionValue へ直流 ─── */
   const percentMV = useMotionValue(0);
   const stageLabelMV = useMotionValue<string>('READY');
 
   const dragCounter = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  /* ─── useForge (progress は onProgressDirect で直流) ─── */
   const { state: forgeState, startForge, cancel: cancelForge } = useForge({
     onProgressDirect: (percent, stage) => {
-      // React setState は踏まない。MotionValue.set() で GPU コンポジタへ直流。
       percentMV.set(percent);
       const label =
         stage === 'hashing'
@@ -382,7 +369,9 @@ export default function ConsoleDropzoneClient({
     },
   });
 
-  /* ─── Forge の state 遷移を UI phase に反映 (低頻度) ─── */
+  // 🔮 The Oracle Sync: DB打刻完了後に発行された certificateId を監視
+  const { jobStatus: oracleStatus, jobError: oracleError } = useOracleSync(certificateId);
+
   useEffect(() => {
     if (forgeState.error) {
       setError(forgeState.error);
@@ -410,13 +399,11 @@ export default function ConsoleDropzoneClient({
     }
   }, [forgeState.error, forgeState.isForging, forgeState.cid, forgeState.certificateId, forgeState.stage, file, onCommit, percentMV, stageLabelMV]);
 
-  /* ─── Magnetic Snap: pointer-driven subtle tilt ─── */
   const mx = useMotionValue(0);
   const my = useMotionValue(0);
   const tiltX = useSpring(useTransform(my, [-1, 1], [3.5, -3.5]), { stiffness: 180, damping: 20 });
   const tiltY = useSpring(useTransform(mx, [-1, 1], [-3.5, 3.5]), { stiffness: 180, damping: 20 });
 
-  /* ─── Cleanup on unmount ─── */
   useEffect(() => {
     return () => { try { cancelForge(); } catch { /* noop */ } };
   }, [cancelForge]);
@@ -458,7 +445,6 @@ export default function ConsoleDropzoneClient({
     [percentMV, stageLabelMV, startForge],
   );
 
-  /* ─── Drop / file input handlers ─── */
   const openPicker = useCallback(() => {
     if (isBusy) return;
     inputRef.current?.click();
@@ -506,7 +492,6 @@ export default function ConsoleDropzoneClient({
     beginForge(dropped);
   }, [beginForge, isBusy]);
 
-  /* ─── Magnetic pointer ─── */
   const onPointerMove = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       const rect = e.currentTarget.getBoundingClientRect();
@@ -518,7 +503,6 @@ export default function ConsoleDropzoneClient({
   );
   const onPointerLeave = useCallback(() => { mx.set(0); my.set(0); }, [mx, my]);
 
-  /* ─── Copy hash ─── */
   const copyHash = useCallback(async () => {
     if (!committedCid) return;
     try {
@@ -528,7 +512,6 @@ export default function ConsoleDropzoneClient({
     } catch { /* noop */ }
   }, [committedCid]);
 
-  /* ─── Derived styles ─── */
   const borderColor = useMemo(() => {
     switch (phase) {
       case 'dragging': return 'rgba(0,212,170,0.75)';
@@ -563,20 +546,14 @@ export default function ConsoleDropzoneClient({
   const showProcessing =
     phase === 'hashing' || phase === 'decoding' || phase === 'muxing' || phase === 'uploading';
 
-  /* ══════════════════════════════════════════════════════════════
-   *  Render
-   * ══════════════════════════════════════════════════════════════ */
-
   return (
     <section
       className={['relative w-full max-w-3xl mx-auto', className ?? ''].join(' ')}
       aria-labelledby="console-dropzone-heading"
     >
-      {/* Ambient auras */}
       <div aria-hidden className="pointer-events-none absolute -top-24 -left-24 w-[420px] h-[420px] rounded-full opacity-[0.09] blur-[120px]" style={{ background: '#6C3EF4' }} />
       <div aria-hidden className="pointer-events-none absolute -bottom-24 -right-24 w-[420px] h-[420px] rounded-full opacity-[0.09] blur-[120px]" style={{ background: '#00D4AA' }} />
 
-      {/* Header row */}
       <div className="relative mb-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 px-1">
         <div className="min-w-0">
           <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/40">
@@ -592,7 +569,6 @@ export default function ConsoleDropzoneClient({
         <PhaseBadge phase={phase} reduce={reduce} />
       </div>
 
-      {/* The Dropzone */}
       <motion.div
         role="button"
         tabIndex={0}
@@ -620,7 +596,6 @@ export default function ConsoleDropzoneClient({
           isBusy ? 'cursor-progress' : '',
         ].join(' ')}
       >
-        {/* Base surface */}
         <div
           aria-hidden
           className="absolute inset-0 rounded-3xl"
@@ -634,7 +609,6 @@ export default function ConsoleDropzoneClient({
           }}
         />
 
-        {/* Cyber grid */}
         <div
           aria-hidden
           className="absolute inset-0 pointer-events-none opacity-[0.08]"
@@ -646,7 +620,6 @@ export default function ConsoleDropzoneClient({
           }}
         />
 
-        {/* Breathing halo when dragging */}
         {!reduce && (
           <motion.div
             aria-hidden
@@ -661,14 +634,12 @@ export default function ConsoleDropzoneClient({
           />
         )}
 
-        {/* Top hairline */}
         <div
           aria-hidden
           className="absolute inset-x-0 top-0 h-px rounded-t-3xl"
           style={{ background: 'linear-gradient(90deg, transparent, rgba(108,62,244,0.8), rgba(0,212,170,0.8), transparent)' }}
         />
 
-        {/* Content */}
         <div className="relative z-10 flex flex-col items-center justify-center px-6 py-10 sm:py-12 min-h-[360px]">
           <AnimatePresence mode="wait" initial={false}>
             {(phase === 'idle' || phase === 'dragging' || phase === 'error') && (
@@ -782,7 +753,7 @@ export default function ConsoleDropzoneClient({
                       <p className="truncate text-white font-bold text-[14px]">
                         {file?.name ?? 'unknown.mp4'}
                       </p>
-                      <span className="shrink-0 text-[10px] font-mono text-white/40 tabular-nums">
+                      <span className="shrink-0 text-[10px] font-mono text-white/45 tabular-nums">
                         {formatBytes(file?.size ?? 0)}
                       </span>
                     </div>
@@ -800,7 +771,6 @@ export default function ConsoleDropzoneClient({
 
                 <ScramblingHash reduce={reduce} />
 
-                {/* Zero-Render 直流メーター */}
                 <DirectFlowMeter
                   reduce={reduce}
                   percentMV={percentMV}
@@ -825,32 +795,60 @@ export default function ConsoleDropzoneClient({
                 transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
                 className="w-full max-w-xl"
               >
-                <div className="flex items-center gap-3">
-                  <motion.div
-                    className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
-                    style={{
-                      background: 'linear-gradient(135deg, #00D4AA 0%, #6C3EF4 100%)',
-                      boxShadow: '0 16px 36px -12px rgba(0,212,170,0.55), 0 0 0 1px rgba(255,255,255,0.08) inset',
-                    }}
-                    initial={reduce ? undefined : { scale: 0.6, rotate: -12 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={{ type: 'spring', stiffness: 220, damping: 16 }}
-                  >
-                    <CheckCircle2 className="w-6 h-6 text-white" strokeWidth={2.4} />
-                  </motion.div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-[#00D4AA]">
-                      Sealed · Master Hash Locked
-                    </p>
-                    <h3 className="mt-0.5 text-white font-black tracking-tight text-[17px] truncate">
-                      {file?.name ?? 'unknown.mp4'}
-                    </h3>
-                    <p className="text-[11px] text-white/50">
-                      {formatBytes(file?.size ?? 0)} · Direct-to-R2 Sealed
-                      {certificateId ? <span className="text-white/40"> · #{certificateId.slice(0, 8)}</span> : null}
-                    </p>
+                {oracleError ? (
+                  <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4 flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-[12px] font-bold text-red-400">Oracle Processing Failed</p>
+                      <p className="mt-1 text-[11px] text-red-300/80">{oracleError}</p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <motion.div
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+                      style={{
+                        background: oracleStatus === 'completed'
+                          ? 'linear-gradient(135deg, #00D4AA 0%, #6C3EF4 100%)'
+                          : 'linear-gradient(135deg, #2A2A35 0%, #1A1A24 100%)',
+                        boxShadow: oracleStatus === 'completed'
+                          ? '0 16px 36px -12px rgba(0,212,170,0.55), 0 0 0 1px rgba(255,255,255,0.08) inset'
+                          : '0 0 0 1px rgba(255,255,255,0.05) inset',
+                      }}
+                      initial={reduce ? undefined : { scale: 0.6, rotate: -12 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ type: 'spring', stiffness: 220, damping: 16 }}
+                    >
+                      {oracleStatus === 'completed' ? (
+                        <CheckCircle2 className="w-6 h-6 text-white" strokeWidth={2.4} />
+                      ) : oracleStatus === 'processing' ? (
+                        <Activity className="w-6 h-6 text-[#00D4AA] animate-pulse" strokeWidth={2} />
+                      ) : (
+                        <Server className="w-6 h-6 text-white/40" strokeWidth={2} />
+                      )}
+                    </motion.div>
+                    
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-[#00D4AA]">
+                        {oracleStatus === 'completed' 
+                          ? 'Sealed · Master Hash Locked'
+                          : oracleStatus === 'processing'
+                            ? 'Oracle Node · Processing...'
+                            : 'Oracle Node · Pending...'}
+                      </p>
+                      <h3 className="mt-0.5 text-white font-black tracking-tight text-[17px] truncate">
+                        {file?.name ?? 'unknown.mp4'}
+                      </h3>
+                      <p className="text-[11px] text-white/50 flex items-center gap-1.5">
+                        {oracleStatus === 'processing' && <Loader2 className="w-3 h-3 animate-spin text-[#00D4AA]" />}
+                        {oracleStatus === 'completed' 
+                          ? `${formatBytes(file?.size ?? 0)} · Direct-to-R2 Sealed`
+                          : 'Mac mini が AIメタデータ解析とC2PA署名を実行しています'}
+                        {certificateId && oracleStatus === 'completed' ? <span className="text-white/40"> · #{certificateId.slice(0, 8)}</span> : null}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div
                   className="mt-4 rounded-2xl border p-4"
@@ -866,8 +864,13 @@ export default function ConsoleDropzoneClient({
                     </span>
                     <button
                       type="button"
+                      disabled={oracleStatus !== 'completed'}
                       onClick={(e) => { e.stopPropagation(); void copyHash(); }}
-                      className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1 text-[10.5px] font-mono uppercase tracking-[0.18em] text-white/75 hover:text-white hover:bg-white/[0.06] transition-colors"
+                      className={`inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[10.5px] font-mono uppercase tracking-[0.18em] transition-colors ${
+                        oracleStatus === 'completed' 
+                          ? 'bg-white/[0.03] text-white/75 hover:text-white hover:bg-white/[0.06] cursor-pointer' 
+                          : 'bg-transparent text-white/20 cursor-not-allowed'
+                      }`}
                     >
                       {copied
                         ? (<><CheckCircle2 className="w-3 h-3 text-[#00D4AA]" /> COPIED</>)
@@ -882,6 +885,8 @@ export default function ConsoleDropzoneClient({
                       WebkitTextFillColor: 'transparent',
                       backgroundClip: 'text',
                       filter: 'drop-shadow(0 0 10px rgba(0,212,170,0.35))',
+                      opacity: oracleStatus === 'completed' ? 1 : 0.4,
+                      transition: 'opacity 300ms ease',
                     }}
                   >
                     {committedCid}
@@ -901,20 +906,11 @@ export default function ConsoleDropzoneClient({
                     <UploadCloud className="w-3.5 h-3.5" />
                     もう1本封印する
                   </button>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); void copyHash(); }}
-                    className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[12px] font-semibold text-white/85 border border-white/10 hover:bg-white/[0.05] transition-colors"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    ハッシュをコピー
-                  </button>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Bottom hairline */}
           <div
             aria-hidden
             className="absolute inset-x-0 bottom-0 h-px pointer-events-none"
@@ -922,7 +918,6 @@ export default function ConsoleDropzoneClient({
           />
         </div>
 
-        {/* Hidden file input */}
         <input
           ref={inputRef}
           type="file"
@@ -934,12 +929,11 @@ export default function ConsoleDropzoneClient({
         />
       </motion.div>
 
-      {/* Footer copy */}
       <div className="mt-3 flex items-center justify-between text-[10.5px] font-mono uppercase tracking-[0.24em] text-white/35 px-1">
         <span>PROOFMARK · CONSOLE 2.0</span>
         <span className="inline-flex items-center gap-1.5">
-          <Lock className="w-3 h-3" />
-          Direct-Flow · Zero-Jank
+          <Activity className="w-3 h-3 text-[#00D4AA]" />
+          Oracle Node Sync Active
         </span>
       </div>
 
