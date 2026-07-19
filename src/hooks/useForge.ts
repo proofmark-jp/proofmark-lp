@@ -1,121 +1,296 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import type { ForgeMessage } from '../lib/forge.worker';
-import { registerCertificateAction } from '../../../src/actions/upload'; // パス調整
+// src/hooks/useForge.ts
+/**
+ * useForge — React state を経由せず Framer Motion の MotionValue に
+ * 進捗を直流するための「Jank 完全殺害型」フック。
+ *
+ * 主な設計原則:
+ *  ① progress は useState を使わない。
+ *     Worker から届く高頻度 (60ms 間隔) の PROGRESS イベントは
+ *     onProgressDirect(percent, stage) コールバックとして呼び出し、
+ *     UI 層で直接 motionValue.set() を叩かせる。
+ *  ② stage / cid / error / isForging は「フェーズ遷移」の粒度でのみ
+ *     setState する (せいぜい 5〜6 回/セッション)。
+ *  ③ registerCertificateAction は Server Action。ネットワーク断は
+ *     fetchWithRetry で吸収する。
+ *  ④ unmount / 新規 start / cancel で worker.terminate() +
+ *     AbortController.abort() を確実に発火。ゾンビ通信ゼロ。
+ */
 
-interface ForgeState {
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ForgeMessage } from '../lib/forge.worker';
+import { registerCertificateAction } from '@/actions/upload';
+
+export type ForgeStage =
+  | 'idle'
+  | 'hashing'
+  | 'decoding'
+  | 'muxing'
+  | 'uploading'
+  | 'finalizing';
+
+export interface ForgeState {
   isForging: boolean;
-  progress: number;
-  stage: 'idle' | 'hashing' | 'decoding' | 'uploading' | 'finalizing';
+  stage: ForgeStage;
   error: string | null;
   cid: string | null;
+  certificateId: string | null;
 }
 
-async function fetchWithRetry(url: string, options: RequestInit, retries = 3, backoff = 500): Promise<Response> {
+export interface UseForgeOptions {
+  /**
+   * Worker から届く進捗を「React State を経由せず」に受け取る直流コールバック。
+   * UI 層でこの中から Framer Motion の MotionValue.set() を叩くと、
+   * React の Virtual DOM 再計算サイクルを完全にバイパスできる。
+   *
+   *  - percent : 0..100
+   *  - stage   : 現在のワーカー内フェーズ
+   */
+  onProgressDirect?: (percent: number, stage: 'hashing' | 'decoding' | 'muxing') => void;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ *  Network helper (Retry with exponential backoff)
+ * ══════════════════════════════════════════════════════════════ */
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 3,
+  backoff = 500,
+): Promise<Response> {
   try {
     const res = await fetch(url, options);
     if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
     return res;
-  } catch (err: any) {
-    if (err.name === 'AbortError') throw err; // ユーザーキャンセル時はリトライしない
+  } catch (err) {
+    if ((err as DOMException)?.name === 'AbortError') throw err;
     if (retries > 0) {
-      console.warn(`[Network Drop Detected] Retrying upload in ${backoff}ms...`);
-      await new Promise(r => setTimeout(r, backoff));
+      await new Promise((r) => setTimeout(r, backoff));
       return fetchWithRetry(url, options, retries - 1, backoff * 2);
     }
     throw err;
   }
 }
 
-export function useForge() {
+/* ══════════════════════════════════════════════════════════════
+ *  Hook
+ * ══════════════════════════════════════════════════════════════ */
+
+export function useForge(options?: UseForgeOptions) {
   const [state, setState] = useState<ForgeState>({
-    isForging: false, progress: 0, stage: 'idle', error: null, cid: null,
+    isForging: false,
+    stage: 'idle',
+    error: null,
+    cid: null,
+    certificateId: null,
   });
-  
+
   const workerRef = useRef<Worker | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  // コンポーネントアンマウント時のクリーンアップ（メモリリーク完全防止）
+  const abortRef = useRef<AbortController | null>(null);
+  // onProgressDirect を ref に閉じ込めて、コールバック変更で
+  // 再レンダー ⇒ 再バインドを発生させない
+  const onProgressDirectRef = useRef<UseForgeOptions['onProgressDirect']>(options?.onProgressDirect);
   useEffect(() => {
+    onProgressDirectRef.current = options?.onProgressDirect;
+  }, [options?.onProgressDirect]);
+
+  const isMountedRef = useRef<boolean>(true);
+  useEffect(() => {
+    isMountedRef.current = true;
     return () => {
-      workerRef.current?.terminate();
-      abortControllerRef.current?.abort();
+      isMountedRef.current = false;
+      try { workerRef.current?.terminate(); } catch { /* noop */ }
+      workerRef.current = null;
+      try { abortRef.current?.abort(); } catch { /* noop */ }
+      abortRef.current = null;
     };
   }, []);
 
-  const startForge = useCallback((file: File) => {
-    workerRef.current?.terminate();
-    abortControllerRef.current?.abort();
-    
-    abortControllerRef.current = new AbortController();
-    const signal = abortControllerRef.current.signal;
+  const cancel = useCallback(() => {
+    try { workerRef.current?.terminate(); } catch { /* noop */ }
+    workerRef.current = null;
+    try { abortRef.current?.abort(); } catch { /* noop */ }
+    abortRef.current = null;
+    if (isMountedRef.current) {
+      setState({
+        isForging: false,
+        stage: 'idle',
+        error: null,
+        cid: null,
+        certificateId: null,
+      });
+    }
+  }, []);
 
-    workerRef.current = new Worker(new URL('../lib/forge.worker.ts', import.meta.url), {
-      type: 'module'
-    });
+  const startForge = useCallback(
+    (file: File) => {
+      // 既存パイプラインを殺す
+      try { workerRef.current?.terminate(); } catch { /* noop */ }
+      workerRef.current = null;
+      try { abortRef.current?.abort(); } catch { /* noop */ }
 
-    setState({ isForging: true, progress: 0, stage: 'hashing', error: null, cid: null });
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const signal = controller.signal;
 
-    workerRef.current.onmessage = async (e: MessageEvent<ForgeMessage>) => {
-      if (signal.aborted) return;
-      const msg = e.data;
-      
-      switch (msg.type) {
-        case 'PROGRESS':
-          setState(s => ({ ...s, progress: msg.percent, stage: msg.stage }));
-          break;
-
-        case 'SUCCESS':
-          workerRef.current?.terminate();
-          try {
-            setState(s => ({ ...s, progress: 100, stage: 'uploading', cid: msg.cid }));
-            
-            // 1. Presigned URL 取得
-            const presignRes = await fetch('/api/storage/presign', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ cid: msg.cid, contentType: msg.framesBlob.type }),
-              signal
-            });
-            const presignData = await presignRes.json();
-            if (!presignRes.ok || presignData.error) throw new Error(presignData.error || 'Failed to get secure URL');
-
-            // 2. R2 への直接アップロード (自動リトライ搭載)
-            await fetchWithRetry(presignData.signedUrl, {
-              method: 'PUT',
-              body: msg.framesBlob,
-              headers: { 'Content-Type': msg.framesBlob.type },
-              signal
-            });
-
-            // 3. アトミックなDBトランザクション確定 (RPC呼び出し)
-            setState(s => ({ ...s, stage: 'finalizing' }));
-            const actionRes = await registerCertificateAction({
-              cid: msg.cid,
-              sizeBytes: msg.framesBlob.size,
-              mimeType: msg.framesBlob.type,
-              title: file.name
-            });
-            
-            if (!actionRes.success) throw new Error(actionRes.error);
-
-            setState(s => ({ ...s, isForging: false, stage: 'idle' }));
-            console.log(`[FORGE APEX COMPLETE] ID: ${actionRes.certificateId}`);
-
-          } catch (err: any) {
-            if (err.name === 'AbortError') return; // キャンセル時のノイズ排除
-            setState(s => ({ ...s, isForging: false, error: `Pipeline Error: ${err.message}` }));
-          }
-          break;
-
-        case 'ERROR':
-          setState(s => ({ ...s, isForging: false, error: msg.message }));
-          workerRef.current?.terminate();
-          break;
+      // Worker 起動
+      let worker: Worker;
+      try {
+        worker = new Worker(new URL('../lib/forge.worker.ts', import.meta.url), { type: 'module' });
+      } catch (err) {
+        setState({
+          isForging: false,
+          stage: 'idle',
+          error: `Worker の起動に失敗しました: ${(err as Error).message}`,
+          cid: null,
+          certificateId: null,
+        });
+        return;
       }
-    };
+      workerRef.current = worker;
 
-    workerRef.current.postMessage({ type: 'START', file });
-  }, []);
+      // フェーズ遷移のみ setState (低頻度 ⇒ Jank ゼロ)
+      if (isMountedRef.current) {
+        setState({
+          isForging: true,
+          stage: 'hashing',
+          error: null,
+          cid: null,
+          certificateId: null,
+        });
+      }
 
-  return { state, startForge };
+      // 前回 stage を ref に保持し、変わったときだけ setState
+      let lastStage: ForgeStage = 'hashing';
+
+      worker.onmessage = async (e: MessageEvent<ForgeMessage>) => {
+        if (signal.aborted) return;
+        const msg = e.data;
+
+        switch (msg.type) {
+          case 'PROGRESS': {
+            // 🩸 高頻度 → React バイパスで直接 UI へ流す
+            try {
+              onProgressDirectRef.current?.(msg.percent, msg.stage);
+            } catch { /* UI 層の例外を握り潰す */ }
+
+            // stage の遷移だけは setState する (React 側の Phase 表示同期用)
+            const nextStage: ForgeStage =
+              msg.stage === 'hashing'
+                ? 'hashing'
+                : msg.stage === 'decoding'
+                  ? 'decoding'
+                  : 'muxing';
+            if (nextStage !== lastStage) {
+              lastStage = nextStage;
+              if (isMountedRef.current) {
+                setState((s) => ({ ...s, stage: nextStage }));
+              }
+            }
+            break;
+          }
+
+          case 'SUCCESS': {
+            try { worker.terminate(); } catch { /* noop */ }
+            if (workerRef.current === worker) workerRef.current = null;
+
+            if (!isMountedRef.current) return;
+
+            try {
+              setState((s) => ({ ...s, stage: 'uploading', cid: msg.cid }));
+
+              // 1) Presigned URL 取得
+              const presignRes = await fetch('/api/storage/presign', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cid: msg.cid, contentType: msg.framesBlob.type }),
+                signal,
+              });
+              if (!presignRes.ok) {
+                throw new Error(`Failed to get secure URL (HTTP ${presignRes.status})`);
+              }
+              const presignData = (await presignRes.json()) as { signedUrl?: string; error?: string };
+              if (presignData.error || !presignData.signedUrl) {
+                throw new Error(presignData.error || 'Failed to get secure URL');
+              }
+
+              // 2) R2 への直接 PUT (retry 付き)
+              await fetchWithRetry(presignData.signedUrl, {
+                method: 'PUT',
+                body: msg.framesBlob,
+                headers: { 'Content-Type': msg.framesBlob.type },
+                signal,
+              });
+
+              // 3) DB 打刻 (Server Action)
+              if (isMountedRef.current) {
+                setState((s) => ({ ...s, stage: 'finalizing' }));
+              }
+              const actionRes = await registerCertificateAction({
+                cid: msg.cid,
+                sizeBytes: msg.framesBlob.size,
+                mimeType: msg.framesBlob.type,
+                title: file.name,
+              });
+
+              if (!actionRes.success) {
+                throw new Error(actionRes.error || 'DB 打刻に失敗しました');
+              }
+
+              if (isMountedRef.current) {
+                setState({
+                  isForging: false,
+                  stage: 'idle',
+                  error: null,
+                  cid: msg.cid,
+                  certificateId: actionRes.certificateId ?? null,
+                });
+              }
+            } catch (err) {
+              if ((err as DOMException)?.name === 'AbortError') return;
+              if (!isMountedRef.current) return;
+              setState((s) => ({
+                ...s,
+                isForging: false,
+                stage: 'idle',
+                error: `Pipeline Error: ${(err as Error).message}`,
+              }));
+            }
+            break;
+          }
+
+          case 'ERROR': {
+            try { worker.terminate(); } catch { /* noop */ }
+            if (workerRef.current === worker) workerRef.current = null;
+            if (!isMountedRef.current) return;
+            setState((s) => ({
+              ...s,
+              isForging: false,
+              stage: 'idle',
+              error: msg.message,
+            }));
+            break;
+          }
+
+          default:
+            break;
+        }
+      };
+
+      worker.onerror = (e) => {
+        if (!isMountedRef.current) return;
+        setState((s) => ({
+          ...s,
+          isForging: false,
+          stage: 'idle',
+          error: e.message || 'Worker ランタイムエラー',
+        }));
+      };
+
+      worker.postMessage({ type: 'START', file });
+    },
+    [],
+  );
+
+  return { state, startForge, cancel };
 }
