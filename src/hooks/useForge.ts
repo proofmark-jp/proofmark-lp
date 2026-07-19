@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ForgeMessage } from '../lib/forge.worker';
 import { registerCertificateAction } from '@/actions/upload';
+import { createClient } from '@/utils/supabase/client';
 
 export type ForgeStage =
   | 'idle'
@@ -200,9 +201,19 @@ export function useForge(options?: UseForgeOptions) {
               setState((s) => ({ ...s, stage: 'uploading', cid: msg.cid }));
 
               // 1) Presigned URL 取得
+              const supabase = createClient();
+              const { data: { session } } = await supabase.auth.getSession();
+              
+              if (!session) {
+                throw new Error('認証セッションが失われています。再度ログインしてください。');
+              }
+
               const presignRes = await fetch('/api/storage/presign', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${session.access_token}` // 🩸 トークンを直結
+                },
                 body: JSON.stringify({ cid: msg.cid, contentType: msg.framesBlob.type }),
                 signal,
               });
