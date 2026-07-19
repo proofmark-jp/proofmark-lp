@@ -304,6 +304,7 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
     
     // 🛡️ メタデータ非依存の非同期ロック (Race Condition 防衛線)
     let activeSampleJobs = 0; 
+    let isFirstFrame = true; // 🩸 WebCodecs バグ回避用のフラグ
 
     // Downscale canvas (transferControlToOffscreen 不要 · Worker 内で完結)
     const canvas = new OffscreenCanvas(REEL_W, REEL_H);
@@ -485,10 +486,17 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
 
       pipeline.decoder = new VideoDecoder({
         output: (frame) => handleDecodedFrame(frame),
-        error: (e) => safeReject(new Error(`Decoder Error: ${e.message}`)),
+        error: (e) => {
+          console.error('[ForgeWorker] 🚨 WebCodecs Decoder 致命的エラー:', e);
+          safeReject(new Error(`Decoder Error: ${e.message}`));
+        },
       });
 
       const description = extractCodecDescription(mp4boxfile, videoTrack.id);
+
+      // 👁️ 観測用ログ
+      console.log(`[ForgeWorker] 🎬 トラック検出: codec=${videoTrack.codec}, size=${videoTrack.track_width}x${videoTrack.track_height}, frames=${videoTrack.nb_samples}`);
+      console.log(`[ForgeWorker] 📦 Extradata 抽出: ${description ? `成功 (${description.byteLength} bytes)` : '失敗 (undefined)'}`);
 
       if (!description) {
         const c = videoTrack.codec.toLowerCase();
@@ -520,6 +528,9 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
       if (finished) return;
       activeSampleJobs++; // 🛡️ 非同期ジョブのロックを取得
 
+      // 👁️ 観測用ログ
+      console.log(`[ForgeWorker] 🧩 チャンクデコード投入: ${samples.length} frames`);
+
       try {
         if (!pipeline.decoder || pipeline.decoder.state !== 'configured') return;
         if (!videoTrack) return;
@@ -537,8 +548,12 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
           const timestamp = Math.round((sample.cts * 1_000_000) / timescale);
           const duration = Math.round(((sample.duration || 0) * 1_000_000) / timescale);
 
+          // 🩸 WebCodecs バグ回避: 最初のフレームは強引に 'key' (キーフレーム) 扱いにする
+          const isKey = sample.is_sync || isFirstFrame;
+          isFirstFrame = false;
+
           const chunk = new EncodedVideoChunk({
-            type: sample.is_sync ? 'key' : 'delta',
+            type: isKey ? 'key' : 'delta',
             timestamp,
             duration: duration > 0 ? duration : undefined,
             data: sample.data || new Uint8Array(0),
@@ -598,7 +613,6 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
         if (finished) return;
 
         // 🛡️ 防衛線: すべての onSamples (非同期) が完全に終わるのを待機する
-        // flush直後にイベントがキューに入る可能性を考慮し、最低50msは必ず待機する
         await sleep(50);
         let waitLoops = 0;
         const MAX_WAIT_LOOPS = 500;
