@@ -63,7 +63,7 @@ export function useOracleSync(certificateId: string | null) {
           if (!isMounted) return;
           const newStatus = payload.new.status as OracleJobStatus;
           setJobStatus(newStatus);
-          if ((newStatus === 'error' || newStatus === 'failed') && payload.new.error_message) {
+          if (newStatus === 'error' && payload.new.error_message) {
             setJobError(payload.new.error_message);
           }
         }
