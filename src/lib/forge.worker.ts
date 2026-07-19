@@ -173,7 +173,13 @@ function extractCodecDescription(
 
       try {
         const mp4boxModule = MP4Box as unknown as MP4BoxModule;
-        const DS = mp4boxModule.DataStream;
+        let DS: DataStreamConstructor | undefined;
+        try {
+          DS = mp4boxModule.DataStream;
+        } catch (dsErr) {
+          DS = undefined;
+        }
+        
         if (DS && typeof (box as { write?: (ds: unknown) => void }).write === 'function') {
           const ds = new DS(undefined, 0, DS.BIG_ENDIAN);
           (box as { write: (ds: unknown) => void }).write(ds);
@@ -181,7 +187,9 @@ function extractCodecDescription(
           if (buf.byteLength > 8) return buf.slice(8);
           return buf;
         }
-      } catch { /* fallback */ }
+      } catch (err) {
+        console.warn('MP4Box.DataStream fallback triggered:', err);
+      }
 
       if (box instanceof Uint8Array) return box;
       if (box instanceof ArrayBuffer) return new Uint8Array(box);
@@ -293,6 +301,8 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
     let encoderClosed = false;
     let decoderClosed = false;
     let finished = false;
+    let extractedSamplesCount = 0;
+    let isExtractionComplete = false;
 
     // Downscale canvas (transferControlToOffscreen 不要 · Worker 内で完結)
     const canvas = new OffscreenCanvas(REEL_W, REEL_H);
@@ -479,6 +489,14 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
 
       const description = extractCodecDescription(mp4boxfile, videoTrack.id);
 
+      if (!description) {
+        const c = videoTrack.codec.toLowerCase();
+        if (c.includes('avc') || c.includes('hvc') || c.includes('hevc')) {
+          safeReject(new Error('コーデックの初期化データ(Extradata)の抽出に失敗しました。'));
+          return;
+        }
+      }
+
       try {
         pipeline.decoder.configure({
           codec: videoTrack.codec,
@@ -534,6 +552,11 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
         }
       } catch (loopErr) {
         safeReject(new Error(`onSamples 例外: ${(loopErr as Error).message}`));
+      } finally {
+        extractedSamplesCount += samples.length;
+        if (videoTrack && extractedSamplesCount >= videoTrack.nb_samples) {
+          isExtractionComplete = true;
+        }
       }
     };
 
@@ -573,6 +596,18 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
         } catch { /* noop */ }
 
         if (finished) return;
+
+        let waitLoops = 0;
+        const MAX_WAIT_LOOPS = 500;
+        while (!isExtractionComplete && !finished && waitLoops < MAX_WAIT_LOOPS) {
+          await sleep(10);
+          waitLoops++;
+        }
+        
+        if (!isExtractionComplete && !finished) {
+          safeReject(new Error('フレーム抽出がタイムアウトしました (Race Condition)'));
+          return;
+        }
 
         try {
           if (pipeline.decoder && pipeline.decoder.state === 'configured') {
