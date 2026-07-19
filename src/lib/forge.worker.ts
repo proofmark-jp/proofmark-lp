@@ -304,6 +304,7 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
     
     // 🛡️ メタデータ非依存の非同期ロック (Race Condition 防衛線)
     let activeSampleJobs = 0; 
+    let isFirstFrame = true;
 
     // Downscale canvas (transferControlToOffscreen 不要 · Worker 内で完結)
     const canvas = new OffscreenCanvas(REEL_W, REEL_H);
@@ -491,7 +492,12 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
         output: (frame) => handleDecodedFrame(frame),
         error: (e) => {
           console.error('[ForgeWorker] 🚨 WebCodecs Decoder 致命的エラー:', e);
-          safeReject(new Error(`Decoder Error: ${e.message}`));
+          // 🩸 防衛線: デコーダが死んでも、すでに1枚でも抽出できていればエラーを無視して強行突破する
+          if (outputFramesCount > 0) {
+            console.warn(`[ForgeWorker] 🛡️ 抽出済みフレーム(${outputFramesCount}枚)が存在するため、デコーダエラーを握り潰して続行します。`);
+          } else {
+            safeReject(new Error(`Decoder Error: ${e.message}`));
+          }
         },
       });
 
@@ -551,9 +557,11 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
           const timestamp = Math.round((sample.cts * 1_000_000) / timescale);
           const duration = Math.round(((sample.duration || 0) * 1_000_000) / timescale);
 
-          // 🩸 真実のみを申告する。mp4boxがsync(キーフレーム)と判定したものだけを'key'にする。
+          const isKey = sample.is_sync || isFirstFrame;
+          isFirstFrame = false;
+
           const chunk = new EncodedVideoChunk({
-            type: sample.is_sync ? 'key' : 'delta',
+            type: isKey ? 'key' : 'delta',
             timestamp,
             duration: duration > 0 ? duration : undefined,
             data: sample.data || new Uint8Array(0),
@@ -595,12 +603,8 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
           const ab = await chunk.arrayBuffer();
           (ab as ArrayBuffer & { fileStart?: number }).fileStart = offset;
 
-          // MP4Boxにチャンクをフィードし、次に読み込むべきファイル位置(nextOffset)を受け取る
           const nextOffset = mp4boxfile.appendBuffer(ab);
 
-          // 🩸 非 Fast-Start (moovアトムが末尾にある) MP4 への絶対防衛線
-          // メタデータ読込後、MP4Boxはメディアデータを抽出するため、自動的にファイル先頭付近への「シーク要求」を出す。
-          // 一方通行のリーダーを捨て、要求された nextOffset へ確実にジャンプして再度データを流し込む。
           if (typeof nextOffset === 'number' && nextOffset !== offset + ab.byteLength) {
             console.log(`[ForgeWorker] 🔄 MP4Boxからのシーク要求を検知: 現在位置 ${offset} -> 移動先 ${nextOffset}`);
             offset = nextOffset;
@@ -632,21 +636,24 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
 
         try {
           if (pipeline.decoder && pipeline.decoder.state === 'configured') {
-            while (pipeline.decoder.decodeQueueSize > 0 && pipeline.decoder.state === 'configured') {
-              await sleep(BACKPRESSURE_POLL_MS);
+            // 🩸 防衛線: デコーダの不要なフラッシュを避け、クラッシュを防ぐ。
+            // 目標枚数に到達していない「最後の絞り出し」が必要な場合のみ flush する。
+            if (outputFramesCount < maxFrames) {
+              while (pipeline.decoder.decodeQueueSize > 0 && pipeline.decoder.state === 'configured') {
+                await sleep(BACKPRESSURE_POLL_MS);
+              }
+              await pipeline.decoder.flush();
             }
-            await pipeline.decoder.flush();
           }
         } catch (dfErr) {
-          safeReject(new Error(`Decoder flush 失敗: ${(dfErr as Error).message}`));
-          return;
+          console.warn('[ForgeWorker] 🛡️ Decoder flush エラー (無視して強行突破します):', dfErr);
         }
 
         try { pipeline.decoder?.close(); } catch { /* noop */ }
         decoderClosed = true;
 
         if (outputFramesCount === 0) {
-          safeReject(new Error('このデバイス・ブラウザではデコードできない動画形式（HDR等）です'));
+          safeReject(new Error('デコード可能なフレームが見つかりませんでした'));
           return;
         }
 
