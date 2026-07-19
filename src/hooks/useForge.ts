@@ -18,8 +18,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ForgeMessage } from '../lib/forge.worker';
-import { registerCertificateAction } from '@/actions/upload';
-import { createClient } from '@/utils/supabase/client';
+import { registerCertificateAction } from '../actions/upload';
+import { createClient } from '../utils/supabase/client';
 
 export type ForgeStage =
   | 'idle'
