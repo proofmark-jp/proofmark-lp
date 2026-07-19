@@ -580,30 +580,33 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
       safeReject(new Error(`MP4 コンテナ解析失敗: ${String(err)}`));
     };
 
-    // ── File Stream → MP4Box.appendBuffer ─────────────────
+    // ── File Stream (Chunked + Seekable) → MP4Box ─────────────────
     (async () => {
       try {
-        const reader = file.stream().getReader();
         let offset = 0;
+        const CHUNK_SIZE = 5 * 1024 * 1024; // 5MBチャンク
 
-        while (true) {
+        while (offset < file.size) {
           if (finished) return;
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (!value || value.byteLength === 0) continue;
-
-          const ab = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer & { fileStart?: number };
-          ab.fileStart = offset;
-          offset += ab.byteLength;
-
-          try {
-            mp4boxfile.appendBuffer(ab);
-          } catch (appendErr) {
-            safeReject(new Error(`appendBuffer 失敗: ${(appendErr as Error).message}`));
-            return;
-          }
-
           if (outputFramesCount >= maxFrames) break;
+
+          const end = Math.min(offset + CHUNK_SIZE, file.size);
+          const chunk = file.slice(offset, end);
+          const ab = await chunk.arrayBuffer();
+          (ab as ArrayBuffer & { fileStart?: number }).fileStart = offset;
+
+          // MP4Boxにチャンクをフィードし、次に読み込むべきファイル位置(nextOffset)を受け取る
+          const nextOffset = mp4boxfile.appendBuffer(ab);
+
+          // 🩸 非 Fast-Start (moovアトムが末尾にある) MP4 への絶対防衛線
+          // メタデータ読込後、MP4Boxはメディアデータを抽出するため、自動的にファイル先頭付近への「シーク要求」を出す。
+          // 一方通行のリーダーを捨て、要求された nextOffset へ確実にジャンプして再度データを流し込む。
+          if (typeof nextOffset === 'number' && nextOffset !== offset + ab.byteLength) {
+            console.log(`[ForgeWorker] 🔄 MP4Boxからのシーク要求を検知: 現在位置 ${offset} -> 移動先 ${nextOffset}`);
+            offset = nextOffset;
+          } else {
+            offset += ab.byteLength;
+          }
         }
 
         try {
