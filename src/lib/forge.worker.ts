@@ -301,8 +301,9 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
     let encoderClosed = false;
     let decoderClosed = false;
     let finished = false;
-    let extractedSamplesCount = 0;
-    let isExtractionComplete = false;
+    
+    // 🛡️ メタデータ非依存の非同期ロック (Race Condition 防衛線)
+    let activeSampleJobs = 0; 
 
     // Downscale canvas (transferControlToOffscreen 不要 · Worker 内で完結)
     const canvas = new OffscreenCanvas(REEL_W, REEL_H);
@@ -517,10 +518,12 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
     // ── MP4Box: onSamples (Backpressure 心臓部) ───────────
     mp4boxfile.onSamples = async (_track_id: number, _ref: unknown, samples: MP4Sample[]) => {
       if (finished) return;
-      if (!pipeline.decoder || pipeline.decoder.state !== 'configured') return;
-      if (!videoTrack) return;
+      activeSampleJobs++; // 🛡️ 非同期ジョブのロックを取得
 
       try {
+        if (!pipeline.decoder || pipeline.decoder.state !== 'configured') return;
+        if (!videoTrack) return;
+
         for (const sample of samples) {
           if (finished) return;
           if (outputFramesCount >= maxFrames) return;
@@ -553,10 +556,7 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
       } catch (loopErr) {
         safeReject(new Error(`onSamples 例外: ${(loopErr as Error).message}`));
       } finally {
-        extractedSamplesCount += samples.length;
-        if (videoTrack && extractedSamplesCount >= videoTrack.nb_samples) {
-          isExtractionComplete = true;
-        }
+        activeSampleJobs--; // 🛡️ 非同期ジョブのロックを解放
       }
     };
 
@@ -597,15 +597,19 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
 
         if (finished) return;
 
+        // 🛡️ 防衛線: すべての onSamples (非同期) が完全に終わるのを待機する
+        // flush直後にイベントがキューに入る可能性を考慮し、最低50msは必ず待機する
+        await sleep(50);
         let waitLoops = 0;
         const MAX_WAIT_LOOPS = 500;
-        while (!isExtractionComplete && !finished && waitLoops < MAX_WAIT_LOOPS) {
+        
+        while (activeSampleJobs > 0 && !finished && waitLoops < MAX_WAIT_LOOPS) {
           await sleep(10);
           waitLoops++;
         }
         
-        if (!isExtractionComplete && !finished) {
-          safeReject(new Error('フレーム抽出がタイムアウトしました (Race Condition)'));
+        if (activeSampleJobs > 0 && !finished) {
+          safeReject(new Error(`フレーム抽出がタイムアウトしました (Race Condition: ${activeSampleJobs} pending)`));
           return;
         }
 
