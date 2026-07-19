@@ -304,7 +304,6 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
     
     // 🛡️ メタデータ非依存の非同期ロック (Race Condition 防衛線)
     let activeSampleJobs = 0; 
-    let isFirstFrame = true; // 🩸 WebCodecs バグ回避用のフラグ
 
     // Downscale canvas (transferControlToOffscreen 不要 · Worker 内で完結)
     const canvas = new OffscreenCanvas(REEL_W, REEL_H);
@@ -382,6 +381,10 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
       if (finished) {
         try { frame.close(); } catch { /* noop */ }
         return;
+      }
+
+      if (outputFramesCount === 0) {
+        console.log('[ForgeWorker] 🟢 初回フレームのデコードに成功しました！');
       }
 
       // 間引き: sampledFramesCount が sampleEveryN の倍数のときだけ採用
@@ -548,12 +551,9 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
           const timestamp = Math.round((sample.cts * 1_000_000) / timescale);
           const duration = Math.round(((sample.duration || 0) * 1_000_000) / timescale);
 
-          // 🩸 WebCodecs バグ回避: 最初のフレームは強引に 'key' (キーフレーム) 扱いにする
-          const isKey = sample.is_sync || isFirstFrame;
-          isFirstFrame = false;
-
+          // 🩸 真実のみを申告する。mp4boxがsync(キーフレーム)と判定したものだけを'key'にする。
           const chunk = new EncodedVideoChunk({
-            type: isKey ? 'key' : 'delta',
+            type: sample.is_sync ? 'key' : 'delta',
             timestamp,
             duration: duration > 0 ? duration : undefined,
             data: sample.data || new Uint8Array(0),
@@ -646,7 +646,7 @@ async function forgeReelMp4(file: File, maxFrames: number): Promise<Blob> {
         decoderClosed = true;
 
         if (outputFramesCount === 0) {
-          safeReject(new Error('デコード可能なフレームが見つかりませんでした'));
+          safeReject(new Error('このデバイス・ブラウザではデコードできない動画形式（HDR等）です'));
           return;
         }
 
