@@ -348,9 +348,7 @@ export default function Settings() {
   const handleRegisterPasskey = async () => {
     try {
       setIsRegisteringPasskey(true);
-      const { error } = await supabase.auth.mfa.webauthn.register({
-        friendlyName: 'My Passkey'
-      });
+      const { error } = await supabase.auth.registerPasskey();
       if (error) throw error;
       toast.success('パスキー（生体認証デバイス）の登録に成功しました。');
     } catch (err: any) {
