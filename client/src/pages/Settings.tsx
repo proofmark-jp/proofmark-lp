@@ -35,8 +35,6 @@ export default function Settings() {
 
   // Security State
   const [newEmail, setNewEmail] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [updatingSecurity, setUpdatingSecurity] = useState(false);
   const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
@@ -318,28 +316,6 @@ export default function Settings() {
       setNewEmail('');
     } catch (err: any) {
       toast.error('メールアドレスの更新に失敗しました', { description: err.message });
-    } finally {
-      setUpdatingSecurity(false);
-    }
-  };
-
-  const handleUpdatePassword = async () => {
-    if (!currentPassword) {
-      toast.error('現在のパスワードを入力してください。');
-      return;
-    }
-    if (!newPassword || newPassword.length < 8) {
-      toast.error('新しいパスワードは8文字以上で入力してください。');
-      return;
-    }
-    try {
-      setUpdatingSecurity(true);
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) throw error;
-      toast.success('パスワードを更新しました。');
-      setNewPassword('');
-    } catch (err: any) {
-      toast.error('パスワードの更新に失敗しました', { description: err.message });
     } finally {
       setUpdatingSecurity(false);
     }
@@ -652,11 +628,13 @@ export default function Settings() {
               <Key className="w-4 h-4" /> Account Security
             </h4>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
               {/* メールアドレス変更 */}
-              <div className="bg-[#151D2F]/30 border border-[#1C1A38] rounded-2xl p-6">
-                <label className="block text-sm font-bold text-white mb-2">メールアドレスの変更</label>
-                <p className="text-xs text-[#A8A0D8] mb-4">現在のメールアドレス: <span className="text-white font-mono">{user?.email}</span></p>
+              <div className="bg-[#151D2F]/30 border border-[#1C1A38] rounded-2xl p-6 flex flex-col h-full justify-between">
+                <div>
+                  <label className="block text-sm font-bold text-white mb-2">メールアドレスの変更</label>
+                  <p className="text-xs text-[#A8A0D8] mb-4">現在のメールアドレス: <span className="text-white font-mono">{user?.email}</span></p>
+                </div>
                 <div className="flex flex-col gap-3">
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -674,57 +652,28 @@ export default function Settings() {
                 </div>
               </div>
 
-              {/* パスワード変更 */}
-              <div className="bg-[#151D2F]/30 border border-[#1C1A38] rounded-2xl p-6">
-                <label className="block text-sm font-bold text-white mb-2">パスワードの変更</label>
-                <p className="text-xs text-[#A8A0D8] mb-4">セキュリティのため、定期的な変更を推奨します。</p>
-                <div className="flex flex-col gap-3">
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Key className="w-4 h-4 text-[#2a2a4e]" />
-                    </div>
-                    <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="現在のパスワード"
-                      className="w-full bg-[#07061A] border border-[#1C1A38] text-white rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-[#6C3EF4] transition-all"
-                    />
-                  </div>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Key className="w-4 h-4 text-[#6C3EF4]" />
-                    </div>
-                    <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="新しいパスワード (8文字以上)"
-                      className="w-full bg-[#07061A] border border-[#1C1A38] text-white rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-[#6C3EF4] transition-all"
-                    />
-                  </div>
-                  <button onClick={handleUpdatePassword} disabled={!currentPassword || !newPassword || updatingSecurity}
-                    className="w-full bg-[#1C1A38] hover:bg-[#2a2a4e] disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-xl text-sm font-bold transition-all border border-[#2a2a4e] mt-1"
-                  >
-                    パスワードを更新
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* パスキー登録 (WebAuthn) */}
-            <div className="mt-8 bg-[#151D2F]/30 border border-[#1C1A38] rounded-2xl p-6 relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-r from-[#00D4AA]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-              <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                <div>
-                  <h5 className="text-base font-bold text-white mb-2 flex items-center gap-2">
-                    <Fingerprint className="w-5 h-5 text-[#00D4AA]" />
+              {/* パスキー登録 (WebAuthn) */}
+              <div className="bg-[#151D2F]/30 border border-[#1C1A38] rounded-2xl p-6 relative overflow-hidden group flex flex-col h-full justify-between">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#00D4AA]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                <div className="relative z-10 mb-4">
+                  <label className="block text-sm font-bold text-white mb-2 flex items-center gap-2">
+                    <Fingerprint className="w-4 h-4 text-[#00D4AA]" />
                     パスキー（WebAuthn）登録
-                  </h5>
-                  <p className="text-sm text-[#A8A0D8] leading-relaxed max-w-lg mb-2">
+                  </label>
+                  <p className="text-xs text-[#A8A0D8] leading-relaxed">
                     お使いのデバイス（指紋認証、顔認証など）をパスキーとして登録し、パスワードレスでより安全なログインを可能にします。
                   </p>
                 </div>
-                <button
-                  onClick={handleRegisterPasskey}
-                  disabled={isRegisteringPasskey}
-                  className="shrink-0 bg-[#00D4AA]/10 hover:bg-[#00D4AA]/20 text-[#00D4AA] border border-[#00D4AA]/30 disabled:opacity-50 px-6 py-3 rounded-xl font-bold transition-all shadow-[0_0_15px_rgba(0,212,170,0.1)] flex items-center gap-2 text-sm whitespace-nowrap"
-                >
-                  {isRegisteringPasskey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
-                  {isRegisteringPasskey ? '登録中...' : 'パスキーを登録する'}
-                </button>
+                <div className="relative z-10">
+                  <button
+                    onClick={handleRegisterPasskey}
+                    disabled={isRegisteringPasskey}
+                    className="w-full bg-[#00D4AA]/10 hover:bg-[#00D4AA]/20 text-[#00D4AA] border border-[#00D4AA]/30 disabled:opacity-50 py-2.5 rounded-xl text-sm font-bold transition-all shadow-[0_0_15px_rgba(0,212,170,0.1)] flex items-center justify-center gap-2"
+                  >
+                    {isRegisteringPasskey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
+                    {isRegisteringPasskey ? '登録中...' : 'パスキーを登録する'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
