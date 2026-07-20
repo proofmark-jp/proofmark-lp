@@ -1,19 +1,18 @@
 import { useState, useEffect } from "react";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import { 
   Zap, 
   Lock, 
   CheckCircle2, 
-  ArrowLeft,
   Sparkles,
   ChevronRight,
+  Fingerprint,
   Mail,
-  User as UserIcon
+  Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
-import navbarLogo from '../assets/logo/navbar/proofmark-navbar-symbol-dark.svg';
 
 const AssetCounter = () => {
   const [targetNumber, setTargetNumber] = useState(124);
@@ -37,7 +36,7 @@ const AssetCounter = () => {
 
   useEffect(() => {
     let start = 0;
-    const duration = 1500; // 1.5秒でカウントアップ
+    const duration = 1500;
     const increment = Math.max(1, Math.floor(targetNumber / (duration / 16)));
 
     const timer = setInterval(() => {
@@ -66,109 +65,67 @@ const AssetCounter = () => {
 };
 
 export default function Auth() {
-  const [location] = useLocation();
-  const searchParams = new URLSearchParams(window.location.search);
-  const queryMode = searchParams.get('mode');
-  
-  const [isLogin, setIsLogin] = useState(queryMode !== 'signup');
-  const [isResetMode, setIsResetMode] = useState(false);
-  const [isRecoveryMode, setIsRecoveryMode] = useState(false); // ★ここが最優先
-  
-  const [username, setUsername] = useState(searchParams.get('username') || "");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'loading_magic' | 'loading_passkey' | 'success'>('idle');
   
-  const { signIn, signUp, resetPassword, user, loading } = useAuth();
+  const { user, loading } = useAuth();
   const [, setLocation] = useLocation();
 
-  // ★ ユーザー状態の変更を検知して宣言的に遷移（iOS Safariのリダイレクトブロック対策）
+  // 認証済みならダッシュボードへ遷移
   useEffect(() => {
-    if (user && !isRecoveryMode) {
+    if (user) {
       setLocation("/dashboard");
     }
-  }, [user, isRecoveryMode, setLocation]);
+  }, [user, setLocation]);
 
-  // ★ PKCEフロー対応：SupabaseのAuthイベントを直接監視する
-  useEffect(() => {
-    let isMounted = true;
-
-    // 1. まず現在のURLのクエリパラメータによる初期状態を設定（リカバリー以外）
-    if (!isRecoveryMode) {
-      setIsLogin(queryMode !== 'signup');
-      setIsResetMode(false);
-      if (searchParams.get('username')) {
-        setUsername(searchParams.get('username') || "");
-      }
-    }
-
-    // 2. Supabaseの認証イベントを監視（パスワードリセットリンクを踏んだ時）
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' && isMounted) {
-        setIsRecoveryMode(true);
-        setIsLogin(false);
-        setIsResetMode(false);
-        toast.info("新しいパスワードを設定してください");
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, [queryMode]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  // 1. Magic Link 送信処理
+  const handleMagicLinkLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email) return;
+    
+    setStatus('loading_magic');
     setError(null);
-    setSuccessMsg(null);
-    setSubmitting(true);
 
     try {
-      if (isRecoveryMode) {
-        const { error } = await supabase.auth.updateUser({ password: newPassword });
-        if (error) {
-          setError(error.message);
-          toast.error("パスワードの更新に失敗しました");
-        } else {
-          setSuccessMsg("パスワードを更新しました。ダッシュボードに移動します。");
-          toast.success("パスワードを更新しました");
-          setIsRecoveryMode(false);
-        }
-      } else if (isResetMode) {
-        const { error } = await resetPassword(email);
-        if (error) {
-          setError(error.message);
-          toast.error("リセットメールの送信に失敗しました");
-        } else {
-          setSuccessMsg("パスワード再設定用のメールを送信しました。");
-          toast.success("リセットメールを送信しました");
-        }
-      } else if (isLogin) {
-        const { error } = await signIn(email, password);
-        if (error) {
-          setError(error.message);
-          toast.error("ログインに失敗しました");
-        } else {
-          toast.success("おかえりなさい！");
-        }
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+        },
+      });
+
+      if (error) {
+        setError(error.message);
+        setStatus('idle');
+        toast.error("ログインリンクの送信に失敗しました");
       } else {
-        const { error } = await signUp(email, password, username);
-        if (error) {
-          setError(error.message);
-          toast.error("アカウント作成に失敗しました");
-        } else {
-          setSuccessMsg("確認メールを送信しました。メールを確認して有効化してください。");
-          toast.success("確認メールを送信しました");
-        }
+        setStatus('success');
+        toast.success("ログインリンクを送信しました");
       }
     } catch (err: any) {
       setError(err.message || "予期せぬエラーが発生しました");
-    } finally {
-      setSubmitting(false);
+      setStatus('idle');
+    }
+  };
+
+  // 2. Passkey ログイン処理
+  const handlePasskeyLogin = async () => {
+    setStatus('loading_passkey');
+    setError(null);
+
+    try {
+      const { error } = await supabase.auth.signInWithPasskey();
+
+      if (error) {
+        setError(error.message);
+        setStatus('idle');
+        toast.error("パスキー認証に失敗しました");
+      }
+      // 成功時は onAuthStateChange 等が検知して自動的にダッシュボードへリダイレクトされる
+    } catch (err: any) {
+      setError(err.message || "予期せぬエラーが発生しました");
+      setStatus('idle');
     }
   };
 
@@ -185,11 +142,9 @@ export default function Auth() {
       
       {/* ── Branding Panel (Left/Top) ────────────────────────── */}
       <div className="hidden lg:flex relative overflow-hidden flex-col justify-between p-12 lg:p-16 xl:p-24 bg-gradient-to-br from-[#0D0B24] to-[#07061A]">
-        {/* Abstract Background Noise/Blur */}
         <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-[#6C3EF4] opacity-10 blur-[120px] rounded-full pointer-events-none" />
         <div className="absolute bottom-[10%] left-[-5%] w-[300px] h-[300px] bg-[#00D4AA] opacity-10 blur-[100px] rounded-full pointer-events-none" />
         
-        {/* Header Logo Component - Standardized with LP */}
         <div className="mb-12">
           <a href="/" className="flex items-center text-decoration-none group cursor-pointer w-fit inline-flex relative z-50 pointer-events-auto">
             <div className="relative">
@@ -202,7 +157,6 @@ export default function Auth() {
           </a>
         </div>
         
-        {/* Value Proposition Content */}
         <div className="relative z-10 max-w-lg">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#6C3EF4]/10 border border-[#6C3EF4]/20 text-[#00D4AA] text-[10px] font-bold tracking-widest uppercase mb-6">
             <Sparkles className="w-3 h-3" /> Digital Existence Proven
@@ -231,7 +185,6 @@ export default function Auth() {
           </div>
         </div>
         
-        {/* Footer Meta info - HONEST SOCIAL PROOF (Now AssetCounter) */}
         <div className="relative z-10">
           <AssetCounter />
         </div>
@@ -240,18 +193,7 @@ export default function Auth() {
       {/* ── Form Panel (Right/Bottom) ─────────────────────────── */}
       <div className="flex flex-col items-center justify-center p-8 lg:p-16 xl:p-24 relative overflow-hidden transition-all duration-300">
         
-        {/* Back button for Reset Mode */}
-        {isResetMode && (
-          <button 
-            onClick={() => { setIsResetMode(false); setError(null); setSuccessMsg(null); }}
-            className="absolute top-8 left-8 lg:left-16 flex items-center gap-2 text-[#A8A0D8] hover:text-[#6C3EF4] transition-all font-bold text-sm z-50 pointer-events-auto"
-          >
-            <ArrowLeft className="w-4 h-4" /> 戻る
-          </button>
-        )}
-
         <div className="w-full max-w-md relative z-10">
-          {/* Mobile Header Logo - Simplified and Unified */}
           <div className="flex items-center justify-center relative z-50 pointer-events-auto mb-10 md:hidden">
             <a href="/" className="flex items-center text-decoration-none group cursor-pointer hover:opacity-80 transition-opacity">
               <div className="relative">
@@ -266,91 +208,33 @@ export default function Auth() {
 
           <div className="mb-10">
             <h2 className="text-3xl font-black text-white mb-3 tracking-tight">
-              {isRecoveryMode 
-                ? "パスワードの再設定" 
-                : isResetMode 
-                  ? "パスワードを忘れた方" 
-                  : isLogin 
-                    ? "Welcome back" 
-                    : "Create identity"}
+              Create identity
             </h2>
             <p className="text-[#A8A0D8] text-sm font-medium">
-              {isRecoveryMode
-                ? "新しい強力なパスワードを入力して、アカウントを保護してください。"
-                : isResetMode 
-                  ? "登録したメールアドレスを入力してください。再設定用のリンクをお送りします。"
-                  : isLogin 
-                    ? "アカウントにログインして、作品の証明履歴を確認しましょう。" 
-                    : "わずか30秒で、あなたのデジタル存在証明を始められます。"}
+              メールアドレス、またはパスキーで安全にログインしてください。パスワードは不要です。
             </p>
           </div>
 
-          {/* Tab Switcher - Only in Auth Mode */}
-          {!isResetMode && !isRecoveryMode && (
-            <div className="flex p-1.5 bg-[#0D0B24] border border-[#1C1A38] rounded-2xl mb-8">
-              <button 
-                onClick={() => { setIsLogin(true); setError(null); setIsResetMode(false); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${isLogin ? 'bg-[#1C1A38] text-white shadow-lg' : 'text-[#A8A0D8] hover:text-white'}`}
+          {status === 'success' ? (
+            <div className="p-8 rounded-2xl bg-[#00D4AA]/10 border border-[#00D4AA]/20 flex flex-col items-center text-center animate-in fade-in slide-in-from-top-2">
+              <Mail className="w-12 h-12 text-[#00D4AA] mb-4" />
+              <h3 className="text-lg font-bold text-white mb-2">リンクを送信しました</h3>
+              <p className="text-[#A8A0D8] text-sm leading-relaxed">
+                <strong>{email}</strong> 宛てにログイン用のリンクを送信しました。<br/>
+                メール内のボタンをクリックしてログインを完了してください。
+              </p>
+              <button
+                onClick={() => setStatus('idle')}
+                className="mt-6 text-[12px] font-bold text-[#6C3EF4] hover:text-[#8B61FF] transition-colors"
               >
-                ログイン
-              </button>
-              <button 
-                onClick={() => { setIsLogin(false); setError(null); setIsResetMode(false); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${!isLogin ? 'bg-[#1C1A38] text-white shadow-lg' : 'text-[#A8A0D8] hover:text-white'}`}
-              >
-                新規登録
+                別のアドレスを使用する
               </button>
             </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {isRecoveryMode ? (
-              // 🔴 パスワード再設定（リカバリー）モード専用のUI
-              <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                <label className="text-xs font-black text-[#A8A0D8] uppercase tracking-widest pl-1" htmlFor="newPassword">新しいパスワード</label>
-                <div className="relative group">
-                  <input
-                    id="newPassword"
-                    name="newPassword"
-                    type="password"
-                    autoComplete="new-password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    minLength={6}
-                    className="w-full bg-[#0D0B24]/50 border border-[#1C1A38] focus:border-[#6C3EF4]/50 rounded-2xl px-5 py-4 text-white placeholder-[#A8A0D8]/30 outline-none transition-all group-hover:border-[#1C1A38]/80"
-                  />
-                  <div className="text-[10px] text-[#A8A0D8]/50 mt-2 pl-1 leading-relaxed">
-                    ※ セキュリティのため、6文字以上の新しいパスワードを入力してください。
-                  </div>
-                </div>
-              </div>
-            ) : (
-              // 🔵 通常のログイン・新規登録・パスワード忘れモードのUI
-              <>
-                {!isLogin && !isResetMode && (
-                  <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <label className="text-xs font-black text-[#A8A0D8] uppercase tracking-widest pl-1" htmlFor="username">ユーザー名（ID）</label>
-                    <div className="relative group">
-                      <input
-                        id="username"
-                        name="username"
-                        type="text"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
-                        placeholder="your_id"
-                        required
-                        className="w-full bg-[#0D0B24]/50 border border-[#1C1A38] focus:border-[#6C3EF4]/50 rounded-2xl px-5 py-4 text-white placeholder-[#A8A0D8]/30 outline-none transition-all group-hover:border-[#1C1A38]/80 capitalize-none"
-                      />
-                      <div className="text-[10px] text-[#A8A0D8]/50 mt-2 pl-1 leading-relaxed">
-                        ※ 半角英数字、アンダースコア、ハイフンが使用可能です
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* メールアドレス入力（ログイン・新規登録・リセット共通） */}
+          ) : (
+            <div className="space-y-6">
+              
+              {/* メイン: Magic Link フォーム */}
+              <form onSubmit={handleMagicLinkLogin} className="space-y-6">
                 <div className="space-y-2">
                   <label className="text-xs font-black text-[#A8A0D8] uppercase tracking-widest pl-1" htmlFor="email">メールアドレス</label>
                   <div className="relative group">
@@ -358,7 +242,7 @@ export default function Auth() {
                       id="email"
                       name="email"
                       type="email"
-                      autoComplete="email username"
+                      autoComplete="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@email.com"
@@ -368,76 +252,62 @@ export default function Auth() {
                   </div>
                 </div>
 
-                {/* パスワード入力（ログイン・新規登録のみ。リセットモードでは非表示） */}
-                {!isResetMode && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between pl-1">
-                      <label className="text-xs font-black text-[#A8A0D8] uppercase tracking-widest" htmlFor="password">パスワード</label>
-                      {isLogin && (
-                        <button 
-                          type="button" 
-                          onClick={() => { setIsResetMode(true); setError(null); setSuccessMsg(null); }}
-                          className="text-[10px] font-bold text-[#6C3EF4] hover:text-[#8B61FF] transition-colors"
-                        >
-                          Forgot password?
-                        </button>
-                      )}
-                    </div>
-                    <div className="relative group">
-                      <input
-                        id="password"
-                        name="password"
-                        type="password"
-                        autoComplete={isLogin ? "current-password" : "new-password"}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        required
-                        minLength={6}
-                        className="w-full bg-[#0D0B24]/50 border border-[#1C1A38] focus:border-[#6C3EF4]/50 rounded-2xl px-5 py-4 text-white placeholder-[#A8A0D8]/30 outline-none transition-all group-hover:border-[#1C1A38]/80"
-                      />
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+                <button
+                  type="submit"
+                  disabled={status === 'loading_magic' || !email}
+                  className="w-full relative group overflow-hidden bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-black tracking-tight shadow-[0_12px_30px_rgba(108,62,244,0.3)] hover:shadow-[0_15px_40px_rgba(108,62,244,0.5)] transition-all active:scale-[0.98]"
+                >
+                  <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    {status === 'loading_magic' ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        メールでログイン
+                        <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
+                  </span>
+                </button>
+              </form>
 
-            {/* エラー・成功メッセージと送信ボタンは維持 */}
-            {error && (
-              <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex gap-3 animate-in fade-in slide-in-from-top-2">
-                <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[10px] font-bold">!</div>
-                <p className="text-red-500 text-xs font-bold leading-relaxed">{error}</p>
+              <div className="relative py-2">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-[#1C1A38]" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="px-3 bg-[#07061A] text-[#A8A0D8] font-bold uppercase tracking-widest">
+                    OR
+                  </span>
+                </div>
               </div>
-            )}
 
-            {successMsg && (
-              <div className="p-4 rounded-2xl bg-[#00D4AA]/10 border border-[#00D4AA]/20 flex gap-3 animate-in fade-in slide-in-from-top-2">
-                <CheckCircle2 className="w-5 h-5 text-[#00D4AA] flex-shrink-0 mt-0.5" />
-                <p className="text-[#00D4AA] text-xs font-bold leading-relaxed">{successMsg}</p>
-              </div>
-            )}
+              {/* サブ: Passkey ログイン */}
+              <button
+                onClick={handlePasskeyLogin}
+                disabled={status === 'loading_passkey'}
+                className="w-full relative group overflow-hidden bg-[#0D0B24] border border-[#1C1A38] hover:border-[#6C3EF4]/50 disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-2xl font-bold tracking-tight transition-all active:scale-[0.98]"
+              >
+                <span className="relative z-10 flex items-center justify-center gap-2">
+                  {status === 'loading_passkey' ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Fingerprint className="w-5 h-5 text-[#A8A0D8] group-hover:text-[#6C3EF4] transition-colors" />
+                      パスキーでログイン
+                    </>
+                  )}
+                </span>
+              </button>
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full relative group overflow-hidden bg-gradient-to-r from-[#6C3EF4] to-[#8B61FF] disabled:opacity-50 disabled:cursor-not-allowed text-white py-5 rounded-2xl font-black tracking-tight shadow-[0_12px_30px_rgba(108,62,244,0.3)] hover:shadow-[0_15px_40px_rgba(108,62,244,0.5)] transition-all active:scale-[0.98]"
-            >
-              <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-              <span className="relative z-10 flex items-center justify-center gap-2">
-                {submitting 
-                  ? "Processing..." 
-                  : isRecoveryMode 
-                    ? "パスワードを更新する" 
-                    : isResetMode 
-                      ? "リセットメールを送信" 
-                      : isLogin 
-                        ? "ログインする" 
-                        : "無料でアカウントを作成"
-                }
-                {!submitting && <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
-              </span>
-            </button>
-          </form>
+              {error && (
+                <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex gap-3 animate-in fade-in slide-in-from-top-2">
+                  <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[10px] font-bold">!</div>
+                  <p className="text-red-500 text-xs font-bold leading-relaxed">{error}</p>
+                </div>
+              )}
+            </div>
+          )}
 
           <p className="mt-10 text-center text-[10px] font-bold text-[#A8A0D8]/40 uppercase tracking-[0.2em] px-4 leading-relaxed">
             Protecting creative integrity with cryptographic proof.<br />
@@ -448,4 +318,3 @@ export default function Auth() {
     </div>
   );
 }
-
