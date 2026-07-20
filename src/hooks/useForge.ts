@@ -182,64 +182,89 @@ export function useForge(options?: UseForgeOptions) {
             try {
               setState((s) => ({ ...s, stage: 'uploading', cid: msg.cid }));
 
-              // 🩸 ゴースト・エクストラクター：Supabaseクライアントを一切起こさず、全ストレージからJWTを強奪する
+              // 🩸 究極のトークン抽出機構 (The Invincible Ghost Extractor v2)
+              // Supabaseクライアントを起こさず、Base64URLデコードを自力で行い、期限切れの古いトークンを確実に弾く。
               let accessToken: string | undefined = undefined;
 
-              const extractJWT = (raw: string | null) => {
-                if (!raw) return null;
+              const isValidJWT = (token: string) => {
                 try {
-                  const parsed = JSON.parse(raw);
-                  if (parsed?.access_token && typeof parsed.access_token === 'string' && parsed.access_token.startsWith('eyJ')) {
-                    return parsed.access_token;
-                  }
-                } catch { }
-                return null;
+                  if (!token || typeof token !== 'string' || token.indexOf('eyJ') !== 0) return false;
+                  const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+                  const payload = JSON.parse(atob(b64));
+                  // 期限切れ（1分以内の猶予）は絶対に弾く。腐敗したトークンはここで死滅する。
+                  return payload.exp && (payload.exp * 1000 > Date.now() + 60000);
+                } catch (e) { return false; }
               };
 
-              // 1. LocalStorage & SessionStorage の走査
+              // 1. Cookie からの抽出 (@supabase/ssr の Base64URL チャンク対応)
               try {
-                for (let i = 0; i < localStorage.length; i++) {
-                  const key = localStorage.key(i);
-                  if (key && key.includes('sb-') && key.includes('-auth-token')) {
-                    accessToken = extractJWT(localStorage.getItem(key)) || accessToken;
+                const cookies = document.cookie.split(';');
+                const baseNames: string[] = [];
+                for (let i = 0; i < cookies.length; i++) {
+                  const c = cookies[i].trim();
+                  const match = c.match(/^(sb-[a-z0-9]+-auth-token)(?:\.\d+)?=/);
+                  if (match && baseNames.indexOf(match[1]) === -1) {
+                    baseNames.push(match[1]);
                   }
                 }
-                if (!accessToken) {
-                  for (let i = 0; i < sessionStorage.length; i++) {
-                    const key = sessionStorage.key(i);
-                    if (key && key.includes('sb-') && key.includes('-auth-token')) {
-                      accessToken = extractJWT(sessionStorage.getItem(key)) || accessToken;
+
+                for (let i = 0; i < baseNames.length; i++) {
+                  const baseName = baseNames[i];
+                  const chunks = [];
+                  for (let j = 0; j < cookies.length; j++) {
+                    const c = cookies[j].trim();
+                    if (c.indexOf(`${baseName}=`) === 0 || c.indexOf(`${baseName}.`) === 0) {
+                      chunks.push(c);
                     }
                   }
-                }
-              } catch (e) {}
+                  chunks.sort();
 
-              // 2. Cookie の走査 (チャンク結合対応)
+                  const tokenStr = chunks.map(c => decodeURIComponent(c.substring(c.indexOf('=') + 1))).join('');
+
+                  let parsed: any = null;
+                  try {
+                    parsed = JSON.parse(tokenStr);
+                  } catch (e1) {
+                    try {
+                      // Base64URL デコード
+                      let b64 = tokenStr.replace(/-/g, '+').replace(/_/g, '/');
+                      const pad = b64.length % 4;
+                      if (pad > 0) {
+                        for (let k = 0; k < 4 - pad; k++) b64 += '=';
+                      }
+                      // UTF-8 安全デコード
+                      const decoded = atob(b64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('');
+                      parsed = JSON.parse(decodeURIComponent(decoded));
+                    } catch (e2) {}
+                  }
+
+                  if (parsed && parsed.access_token && isValidJWT(parsed.access_token)) {
+                    accessToken = parsed.access_token;
+                    break;
+                  }
+                }
+              } catch (e) {
+                console.warn('[ForgePipeline] Cookie extraction failed', e);
+              }
+
+              // 2. LocalStorage からの抽出 (Cookieが見つからなかった場合のフォールバック)
               if (!accessToken) {
                 try {
-                  const cookies = document.cookie.split(';').map(c => c.trim());
-                  const baseNames: string[] = [];
-                  
-                  cookies.forEach(c => {
-                    const match = c.match(/^(sb-[a-z0-9]+-auth-token)(?:\.\d+)?=/);
-                    if (match && !baseNames.includes(match[1])) {
-                      baseNames.push(match[1]);
+                  for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.indexOf('sb-') > -1 && key.indexOf('-auth-token') > -1) {
+                      const raw = localStorage.getItem(key);
+                      if (raw) {
+                        try {
+                          const parsed = JSON.parse(raw);
+                          // ここでも有効期限を厳格にチェック。古いトークンは拾わない。
+                          if (parsed && parsed.access_token && isValidJWT(parsed.access_token)) {
+                            accessToken = parsed.access_token;
+                            break;
+                          }
+                        } catch (e) {}
+                      }
                     }
-                  });
-
-                  for (let i = 0; i < baseNames.length; i++) {
-                    const baseName = baseNames[i];
-                    const chunks = cookies
-                      .filter(c => c.startsWith(`${baseName}=`) || c.startsWith(`${baseName}.`))
-                      .sort();
-                    
-                    const combined = chunks.map(c => {
-                      const val = c.split('=').slice(1).join('=');
-                      return decodeURIComponent(val);
-                    }).join('');
-                    
-                    accessToken = extractJWT(combined) || accessToken;
-                    if (accessToken) break;
                   }
                 } catch (e) {}
               }
@@ -250,14 +275,13 @@ export function useForge(options?: UseForgeOptions) {
 
               const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`, // 強奪したトークンをセット
+                'Authorization': `Bearer ${accessToken}`, // 強奪し、かつ「新鮮」であることを証明されたトークン
               };
 
-              // 1) Presigned URL 取得 (credentials: 'same-origin' を明示してCookieも併用させる)
+              // 1) Presigned URL 取得
               const presignRes = await fetch('/api/storage/presign', {
                 method: 'POST',
                 headers,
-                credentials: 'same-origin',
                 body: JSON.stringify({ cid: msg.cid, contentType: msg.framesBlob.type }),
                 signal,
               });
@@ -290,7 +314,6 @@ export function useForge(options?: UseForgeOptions) {
               const commitRes = await fetch('/api/certificates/commit', {
                 method: 'POST',
                 headers,
-                credentials: 'same-origin',
                 body: JSON.stringify({
                   cid: msg.cid,
                   sizeBytes: msg.framesBlob.size,
