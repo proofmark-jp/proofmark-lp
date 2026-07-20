@@ -6,7 +6,6 @@ export const runtime = 'edge';
 
 const S3 = new S3Client({
   region: 'auto',
-  // 👑 修正: Vercelに登録されている R2_ACCOUNT_ID を正しく読み込むように変更
   endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
   credentials: {
     accessKeyId: process.env.R2_ACCESS_KEY_ID!,
@@ -14,8 +13,11 @@ const S3 = new S3Client({
   },
 });
 
-// Edge領域での簡易インメモリRate Limit（Vercel Edgeの同一アイソレート内でのスパム防止）
 const rateLimitCache = new Map<string, number>();
+
+// 👑 許容する最大ファイルサイズ (例: 500MB)
+// 500 * 1024 * 1024 = 524,288,000 bytes
+const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024;
 
 export async function POST(req: Request) {
   try {
@@ -26,7 +28,7 @@ export async function POST(req: Request) {
       return new Response(JSON.stringify({ error: 'UNAUTHORIZED_ACCESS' }), { status: 401 });
     }
 
-    // 1. レートリミット検証 (1ユーザーあたり10秒に1回以上の連続リクエストを物理遮断)
+    // 1. レートリミット検証
     const now = Date.now();
     const lastRequest = rateLimitCache.get(user.id) || 0;
     if (now - lastRequest < 10000) {
@@ -34,19 +36,26 @@ export async function POST(req: Request) {
     }
     rateLimitCache.set(user.id, now);
 
-    const { cid, contentType } = await req.json();
+    // 👑 sizeBytes をペイロードから受け取るように追加
+    const { cid, contentType, sizeBytes } = await req.json();
     
     if (!cid || !/^sha256:[a-f0-9]{64}$/.test(cid) || !contentType) {
       return new Response(JSON.stringify({ error: 'INVALID_PAYLOAD' }), { status: 400 });
     }
 
-    // 2. R2 署名付きURL生成
+    // 👑 2. 兵糧攻め（巨大ファイル）の物理遮断
+    if (!sizeBytes || typeof sizeBytes !== 'number' || sizeBytes > MAX_FILE_SIZE_BYTES) {
+      return new Response(JSON.stringify({ 
+        error: `PAYLOAD_TOO_LARGE: File size must be under ${MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB.` 
+      }), { status: 413 });
+    }
+
+    // 3. R2 署名付きURL生成
     const objectKey = `timelines/${user.id}/${cid.replace('sha256:', '')}.webp`;
     const command = new PutObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME!,
       Key: objectKey,
       ContentType: contentType,
-      // Metadataを付与しておくことで、将来のR2 Lifecycle Ruleでの判定に利用可能
       Metadata: { 'proofmark-status': 'pending' } 
     });
 
