@@ -15,10 +15,8 @@
  *  ④ unmount / 新規 start / cancel で worker.terminate() +
  *     AbortController.abort() を確実に発火。ゾンビ通信ゼロ。
  */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ForgeMessage } from '../lib/forge.worker';
-import { createClient } from '../utils/supabase/client';
 
 export type ForgeStage =
   | 'idle'
@@ -51,7 +49,6 @@ export interface UseForgeOptions {
 /* ══════════════════════════════════════════════════════════════
  *  Network helper (Retry with exponential backoff)
  * ══════════════════════════════════════════════════════════════ */
-
 async function fetchWithRetry(
   url: string,
   options: RequestInit,
@@ -75,7 +72,6 @@ async function fetchWithRetry(
 /* ══════════════════════════════════════════════════════════════
  *  Hook
  * ══════════════════════════════════════════════════════════════ */
-
 export function useForge(options?: UseForgeOptions) {
   const [state, setState] = useState<ForgeState>({
     isForging: false,
@@ -87,8 +83,7 @@ export function useForge(options?: UseForgeOptions) {
 
   const workerRef = useRef<Worker | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  // onProgressDirect を ref に閉じ込めて、コールバック変更で
-  // 再レンダー ⇒ 再バインドを発生させない
+
   const onProgressDirectRef = useRef<UseForgeOptions['onProgressDirect']>(options?.onProgressDirect);
   useEffect(() => {
     onProgressDirectRef.current = options?.onProgressDirect;
@@ -124,16 +119,13 @@ export function useForge(options?: UseForgeOptions) {
 
   const startForge = useCallback(
     (file: File) => {
-      // 既存パイプラインを殺す
       try { workerRef.current?.terminate(); } catch { /* noop */ }
       workerRef.current = null;
       try { abortRef.current?.abort(); } catch { /* noop */ }
-
       const controller = new AbortController();
       abortRef.current = controller;
       const signal = controller.signal;
 
-      // Worker 起動
       let worker: Worker;
       try {
         worker = new Worker(new URL('../lib/forge.worker.ts', import.meta.url), { type: 'module' });
@@ -149,7 +141,6 @@ export function useForge(options?: UseForgeOptions) {
       }
       workerRef.current = worker;
 
-      // フェーズ遷移のみ setState (低頻度 ⇒ Jank ゼロ)
       if (isMountedRef.current) {
         setState({
           isForging: true,
@@ -160,7 +151,6 @@ export function useForge(options?: UseForgeOptions) {
         });
       }
 
-      // 前回 stage を ref に保持し、変わったときだけ setState
       let lastStage: ForgeStage = 'hashing';
 
       worker.onmessage = async (e: MessageEvent<ForgeMessage>) => {
@@ -169,18 +159,17 @@ export function useForge(options?: UseForgeOptions) {
 
         switch (msg.type) {
           case 'PROGRESS': {
-            // 🩸 高頻度 → React バイパスで直接 UI へ流す
             try {
               onProgressDirectRef.current?.(msg.percent, msg.stage);
             } catch { /* UI 層の例外を握り潰す */ }
 
-            // stage の遷移だけは setState する (React 側の Phase 表示同期用)
             const nextStage: ForgeStage =
               msg.stage === 'hashing'
                 ? 'hashing'
                 : msg.stage === 'decoding'
                   ? 'decoding'
                   : 'muxing';
+
             if (nextStage !== lastStage) {
               lastStage = nextStage;
               if (isMountedRef.current) {
@@ -193,35 +182,52 @@ export function useForge(options?: UseForgeOptions) {
           case 'SUCCESS': {
             try { worker.terminate(); } catch { /* noop */ }
             if (workerRef.current === worker) workerRef.current = null;
-
             if (!isMountedRef.current) return;
 
             try {
               setState((s) => ({ ...s, stage: 'uploading', cid: msg.cid }));
 
-              // 1) Presigned URL 取得
-              const supabase = createClient();
-              const { data: { session } } = await supabase.auth.getSession();
-              
-              if (!session) {
-                throw new Error('認証セッションが失われています。再度ログインしてください。');
+              // 🩸 Supabase Client の誤発報を物理的に回避するため、localStorage から直接トークンを抜く
+              let accessToken: string | undefined = undefined;
+              try {
+                for (let i = 0; i < localStorage.length; i++) {
+                  const key = localStorage.key(i);
+                  if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+                    const stored = localStorage.getItem(key);
+                    if (stored) {
+                      const parsed = JSON.parse(stored);
+                      if (parsed?.access_token) {
+                        accessToken = parsed.access_token;
+                        break;
+                      }
+                    }
+                  }
+                }
+              } catch (e) { /* ignore */ }
+
+              const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+              };
+              if (accessToken) {
+                headers['Authorization'] = `Bearer ${accessToken}`;
               }
 
+              // 1) Presigned URL 取得
               const presignRes = await fetch('/api/storage/presign', {
                 method: 'POST',
-                headers: { 
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${session.access_token}` // 🩸 トークンを直結
-                },
+                headers,
                 body: JSON.stringify({ cid: msg.cid, contentType: msg.framesBlob.type }),
                 signal,
               });
+              
+              if (presignRes.status === 401 || presignRes.status === 403) {
+                throw new Error('認証セッションが失われています。再度ログインしてください。');
+              }
               if (!presignRes.ok) {
                 throw new Error(`Failed to get secure URL (HTTP ${presignRes.status})`);
               }
-              // 👑 修正: objectKey の型定義と抽出を追加
+
               const presignData = (await presignRes.json()) as { signedUrl?: string; objectKey?: string; error?: string };
-              // 👑 修正: objectKey の欠落もエラーとして弾く
               if (presignData.error || !presignData.signedUrl || !presignData.objectKey) {
                 throw new Error(presignData.error || 'Failed to get secure URL or Object Key');
               }
@@ -239,20 +245,9 @@ export function useForge(options?: UseForgeOptions) {
                 setState((s) => ({ ...s, stage: 'finalizing' }));
               }
 
-              const supabaseClient = createClient();
-              const { data: { session: currentSession } } = await supabaseClient.auth.getSession();
-              const accessToken = currentSession?.access_token;
-
-              const headers: Record<string, string> = {
-                'Content-Type': 'application/json',
-              };
-              if (accessToken) {
-                headers['Authorization'] = `Bearer ${accessToken}`;
-              }
-
               const commitRes = await fetch('/api/certificates/commit', {
                 method: 'POST',
-                headers,
+                headers, // 抽出したトークンヘッダーを再利用
                 body: JSON.stringify({
                   cid: msg.cid,
                   sizeBytes: msg.framesBlob.size,
@@ -269,7 +264,6 @@ export function useForge(options?: UseForgeOptions) {
               }
 
               const actionRes = (await commitRes.json()) as { success: boolean; certificateId?: string; error?: string };
-
               if (!actionRes.success) {
                 throw new Error(actionRes.error || 'DB 打刻に失敗しました');
               }
@@ -283,6 +277,7 @@ export function useForge(options?: UseForgeOptions) {
                   certificateId: actionRes.certificateId ?? null,
                 });
               }
+
             } catch (err) {
               if ((err as DOMException)?.name === 'AbortError') return;
               if (!isMountedRef.current) return;
