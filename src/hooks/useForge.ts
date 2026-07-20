@@ -17,7 +17,6 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ForgeMessage } from '../lib/forge.worker';
-// 🩸 Supabase クライアントへの依存を完全に消去。これ以上自爆スイッチを踏まない。
 
 export type ForgeStage =
   | 'idle'
@@ -183,15 +182,82 @@ export function useForge(options?: UseForgeOptions) {
             try {
               setState((s) => ({ ...s, stage: 'uploading', cid: msg.cid }));
 
-              // 🩸 ブラウザの標準機能に任せ、Cookieを自動送信させる。手動のヘッダー付与は行わない。
-              const headers: Record<string, string> = {
-                'Content-Type': 'application/json',
+              // 🩸 ゴースト・エクストラクター：Supabaseクライアントを一切起こさず、全ストレージからJWTを強奪する
+              let accessToken: string | undefined = undefined;
+
+              const extractJWT = (raw: string | null) => {
+                if (!raw) return null;
+                try {
+                  const parsed = JSON.parse(raw);
+                  if (parsed?.access_token && typeof parsed.access_token === 'string' && parsed.access_token.startsWith('eyJ')) {
+                    return parsed.access_token;
+                  }
+                } catch { }
+                return null;
               };
 
-              // 1) Presigned URL 取得
+              // 1. LocalStorage & SessionStorage の走査
+              try {
+                for (let i = 0; i < localStorage.length; i++) {
+                  const key = localStorage.key(i);
+                  if (key && key.includes('sb-') && key.includes('-auth-token')) {
+                    accessToken = extractJWT(localStorage.getItem(key)) || accessToken;
+                  }
+                }
+                if (!accessToken) {
+                  for (let i = 0; i < sessionStorage.length; i++) {
+                    const key = sessionStorage.key(i);
+                    if (key && key.includes('sb-') && key.includes('-auth-token')) {
+                      accessToken = extractJWT(sessionStorage.getItem(key)) || accessToken;
+                    }
+                  }
+                }
+              } catch (e) {}
+
+              // 2. Cookie の走査 (チャンク結合対応)
+              if (!accessToken) {
+                try {
+                  const cookies = document.cookie.split(';').map(c => c.trim());
+                  const baseNames: string[] = [];
+                  
+                  cookies.forEach(c => {
+                    const match = c.match(/^(sb-[a-z0-9]+-auth-token)(?:\.\d+)?=/);
+                    if (match && !baseNames.includes(match[1])) {
+                      baseNames.push(match[1]);
+                    }
+                  });
+
+                  for (let i = 0; i < baseNames.length; i++) {
+                    const baseName = baseNames[i];
+                    const chunks = cookies
+                      .filter(c => c.startsWith(`${baseName}=`) || c.startsWith(`${baseName}.`))
+                      .sort();
+                    
+                    const combined = chunks.map(c => {
+                      const val = c.split('=').slice(1).join('=');
+                      return decodeURIComponent(val);
+                    }).join('');
+                    
+                    accessToken = extractJWT(combined) || accessToken;
+                    if (accessToken) break;
+                  }
+                } catch (e) {}
+              }
+
+              if (!accessToken) {
+                throw new Error('認証セッションが失われています。再度ログインしてください。');
+              }
+
+              const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`, // 強奪したトークンをセット
+              };
+
+              // 1) Presigned URL 取得 (credentials: 'same-origin' を明示してCookieも併用させる)
               const presignRes = await fetch('/api/storage/presign', {
                 method: 'POST',
                 headers,
+                credentials: 'same-origin',
                 body: JSON.stringify({ cid: msg.cid, contentType: msg.framesBlob.type }),
                 signal,
               });
@@ -208,7 +274,7 @@ export function useForge(options?: UseForgeOptions) {
                 throw new Error(presignData.error || 'Failed to get secure URL or Object Key');
               }
 
-              // 2) R2 への直接 PUT (retry 付き)
+              // 2) R2 への直接 PUT
               await fetchWithRetry(presignData.signedUrl, {
                 method: 'PUT',
                 body: msg.framesBlob,
@@ -216,14 +282,15 @@ export function useForge(options?: UseForgeOptions) {
                 signal,
               });
 
-              // 3) DB 打刻 (API Route Handler)
+              // 3) DB 打刻
               if (isMountedRef.current) {
                 setState((s) => ({ ...s, stage: 'finalizing' }));
               }
 
               const commitRes = await fetch('/api/certificates/commit', {
                 method: 'POST',
-                headers, 
+                headers,
+                credentials: 'same-origin',
                 body: JSON.stringify({
                   cid: msg.cid,
                   sizeBytes: msg.framesBlob.size,
