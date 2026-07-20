@@ -187,23 +187,40 @@ export function useForge(options?: UseForgeOptions) {
             try {
               setState((s) => ({ ...s, stage: 'uploading', cid: msg.cid }));
 
-              // 🩸 Supabase Client の誤発報を物理的に回避するため、localStorage から直接トークンを抜く
+              // 🩸 @supabase/ssr の Cookie チャンクを完全にデコードしてJWTを直接抽出する
               let accessToken: string | undefined = undefined;
               try {
-                for (let i = 0; i < localStorage.length; i++) {
-                  const key = localStorage.key(i);
-                  if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
-                    const stored = localStorage.getItem(key);
-                    if (stored) {
-                      const parsed = JSON.parse(stored);
-                      if (parsed?.access_token) {
-                        accessToken = parsed.access_token;
-                        break;
-                      }
+                const cookies = document.cookie.split(';').map(c => c.trim());
+                const baseNames = new Set<string>();
+                
+                // Cookieの中から 'sb-[project-ref]-auth-token' のベース名を探す
+                cookies.forEach(c => {
+                  const match = c.match(/^(sb-[a-z0-9]+-auth-token)(?:\.\d+)?=/);
+                  if (match) baseNames.add(match[1]);
+                });
+
+                for (const baseName of baseNames) {
+                  // チャンク化されている場合 (.0, .1) も含めて取得し、正しい順序で結合する
+                  const chunks = cookies
+                    .filter(c => c.startsWith(`${baseName}=`) || c.startsWith(`${baseName}.`))
+                    .sort();
+                  
+                  const tokenStr = chunks.map(c => {
+                    const val = c.split('=').slice(1).join('=');
+                    return decodeURIComponent(val);
+                  }).join('');
+                  
+                  try {
+                    const parsed = JSON.parse(tokenStr);
+                    if (parsed?.access_token) {
+                      accessToken = parsed.access_token;
+                      break; // 正当なトークンが見つかれば抜ける
                     }
-                  }
+                  } catch (e) { /* 解析失敗時は次のベース名を試す */ }
                 }
-              } catch (e) { /* ignore */ }
+              } catch (e) {
+                console.warn('[ForgePipeline] Cookie session extraction failed:', e);
+              }
 
               const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
