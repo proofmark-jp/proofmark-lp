@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ForgeMessage } from '../lib/forge.worker';
-import { createClient } from '../utils/supabase/client'; // 🩸 公式クライアントを復活
+import { createClient } from '../utils/supabase/client';
 
 export type ForgeStage =
   | 'idle'
@@ -84,6 +84,8 @@ export function useForge(options?: UseForgeOptions) {
 
   const workerRef = useRef<Worker | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // 🩸 トークンを退避・保持するためのRef
+  const accessTokenRef = useRef<string | null>(null);
 
   const onProgressDirectRef = useRef<UseForgeOptions['onProgressDirect']>(options?.onProgressDirect);
   useEffect(() => {
@@ -118,14 +120,36 @@ export function useForge(options?: UseForgeOptions) {
     }
   }, []);
 
+  // 🩸 処理開始前に非同期でセッションを取得するため、async関数化
   const startForge = useCallback(
-    (file: File) => {
+    async (file: File) => {
       try { workerRef.current?.terminate(); } catch { /* noop */ }
       workerRef.current = null;
       try { abortRef.current?.abort(); } catch { /* noop */ }
       const controller = new AbortController();
       abortRef.current = controller;
       const signal = controller.signal;
+
+      // 🩸 防衛線: 高負荷処理に入る「前」の安全な状態でトークンを抽出し、Refにキャッシュする
+      try {
+        const supabaseClient = createClient();
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        
+        if (!session?.access_token) {
+          setState({
+            isForging: false, stage: 'idle', cid: null, certificateId: null,
+            error: '認証セッションが見つかりません。再度ログインしてください。'
+          });
+          return;
+        }
+        accessTokenRef.current = session.access_token;
+      } catch (err) {
+        setState({
+          isForging: false, stage: 'idle', cid: null, certificateId: null,
+          error: '認証情報の取得に失敗しました。'
+        });
+        return;
+      }
 
       let worker: Worker;
       try {
@@ -188,17 +212,15 @@ export function useForge(options?: UseForgeOptions) {
             try {
               setState((s) => ({ ...s, stage: 'uploading', cid: msg.cid }));
 
-              // 🩸 シングルトン化されたクライアントから、公式メソッドで確実にトークンを取得する
-              const supabaseClient = createClient();
-              const { data: { session: currentSession } } = await supabaseClient.auth.getSession();
-
-              if (!currentSession?.access_token) {
-                throw new Error('認証セッションが失われています。再度ログインしてください。');
+              // 🩸 事前キャッシュしたトークンを使用する。ここでgetSession()は絶対に呼ばない
+              const accessToken = accessTokenRef.current;
+              if (!accessToken) {
+                throw new Error('セッショントークンが消失しています。再度お試しください。');
               }
 
               const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${currentSession.access_token}`,
+                'Authorization': `Bearer ${accessToken}`,
               };
 
               // 1) Presigned URL 取得
@@ -236,7 +258,7 @@ export function useForge(options?: UseForgeOptions) {
 
               const commitRes = await fetch('/api/certificates/commit', {
                 method: 'POST',
-                headers, // 同じ Authorization ヘッダーを使用
+                headers, // キャッシュ済みのAuthorizationヘッダーを再利用
                 body: JSON.stringify({
                   cid: msg.cid,
                   sizeBytes: msg.framesBlob.size,
