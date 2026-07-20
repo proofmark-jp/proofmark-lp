@@ -413,16 +413,16 @@ export default function VaultGridClient({
           table: 'certificates',
           filter: `user_id=eq.${userId}`, // 物理的に自分のイベント以外を弾く
         },
-        (payload) => {
+        (payload: { eventType: string; new: Certificate } & Record<string, any>) => {
           setCerts((prev) => {
             if (payload.eventType === 'INSERT') {
-              const newCert = payload.new as Certificate;
+              const newCert = payload.new;
               if (newCert.is_archived) return prev;
               if (prev.some((c) => c.id === newCert.id)) return prev;
               return [newCert, ...prev];
             }
             if (payload.eventType === 'UPDATE') {
-              const updatedCert = payload.new as Certificate;
+              const updatedCert = payload.new;
               if (updatedCert.is_archived) {
                 return prev.filter((c) => c.id !== updatedCert.id);
               }
@@ -435,7 +435,7 @@ export default function VaultGridClient({
           });
         }
       )
-      .subscribe((status) => {
+      .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
           console.log('[Nervous System] Evidence Vault connected. Shield active.');
         }

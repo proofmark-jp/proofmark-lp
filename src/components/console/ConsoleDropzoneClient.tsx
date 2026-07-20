@@ -356,8 +356,8 @@ export default function ConsoleDropzoneClient({
   const dragCounter = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { state: forgeState, startForge, cancel: cancelForge } = useForge({
-    onProgressDirect: (percent, stage) => {
+  const forgeOptions = useMemo(() => ({
+    onProgressDirect: (percent: number, stage: 'hashing' | 'decoding' | 'muxing') => {
       percentMV.set(percent);
       const label =
         stage === 'hashing'
@@ -367,7 +367,9 @@ export default function ConsoleDropzoneClient({
             : 'ALL-INTRA · MUX';
       if (stageLabelMV.get() !== label) stageLabelMV.set(label);
     },
-  });
+  }), []);
+
+  const { state: forgeState, startForge, cancel: cancelForge } = useForge(forgeOptions);
 
   // 🔮 The Oracle Sync: DB打刻完了後に発行された certificateId を監視
   const { jobStatus: oracleStatus, jobError: oracleError } = useOracleSync(certificateId);

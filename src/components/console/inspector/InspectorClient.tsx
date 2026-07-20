@@ -1288,8 +1288,8 @@ export default function InspectorClient({
           table: 'certificates',
           filter: `id=eq.${cert.id}`, // この証明書のみを極限監視
         },
-        (payload) => {
-          const updatedCert = payload.new as CertificateRow;
+        (payload: { new: CertificateRow } & Record<string, any>) => {
+          const updatedCert = payload.new;
           
           // Pending から Sealed に昇格した瞬間を検知し、官能的な通知を発火
           const wasPending = !cert.timestamp_token;

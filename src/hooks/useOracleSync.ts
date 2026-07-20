@@ -59,7 +59,7 @@ export function useOracleSync(certificateId: string | null) {
           table: 'oracle_jobs',
           filter: `certificate_id=eq.${certificateId}`,
         },
-        (payload) => {
+        (payload: { new: Record<string, any> }) => {
           if (!isMounted) return;
           const newStatus = payload.new.status as OracleJobStatus;
           setJobStatus(newStatus);
@@ -68,7 +68,7 @@ export function useOracleSync(certificateId: string | null) {
           }
         }
       )
-      .subscribe((status, err) => {
+      .subscribe((status: string, err?: any) => {
         if (status === 'SUBSCRIBED') {
           // 🩸 【回線断 & Race Condition への絶対防衛】
           // ネットワークの新規接続、または瞬断からの復帰（再接続）が完了した瞬間に発火。
