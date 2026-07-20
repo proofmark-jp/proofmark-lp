@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation, Link } from 'wouter';
-import { Camera, Save, User, Loader2, ShieldCheck, ArrowLeft, LayoutGrid, Globe, Info, Edit3, Twitter, Instagram, Youtube, Video, Heart, DollarSign, PenTool, CreditCard, Zap, Sparkles, Mail, Key, AlertTriangle, Trash2, Search, Code } from 'lucide-react';
+import { Camera, Save, User, Loader2, ShieldCheck, ArrowLeft, LayoutGrid, Globe, Info, Edit3, Twitter, Instagram, Youtube, Video, Heart, DollarSign, PenTool, CreditCard, Zap, Sparkles, Mail, Key, AlertTriangle, Trash2, Search, Code, Fingerprint } from 'lucide-react';
 import { toast } from 'sonner';
 import WidgetBuilder from '../components/embed/WidgetBuilder';
 import AdminStorageSimulator from '../components/admin/AdminStorageSimulator';
@@ -39,6 +39,7 @@ export default function Settings() {
   const [newPassword, setNewPassword] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [updatingSecurity, setUpdatingSecurity] = useState(false);
+  const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
 
   // Admin & Impersonation State
   const [targetUserId, setTargetUserId] = useState('');
@@ -341,6 +342,19 @@ export default function Settings() {
       toast.error('パスワードの更新に失敗しました', { description: err.message });
     } finally {
       setUpdatingSecurity(false);
+    }
+  };
+
+  const handleRegisterPasskey = async () => {
+    try {
+      setIsRegisteringPasskey(true);
+      const { error } = await supabase.auth.linkIdentity({ provider: 'passkey' });
+      if (error) throw error;
+      toast.success('パスキー（生体認証デバイス）の登録に成功しました。');
+    } catch (err: any) {
+      toast.error('パスキーの登録に失敗しました', { description: err.message });
+    } finally {
+      setIsRegisteringPasskey(false);
     }
   };
 
@@ -687,6 +701,30 @@ export default function Settings() {
                     パスワードを更新
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* パスキー登録 (WebAuthn) */}
+            <div className="mt-8 bg-[#151D2F]/30 border border-[#1C1A38] rounded-2xl p-6 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-r from-[#00D4AA]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+              <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                  <h5 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+                    <Fingerprint className="w-5 h-5 text-[#00D4AA]" />
+                    パスキー（WebAuthn）登録
+                  </h5>
+                  <p className="text-sm text-[#A8A0D8] leading-relaxed max-w-lg mb-2">
+                    お使いのデバイス（指紋認証、顔認証など）をパスキーとして登録し、パスワードレスでより安全なログインを可能にします。
+                  </p>
+                </div>
+                <button
+                  onClick={handleRegisterPasskey}
+                  disabled={isRegisteringPasskey}
+                  className="shrink-0 bg-[#00D4AA]/10 hover:bg-[#00D4AA]/20 text-[#00D4AA] border border-[#00D4AA]/30 disabled:opacity-50 px-6 py-3 rounded-xl font-bold transition-all shadow-[0_0_15px_rgba(0,212,170,0.1)] flex items-center gap-2 text-sm whitespace-nowrap"
+                >
+                  {isRegisteringPasskey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
+                  {isRegisteringPasskey ? '登録中...' : 'パスキーを登録する'}
+                </button>
               </div>
             </div>
           </div>
