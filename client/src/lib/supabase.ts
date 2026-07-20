@@ -32,6 +32,10 @@ export const supabase = createClient(
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
+      // 👑 Passkeyの実験的APIを明示的に有効化
+      experimental: {
+        passkey: true
+      }
     },
   }
 );
