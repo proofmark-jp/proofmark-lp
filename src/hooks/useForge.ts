@@ -17,6 +17,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ForgeMessage } from '../lib/forge.worker';
+import { createClient } from '../utils/supabase/client'; // 🩸 公式クライアントを復活
 
 export type ForgeStage =
   | 'idle'
@@ -187,50 +188,18 @@ export function useForge(options?: UseForgeOptions) {
             try {
               setState((s) => ({ ...s, stage: 'uploading', cid: msg.cid }));
 
-              // 🩸 @supabase/ssr の Cookie チャンクを完全にデコードしてJWTを直接抽出する
-              let accessToken: string | undefined = undefined;
-              try {
-                const cookies = document.cookie.split(';').map(c => c.trim());
-                const baseNames: string[] = [];
-                
-                // Cookieの中から 'sb-[project-ref]-auth-token' のベース名を探す
-                cookies.forEach(c => {
-                  const match = c.match(/^(sb-[a-z0-9]+-auth-token)(?:\.\d+)?=/);
-                  if (match && !baseNames.includes(match[1])) {
-                    baseNames.push(match[1]);
-                  }
-                });
+              // 🩸 シングルトン化されたクライアントから、公式メソッドで確実にトークンを取得する
+              const supabaseClient = createClient();
+              const { data: { session: currentSession } } = await supabaseClient.auth.getSession();
 
-                for (let i = 0; i < baseNames.length; i++) {
-                  const baseName = baseNames[i];
-                  // チャンク化されている場合 (.0, .1) も含めて取得し、正しい順序で結合する
-                  const chunks = cookies
-                    .filter(c => c.startsWith(`${baseName}=`) || c.startsWith(`${baseName}.`))
-                    .sort();
-                  
-                  const tokenStr = chunks.map(c => {
-                    const val = c.split('=').slice(1).join('=');
-                    return decodeURIComponent(val);
-                  }).join('');
-                  
-                  try {
-                    const parsed = JSON.parse(tokenStr);
-                    if (parsed?.access_token) {
-                      accessToken = parsed.access_token;
-                      break; // 正当なトークンが見つかれば抜ける
-                    }
-                  } catch (e) { /* 解析失敗時は次のベース名を試す */ }
-                }
-              } catch (e) {
-                console.warn('[ForgePipeline] Cookie session extraction failed:', e);
+              if (!currentSession?.access_token) {
+                throw new Error('認証セッションが失われています。再度ログインしてください。');
               }
 
               const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentSession.access_token}`,
               };
-              if (accessToken) {
-                headers['Authorization'] = `Bearer ${accessToken}`;
-              }
 
               // 1) Presigned URL 取得
               const presignRes = await fetch('/api/storage/presign', {
@@ -267,7 +236,7 @@ export function useForge(options?: UseForgeOptions) {
 
               const commitRes = await fetch('/api/certificates/commit', {
                 method: 'POST',
-                headers, // 抽出したトークンヘッダーを再利用
+                headers, // 同じ Authorization ヘッダーを使用
                 body: JSON.stringify({
                   cid: msg.cid,
                   sizeBytes: msg.framesBlob.size,
