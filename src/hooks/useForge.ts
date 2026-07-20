@@ -191,15 +191,18 @@ export function useForge(options?: UseForgeOptions) {
               let accessToken: string | undefined = undefined;
               try {
                 const cookies = document.cookie.split(';').map(c => c.trim());
-                const baseNames = new Set<string>();
+                const baseNames: string[] = [];
                 
                 // Cookieの中から 'sb-[project-ref]-auth-token' のベース名を探す
                 cookies.forEach(c => {
                   const match = c.match(/^(sb-[a-z0-9]+-auth-token)(?:\.\d+)?=/);
-                  if (match) baseNames.add(match[1]);
+                  if (match && !baseNames.includes(match[1])) {
+                    baseNames.push(match[1]);
+                  }
                 });
 
-                for (const baseName of baseNames) {
+                for (let i = 0; i < baseNames.length; i++) {
+                  const baseName = baseNames[i];
                   // チャンク化されている場合 (.0, .1) も含めて取得し、正しい順序で結合する
                   const chunks = cookies
                     .filter(c => c.startsWith(`${baseName}=`) || c.startsWith(`${baseName}.`))
