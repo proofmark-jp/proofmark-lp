@@ -286,11 +286,14 @@ export function useForge(options?: UseForgeOptions) {
                 signal,
               });
               
-              if (presignRes.status === 401 || presignRes.status === 403) {
-                throw new Error('認証セッションが失われています。再度ログインしてください。');
-              }
               if (!presignRes.ok) {
-                throw new Error(`Failed to get secure URL (HTTP ${presignRes.status})`);
+                const errText = await presignRes.text().catch(() => 'Unknown error');
+                let errMsg = errText;
+                try {
+                  const parsed = JSON.parse(errText);
+                  if (parsed.error) errMsg = parsed.error;
+                } catch {}
+                throw new Error(errMsg);
               }
 
               const presignData = (await presignRes.json()) as { signedUrl?: string; objectKey?: string; error?: string };
@@ -325,8 +328,13 @@ export function useForge(options?: UseForgeOptions) {
               });
 
               if (!commitRes.ok) {
-                const errData = (await commitRes.json().catch(() => ({}))) as { error?: string };
-                throw new Error(errData.error || `DB commit failed (HTTP ${commitRes.status})`);
+                const errText = await commitRes.text().catch(() => 'Unknown error');
+                let errMsg = errText;
+                try {
+                  const parsed = JSON.parse(errText);
+                  if (parsed.error) errMsg = parsed.error;
+                } catch {}
+                throw new Error(errMsg);
               }
 
               const actionRes = (await commitRes.json()) as { success: boolean; certificateId?: string; error?: string };
