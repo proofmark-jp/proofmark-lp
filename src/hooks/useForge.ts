@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ForgeMessage } from '../lib/forge.worker';
-import { createClient } from '../utils/supabase/client';
+// 🩸 Supabase クライアントへの依存を完全に消去。これ以上自爆スイッチを踏まない。
 
 export type ForgeStage =
   | 'idle'
@@ -38,11 +38,6 @@ export interface ForgeState {
 export interface UseForgeOptions {
   /**
    * Worker から届く進捗を「React State を経由せず」に受け取る直流コールバック。
-   * UI 層でこの中から Framer Motion の MotionValue.set() を叩くと、
-   * React の Virtual DOM 再計算サイクルを完全にバイパスできる。
-   *
-   *  - percent : 0..100
-   *  - stage   : 現在のワーカー内フェーズ
    */
   onProgressDirect?: (percent: number, stage: 'hashing' | 'decoding' | 'muxing') => void;
 }
@@ -84,8 +79,6 @@ export function useForge(options?: UseForgeOptions) {
 
   const workerRef = useRef<Worker | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  // 🩸 トークンを退避・保持するためのRef
-  const accessTokenRef = useRef<string | null>(null);
 
   const onProgressDirectRef = useRef<UseForgeOptions['onProgressDirect']>(options?.onProgressDirect);
   useEffect(() => {
@@ -120,36 +113,14 @@ export function useForge(options?: UseForgeOptions) {
     }
   }, []);
 
-  // 🩸 処理開始前に非同期でセッションを取得するため、async関数化
   const startForge = useCallback(
-    async (file: File) => {
+    (file: File) => {
       try { workerRef.current?.terminate(); } catch { /* noop */ }
       workerRef.current = null;
       try { abortRef.current?.abort(); } catch { /* noop */ }
       const controller = new AbortController();
       abortRef.current = controller;
       const signal = controller.signal;
-
-      // 🩸 防衛線: 高負荷処理に入る「前」の安全な状態でトークンを抽出し、Refにキャッシュする
-      try {
-        const supabaseClient = createClient();
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        
-        if (!session?.access_token) {
-          setState({
-            isForging: false, stage: 'idle', cid: null, certificateId: null,
-            error: '認証セッションが見つかりません。再度ログインしてください。'
-          });
-          return;
-        }
-        accessTokenRef.current = session.access_token;
-      } catch (err) {
-        setState({
-          isForging: false, stage: 'idle', cid: null, certificateId: null,
-          error: '認証情報の取得に失敗しました。'
-        });
-        return;
-      }
 
       let worker: Worker;
       try {
@@ -212,15 +183,9 @@ export function useForge(options?: UseForgeOptions) {
             try {
               setState((s) => ({ ...s, stage: 'uploading', cid: msg.cid }));
 
-              // 🩸 事前キャッシュしたトークンを使用する。ここでgetSession()は絶対に呼ばない
-              const accessToken = accessTokenRef.current;
-              if (!accessToken) {
-                throw new Error('セッショントークンが消失しています。再度お試しください。');
-              }
-
+              // 🩸 ブラウザの標準機能に任せ、Cookieを自動送信させる。手動のヘッダー付与は行わない。
               const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`,
               };
 
               // 1) Presigned URL 取得
@@ -258,7 +223,7 @@ export function useForge(options?: UseForgeOptions) {
 
               const commitRes = await fetch('/api/certificates/commit', {
                 method: 'POST',
-                headers, // キャッシュ済みのAuthorizationヘッダーを再利用
+                headers, 
                 body: JSON.stringify({
                   cid: msg.cid,
                   sizeBytes: msg.framesBlob.size,
