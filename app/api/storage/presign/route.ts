@@ -3,6 +3,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createClient } from '@/utils/supabase/server';
 
 export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 
 const S3 = new S3Client({
   region: 'auto',
