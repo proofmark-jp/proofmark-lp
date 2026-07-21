@@ -282,7 +282,11 @@ export function useForge(options?: UseForgeOptions) {
               const presignRes = await fetch('/api/storage/presign', {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({ cid: msg.cid, contentType: msg.framesBlob.type }),
+                body: JSON.stringify({ 
+                  cid: msg.cid, 
+                  contentType: msg.framesBlob.type,
+                  sizeBytes: msg.framesBlob.size 
+                }),
                 signal,
               });
               
