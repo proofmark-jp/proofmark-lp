@@ -1,0 +1,154 @@
+/* ==========================================================================
+   God-Mode Shimmer & Animation Tokens
+   ========================================================================== */
+
+@keyframes pmShimmer {
+  0% {
+    transform: translateX(-120%) skewX(-12deg);
+  }
+  100% {
+    transform: translateX(220%) skewX(-12deg);
+  }
+}
+
+@keyframes pmTsaPulse {
+  0%, 100% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 0 rgba(240, 187, 56, 0.5);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 8px rgba(240, 187, 56, 0);
+  }
+}
+
+@keyframes pmSealOrbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pmSealOrbitRev {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+/* ==========================================================================
+   Core Utility Classes (Obsidian SSOT Tokens Integration)
+   ========================================================================== */
+
+.shimmerHost {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.shimmerHost::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(255, 255, 255, 0.45) 50%,
+    rgba(255, 255, 255, 0) 70%,
+    transparent 100%
+  );
+  transform: translateX(-120%) skewX(-12deg);
+  animation: pmShimmer 3.4s ease-in-out infinite;
+  animation-delay: 1.2s;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.tsaSyncing {
+  animation: pmTsaPulse 2s ease-in-out infinite;
+}
+
+.sealOrbit {
+  animation: pmSealOrbit 36s linear infinite;
+}
+
+.sealOrbitRev {
+  animation: pmSealOrbitRev 48s linear infinite;
+}
+
+/* ==========================================================================
+   Apple Filmstrip Layout & Print Media Override
+   ========================================================================== */
+
+.filmstrip {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: 1.25rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(108, 62, 244, 0.5) transparent;
+}
+
+.filmstrip::-webkit-scrollbar {
+  height: 6px;
+}
+
+.filmstrip::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.filmstrip::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, rgba(108, 62, 244, 0.55), rgba(0, 212, 170, 0.55));
+  border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .filmstrip {
+    scroll-behavior: auto;
+  }
+  .shimmerHost::after,
+  .tsaSyncing,
+  .sealOrbit,
+  .sealOrbitRev {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ==========================================================================
+   Print CSS Engine (Defeats White-out Defect Explicitly)
+   ========================================================================== */
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+  
+  :global(body) {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    zoom: 0.88;
+  }
+  
+  .printCompact {
+    padding: 1rem !important;
+    margin-bottom: 0 !important;
+    background: #ffffff !important;
+    border: 2px solid #e2e8f0 !important;
+    box-shadow: none !important;
+    color: #000000 !important;
+  }
+
+  :global(.no-print) {
+    display: none !important;
+  }
+}
