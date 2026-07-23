@@ -999,7 +999,7 @@ export default function CertificateClient({ initialData, certId }: Props) {
                             creatorDisplayName: cert.creator_display_name || 'ProofMark Verified Creator',
                             legalName: cert.legal_name || null,
                             email: user?.email || '',
-                            defaultPersona: cert.default_persona || 'creator',
+                            defaultPersona: (cert.default_persona as "creator" | "legal") || 'creator',
                         }}
                         defaultLanguage="ja"
                     />
