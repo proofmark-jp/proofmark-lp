@@ -100,7 +100,8 @@ class IncrementalSHA256 {
             W[i] = (W[i - 16] + s0 + W[i - 7] + s1) >>> 0;
         }
 
-        let [a, b, c, d, e, f, g, h] = this.H;
+        let a = this.H[0], b = this.H[1], c = this.H[2], d = this.H[3],
+            e = this.H[4], f = this.H[5], g = this.H[6], h = this.H[7];
 
         for (let i = 0; i < 64; i++) {
             const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
