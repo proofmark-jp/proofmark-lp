@@ -297,8 +297,8 @@ const styles = StyleSheet.create({
   pillarBadge: {
     fontFamily: PDF_FONT_FAMILY.mono,
     fontSize: SCALE.caption - 0.3, // 6.2
-    fontWeight: 700,
-    color: PDF_COLORS.purple,
+    fontWeight: 400,
+    color: PDF_COLORS.purpleDeep,
     letterSpacing: 1.2,
     marginBottom: SCALE.s1 + 1,
   },

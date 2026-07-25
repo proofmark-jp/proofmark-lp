@@ -244,8 +244,8 @@ const styles = StyleSheet.create({
     fontFamily: PDF_FONT_FAMILY.sans,
     marginTop: SCALE.s2 + 2,
     fontSize: SCALE.subheading, // 13
-    fontWeight: 500,
-    color: PDF_COLORS.ink,
+    fontWeight: 400,
+    color: PDF_COLORS.inkDeep,
     // letterSpacing 1.6 → 0.5
     // 日本語正書法では字間は 0〜0.1em が限界。
     // 1.6pt は文字列がバラバラに見え、大企業法務が「粗雑なツール」と判断する。
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: SCALE.body - 0.5, // 10
     color: PDF_COLORS.inkDeep,
-    fontWeight: 500,
+    fontWeight: 400,
     flexWrap: 'wrap',
     wordBreak: 'break-all',
   },
@@ -410,8 +410,8 @@ const styles = StyleSheet.create({
   certificateId: {
     fontFamily: PDF_FONT_FAMILY.mono,
     fontSize: SCALE.small + 1.5, // 10
-    color: PDF_COLORS.purple,
-    fontWeight: 700,
+    color: PDF_COLORS.purpleDeep,
+    fontWeight: 400,
     letterSpacing: 1.4,
     marginTop: 1,
   },
