@@ -157,7 +157,9 @@ export async function GET(request: NextRequest) {
         initLogPromise = initAuditLog(targetId, kind, request, initialMetadata);
 
         // 4. DBペイロード調達（ビジネスロジック）
-        const payload = await fetchEvidencePayload(targetId, kind);
+        // Redisチケットに封入されている所有者IDを渡し、DBレベルの弾圧を有効化する
+        const payload = await fetchEvidencePayload(targetId, kind, ticketPayload.userId); 
+        // ※ ticketPayload内のユーザーIDの変数名が userId でない場合は適宜合わせること。
         if (!payload || !payload.files) throw new Error('Evidence data corrupted.');
 
         isStreamStarted = true;
