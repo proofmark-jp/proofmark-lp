@@ -34,16 +34,16 @@ function initServerFontsNative() {
     Font.register({
         family: PDF_FONT_FAMILY.sans,
         fonts: [
-            { src: notoSansRegular, fontWeight: 400 },
+            { src: `data:font/ttf;base64,${notoSansRegular.toString('base64')}`, fontWeight: 400 },
             // ※UI側の指定で Medium(500) は使わず、Regular(400) + 色補正へ変更すること
-            { src: notoSansBold, fontWeight: 700 },
+            { src: `data:font/ttf;base64,${notoSansBold.toString('base64')}`, fontWeight: 700 },
         ],
     });
 
     Font.register({
         family: PDF_FONT_FAMILY.mono,
         fonts: [
-            { src: jetBrainsRegular, fontWeight: 400 },
+            { src: `data:font/ttf;base64,${jetBrainsRegular.toString('base64')}`, fontWeight: 400 },
             // ※UI側の指定で Bold(700) は使わず、Regular(400) + 色補正へ変更すること
         ],
     });
