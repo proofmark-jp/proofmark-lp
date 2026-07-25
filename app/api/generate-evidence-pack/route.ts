@@ -66,7 +66,7 @@ async function initAuditLog(
 ): Promise<string | null> {
     try {
         const forwardedFor = request.headers.get('x-forwarded-for');
-        const ipAddress = request.ip || (forwardedFor ? forwardedFor.split(',')[0].trim() : '127.0.0.1');
+        const ipAddress = forwardedFor ? forwardedFor.split(',')[0].trim() : '127.0.0.1';
         const userAgent = request.headers.get('user-agent') || 'Unknown';
 
         const { data, error } = await Promise.race([
