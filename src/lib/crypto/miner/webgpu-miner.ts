@@ -19,13 +19,86 @@
  *     try/finally で確実に destroy。Worker terminate 時にも呼ばれる。
  */
 
+declare global {
+  interface Navigator {
+    gpu?: GPU;
+  }
+  interface GPU {
+    requestAdapter(options?: { powerPreference?: string }): Promise<GPUAdapter | null>;
+  }
+  interface GPUAdapter {
+    requestDevice(options?: any): Promise<GPUDevice | null>;
+    requestAdapterInfo?(): Promise<{ vendor?: string; device?: string }>;
+  }
+  interface GPUDevice {
+    queue: GPUQueue;
+    createBindGroupLayout(descriptor: any): GPUBindGroupLayout;
+    createPipelineLayout(descriptor: any): GPUPipelineLayout;
+    createShaderModule(descriptor: any): GPUShaderModule;
+    createComputePipelineAsync(descriptor: any): Promise<GPUComputePipeline>;
+    createBuffer(descriptor: any): GPUBuffer;
+    createBindGroup(descriptor: any): GPUBindGroup;
+    createCommandEncoder(): GPUCommandEncoder;
+    destroy(): void;
+  }
+  interface GPUQueue {
+    writeBuffer(buffer: GPUBuffer, bufferOffset: number, data: BufferSource): void;
+    submit(commandBuffers: GPUCommandBuffer[]): void;
+  }
+  interface GPUBuffer {
+    mapAsync(mode: number): Promise<void>;
+    getMappedRange(offset?: number, size?: number): ArrayBuffer;
+    unmap(): void;
+    destroy(): void;
+  }
+  interface GPUBindGroupLayout {}
+  interface GPUPipelineLayout {}
+  interface GPUShaderModule {}
+  interface GPUComputePipeline {}
+  interface GPUBindGroup {}
+  interface GPUCommandEncoder {
+    beginComputePass(): GPUComputePassEncoder;
+    copyBufferToBuffer(source: GPUBuffer, sourceOffset: number, destination: GPUBuffer, destinationOffset: number, size: number): void;
+    finish(): GPUCommandBuffer;
+  }
+  interface GPUComputePassEncoder {
+    setPipeline(pipeline: GPUComputePipeline): void;
+    setBindGroup(index: number, bindGroup: GPUBindGroup): void;
+    dispatchWorkgroups(workgroupCountX: number, workgroupCountY?: number, workgroupCountZ?: number): void;
+    end(): void;
+  }
+  interface GPUCommandBuffer {}
+
+  var GPUShaderStage: {
+    readonly COMPUTE: number;
+    readonly VERTEX: number;
+    readonly FRAGMENT: number;
+  };
+  var GPUBufferUsage: {
+    readonly MAP_READ: number;
+    readonly MAP_WRITE: number;
+    readonly COPY_SRC: number;
+    readonly COPY_DST: number;
+    readonly INDEX: number;
+    readonly VERTEX: number;
+    readonly UNIFORM: number;
+    readonly STORAGE: number;
+    readonly INDIRECT: number;
+    readonly QUERY_RESOLVE: number;
+  };
+  var GPUMapMode: {
+    readonly READ: number;
+    readonly WRITE: number;
+  };
+}
+
 /* ══════════════════════════════════════════════════════════════
  *  Feature detection
  * ══════════════════════════════════════════════════════════════ */
 
 export async function isWebGPUSupported(): Promise<boolean> {
   try {
-    const gpu = (globalThis as unknown as { navigator?: { gpu?: unknown } }).navigator?.gpu as GPU | undefined;
+    const gpu = navigator.gpu;
     if (!gpu) return false;
     const adapter = await gpu.requestAdapter();
     if (!adapter) return false;
@@ -310,12 +383,13 @@ export class WebGPUMiner {
   public deviceLabel = 'webgpu';
 
   async init(): Promise<void> {
-    const gpu = (navigator as unknown as { gpu?: GPU }).gpu;
+    const gpu = navigator.gpu;
     if (!gpu) throw new Error('WebGPU unavailable');
     this.adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!this.adapter) throw new Error('no GPUAdapter');
     // 一部の環境で device が lost する。lost ハンドラを取り付けて即 abort に繋げる。
     this.device = await this.adapter.requestDevice();
+    if (!this.device) throw new Error('no GPUDevice');
     this.queue = this.device.queue;
     // adapter.info は Chrome 126+ でのみ利用可
     try {
