@@ -766,6 +766,7 @@
 │   │   ├── server
 │   │   │   └── crypto
 │   │   │       └── pow-edge.ts
+│   │   ├── sha256-wasm.worker.ts
 │   │   ├── supabase.ts
 │   │   ├── takedownPdfGenerator.ts
 │   │   └── zipStreamer.ts
@@ -828,6 +829,12 @@
 │   │   ├── 20260720044941_update_register_certificate_atomic_file_size.sql
 │   │   ├── 20260724121926_create_audit_logs_table.sql
 │   │   ├── 20260724125217_upgrade_audit_logs_rev6.sql
+│   │   ├── 20260801052034_001_certificates_v7_omega.sql
+│   │   ├── 20260801052740_002_r2_multipart_sessions.sql
+│   │   ├── 20260801052937_003_webhook_events.sql
+│   │   ├── 20260801053457_004_organizations.sql
+│   │   ├── 20260801053645_005_cron_heartbeat.sql
+│   │   ├── 20260801062147_006_audit_logs.sql
 │   │   └── applied_via_gui
 │   │       ├── 001_initial_schema.sql
 │   │       ├── 002_create_profiles_table.sql
@@ -843,7 +850,7 @@
 ├── vercel.json
 └── vite.config.ts
 
-113 directories, 582 files
+113 directories, 589 files
 
 【3. DB Schema】
 -- ============================================================
@@ -4957,6 +4964,362 @@ BEGIN
             (kind = 'auth' AND status != 'COMPLETED' AND created_at < NOW() - INTERVAL '30 days');
         $query$
     );
+END
+$$;-- =============================================================================
+-- 👑 THE SOVEREIGN ARCHITECT: sql/schema/001_certificates_v7_omega.sql
+-- Phase 1.1: The Titanium Skeleton (Perfected Merge - ALTER Patch)
+-- 目的: 既存の certificates テーブルを破壊せず、V7 OMEGA の絶対法典カラムを冪等に注入する
+-- =============================================================================
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- 1. 新規カラムの冪等追加 (The Missing Links)
+ALTER TABLE public.certificates
+    ADD COLUMN IF NOT EXISTS chain_sha256 TEXT,
+    ADD COLUMN IF NOT EXISTS dhash_64bit TEXT,
+    ADD COLUMN IF NOT EXISTS consent_json JSONB DEFAULT '{}'::jsonb,
+    ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS object_purged_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS verification_mode TEXT NOT NULL DEFAULT 'full' CHECK (verification_mode IN ('full', 'hash_only')),
+    ADD COLUMN IF NOT EXISTS sha256_verified_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS is_asset_purged BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS purged_at TIMESTAMPTZ;
+
+-- 2. UNIQUE制約の冪等追加 (chain_sha256)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'certificates_chain_sha256_key') THEN
+        ALTER TABLE public.certificates ADD CONSTRAINT certificates_chain_sha256_key UNIQUE (chain_sha256);
+    END IF;
+END $$;
+
+-- 3. インデックスの冪等追加 (FinOps Query Optimization)
+CREATE INDEX IF NOT EXISTS idx_certificates_chain_sha256 ON public.certificates(chain_sha256);
+
+-- 4. Zero-Trust RLS (Row Level Security) の絶対封鎖と再構築
+ALTER TABLE public.certificates ENABLE ROW LEVEL SECURITY;
+
+-- 既存の不確実なポリシーを物理削除し、V7 OMEGA の法典で上書きする
+DROP POLICY IF EXISTS "Users can view their own or public certificates" ON public.certificates;
+CREATE POLICY "Users can view their own or public certificates" ON public.certificates
+    FOR SELECT USING (
+        auth.uid() = user_id 
+        OR visibility IN ('public', 'unlisted') 
+        OR proof_mode = 'shareable'
+    );
+
+DROP POLICY IF EXISTS "No direct inserts from client" ON public.certificates;
+CREATE POLICY "No direct inserts from client" ON public.certificates FOR INSERT WITH CHECK (false);
+
+DROP POLICY IF EXISTS "No direct updates from client" ON public.certificates;
+CREATE POLICY "No direct updates from client" ON public.certificates FOR UPDATE USING (false);
+
+DROP POLICY IF EXISTS "No direct deletes from client" ON public.certificates;
+CREATE POLICY "No direct deletes from client" ON public.certificates FOR DELETE USING (false);-- =============================================================================
+-- 👑 THE SOVEREIGN ARCHITECT: sql/schema/002_r2_multipart_sessions.sql
+-- Phase 1.2: R2 Multipart Orphan Reaper 台帳 (FinOps 課金爆発防衛)
+-- 目的: Blueprint §VII.4 に基づき、孤立したMultipart Uploadを監視・刈り取る台帳を冪等に錬成
+-- =============================================================================
+
+-- 1. テーブル錬成 (The Absolute Source of Truth for Multipart Sessions)
+CREATE TABLE IF NOT EXISTS public.r2_multipart_sessions (
+    upload_id TEXT PRIMARY KEY,
+    object_key TEXT NOT NULL,
+    bucket TEXT NOT NULL,
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    parts_uploaded INTEGER NOT NULL DEFAULT 0,
+    parts_expected INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('active', 'completed', 'aborted', 'reaped')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 2. 冪等なインデックス生成 (Reaper Query Optimization)
+-- 刈り取り対象 ('active' 状態) を高速に検出するための部分インデックス
+CREATE INDEX IF NOT EXISTS idx_r2_multipart_reap 
+    ON public.r2_multipart_sessions (status, last_heartbeat_at) 
+    WHERE status = 'active';
+
+CREATE INDEX IF NOT EXISTS idx_r2_multipart_user_id 
+    ON public.r2_multipart_sessions (user_id);
+
+-- 3. 自動更新トリガー (Heartbeat & Updated_at 追従)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'handle_multipart_sessions_updated_at') THEN
+        CREATE TRIGGER handle_multipart_sessions_updated_at
+            BEFORE UPDATE ON public.r2_multipart_sessions
+            FOR EACH ROW
+            EXECUTE FUNCTION public.moddatetime();
+    END IF;
+END
+$$;
+
+-- 4. Zero-Trust RLS (Row Level Security) の絶対封鎖
+-- ブラウザからこの台帳への直接アクセスは一切禁止。Server Action / pg_cron (Service Role) 経由のみ許可。
+ALTER TABLE public.r2_multipart_sessions ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'r2_multipart_sessions' AND policyname = 'Deny all public access to r2_multipart_sessions') THEN
+        CREATE POLICY "Deny all public access to r2_multipart_sessions" ON public.r2_multipart_sessions
+            FOR ALL USING (false) WITH CHECK (false);
+    END IF;
+END
+$$;-- =============================================================================
+-- 👑 THE SOVEREIGN ARCHITECT: sql/schema/003_webhook_events.sql
+-- Phase 1.3: Webhook Idempotency Ledger (The Stripe Fortress)
+-- 目的: Blueprint §IV.3 に基づき、Stripe Webhookの二重処理・競合を物理的に遮断する
+-- =============================================================================
+
+-- 1. テーブル錬成 (The Absolute Source of Truth for Webhooks)
+CREATE TABLE IF NOT EXISTS public.webhook_events (
+    -- StripeのイベントIDを主キー（UNIQUE）とし、DBレベルで二重処理を物理遮断する
+    event_id TEXT PRIMARY KEY,
+    provider TEXT NOT NULL DEFAULT 'stripe',
+    event_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'processed', 'failed')),
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    error_message TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    processed_at TIMESTAMPTZ
+);
+
+-- 2. 冪等なインデックス生成 (FinOps Query Optimization)
+CREATE INDEX IF NOT EXISTS idx_webhook_events_status 
+    ON public.webhook_events (status, created_at DESC) 
+    WHERE status IN ('received', 'failed');
+
+CREATE INDEX IF NOT EXISTS idx_webhook_events_created_at 
+    ON public.webhook_events (created_at DESC);
+
+-- 3. Zero-Trust RLS (Row Level Security) の絶対封鎖
+-- Webhookログへのアクセスは、外部からの参照・書き込みを一切許容しない (Service Role専用)
+ALTER TABLE public.webhook_events ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'webhook_events' AND policyname = 'Deny all public access to webhook_events') THEN
+        CREATE POLICY "Deny all public access to webhook_events" ON public.webhook_events
+            FOR ALL USING (false) WITH CHECK (false);
+    END IF;
+END
+$$;-- =============================================================================
+-- 👑 THE SOVEREIGN ARCHITECT: sql/schema/004_organizations.sql
+-- Phase 1.4: Organizational Identity Layer (The B2B Neutral Zone)
+-- 目的: Blueprint §X.3 に基づき、SAML/Passkeyの衝突を回避する組織ID基盤を冪等に錬成
+-- =============================================================================
+
+-- 1. organizations テーブル錬成 (The Corporate Entity)
+CREATE TABLE IF NOT EXISTS public.organizations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain TEXT UNIQUE NOT NULL,
+    dns_txt_verified_at TIMESTAMPTZ,
+    org_signing_pubkey TEXT NOT NULL,
+    tier TEXT NOT NULL DEFAULT 'enterprise',
+    saml_provider TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 2. organization_members テーブル錬成 (The Delegation Chain)
+CREATE TABLE IF NOT EXISTS public.organization_members (
+    organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
+    -- 🚨 注意: public.profiles が存在することを前提とする
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    role TEXT NOT NULL CHECK (role IN ('owner','admin','signer','viewer')),
+    can_sign_on_behalf BOOLEAN DEFAULT false,
+    added_at TIMESTAMPTZ DEFAULT NOW(),
+    revoked_at TIMESTAMPTZ,
+    PRIMARY KEY (organization_id, user_id)
+);
+
+-- 3. 冪等なインデックス生成 (SSO & Query Optimization)
+CREATE INDEX IF NOT EXISTS idx_organizations_domain ON public.organizations(domain);
+-- revoked_at IS NULL (アクティブなメンバー) のみを高速検索する部分インデックス
+CREATE INDEX IF NOT EXISTS idx_org_members_active_user 
+    ON public.organization_members(user_id) 
+    WHERE revoked_at IS NULL;
+
+-- 4. 自動更新トリガー
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'handle_organizations_updated_at') THEN
+        CREATE TRIGGER handle_organizations_updated_at
+            BEFORE UPDATE ON public.organizations
+            FOR EACH ROW
+            EXECUTE FUNCTION public.moddatetime();
+    END IF;
+END
+$$;
+
+-- 5. Zero-Trust RLS (Row Level Security) の絶対封鎖と境界定義
+ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    -- 組織の参照: 自身が所属しており、かつSAML連携等で revoked されていない(IS NULL)場合のみ参照可能
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'organizations' AND policyname = 'Members can view their active organizations') THEN
+        CREATE POLICY "Members can view their active organizations" ON public.organizations
+            FOR SELECT USING (
+                EXISTS (
+                    SELECT 1 FROM public.organization_members
+                    WHERE organization_id = public.organizations.id
+                      AND user_id = auth.uid()
+                      AND revoked_at IS NULL
+                )
+            );
+    END IF;
+
+    -- メンバーの参照: 同じ組織に所属するアクティブなメンバー同士のみ参照可能
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'organization_members' AND policyname = 'Members can view peers in active organizations') THEN
+        CREATE POLICY "Members can view peers in active organizations" ON public.organization_members
+            FOR SELECT USING (
+                EXISTS (
+                    SELECT 1 FROM public.organization_members AS my_membership
+                    WHERE my_membership.organization_id = public.organization_members.organization_id
+                      AND my_membership.user_id = auth.uid()
+                      AND my_membership.revoked_at IS NULL
+                )
+            );
+    END IF;
+
+    -- INSERT / UPDATE / DELETE: クライアントからの直接ミューテーションを完全遮断 (Service Role / Edge 経由のみ)
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'organizations' AND policyname = 'No direct inserts on organizations') THEN
+        CREATE POLICY "No direct inserts on organizations" ON public.organizations FOR INSERT WITH CHECK (false);
+        CREATE POLICY "No direct updates on organizations" ON public.organizations FOR UPDATE USING (false);
+        CREATE POLICY "No direct deletes on organizations" ON public.organizations FOR DELETE USING (false);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'organization_members' AND policyname = 'No direct inserts on organization_members') THEN
+        CREATE POLICY "No direct inserts on organization_members" ON public.organization_members FOR INSERT WITH CHECK (false);
+        CREATE POLICY "No direct updates on organization_members" ON public.organization_members FOR UPDATE USING (false);
+        CREATE POLICY "No direct deletes on organization_members" ON public.organization_members FOR DELETE USING (false);
+    END IF;
+END
+$$;-- =============================================================================
+-- 👑 THE SOVEREIGN ARCHITECT: sql/schema/005_cron_heartbeat.sql
+-- Phase 1.5: The Watchdog Trinity & Oracle Node Heartbeat (Manual Correction Integrated)
+-- 目的: Blueprint §IV.7 および §XI に基づき、pg_cron / Vercel Cron / Mac mini の相互監視基盤を冪等に錬成
+-- =============================================================================
+
+-- 1. cron_heartbeat テーブル錬成 (The Watchdog Trinity: §IV.7)
+CREATE TABLE IF NOT EXISTS public.cron_heartbeat (
+    job_name TEXT PRIMARY KEY,
+    last_success_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expected_interval_seconds INTEGER NOT NULL,
+    consecutive_failures INTEGER DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 2. oracle_node_heartbeat テーブル錬成 (Mac mini M4 Death Detector: §XI / Manual Correction)
+CREATE TABLE IF NOT EXISTS public.oracle_node_heartbeat (
+    node_id TEXT PRIMARY KEY DEFAULT 'mac-mini-m4-primary',
+    last_heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'degraded', 'dead')),
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 3. 冪等なインデックス生成
+CREATE INDEX IF NOT EXISTS idx_cron_heartbeat_last_success 
+    ON public.cron_heartbeat (last_success_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_oracle_node_heartbeat_status 
+    ON public.oracle_node_heartbeat (status, last_heartbeat_at DESC);
+
+-- 4. 自動更新トリガー
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'handle_cron_heartbeat_updated_at') THEN
+        CREATE TRIGGER handle_cron_heartbeat_updated_at
+            BEFORE UPDATE ON public.cron_heartbeat
+            FOR EACH ROW
+            EXECUTE FUNCTION public.moddatetime();
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'handle_oracle_node_heartbeat_updated_at') THEN
+        CREATE TRIGGER handle_oracle_node_heartbeat_updated_at
+            BEFORE UPDATE ON public.oracle_node_heartbeat
+            FOR EACH ROW
+            EXECUTE FUNCTION public.moddatetime();
+    END IF;
+END
+$$;
+
+-- 5. Zero-Trust RLS (Row Level Security) の絶対封鎖
+ALTER TABLE public.cron_heartbeat ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.oracle_node_heartbeat ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'cron_heartbeat' AND policyname = 'Deny all public access to cron_heartbeat') THEN
+        CREATE POLICY "Deny all public access to cron_heartbeat" ON public.cron_heartbeat
+            FOR ALL USING (false) WITH CHECK (false);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'oracle_node_heartbeat' AND policyname = 'Deny all public access to oracle_node_heartbeat') THEN
+        CREATE POLICY "Deny all public access to oracle_node_heartbeat" ON public.oracle_node_heartbeat
+            FOR ALL USING (false) WITH CHECK (false);
+    END IF;
+END
+$$;-- =============================================================================
+-- 👑 THE SOVEREIGN ARCHITECT: sql/schema/006_audit_logs.sql
+-- Phase 1.6: The Immutable Ledger (FinOps & Tax Compliance)
+-- 目的: Blueprint §IV.4, §IV.5 に基づき、メタデータ注入と3階層パージを支える監査ログ台帳を冪等に錬成
+-- =============================================================================
+
+-- 1. テーブル錬成 (The Immutable Ledger)
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    target_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('auth', 'spot')),
+    status TEXT NOT NULL CHECK (status IN ('STARTED', 'COMPLETED', 'ABORTED', 'FAILED')),
+    ip_address TEXT,
+    user_agent TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 2. 冪等なインデックス生成 (FinOps & Purge Optimization)
+CREATE INDEX IF NOT EXISTS idx_audit_logs_target_id 
+    ON public.audit_logs (target_id);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at 
+    ON public.audit_logs (created_at DESC);
+
+-- GIN Index (jsonb_path_ops): metadata内部の payment_intent_id 等を高速検索
+CREATE INDEX IF NOT EXISTS idx_audit_logs_metadata 
+    ON public.audit_logs USING GIN (metadata jsonb_path_ops);
+
+-- B-Tree Composite Index: 3階層ビジネスパージ (pg_cron) の WHERE 句評価順序に完全合致
+CREATE INDEX IF NOT EXISTS idx_audit_logs_kind_status_created_at 
+    ON public.audit_logs (kind, status, created_at);
+
+-- 3. 自動更新トリガー
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'handle_audit_logs_updated_at') THEN
+        CREATE TRIGGER handle_audit_logs_updated_at
+            BEFORE UPDATE ON public.audit_logs
+            FOR EACH ROW
+            EXECUTE FUNCTION public.moddatetime();
+    END IF;
+END
+$$;
+
+-- 4. Zero-Trust RLS (Row Level Security) の絶対封鎖
+-- 監査ログは WORM 特性を持ち、クライアントからの読み書きを一切許容しない
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'audit_logs' AND policyname = 'Deny all public access to audit_logs') THEN
+        CREATE POLICY "Deny all public access to audit_logs" ON public.audit_logs
+            FOR ALL USING (false) WITH CHECK (false);
+    END IF;
 END
 $$;
 【4. Infra Config】
