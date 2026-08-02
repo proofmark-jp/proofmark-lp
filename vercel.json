@@ -44,11 +44,15 @@
   "crons": [
     {
       "path": "/api/cron/upsell-warning",
-      "schedule": "0 16 * * *" 
+      "schedule": "0 16 * * *"
     },
     {
       "path": "/api/cron/gc",
-      "schedule": "0 18 * * *" 
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/multipart-abort",
+      "schedule": "0 3,9,15,21 * * *"
     }
   ]
 }

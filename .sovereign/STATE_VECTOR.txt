@@ -186,6 +186,9 @@
 │   │   │   ├── commit
 │   │   │   │   └── route.ts
 │   │   │   └── route.ts
+│   │   ├── cron
+│   │   │   └── multipart-abort
+│   │   │       └── route.ts
 │   │   ├── generate-evidence-pack
 │   │   │   └── route.ts
 │   │   ├── pow
@@ -196,8 +199,11 @@
 │   │   ├── storage
 │   │   │   └── presign
 │   │   │       └── route.ts
-│   │   └── upload
-│   │       └── route.ts
+│   │   ├── upload
+│   │   │   └── route.ts
+│   │   └── webhooks
+│   │       └── stripe
+│   │           └── route.ts
 │   ├── cert
 │   │   └── [id]
 │   │       ├── CertificateClient.module.css
@@ -573,8 +579,9 @@
 │       │   ├── 02_Stripe-FinOps.md
 │       │   └── 03_Disaster-Recovery.md
 │       └── 07_DEV_LOGS
-│           ├── ADR-20260801-1839.md
 │           ├── ADR-20260801-1840.md
+│           ├── ADR-20260802-0607.md
+│           ├── ADR-20260802-1353.md
 │           └── ProofMark_Development_Archive.md
 ├── fonts
 │   ├── JetBrainsMono-Regular.ttf
@@ -712,6 +719,7 @@
 │   └── mock-oracle.ts
 ├── src
 │   ├── actions
+│   │   ├── commit.ts
 │   │   ├── registerCertificate.ts
 │   │   └── upload.ts
 │   ├── components
@@ -838,6 +846,11 @@
 │   │   ├── 20260801053457_004_organizations.sql
 │   │   ├── 20260801053645_005_cron_heartbeat.sql
 │   │   ├── 20260801062147_006_audit_logs.sql
+│   │   ├── 20260801112617_007_atomic_certificate_commit.sql
+│   │   ├── 20260801221429_008_cron_tier_purge.sql
+│   │   ├── 20260801222346_009_cron_tier_purge2.sql
+│   │   ├── 20260802041618_0010_cron_tier_purge3.sql
+│   │   ├── 20260802042533_0011_cron_multipart_reaper.sql
 │   │   └── applied_via_gui
 │   │       ├── 001_initial_schema.sql
 │   │       ├── 002_create_profiles_table.sql
@@ -853,7 +866,7 @@
 ├── vercel.json
 └── vite.config.ts
 
-113 directories, 591 files
+117 directories, 600 files
 
 【3. DB Schema】
 -- ============================================================
@@ -5324,6 +5337,258 @@ BEGIN
             FOR ALL USING (false) WITH CHECK (false);
     END IF;
 END
+$$;-- =============================================================================
+-- 👑 THE SOVEREIGN ARCHITECT: sql/functions/atomic_certificate_commit.sql
+-- Phase 1.10: Two-Phase Commit / Atomic Certificate Commit RPC
+-- 目的: R2へのアップロード後の完全な打刻と、重複（23505）の静かなる吸収
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION public.atomic_certificate_commit(
+  p_sha256 TEXT,
+  p_object_key TEXT,
+  p_size_bytes BIGINT,
+  p_etag TEXT
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_cert_id UUID;
+  v_user_id UUID;
+  v_existing_id UUID;
+BEGIN
+  -- 1. Gatekeeper: セッションの絶対検証 (なりすまし物理遮断)
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'UNAUTHORIZED';
+  END IF;
+
+  -- 2. WORM Insert: 冪等な暗号的打刻
+  -- 既に同一の sha256 が存在する場合、この INSERT は何もせず (DO NOTHING)、エラーも投げない
+  INSERT INTO public.certificates (
+    user_id,
+    sha256,
+    storage_path,
+    file_size,
+    file_name,
+    proof_mode,
+    visibility,
+    status,
+    metadata_json
+  ) VALUES (
+    v_user_id,
+    p_sha256,
+    p_object_key,
+    p_size_bytes,
+    COALESCE(split_part(p_object_key, '/', -1), 'Untitled'), -- ObjectKeyからの安全な抽出
+    'private',
+    'private',
+    'completed',
+    jsonb_build_object(
+      'r2_etag', p_etag,
+      'committed_at', NOW()
+    )
+  )
+  ON CONFLICT (sha256) DO NOTHING
+  RETURNING id INTO v_cert_id;
+
+  -- 3. Duplicate Resolution: 既に暗号化された真実の抽出
+  -- INSERT が DO NOTHING によってスキップされた場合、v_cert_id は NULL となる
+  IF v_cert_id IS NULL THEN
+    SELECT id INTO v_existing_id
+    FROM public.certificates
+    WHERE sha256 = p_sha256;
+
+    RETURN jsonb_build_object(
+      'isDuplicate', true,
+      'certificateId', v_existing_id
+    );
+  END IF;
+
+  -- 4. 新規発行の成功
+  RETURN jsonb_build_object(
+    'isDuplicate', false,
+    'certificateId', v_cert_id
+  );
+END;
+$$;
+
+-- 5. Zero-Trust Authorization: 不要な実行権限の完全剥奪と許可
+REVOKE ALL ON FUNCTION public.atomic_certificate_commit(TEXT, TEXT, BIGINT, TEXT) FROM public;
+REVOKE ALL ON FUNCTION public.atomic_certificate_commit(TEXT, TEXT, BIGINT, TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.atomic_certificate_commit(TEXT, TEXT, BIGINT, TEXT) TO authenticated;-- =============================================================================
+-- 👑 THE SOVEREIGN ARCHITECT: sql/cron/tier_purge.sql
+-- Phase 1.12: 3-Tier Business & FinOps Purge Job
+-- 目的: 日本の電子帳簿保存法およびStripeチャージバック反証要件に基づく階層型ログパージ
+-- =============================================================================
+
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
+
+DO $$
+BEGIN
+    -- 🚨 【Atomic Idempotency】 
+    -- 初回実行時（ジョブ未登録時）に cron.unschedule が投げる例外を完全に握り潰し、
+    -- デプロイメント時のマイグレーション・デッドロックを物理的に遮断する。
+    BEGIN
+        PERFORM cron.unschedule('purge-audit-logs');
+    EXCEPTION 
+        WHEN OTHERS THEN NULL;
+    END;
+    
+    -- 🚨 【FinOps Armor】 
+    -- 実行時間を UTC 18:00 (JST 午前3時) にハードコード。
+    -- B2B業務のピークタイムにおける数百万件のログ削除によるI/Oスパイクとテーブルロックを回避する。
+    PERFORM cron.schedule(
+        'purge-audit-logs', 
+        '0 18 * * *', 
+        $query$ 
+        -- 【Tax Compliance & Strategic Purge SQL】
+        -- 複合インデックス (kind, status, created_at) に完全に合致するWHERE句評価。
+        DELETE FROM public.audit_logs 
+        WHERE 
+            -- 1. Spot決済ログ: チャージバック及び日本の税法（7年保存義務）に準拠し 2555日 死守
+            (kind = 'spot' AND created_at < NOW() - INTERVAL '2555 days')
+            OR
+            -- 2. 無料成功ログ: 法的監査の証跡として 365日 死守
+            (kind = 'auth' AND status = 'COMPLETED' AND created_at < NOW() - INTERVAL '365 days')
+            OR
+            -- 3. 失敗・中断・ゴミログ: インフラ保護のため 30日 で消去
+            (kind = 'auth' AND status != 'COMPLETED' AND created_at < NOW() - INTERVAL '30 days');
+        $query$
+    );
+END
+$$;-- =============================================================================
+-- 👑 THE SOVEREIGN ARCHITECT: sql/cron/tier_purge.sql
+-- Phase 1.12: 3-Tier Business & FinOps Purge Job
+-- 目的: 日本の電子帳簿保存法およびStripeチャージバック反証要件に基づく階層型ログパージ
+-- =============================================================================
+
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
+
+DO $$
+BEGIN
+    -- 🚨 【Atomic Idempotency】 
+    -- 初回実行時（ジョブ未登録時）に cron.unschedule が投げる例外を完全に握り潰し、
+    -- デプロイメント時のマイグレーション・デッドロックを物理的に遮断する。
+    BEGIN
+        PERFORM cron.unschedule('purge-audit-logs');
+    EXCEPTION 
+        WHEN OTHERS THEN NULL;
+    END;
+    
+    -- 🚨 【FinOps Armor】 
+    -- 実行時間を UTC 18:00 (JST 午前3時) にハードコード。
+    -- B2B業務のピークタイムにおけるI/Oスパイクとテーブルロックを回避する。
+    PERFORM cron.schedule(
+        'purge-audit-logs', 
+        '0 18 * * *', 
+        $query$ 
+        -- 【Tax Compliance & Strategic Purge SQL】
+        -- クエリプランナーに確実なインデックススキャンを強制させるため、
+        -- OR句によるI/O爆発を物理的に排除し、3つの独立したDELETE文として直列実行する。
+
+        -- 1. Spot決済ログ: チャージバック及び日本の税法（7年保存義務）に準拠し 2555日 死守
+        DELETE FROM public.audit_logs 
+        WHERE kind = 'spot' AND created_at < NOW() - INTERVAL '2555 days';
+
+        -- 2. 無料成功ログ: 法的監査の証跡として 365日 死守
+        DELETE FROM public.audit_logs 
+        WHERE kind = 'auth' AND status = 'COMPLETED' AND created_at < NOW() - INTERVAL '365 days';
+
+        -- 3. 失敗・中断・ゴミログ: インフラ保護のため 30日 で消去
+        DELETE FROM public.audit_logs 
+        WHERE kind = 'auth' AND status != 'COMPLETED' AND created_at < NOW() - INTERVAL '30 days';
+        $query$
+    );
+END
+$$;-- =============================================================================
+-- 👑 THE SOVEREIGN ARCHITECT: sql/cron/tier_purge.sql
+-- Phase 1.12: 3-Tier Business & FinOps Purge Job
+-- 目的: 日本の電子帳簿保存法およびStripeチャージバック反証要件に基づく階層型ログパージ
+-- =============================================================================
+
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
+
+DO $$
+BEGIN
+    -- 🚨 【Atomic Idempotency】 
+    -- 初回実行時（ジョブ未登録時）に cron.unschedule が投げる例外を完全に握り潰し、
+    -- デプロイメント時のマイグレーション・デッドロックを物理的に遮断する。
+    BEGIN
+        PERFORM cron.unschedule('purge-audit-logs');
+    EXCEPTION 
+        WHEN OTHERS THEN NULL;
+    END;
+    
+    -- 🚨 【FinOps Armor】 
+    -- 実行時間を UTC 18:00 (JST 午前3時) にハードコード。
+    -- B2B業務のピークタイムにおけるI/Oスパイクとテーブルロックを回避する。
+    PERFORM cron.schedule(
+        'purge-audit-logs', 
+        '0 18 * * *', 
+        $query$ 
+        -- 【Tax Compliance & Strategic Purge SQL】
+        -- クエリプランナーに確実なインデックススキャンを強制させるため、
+        -- OR句によるI/O爆発を排除し、かつ否定演算子(!=)をIN句の肯定リストに変換して直列実行する。
+
+        -- 1. Spot決済ログ: チャージバック及び日本の税法（7年保存義務）に準拠し 2555日 死守
+        DELETE FROM public.audit_logs 
+        WHERE kind = 'spot' AND created_at < NOW() - INTERVAL '2555 days';
+
+        -- 2. 無料成功ログ: 法的監査の証跡として 365日 死守
+        DELETE FROM public.audit_logs 
+        WHERE kind = 'auth' AND status = 'COMPLETED' AND created_at < NOW() - INTERVAL '365 days';
+
+        -- 3. 失敗・中断・ゴミログ: インフラ保護のため 30日 で消去 (Seq Scan回避のため肯定リスト指定)
+        DELETE FROM public.audit_logs 
+        WHERE kind = 'auth' AND status IN ('STARTED', 'ABORTED', 'FAILED') AND created_at < NOW() - INTERVAL '30 days';
+        $query$
+    );
+END
+$$;-- =============================================================================
+-- 👑 THE SOVEREIGN ARCHITECT: sql/cron/multipart_reaper.sql
+-- Phase 1.13: The Multipart Orphan Reaper (State Machine Detection)
+-- 目的: Cloudflare R2の孤立したMultipart Uploadを検出し、課金源を刈り取る準備を行う
+-- =============================================================================
+
+CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
+
+DO $$
+BEGIN
+    -- 🚨 【Atomic Idempotency】 
+    -- 初回実行時（ジョブ未登録時）の cron.unschedule 例外を完全に握り潰し、
+    -- マイグレーション・デッドロックを物理的に遮断する。
+    BEGIN
+        PERFORM cron.unschedule('detect-multipart-orphans');
+    EXCEPTION 
+        WHEN OTHERS THEN NULL;
+    END;
+    
+    -- 🚨 【Decoupled FinOps Architecture】
+    -- pg_cron はDB内部での「タイムアウト検知」と「状態遷移 (active -> aborted)」のみを担う。
+    -- 実際の R2 SDK 呼び出し (物理削除) は Vercel Cron に委譲することで、
+    -- 外部API通信によるDBトランザクションの長時間ロックやエラーを完全に排除する。
+    -- スケジュールは 1日4回 (UTC 3,9,15,21) に固定し、pg_cron 実行枠を極限まで節約する。
+    PERFORM cron.schedule(
+        'detect-multipart-orphans', 
+        '0 3,9,15,21 * * *', 
+        $query$ 
+        -- 【Zero-I/O Reaper Query】
+        -- 002_r2_multipart_sessions.sql で定義済みの部分インデックス
+        -- (idx_r2_multipart_reap: WHERE status = 'active') に完全に合致させる。
+        -- 30分以上Heartbeatが途絶えたセッションを、インデックススキャンで瞬時に捕捉し無効化する。
+        UPDATE public.r2_multipart_sessions
+        SET 
+            status = 'aborted',
+            updated_at = NOW()
+        WHERE 
+            status = 'active' 
+            AND last_heartbeat_at < NOW() - INTERVAL '30 minutes';
+        $query$
+    );
+END
 $$;
 【4. Infra Config】
 --- vercel.json ---
@@ -5373,11 +5638,15 @@ $$;
   "crons": [
     {
       "path": "/api/cron/upsell-warning",
-      "schedule": "0 16 * * *" 
+      "schedule": "0 16 * * *"
     },
     {
       "path": "/api/cron/gc",
-      "schedule": "0 18 * * *" 
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/multipart-abort",
+      "schedule": "0 3,9,15,21 * * *"
     }
   ]
 }
