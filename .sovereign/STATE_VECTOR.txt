@@ -219,6 +219,10 @@
 │   ├── layout.tsx
 │   ├── login
 │   │   └── page.tsx
+│   ├── privacy
+│   │   └── page.tsx
+│   ├── tos
+│   │   └── page.tsx
 │   └── verify
 │       └── [id]
 │           └── page.tsx
@@ -582,6 +586,7 @@
 │           ├── ADR-20260801-1840.md
 │           ├── ADR-20260802-0607.md
 │           ├── ADR-20260802-1353.md
+│           ├── ADR-20260803-0647.md
 │           └── ProofMark_Development_Archive.md
 ├── fonts
 │   ├── JetBrainsMono-Regular.ttf
@@ -866,7 +871,7 @@
 ├── vercel.json
 └── vite.config.ts
 
-117 directories, 600 files
+119 directories, 603 files
 
 【3. DB Schema】
 -- ============================================================
