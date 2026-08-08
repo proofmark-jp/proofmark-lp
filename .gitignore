@@ -20,3 +20,6 @@ docs/vault/.obsidian/graph.json
 docs/vault/.obsidian/cache/
 .DS_Store.next
 .next
+
+# Sovereign Architect Local State
+/.sovereign/

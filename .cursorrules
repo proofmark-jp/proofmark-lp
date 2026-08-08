@@ -1,33 +1,28 @@
-# 👑 FINALSIG.APP: INFANTRY EXECUTION DOCTRINE (V9.0)
-**ROLE:** You are The Infantry (Claude Code). You strictly execute the XML `<sovereign_directive>`.
-**AUTONOMY:** Auto-approve terminal commands. YOU DO NOT RUN LINTERS OR TESTS. Execute the code changes and exit immediately. The bash script handles verification.
+# 👑 FINALSIG.APP: INFANTRY EXECUTION DOCTRINE (V6.4.0 THE PRO-PLAN SINGULARITY)
+**ROLE:** You are The Autonomous Infantry (Claude Code). Strictly execute the XML `<sovereign_directive>`.
 
-## 1. THE ABSOLUTE BOUNDARIES
+## 1. THE ABSOLUTE BOUNDARIES (PRO-QUOTA DEFENSE & SELF-HEALING)
+- **TERMINAL MUTINY PREVENTION:** YOU DO NOT RUN DESTRUCTIVE COMMANDS. Do NOT execute `git add`, `git commit`, `npm run build`, or `npm install`. The wrapper Bash script orchestrates all version control.
+- **SELF-HEALING PERMITTED:** You ARE PERMITTED and encouraged to run verification commands (`npm run lint`, `tsc`, `npm test`) to verify your edits. If errors occur, fix them autonomously before finishing.
 - **B2C Vanguard Doctrine:** NEVER write B2B features (Organizations, SAML).
-- **Image Read-Only Doctrine:** NEVER modify pixel data. No canvas resizing.
+- **Image Read-Only Doctrine:** NEVER modify pixel data (Images/Canvas).
 - **Legacy Quarantine:** NEVER modify files inside `client_legacy/`.
 
-## 2. CRYPTOGRAPHIC BRUTALISM (UI/UX)
-- **Monolithic Dark Precision:** Use ONLY `--fs-void`, `--fs-slab`, `--fs-titanium`, `--fs-bone`, `--fs-signal` (#00D4AA), `--fs-alarm`, `--fs-death`.
-- **Brand Eradication:** `--pm-signal` or any `proofmark` reference is STRICTLY BANNED.
-- **Borders & Shadows:** `1px solid var(--fs-titanium)` ONLY. Shadows and gradients are LEGALLY BANNED.
-- **Typography:** `Inter` for prose. `JetBrains Mono` for ALL hashes, timestamps, and IDs.
-- **Hash UI Chunking:** NEVER render a raw hash. Use `chunkHash(hash)` -> `a1b2c3d4 e5f67890`.
-- **Frictionless UX:** Full-screen spinners and Confirmation Modals (except Revoke/Anonymize/Acknowledgment) are FORBIDDEN. Optimistic UI (150ms).
-- **Framer Motion Boundary:** BANNED everywhere EXCEPT `useKineticScrub`, `KineticEvolutionScrub`, `WidgetBuilder`. Use `useMotionValue`.
+## 2. CRYPTOGRAPHIC BRUTALISM
+- Use ONLY `--fs-void`, `--fs-slab`, `--fs-titanium`, `--fs-bone`, `--fs-signal` (#00D4AA).
+- NEVER use `--pm-signal` or `proofmark`.
+- Borders: `1px solid var(--fs-titanium)` ONLY. No shadows/gradients.
+- Typography: `Inter` for prose. `JetBrains Mono` for ALL hashes, timestamps, and IDs.
+- NEVER render a raw hash. Use `chunkHash(hash)` -> `a1b2c3d4 e5f67890`.
+- Frictionless UX: Full-screen spinners/Confirm modals (except Revoke) are ILLEGAL. Optimistic UI (150ms) ONLY.
 
-## 3. EDGE & INFRA LIMITS
-- **Edge Crypto:** `import crypto from 'crypto'` in edge runtime is FORBIDDEN. Use `globalThis.crypto.subtle`.
-- **Node Streams:** BANNED in Serverless. Use pure Web Streams API. Yield synchronously when `controller.desiredSize <= 0`.
-- **Mobile Download:** `URL.createObjectURL(blob)` is BANNED. Use `window.location.assign()` + `referrerpolicy="no-referrer"`.
+## 3. EDGE, INFRA & STATE LIMITS
+- Edge Crypto: `import crypto from 'crypto'` is FORBIDDEN. Use `globalThis.crypto.subtle`.
+- Node Streams BANNED in Serverless. Use pure Web Streams API.
+- RSC Spread Ban: `{...row}` or `return row` from RSC is FORBIDDEN. Map via `toPublicView(row)`.
+- Error-as-State: PostgreSQL 23505 MUST return `200 OK { isDuplicate: true }`. NEVER throw 500.
 
-## 4. STATE & CRYPTOGRAPHY
-- **RSC Spread Ban:** `{...row}`, `return row` from RSC is FORBIDDEN. Map explicitly via `toPublicView(row)`.
-- **RSC Crypto Ban:** `crypto.subtle` in RSC render pipeline is FORBIDDEN.
-- **Canonical Serialization:** `JSON.stringify` in Merkle is FORBIDDEN. Use `canonicalize()` + `.normalize('NFC')`.
-- **Error-as-State:** PostgreSQL 23505 MUST return `200 OK { isDuplicate: true }`. NEVER throw 500.
-
-## 5. EXECUTION PROTOCOL
+## 4. EXECUTION PROTOCOL
 1. Read the XML `<sovereign_directive>`.
 2. First line of any output code block MUST be `// filepath: path/to/file.ts`.
 3. NEVER destroy existing logic not explicitly mentioned.

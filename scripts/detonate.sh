@@ -1,108 +1,103 @@
 #!/usr/bin/env bash
-# 👑 FINALSIG.APP: THE DETONATOR SCRIPT (Trap #36) - SINGULARITY BUILD
+# 👑 FINALSIG.APP: THE DETONATOR SCRIPT (Self-Healing & Autopsy Build)
 
 PAYLOAD_FILE=$1
+MODEL_OPTION=$2
 PRUNER_SCRIPT="scripts/prune-state-vector.mjs"
+ERROR_LOG=".sovereign_error.log"
 
 if [ -z "$PAYLOAD_FILE" ] || [ ! -f "$PAYLOAD_FILE" ]; then
-  echo "🚨 [FATAL ERROR] Payload file required."
-  exit 1
+  echo "🚨 [FATAL ERROR] Payload file missing." ; exit 1
 fi
-
 if [ -n "$(git status --porcelain)" ]; then
-  echo "🚨 [FATAL ERROR] Working directory is not clean. Aborting."
-  exit 1
+  echo "🚨 [FATAL ERROR] Working directory not clean. Aborting." ; exit 1
 fi
 
-BASE_BRANCH=$(git branch --show-current)
-TARGET_BRANCH="infantry/$(date +'%Y%m%d-%H%M%S')"
+PAYLOAD_BASENAME=$(basename "$PAYLOAD_FILE")
+TARGET_MODEL="sonnet"
+MAX_TURNS=7
+
+if [ "$MODEL_OPTION" == "--opus" ]; then TARGET_MODEL="opus"; MAX_TURNS=10; fi
+if [ "$MODEL_OPTION" == "--fable" ]; then TARGET_MODEL="fable"; MAX_TURNS=15; fi
 
 # ---------------------------------------------------------
-# [絶対消滅プロトコル] シグナル割り込み時のハードリセット
+# [検死・絶対消滅プロトコル] 失敗時に証拠を残しつつ、WSは一瞬で復元
 # ---------------------------------------------------------
-cleanup_on_interrupt() {
-  echo -e "\n🚨 [INTERRUPT] Script killed. Executing absolute annihilation of partial state..."
-  git reset --hard HEAD
-  git clean -fd
-  git checkout "$BASE_BRANCH" || true
-  git branch -D "$TARGET_BRANCH" || true
-  echo "🛡️ [WORKSPACE SECURED] All partial changes destroyed. Returned to $BASE_BRANCH."
+abort_and_clean() {
+  local REASON=$1
+  echo -e "\n🚨 [ABORT] Detonation failed: $REASON"
+  
+  echo "📝 Extracting Autopsy Report to $ERROR_LOG..."
+  echo "=== AUTOPSY REPORT: $REASON ===" > "$ERROR_LOG"
+  echo "Timestamp: $(date)" >> "$ERROR_LOG"
+  
+  # 変更があればDiffを記録、なければ直近の状態を記録
+  if [ -n "$(git status --porcelain)" ]; then
+    git diff >> "$ERROR_LOG" 2>&1
+    git diff --cached >> "$ERROR_LOG" 2>&1
+  else
+    echo "No file changes detected before crash." >> "$ERROR_LOG"
+  fi
+  
+  echo "Executing absolute rollback (git reset --hard)..."
+  git reset --hard HEAD > /dev/null 2>&1
+  # ペイロードファイルと検死レポートだけは保護してクリーンアップ
+  git clean -fd -e "$PAYLOAD_BASENAME" -e "$ERROR_LOG" > /dev/null 2>&1
+  
+  echo "🛡️ [WORKSPACE SECURED] All partial changes annihilated. Error log saved to $ERROR_LOG."
   exit 1
 }
-trap cleanup_on_interrupt SIGINT SIGTERM
+trap 'abort_and_clean "Interrupted by OS/User"' SIGINT SIGTERM
 
 echo "👑 [DETONATOR] Initiating Sovereign Workflow..."
-git checkout -b "$TARGET_BRANCH"
 
-# [関所1] ペイロード浄化・検閲
-echo "🔍 Validating Payload..."
-if ! node scripts/validate-directive.mjs "$PAYLOAD_FILE"; then
-  echo "🚨 [FATAL ERROR] Payload validation failed."
-  git checkout "$BASE_BRANCH"
-  git branch -d "$TARGET_BRANCH"
-  trap - SIGINT SIGTERM
+# [関所1] Bashネイティブなペイロード検証
+if ! grep -q "<sovereign_directive>" "$PAYLOAD_FILE"; then
+  echo "🚨 [FATAL ERROR] Missing <sovereign_directive> tags."
   exit 1
 fi
 
-# [実行] Claude Code (The Infantry) 起爆
+# [実行] Claude Code (The Autonomous Infantry)
+echo "🚀 Detonating [$TARGET_MODEL] (Max Turns: $MAX_TURNS)..."
 set +e
-claude -p "Execute the directive in $PAYLOAD_FILE exactly. Auto-approve all commands. DO NOT run linting or tests yourself; the Bash script will handle verification. Finish and exit."
+# 破壊的行動は禁じつつ、Lint等による自己修復は促すプロンプト
+claude -p "Execute the directive in $PAYLOAD_FILE exactly. Auto-approve commands. You may run lint/tests to fix errors before exiting." --model "$TARGET_MODEL" --max-turns "$MAX_TURNS"
 CLAUDE_EXIT_CODE=$?
 set -e
 
-# [関所1.5] ゾンビ実行トラップの物理的遮断
 if [ $CLAUDE_EXIT_CODE -ne 0 ]; then
-  echo "🚨 [CLAUDE CRASHED] The Infantry terminated abnormally (Exit Code: $CLAUDE_EXIT_CODE)."
-  echo "Sealing broken state for forensic analysis..."
-  git add -A
-  git commit -m "chore(broken): claude code crashed" --no-verify || true
-  git checkout "$BASE_BRANCH"
-  git clean -fd # Untrackedファイルの残留を防ぐ
-  trap - SIGINT SIGTERM
-  exit 1
+  abort_and_clean "Claude Code CLI Crashed (Exit Code: $CLAUDE_EXIT_CODE)"
+fi
+
+if [ -z "$(git status --porcelain)" ]; then
+  echo "⚠️ [DETONATOR SUCCESS] No changes made by Infantry."
+  exit 0
 fi
 
 # [同期] STATE_VECTOR 更新 & Pruning
 echo "🟢 [EXECUTION COMPLETE] Updating Sovereign State..."
-npm run state:sync || true
+npm run state:sync > /dev/null 2>&1 || true
 if [ -f "$PRUNER_SCRIPT" ]; then
-  node "$PRUNER_SCRIPT" || true
+  node "$PRUNER_SCRIPT" > /dev/null 2>&1 || true
 fi
 
-# ---------------------------------------------------------
-# [生還プロトコル] No-Op 判定とブランチ消却
-# ---------------------------------------------------------
-if [ -z "$(git status --porcelain)" ]; then
-  echo "⚠️ [DETONATOR SUCCESS] No code changes were made. Purging empty branch."
-  git checkout "$BASE_BRANCH"
-  git branch -d "$TARGET_BRANCH"
-  trap - SIGINT SIGTERM
-  exit 0
+# [物理的検証]
+echo "🔍 Verifying integrity..."
+# Lintでエラーが出た場合はログを一時ファイルに吐き、それを検死レポートに含める
+if ! npm run lint > .lint_temp.log 2>&1; then
+  cat .lint_temp.log >> "$ERROR_LOG"
+  rm -f .lint_temp.log
+  abort_and_clean "Linting Failed after Claude execution"
 fi
+rm -f .lint_temp.log
 
-# [関所2] 物理的検証 (Linter) と教義監視 (B2C Gate)
-echo "🔍 Verifying integrity (Lint/TypeCheck)..."
-if npm run lint; then
-  echo "🔍 Auditing B2C Vanguard Doctrine..."
-  if node scripts/validate-b2c-gate.mjs; then
-    git add -A
-    git commit -m "feat(auto): Infantry execution of directive"
-    echo "👑 [DETONATOR SUCCESS] Clean commit created on $TARGET_BRANCH."
-    trap - SIGINT SIGTERM
-    exit 0
-  else
-    echo "🚨 [B2C GATE FAILED] Infantry violated B2C Vanguard Doctrine."
-  fi
-else
-  echo "🚨 [LINT FAILED] Code is corrupt."
-fi
-
-# ---------------------------------------------------------
-# エラー時の封印と帰還 (Untracked Phantomの破壊)
-# ---------------------------------------------------------
+# [関所2] BashネイティブなB2C Vanguard Doctrine 監視
 git add -A
-git commit -m "chore(broken): failed execution or doctrine violation" --no-verify || true
-git checkout "$BASE_BRANCH"
-git clean -fd # 隔離ブランチで作られたUntrackedファイルをmainに残さない
-trap - SIGINT SIGTERM
-exit 1
+if git diff --cached --name-only | grep -qE "(enterprise\.finalsig\.app|api/mcp|api/enterprise|api/webhooks/saml|sdk)/"; then
+  abort_and_clean "B2C Vanguard Doctrine Violated (B2B paths modified)"
+fi
+
+git commit -m "feat(auto): Infantry execution of sovereign directive"
+echo "👑 [DETONATOR SUCCESS] Clean commit created. Pipeline complete."
+# 成功時は過去のエラーログを掃除
+rm -f "$ERROR_LOG"
