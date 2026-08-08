@@ -10,7 +10,7 @@
           "value": "(?i)^.*\\.vercel\\.app$"
         }
       ],
-      "destination": "https://proofmark.jp/$1",
+      "destination": "https://finalsig.app/$1",
       "permanent": true
     }
   ],
